@@ -3,44 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#080d19">
-  <meta name="description" content="星际突围，一款逐步开发的纵向飞机射击小游戏。">
-  <title>星际突围 · 飞机射击小游戏</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1325'/%3E%3Cpath d='M16 4 27 25 16 20 5 25Z' fill='%2369dcff'/%3E%3C/svg%3E">
+  <meta name="theme-color" content="#080b14">
+  <meta name="description" content="星际突围，一款逐步开发的横向飞机射击小游戏。">
+  <title>星际突围 · 横向飞行</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff414e' d='M30 16 3 3 9 16 3 29Z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script src="game.js" defer></script>
 </head>
 <body>
-  <main class="app">
-    <header class="masthead">
-      <a class="brand" href="./" aria-label="星际突围首页"><span class="brand-mark" aria-hidden="true">✦</span> 星际突围</a>
-      <span class="edition">STAR BREAKER</span>
-    </header>
-
-    <section class="battlefield" aria-label="游戏区域">
-      <canvas id="game-canvas" width="480" height="680" tabindex="-1" aria-label="星空战场，玩家飞机位于底部中央。当前阶段尚未开放移动和射击。"></canvas>
+  <main class="app" id="game-app">
+    <section class="battlefield" aria-label="横向星空战场">
+      <canvas id="game-canvas" width="1280" height="720" tabindex="-1" aria-describedby="control-instructions" aria-label="横向星空战场。点击开始游戏后，红色战机从左侧出发。"></canvas>
       <div class="field-edge" aria-hidden="true"></div>
-
+      <header class="masthead">
+        <a class="brand" href="./" aria-label="星际突围首页"><span class="brand-mark" aria-hidden="true">✦</span> 星际突围 <span class="edition">STAR BREAKER</span></a>
+        <button id="fullscreen-button" class="secondary-button fullscreen-button" type="button" aria-pressed="false" hidden>⛶ 全屏</button>
+      </header>
       <div id="start-screen" class="start-screen">
-        <span class="eyebrow">纵向飞行射击</span>
-        <h1>星际<span>突围</span></h1>
-        <p class="intro">你的战场，在星海之间。</p>
-        <button id="start-button" class="primary-button" type="button">开始游戏</button>
-        <span class="start-caption">进入战场</span>
+        <div class="start-copy">
+          <span class="eyebrow"><span></span> 赤焰战机 / CRIMSON</span>
+          <h1>星际<span>突围</span></h1>
+          <p class="intro">穿越星海，向前突围。</p>
+          <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">→</span></button>
+          <p class="start-caption">方向键 / WASD 操控战机</p>
+          <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>
+        </div>
+        <div class="hangar-art">
+          <div class="orbit" aria-hidden="true"></div>
+          <img id="fighter-art" src="assets/red-fighter.png" alt="赤焰战机：红色装甲、双引擎，机头朝右" draggable="false">
+          <div class="ship-label"><span class="label-line"></span><span>赤焰 · 重装突击型<small>CRIMSON / ASSAULT FIGHTER</small></span></div>
+        </div>
       </div>
-
       <div id="battle-screen" class="battle-screen" hidden>
         <div class="hud" aria-label="战场信息">
           <div><span class="hud-label">得分</span><strong id="score">000000</strong></div>
-          <div class="life"><span class="hud-label">生命</span><span class="hearts" aria-label="3 点生命">♥ ♥ ♥</span></div>
+          <div class="life"><span class="hud-label">训练保护</span><span class="hearts" aria-label="3 点生命">♥ ♥ ♥</span></div>
         </div>
-        <div class="ready-message"><span class="ready-line"></span><h2>战场已就绪</h2><p>准备出发</p><span class="ready-line"></span></div>
-        <button id="menu-button" class="secondary-button" type="button">返回开始画面</button>
+        <div class="difficulty-readout" aria-label="战斗难度"><span>战斗 <time id="battle-clock">00:00</time></span><span>新敌机 <strong id="enemy-strength">1 HP</strong></span></div>
+        <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>上下移动瞄准 · 击毁 +100 · 留意敌机血条</p><span class="flight-direction">每 20 秒新敌机血量增加 <span aria-hidden="true">→</span></span></div>
+        <div id="pause-hint" class="pause-message" hidden><strong>已暂停</strong><span>点击战场继续战斗</span></div>
+        <button id="menu-button" class="secondary-button menu-button" type="button">返回开始画面</button>
       </div>
+      <footer class="lesson-note"><span class="lesson-badge">拦截训练</span><p id="control-instructions">方向键 / WASD 移动<span class="training-note"> · 自动射击 · 击毁 +100 · 当前不会受伤</span></p></footer>
     </section>
-
-    <footer class="lesson-note"><span class="lesson-badge">第 1 步</span><p>先体验开始画面与战场切换。<br>飞机移动、射击和敌机将在后续步骤加入。</p></footer>
     <p id="status" class="sr-only" role="status" aria-live="polite">开始画面已就绪。</p>
   </main>
 </body>
 </html>
+

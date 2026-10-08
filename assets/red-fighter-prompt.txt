@@ -1,0 +1,6 @@
+Generator: built-in imagegen (not CLI)
+Output: assets/red-fighter.png
+Transparent background: true
+
+Final prompt:
+Create one polished 2D game sprite for a side-scrolling space shooter. Single powerful futuristic RED armored fighter spacecraft, strict top-down orthographic view, nose pointing exactly RIGHT, rear engines at LEFT, symmetrical silhouette across its horizontal centerline. Broad swept armored wings, sharp spear-like nose, layered crimson and dark scarlet panels, dark gunmetal mechanical details, small amber cockpit, twin bright orange engine cores. Aggressive, formidable, premium arcade shoot-em-up look with crisp detailed 3D-rendered surface shading, clearly readable silhouette at small sizes. Isolated on transparent background; no scene, no stars, no text, no symbols, no watermark, no extra ships, no shadow on a floor. Compact horizontal 3:2 silhouette with even transparent padding around all extremities, engine glow very short and contained. Asset for an original game called Star Breaker.
