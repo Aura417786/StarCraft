@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080d19">
+  <meta name="description" content="星际突围，一款逐步开发的纵向飞机射击小游戏。">
+  <title>星际突围 · 飞机射击小游戏</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1325'/%3E%3Cpath d='M16 4 27 25 16 20 5 25Z' fill='%2369dcff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="game.js" defer></script>
+</head>
+<body>
+  <main class="app">
+    <header class="masthead">
+      <a class="brand" href="./" aria-label="星际突围首页"><span class="brand-mark" aria-hidden="true">✦</span> 星际突围</a>
+      <span class="edition">STAR BREAKER</span>
+    </header>
+
+    <section class="battlefield" aria-label="游戏区域">
+      <canvas id="game-canvas" width="480" height="680" tabindex="-1" aria-label="星空战场，玩家飞机位于底部中央。当前阶段尚未开放移动和射击。"></canvas>
+      <div class="field-edge" aria-hidden="true"></div>
+
+      <div id="start-screen" class="start-screen">
+        <span class="eyebrow">纵向飞行射击</span>
+        <h1>星际<span>突围</span></h1>
+        <p class="intro">你的战场，在星海之间。</p>
+        <button id="start-button" class="primary-button" type="button">开始游戏</button>
+        <span class="start-caption">进入战场</span>
+      </div>
+
+      <div id="battle-screen" class="battle-screen" hidden>
+        <div class="hud" aria-label="战场信息">
+          <div><span class="hud-label">得分</span><strong id="score">000000</strong></div>
+          <div class="life"><span class="hud-label">生命</span><span class="hearts" aria-label="3 点生命">♥ ♥ ♥</span></div>
+        </div>
+        <div class="ready-message"><span class="ready-line"></span><h2>战场已就绪</h2><p>准备出发</p><span class="ready-line"></span></div>
+        <button id="menu-button" class="secondary-button" type="button">返回开始画面</button>
+      </div>
+    </section>
+
+    <footer class="lesson-note"><span class="lesson-badge">第 1 步</span><p>先体验开始画面与战场切换。<br>飞机移动、射击和敌机将在后续步骤加入。</p></footer>
+    <p id="status" class="sr-only" role="status" aria-live="polite">开始画面已就绪。</p>
+  </main>
+</body>
+</html>

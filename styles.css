@@ -1,0 +1,42 @@
+:root { color-scheme: dark; --bg: #080d19; --text: #edf5ff; --muted: #94a4bc; --cyan: #7de6ff; --gold: #ffc277; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: radial-gradient(ellipse at 50% 45%, #142039 0%, var(--bg) 68%); color: var(--text); font: 16px/1.6 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { font: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 5px; }
+.app { width: min(100%, 520px, calc((100dvh - 170px) * .706 + 40px)); min-width: min(100%, 300px); margin: 0 auto; padding: 23px 20px 20px; }
+.masthead { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.brand { display: flex; gap: 9px; align-items: center; color: var(--text); text-decoration: none; font-size: 16px; font-weight: 700; letter-spacing: .08em; }
+.brand-mark { color: var(--cyan); font-size: 24px; line-height: 1; }
+.edition { font-size: 12px; letter-spacing: .16em; color: var(--muted); }
+.battlefield { position: relative; width: 100%; aspect-ratio: 480 / 680; overflow: hidden; background: #081020; border: 1px solid #344962; border-radius: 14px; box-shadow: 0 24px 80px #0007, 0 0 50px #4bacff08; }
+#game-canvas { display: block; width: 100%; height: 100%; background: radial-gradient(ellipse at 80% 16%, #14304c66, transparent 58%); }
+.field-edge { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 80px #0307117a; border-radius: inherit; }
+.start-screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 28px; background: linear-gradient(180deg, #080f2000, #080f2040 50%, #080f2000); }
+.eyebrow { color: var(--cyan); font-size: 14px; letter-spacing: .28em; margin-bottom: 20px; }
+h1 { font-size: clamp(46px, 12vw, 76px); line-height: 1.18; letter-spacing: .12em; margin: 0 0 22px .12em; text-align: center; font-weight: 900; text-shadow: 0 4px 28px #57c7ff25; }
+h1 span { display: block; color: var(--cyan); }
+.intro { color: #b1bfd3; font-size: 16px; margin: 0 0 39px; letter-spacing: .06em; }
+.primary-button { width: min(100%, 244px); min-height: 54px; border: 1px solid #ffe2b1; border-radius: 7px; color: #23170c; background: linear-gradient(135deg, #ffda9d, #ffb566); font-size: 18px; font-weight: 800; letter-spacing: .14em; box-shadow: 0 8px 28px #ffb56620; transition: transform .16s, box-shadow .16s; }
+.primary-button:hover { transform: translateY(-2px); box-shadow: 0 10px 34px #ffb56635; }
+.primary-button:active { transform: translateY(1px); }
+.start-caption { color: var(--muted); font-size: 14px; margin-top: 14px; }
+.battle-screen { position: absolute; inset: 0; pointer-events: none; }
+.hud { display: flex; justify-content: space-between; padding: 20px 24px; background: linear-gradient(#080f20e8, transparent); }
+.hud-label { display: block; color: #abb9ce; font-size: 14px; margin-bottom: 2px; }
+.hud strong { font: 600 27px/1.2 Consolas, monospace; letter-spacing: .12em; }
+.life { text-align: right; }
+.hearts { color: var(--gold); font-size: 22px; letter-spacing: .08em; }
+.ready-message { position: absolute; inset: 32% 20px auto; display: flex; flex-direction: column; align-items: center; }
+.ready-message h2 { font-size: clamp(23px, 6vw, 30px); font-weight: 600; letter-spacing: .18em; margin: 22px 0 4px .18em; }
+.ready-message p { color: var(--muted); font-size: 14px; letter-spacing: .2em; margin: 0 0 23px; }
+.ready-line { width: 48px; height: 1px; background: var(--cyan); opacity: .6; }
+.secondary-button { position: absolute; bottom: 20px; right: 20px; color: #c0cee0; background: #0c1629b8; border: 1px solid #405773; border-radius: 6px; padding: 8px 13px; min-height: 42px; font-size: 14px; pointer-events: auto; }
+.secondary-button:hover { color: white; border-color: var(--cyan); }
+.lesson-note { display: flex; align-items: flex-start; gap: 12px; margin-top: 18px; color: var(--muted); }
+.lesson-badge { flex: 0 0 auto; border: 1px solid #34455e; border-radius: 5px; padding: 2px 8px; font-size: 14px; color: #c2cee0; }
+.lesson-note p { margin: 0; font-size: 14px; line-height: 1.8; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 360px) { .app { padding: 16px 12px; } .edition { letter-spacing: .05em; } .intro { font-size: 14px; margin-bottom: 24px; } .start-screen { padding: 20px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
