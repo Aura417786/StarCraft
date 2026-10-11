@@ -70,3 +70,42 @@ h1 > span { color: var(--red); }
 .difficulty-readout strong { color: #ffb178; font: 600 12px Consolas, monospace; margin-left: 5px; }
 @media (max-width: 520px) { .difficulty-readout { top: 140px; left: 20px; gap: 16px; font-size: 10px; } }
 @media (max-height: 450px) and (min-width: 521px) { .difficulty-readout { top: 70px; } }
+
+.shield-status { display: block; color: #ffcc83; font: 11px/1.5 Consolas, monospace; }
+.game-over-screen { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; background: #060913e8; padding: 24px; overflow: auto; }
+.result-card { width: min(100%, 380px); text-align: center; }
+.result-card > .eyebrow { justify-content: center; color: #be7c85; font: 10px Consolas, monospace; letter-spacing: .25em; }
+.result-card h2 { margin: 12px 0 8px; font-size: clamp(30px, 5vw, 46px); letter-spacing: .12em; }
+.result-intro { margin: 0 0 28px; color: #8d99ad; font-size: 13px; letter-spacing: .1em; }
+.result-score > span, .result-details span { display: block; color: #909eb2; font-size: 11px; letter-spacing: .1em; }
+.result-score > strong { color: #ffc4a4; font: 500 44px/1.5 Consolas, monospace; letter-spacing: .12em; }
+.result-details { display: flex; justify-content: center; gap: 65px; margin: 18px 0 32px; }
+.result-details strong { display: block; color: #d7e0ee; font: 22px/1.8 Consolas, monospace; }
+.result-card .primary-button { width: 100%; margin-bottom: 12px; }
+.result-card > .secondary-button { width: 100%; }
+.result-tip { color: #65738a; font-size: 10px; margin-top: 20px; }
+@media (max-height: 550px) { .game-over-screen { padding: 16px; } .result-card { width: min(100%, 460px); } .result-card h2 { font-size: 28px; margin: 7px 0; } .result-intro { margin-bottom: 8px; } .result-score > strong { font-size: 30px; } .result-details { margin: 8px 0 12px; } .result-details strong { font-size: 17px; } .result-card .primary-button { min-height: 42px; padding: 5px 20px; } .result-tip { margin: 10px 0 0; } }
+@media (max-height: 550px) {
+  .result-card > .eyebrow { font-size: 9px; line-height: 1.2; }
+  .result-card h2 { font-size: 25px; line-height: 1.3; margin: 7px 0; }
+  .result-intro { display: none; }
+  .result-score > span, .result-details span { font-size: 10px; line-height: 1.4; }
+  .result-score > strong { font-size: 28px; line-height: 1.3; }
+  .result-details { margin: 10px 0 14px; }
+  .result-details strong { font-size: 17px; line-height: 1.4; }
+  .result-card .primary-button { font-size: 15px; line-height: 1.4; margin-bottom: 8px; }
+  .result-card > .secondary-button { min-height: 34px; padding: 5px 14px; }
+  .result-tip { font-size: 9px; line-height: 1.4; margin: 10px 0 0; }
+}
+
+/* 三色球同时用文字和颜色区分效果。 */
+.weapon-readout { position: absolute; top: 95px; right: 3.4vw; display: flex; gap: 16px; color: #9da9bd; font-size: 11px; }
+.weapon-stat { white-space: nowrap; }
+.weapon-stat strong { margin-left: 5px; font: 600 11px/1.6 Consolas, monospace; }
+.weapon-stat.blue strong, .powerup-notice[data-type="blue"] { color: #55bdff; }
+.weapon-stat.yellow strong, .powerup-notice[data-type="yellow"] { color: #ffe16a; }
+.weapon-stat.red strong, .powerup-notice[data-type="red"] { color: #ff6676; }
+.powerup-notice { position: absolute; top: 140px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border: 1px solid currentColor; border-radius: 5px; background: #080e1de8; font-size: 14px; text-align: center; }
+@media (max-width: 1000px) { .weapon-readout { top: 119px; left: 3.4vw; right: auto; gap: 16px; } .powerup-notice { top: 157px; } }
+@media (max-width: 520px) { .weapon-readout { top: 164px; left: 20px; right: 12px; flex-wrap: wrap; gap: 4px 12px; font-size: 10px; } .weapon-stat strong { font-size: 10px; margin-left: 2px; } .powerup-notice { top: 212px; width: max-content; max-width: 90%; font-size: 12px; } }
+@media (max-height: 450px) and (min-width: 521px) { .weapon-readout { top: 94px; left: 3.4vw; right: auto; gap: 14px; } .powerup-notice { top: 124px; padding: 5px 12px; font-size: 12px; } }

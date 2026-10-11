@@ -25,7 +25,7 @@
           <h1>星际<span>突围</span></h1>
           <p class="intro">穿越星海，向前突围。</p>
           <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">→</span></button>
-          <p class="start-caption">方向键 / WASD 操控战机</p>
+          <p class="start-caption">方向键 / WASD 操控 · 射击能量球升级</p>
           <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>
         </div>
         <div class="hangar-art">
@@ -37,17 +37,34 @@
       <div id="battle-screen" class="battle-screen" hidden>
         <div class="hud" aria-label="战场信息">
           <div><span class="hud-label">得分</span><strong id="score">000000</strong></div>
-          <div class="life"><span class="hud-label">训练保护</span><span class="hearts" aria-label="3 点生命">♥ ♥ ♥</span></div>
+          <div class="life"><span class="hud-label">生命</span><span id="player-lives" class="hearts" aria-label="3 点生命">♥ ♥ ♥</span><span id="shield-status" class="shield-status" hidden></span></div>
         </div>
         <div class="difficulty-readout" aria-label="战斗难度"><span>战斗 <time id="battle-clock">00:00</time></span><span>新敌机 <strong id="enemy-strength">1 HP</strong></span></div>
-        <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>上下移动瞄准 · 击毁 +100 · 留意敌机血条</p><span class="flight-direction">每 20 秒新敌机血量增加 <span aria-hidden="true">→</span></span></div>
+        <div class="weapon-readout" aria-label="当前武器强化">
+          <span class="weapon-stat blue">蓝 · 攻速 <strong id="weapon-speed">1级 · 5次/秒</strong></span>
+          <span class="weapon-stat yellow">黄 · 弹道 <strong id="weapon-lanes">1条</strong></span>
+          <span class="weapon-stat red">红 · 伤害 <strong id="weapon-damage">1点</strong></span>
+        </div>
+        <div id="powerup-notice" class="powerup-notice" hidden></div>
+        <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>上下移动瞄准 · 躲避撞击 · 击毁 +100</p><span class="flight-direction">射击能量球：蓝攻速 · 黄弹道 · 红伤害 <span aria-hidden="true">→</span></span></div>
         <div id="pause-hint" class="pause-message" hidden><strong>已暂停</strong><span>点击战场继续战斗</span></div>
         <button id="menu-button" class="secondary-button menu-button" type="button">返回开始画面</button>
       </div>
-      <footer class="lesson-note"><span class="lesson-badge">拦截训练</span><p id="control-instructions">方向键 / WASD 移动<span class="training-note"> · 自动射击 · 击毁 +100 · 当前不会受伤</span></p></footer>
+      <section id="game-over-screen" class="game-over-screen" aria-labelledby="game-over-title" hidden>
+        <div class="result-card">
+          <span class="eyebrow">MISSION REPORT</span>
+          <h2 id="game-over-title">游戏结束</h2>
+          <p class="result-intro">调整航线，再次突围。</p>
+          <div class="result-score"><span>本局得分</span><strong id="final-score">000000</strong></div>
+          <div class="result-details"><div><span>存活时间</span><strong id="final-time">00:00</strong></div><div><span>击毁敌机</span><strong id="final-kills">0</strong></div></div>
+          <button id="restart-button" class="primary-button" type="button">重新开始 <span aria-hidden="true">↗</span></button>
+          <button id="result-menu-button" class="secondary-button" type="button">返回开始画面</button>
+          <p class="result-tip">撞击扣 1 点生命 · 受伤后保护 1.5 秒</p>
+        </div>
+      </section>
+      <footer class="lesson-note"><span class="lesson-badge">正式出击</span><p id="control-instructions">方向键 / WASD 移动<span class="training-note"> · 自动射击 · 击毁 +100 · 撞击扣生命</span></p></footer>
     </section>
     <p id="status" class="sr-only" role="status" aria-live="polite">开始画面已就绪。</p>
   </main>
 </body>
 </html>
-

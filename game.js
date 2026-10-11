@@ -1,6 +1,6 @@
 "use strict";
 
-// 第 4 步扩展：敌机血量随有效战斗时间增加，玩家受伤之后加入。
+// 三色能量球：射击蓝球加攻速、黄球加弹道、红球加单发伤害。
 const canvas = document.querySelector("#game-canvas");
 const context = canvas.getContext("2d");
 const app = document.querySelector("#game-app");
@@ -16,6 +16,18 @@ const fighterImage = document.querySelector("#fighter-art");
 const scoreDisplay = document.querySelector("#score");
 const battleClock = document.querySelector("#battle-clock");
 const enemyStrength = document.querySelector("#enemy-strength");
+const lifeDisplay = document.querySelector("#player-lives");
+const shieldStatus = document.querySelector("#shield-status");
+const gameOverScreen = document.querySelector("#game-over-screen");
+const restartButton = document.querySelector("#restart-button");
+const resultMenuButton = document.querySelector("#result-menu-button");
+const finalScore = document.querySelector("#final-score");
+const finalTime = document.querySelector("#final-time");
+const finalKills = document.querySelector("#final-kills");
+const speedDisplay = document.querySelector("#weapon-speed");
+const lanesDisplay = document.querySelector("#weapon-lanes");
+const damageDisplay = document.querySelector("#weapon-damage");
+const powerupNotice = document.querySelector("#powerup-notice");
 const assetStatus = document.querySelector("#asset-status");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -23,7 +35,18 @@ let state = "menu";
 let previousTime = 0;
 let windowActive = true;
 // interval 是发射间隔（秒），speed 是子弹每秒前进的距离。
-const weapon = { interval: 0.2, speed: 720, length: 26, damage: 1 };
+const weapon = { interval: 0.2, speed: 720, length: 26, damage: 1, speedLevel: 1, lanes: 1 };
+const speedIntervals = [0.2, 0.15, 0.1];
+const powerupRules = { interval: 8, speed: 110, radius: 18, maxOnScreen: 5 };
+const powerups = [];
+let powerupCooldown = 3;
+let powerupSpawnCount = 0;
+let upgradeNoticeTime = 0;
+const powerupTypes = {
+  blue: { color: "#55bdff", label: "攻速", symbol: "»" },
+  yellow: { color: "#ffe16a", label: "弹道", symbol: "Ⅲ" },
+  red: { color: "#ff6676", label: "伤害", symbol: "+" },
+};
 const bullets = [];
 let shotCooldown = 0;
 let muzzleFlash = 0;
@@ -33,6 +56,7 @@ const explosions = [];
 let enemyCooldown = 0.6;
 let enemySpawnCount = 0;
 let score = 0;
+let kills = 0;
 let battleTime = 0;
 let lastDifficultySecond = -1;
 const pressedKeys = new Set();
@@ -42,7 +66,8 @@ const movementKeys = new Set([
 ]);
 // viewport 使用屏幕像素作为坐标；高清画布另按设备像素密度绘制。
 const viewport = { width: 1280, height: 720 };
-const player = { x: 200, y: 360, width: 180, height: 120, speed: 300 };
+const playerRules = { maxLives: 3, protection: 1.5 };
+const player = { x: 200, y: 360, width: 180, height: 120, speed: 300, lives: 3, shield: 0 };
 const flightBounds = { left: 0, right: 0, top: 0, bottom: 0 };
 const stars = Array.from({ length: 150 }, () => ({
   x: Math.random(), y: Math.random(),
@@ -73,7 +98,7 @@ function resizeBattlefield() {
   // HUD 和底部按钮之外，整架战机（包含尾焰）都应留在战场内。
   flightBounds.left = Math.min(viewport.width / 2, player.width / 2 + 12);
   flightBounds.right = Math.max(flightBounds.left, viewport.width - player.width / 2 - 12);
-  const topBar = viewport.width <= 520 ? 140 : Math.min(90, viewport.height * 0.22);
+  const topBar = viewport.width <= 520 ? 200 : Math.min(90, viewport.height * 0.22);
   const bottomBar = Math.min(65, viewport.height * 0.18);
   flightBounds.top = Math.min(viewport.height / 2, topBar + player.height / 2 + 8);
   flightBounds.bottom = Math.max(flightBounds.top, viewport.height - bottomBar - player.height / 2 - 8);
@@ -95,9 +120,14 @@ if (fighterImage.complete) readyFighter();
 
 function showScreen(nextState) {
   clearMovement();
-  resetWeapons();
+  resetWeapons(false);
   resetEncounter();
   resetPlayer();
+  player.lives = playerRules.maxLives;
+  player.shield = 0;
+  updateLifeDisplay();
+  gameOverScreen.hidden = true;
+  menuButton.hidden = false;
   state = nextState;
   const inBattle = state === "battle";
   startScreen.hidden = inBattle;
@@ -108,13 +138,15 @@ function showScreen(nextState) {
     ? "可操作的横向星空战场。红色战机自动向右射击，方向键或 WASD 按屏幕方向移动。"
     : "横向星空战场。点击开始游戏后，红色战机从左侧出发。");
   statusMessage.textContent = inBattle
-    ? "已进入横向战场。上下移动瞄准敌机，机头自动向右射击。敌机初始一击击毁，每 20 秒新敌机血量增加，最高 5 点。击毁得 100 分，当前训练不会受伤。"
+    ? "已进入横向战场。上下移动瞄准敌机，机头自动向右射击。敌机初始一击击毁，每 20 秒新敌机血量增加，最高 5 点。击毁得 100 分，撞击扣 1 点生命，受伤后有 1.5 秒保护。射击能量球升级：蓝色攻速、黄色弹道、红色伤害，各项最高三级。"
     : "已返回开始画面。";
   (inBattle ? canvas : startButton).focus({ preventScroll: true });
   updatePauseHint();
 }
 startButton.addEventListener("click", () => showScreen("battle"));
 menuButton.addEventListener("click", () => showScreen("menu"));
+restartButton.addEventListener("click", () => showScreen("battle"));
+resultMenuButton.addEventListener("click", () => showScreen("menu"));
 
 // 浏览器要求由用户点击按钮才能进入真正的全屏；默认已铺满页面。
 fullscreenButton.hidden = !document.fullscreenEnabled || !app.requestFullscreen;
@@ -194,10 +226,53 @@ function updatePlayer(seconds) {
   player.y = clamp(player.y + vertical / length * player.speed * seconds, flightBounds.top, flightBounds.bottom);
   movementHint.hidden = true;
 }
-function resetWeapons() {
+function resetWeapons(preserveUpgrades = true) {
   bullets.length = 0;
   shotCooldown = 0;
   muzzleFlash = 0;
+  if (!preserveUpgrades) {
+    weapon.speedLevel = 1;
+    weapon.lanes = 1;
+    weapon.damage = 1;
+    weapon.interval = speedIntervals[0];
+  }
+  updateWeaponDisplay();
+}
+function updateWeaponDisplay() {
+  speedDisplay.textContent = weapon.speedLevel + "级 · " + Number((1 / weapon.interval).toFixed(1)) + "次/秒";
+  lanesDisplay.textContent = weapon.lanes + "条";
+  damageDisplay.textContent = weapon.damage + "点";
+}
+function shotOffsets() {
+  if (weapon.lanes === 2) return [-player.height * 0.1, player.height * 0.1];
+  if (weapon.lanes === 3) return [-player.height * 0.2, 0, player.height * 0.2];
+  return [0];
+}
+function applyPowerup(type) {
+  const details = powerupTypes[type];
+  if (!details) return false;
+  let improved = false;
+  if (type === "blue" && weapon.speedLevel < 3) {
+    weapon.speedLevel++;
+    weapon.interval = speedIntervals[weapon.speedLevel - 1];
+    shotCooldown = Math.min(shotCooldown, weapon.interval);
+    improved = true;
+  } else if (type === "yellow" && weapon.lanes < 3) {
+    weapon.lanes++;
+    improved = true;
+  } else if (type === "red" && weapon.damage < 3) {
+    weapon.damage++;
+    improved = true;
+  }
+  updateWeaponDisplay();
+  powerupNotice.textContent = improved
+    ? details.label + "升级！" + (type === "blue" ? speedDisplay.textContent : type === "yellow" ? lanesDisplay.textContent + "弹道" : "每颗子弹 " + damageDisplay.textContent + "伤害")
+    : details.label + "已达上限";
+  powerupNotice.dataset.type = type;
+  powerupNotice.hidden = false;
+  upgradeNoticeTime = 2;
+  statusMessage.textContent = powerupNotice.textContent;
+  return improved;
 }
 function muzzlePosition() {
   // 透明图片的机头位于中心右侧约 46.5% 机身宽度处。
@@ -214,7 +289,9 @@ function updateShooting(seconds) {
   shotCooldown -= seconds;
   if (shotCooldown <= 0.00000001) {
     const muzzle = muzzlePosition();
-    bullets.push({ x: muzzle.x + 3, previousX: muzzle.x + 3, y: muzzle.y });
+    for (const offset of shotOffsets()) {
+      bullets.push({ x: muzzle.x + 3, previousX: muzzle.x + 3, y: muzzle.y + offset, damage: weapon.damage });
+    }
     shotCooldown += weapon.interval;
     muzzleFlash = 0.055;
   }
@@ -224,8 +301,14 @@ function resetEncounter(resetScore = true) {
   explosions.length = 0;
   enemyCooldown = 0.6;
   enemySpawnCount = 0;
+  powerups.length = 0;
   if (resetScore) {
+    powerupCooldown = 3;
+    powerupSpawnCount = 0;
+    upgradeNoticeTime = 0;
+    powerupNotice.hidden = true;
     score = 0;
+    kills = 0;
     battleTime = 0;
     lastDifficultySecond = -1;
   }
@@ -258,8 +341,8 @@ function spawnEnemy() {
     speed: enemyRules.speed * (0.9 + Math.random() * 0.2) });
   enemySpawnCount++;
 }
-function createExplosion(enemy) {
-  explosions.push({ x: enemy.x, y: enemy.y, age: 0,
+function createExplosion(enemy, points = enemyRules.points) {
+  explosions.push({ x: enemy.x, y: enemy.y, age: 0, points,
     duration: reducedMotion.matches ? 0.2 : 0.55,
     particles: Array.from({ length: 12 }, (_, index) => {
       const angle = index / 12 * Math.PI * 2 + Math.random() * 0.3;
@@ -297,33 +380,161 @@ function updateEncounter(seconds) {
     if (enemies.length < enemyRules.maxOnScreen) spawnEnemy();
     enemyCooldown += enemyRules.interval;
   }
-  for (let bulletIndex = bullets.length - 1; bulletIndex >= 0; bulletIndex--) {
-    const bullet = bullets[bulletIndex];
-    let hitIndex = -1;
-    // 选择弹道上先遇到的敌机。一颗子弹造成一次伤害，不会穿透整排。
-    for (let enemyIndex = 0; enemyIndex < enemies.length; enemyIndex++) {
-      const enemy = enemies[enemyIndex];
-      if (enemy.x - enemy.width / 2 >= viewport.width || !bulletHitsEnemy(bullet, enemy)) continue;
-      if (hitIndex < 0 || enemy.x < enemies[hitIndex].x) hitIndex = enemyIndex;
-    }
-    if (hitIndex >= 0) {
-      const enemy = enemies[hitIndex];
-      bullets.splice(bulletIndex, 1);
-      enemy.hp = Math.max(0, enemy.hp - weapon.damage);
-      enemy.hitFlash = 0.08;
-      if (enemy.hp === 0) {
-        createExplosion(enemy);
-        enemies.splice(hitIndex, 1);
-        score += enemyRules.points;
-        scoreDisplay.textContent = String(score).padStart(6, "0");
-        movementHint.hidden = true;
-      }
-    }
+
+}
+function spawnPowerup() {
+  const radius = powerupRules.radius;
+  const type = ["blue", "yellow", "red"][powerupSpawnCount % 3];
+  const x = viewport.width + radius + 4;
+  // 在不同高度出现，让球能被看见，也让玩家有机会选择瞄准哪种效果。
+  const lanes = [0.36, 0.64, 0.22, 0.78, 0.5];
+  const lane = lanes[powerupSpawnCount % lanes.length];
+  const y = flightBounds.top + (flightBounds.bottom - flightBounds.top) * lane;
+  powerups.push({ x, previousX: x, y, radius, type });
+  powerupSpawnCount++;
+}
+function bulletHitsPowerup(bullet, orb) {
+  // 球体而不是方形碰撞范围；检测相对移动整段路径，避免高速穿过。
+  const vertical = Math.max(0, Math.abs(bullet.y - orb.y) - 2.5);
+  if (vertical > orb.radius) return false;
+  const reach = Math.sqrt(orb.radius * orb.radius - vertical * vertical);
+  return bullet.previousX - orb.previousX <= reach
+    && bullet.x + weapon.length - orb.x >= -reach;
+}
+function updatePowerups(seconds) {
+  if (!isBattleActive()) return;
+  upgradeNoticeTime = Math.max(0, upgradeNoticeTime - seconds);
+  powerupNotice.hidden = upgradeNoticeTime <= 0;
+  for (let index = powerups.length - 1; index >= 0; index--) {
+    const orb = powerups[index];
+    orb.previousX = orb.x;
+    orb.x -= powerupRules.speed * seconds;
+    if (orb.x + orb.radius < 0) powerups.splice(index, 1);
   }
-  // 碰撞判定后再清理出界子弹，确保靠近右边缘的命中也能算分。
+  powerupCooldown -= seconds;
+  if (powerupCooldown <= 0.00000001) {
+    if (powerups.length < powerupRules.maxOnScreen) spawnPowerup();
+    powerupCooldown += powerupRules.interval;
+  }
+  resolveProjectileHits();
   for (let index = bullets.length - 1; index >= 0; index--) {
     if (bullets[index].x > viewport.width) bullets.splice(index, 1);
   }
+}
+function resolveProjectileHits() {
+  for (let bulletIndex = bullets.length - 1; bulletIndex >= 0; bulletIndex--) {
+    const bullet = bullets[bulletIndex];
+    let hit = null;
+    for (let index = 0; index < enemies.length; index++) {
+      const enemy = enemies[index];
+      const leadingEdge = enemy.x - enemy.width * 0.45;
+      if (enemy.x - enemy.width / 2 >= viewport.width || !bulletHitsEnemy(bullet, enemy)) continue;
+      if (!hit || leadingEdge < hit.edge) hit = { kind: "enemy", index, edge: leadingEdge };
+    }
+    for (let index = 0; index < powerups.length; index++) {
+      const orb = powerups[index];
+      const vertical = Math.max(0, Math.abs(bullet.y - orb.y) - 2.5);
+      const leadingEdge = orb.x - Math.sqrt(Math.max(0, orb.radius * orb.radius - vertical * vertical));
+      if (orb.x - orb.radius >= viewport.width || !bulletHitsPowerup(bullet, orb)) continue;
+      if (!hit || leadingEdge < hit.edge) hit = { kind: "orb", index, edge: leadingEdge };
+    }
+    if (!hit) continue;
+    bullets.splice(bulletIndex, 1);
+    if (hit.kind === "orb") {
+      const orb = powerups.splice(hit.index, 1)[0];
+      applyPowerup(orb.type);
+    } else {
+      const enemy = enemies[hit.index];
+      enemy.hp = Math.max(0, enemy.hp - (bullet.damage ?? weapon.damage));
+      enemy.hitFlash = 0.08;
+      if (enemy.hp === 0) {
+        createExplosion(enemy);
+        enemies.splice(hit.index, 1);
+        score += enemyRules.points;
+        kills++;
+        scoreDisplay.textContent = String(score).padStart(6, "0");
+      }
+    }
+    movementHint.hidden = true;
+  }
+}
+function drawPowerups() {
+  for (const orb of powerups) {
+    const details = powerupTypes[orb.type];
+    context.save();
+    context.translate(orb.x, orb.y);
+    context.strokeStyle = details.color;
+    context.fillStyle = "#101e35";
+    context.lineWidth = 2;
+    context.shadowColor = details.color;
+    context.shadowBlur = reducedMotion.matches ? 0 : 16;
+    context.beginPath();
+    context.arc(0, 0, orb.radius, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.shadowBlur = 0;
+    context.fillStyle = details.color;
+    context.textAlign = "center";
+    context.font = "700 20px Consolas, monospace";
+    context.fillText(details.symbol, 0, 7);
+    context.font = "11px Microsoft YaHei, sans-serif";
+    context.fillText(details.label, 0, -orb.radius - 8);
+    context.restore();
+  }
+}
+function updateLifeDisplay() {
+  lifeDisplay.textContent = Array.from({ length: playerRules.maxLives }, (_, index) =>
+    index < player.lives ? "♥" : "♡").join(" ");
+  lifeDisplay.setAttribute("aria-label", player.lives + " 点生命");
+  shieldStatus.hidden = player.shield <= 0 || player.lives <= 0;
+  const label = "保护 " + (Math.ceil(player.shield * 10) / 10).toFixed(1) + "s";
+  if (shieldStatus.textContent !== label) shieldStatus.textContent = label;
+}
+function playerTouchesEnemy(enemy) {
+  // 使用机身中心作为碰撞范围，给机翼留出一点容错。
+  return Math.abs(player.x - enemy.x) <= player.width * 0.3 + enemy.width * 0.4
+    && Math.abs(player.y - enemy.y) <= player.height * 0.26 + enemy.height * 0.34;
+}
+function updatePlayerDamage(seconds) {
+  if (!isBattleActive()) return;
+  player.shield = Math.max(0, player.shield - seconds);
+  if (player.shield <= 0) {
+    for (let index = 0; index < enemies.length; index++) {
+      const enemy = enemies[index];
+      if (!playerTouchesEnemy(enemy)) continue;
+      enemies.splice(index, 1);
+      createExplosion(enemy, 0); // 撞毁敌机不会获得击杀分数。
+      player.lives = Math.max(0, player.lives - 1);
+      movementHint.hidden = true;
+      if (player.lives === 0) {
+        endGame();
+      } else {
+        player.shield = playerRules.protection;
+        statusMessage.textContent = "受到撞击，剩余 " + player.lives + " 点生命，获得 1.5 秒保护。";
+      }
+      break; // 同一帧撞到多架敌机，也只扣一次生命。
+    }
+  }
+  updateLifeDisplay();
+}
+function endGame() {
+  state = "over";
+  clearMovement();
+  resetWeapons();
+  player.shield = 0;
+  updateLifeDisplay();
+  canvas.tabIndex = -1;
+  canvas.setAttribute("aria-label", "本局已结束，战场已停止。选择重新开始可再玩一局。");
+  movementHint.hidden = true;
+  pauseHint.hidden = true;
+  powerupNotice.hidden = true;
+  menuButton.hidden = true;
+  finalScore.textContent = String(score).padStart(6, "0");
+  finalTime.textContent = battleClock.textContent;
+  finalKills.textContent = String(kills);
+  gameOverScreen.hidden = false;
+  statusMessage.textContent = "游戏结束。本局得分 " + score + "，击毁 " + kills + " 架敌机。";
+  restartButton.focus({ preventScroll: true });
 }
 function drawEnemies() {
   for (const enemy of enemies) {
@@ -398,8 +609,10 @@ function drawExplosions() {
     context.fillStyle = "#ffe3a5";
     context.font = "600 16px Consolas, monospace";
     context.textAlign = "center";
-    context.fillText("+" + enemyRules.points, explosion.x,
-      explosion.y - 28 - (reducedMotion.matches ? 0 : progress * 24));
+    if (explosion.points > 0) {
+      context.fillText("+" + explosion.points, clamp(explosion.x, 30, viewport.width - 30),
+        explosion.y - 28 - (reducedMotion.matches ? 0 : progress * 24));
+    }
     context.restore();
   }
 }
@@ -423,14 +636,26 @@ function drawMuzzleFlash() {
   context.fillStyle = "#ffdf9d";
   context.shadowColor = "#ff8a4a";
   context.shadowBlur = 14;
-  context.beginPath();
-  context.ellipse(muzzle.x + 3, muzzle.y, 8, 4, 0, 0, Math.PI * 2);
-  context.fill();
+  for (const offset of shotOffsets()) {
+    context.beginPath();
+    context.ellipse(muzzle.x + 3, muzzle.y + offset, 8, 4, 0, 0, Math.PI * 2);
+    context.fill();
+  }
   context.restore();
 }
 function drawPlayer() {
   if (state !== "battle" || !fighterImage.complete || !fighterImage.naturalWidth) return;
+  context.save();
+  if (player.shield > 0) {
+    context.strokeStyle = "#ffcc83";
+    context.lineWidth = 2;
+    context.globalAlpha = reducedMotion.matches ? 0.8 : 0.65 + Math.sin(player.shield * 8) * 0.15;
+    context.beginPath();
+    context.ellipse(player.x, player.y, player.width * 0.55, player.height * 0.6, 0, 0, Math.PI * 2);
+    context.stroke();
+  }
   context.drawImage(fighterImage, player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
+  context.restore();
 }
 function drawFrame(time) {
   const seconds = previousTime ? Math.min((time - previousTime) / 1000, 0.05) : 0;
@@ -438,6 +663,8 @@ function drawFrame(time) {
   updatePlayer(seconds);
   updateShooting(seconds);
   updateEncounter(seconds);
+  updatePowerups(seconds);
+  updatePlayerDamage(seconds);
   context.clearRect(0, 0, viewport.width, viewport.height);
   for (const star of stars) {
     // 原来的向下滚动顺时针转 90 度，变成从右向左滚动。
@@ -450,15 +677,13 @@ function drawFrame(time) {
   }
   context.globalAlpha = 1;
   drawEnemies();
+  drawPowerups();
   drawBullets();
   drawPlayer();
   drawMuzzleFlash();
   drawExplosions();
   window.requestAnimationFrame(drawFrame);
 }
+updateLifeDisplay();
 resizeBattlefield();
 window.requestAnimationFrame(drawFrame);
-
-
-
-
