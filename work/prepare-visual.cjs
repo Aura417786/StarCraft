@@ -1,0 +1,11 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.join(__dirname,'..');
+let html = fs.readFileSync(path.join(root,'index.html'),'utf8').replace('<head>','<head>\n<base href="/">');
+const controls = [['orbit','轨道'],['belt','陨石'],['wreck','残骸'],['citadel','巨舰'],['rift','裂隙'],['escort','护航'],['command','楔队'],['pincer','包抄'],['boss0','苍穹'],['boss1','赤焰'],['boss2','紫电'],['boss3','蜂后'],['boss4','堡垒'],['break','拆上炮'],['duo','双首领'],['props','战场物件'],['transport','运输舰'],['journey','飞行过渡'],['live','正常游玩'],['hide','收起验收栏']];
+const bar='<aside id="qa-bar" style="position:fixed;bottom:0;left:0;right:0;z-index:90;padding:5px;display:flex;gap:4px;flex-wrap:wrap;background:#101928;">'+controls.map(([key,name])=>`<button data-qa="${key}" style="font:11px sans-serif;padding:4px 6px;border:1px solid #63758d;border-radius:4px;background:#24334b;color:#dcecff">${name}</button>`).join('')+'<span id="qa-error" style="color:#ff8a8a;font:11px sans-serif">验收场景</span></aside><script src="work/v13-visual.js" defer></script>';
+fs.writeFileSync(path.join(__dirname,'v13-visual.html'),html.replace('</body>',bar+'</body>'));
+let server=fs.readFileSync(path.join(__dirname,'preview.cjs'),'utf8');
+server=server.replace("const allowed = new Map([", "const allowed = new Map([['/work/v13-visual.html',['work/v13-visual.html','text/html']],['/work/v13-visual.js',['work/v13-visual.js','text/javascript']],");
+server=server.replaceAll('4173','4193');
+fs.writeFileSync(path.join(__dirname,'qa-server.cjs'),server);
