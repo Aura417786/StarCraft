@@ -1,0 +1,37 @@
+/* 独立展示页，正式游戏入口不加载。 */
+.showcase-controls {
+  position: fixed;
+  z-index: 120;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  width: min(94vw, 740px);
+  padding: 14px 18px;
+  border: 1px solid #ffffff30;
+  border-radius: 10px;
+  background: #0b1125ee;
+  box-shadow: 0 12px 50px #0008;
+  color: #dce3f1;
+  font: 13px/1.6 "Microsoft YaHei", sans-serif;
+}
+.showcase-controls p { margin: 0 0 10px; }
+.showcase-controls .showcase-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.showcase-controls button, .showcase-controls a {
+  min-height: 36px;
+  padding: 7px 14px;
+  border: 1px solid #7a8ca855;
+  border-radius: 5px;
+  background: #18253c;
+  color: #e5efff;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.showcase-controls button:first-child { background: #b83246; border-color: #fa7287; }
+.showcase-controls button:disabled { opacity: .5; cursor: wait; }
+.showcase-controls [hidden] { display: none !important; }
+body[data-showcase-active="true"] .showcase-controls,
+body[data-showcase-active="true"] .masthead,
+body[data-showcase-active="true"] #battle-screen,
+body[data-showcase-active="true"] .lesson-note,
+body[data-showcase-active="true"] #evolution-screen { visibility: hidden; }

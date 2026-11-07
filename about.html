@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="星际突围是一款电脑浏览器飞机射击小游戏。拆毁首领炮组、连击暴走、三选一进化，穿越五片太空战场。">
+  <meta name="theme-color" content="#090b11">
+  <title>星际突围 · STAR BREAKER | 即刻出击</title>
+  <link rel="stylesheet" href="about.css">
+  <script src="about.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <header class="site-header">
+    <a class="wordmark" href="about.html" aria-label="星际突围首页"><span class="brand-star" aria-hidden="true">✦</span><span>星际突围<small>STAR BREAKER</small></span></a>
+    <nav aria-label="页面导航"><a href="#brief">作战简报</a><a href="#journey">五片星域</a><a href="#feedback">试玩反馈</a></nav>
+    <a class="header-play" href="index.html">进入战场 <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <img class="hero-scenery" src="assets/scenery/orbit.png" alt="行星地表的山脉、云海和晨昏线">
+      <div class="hero-shade"></div>
+      <div class="hero-copy">
+        <p class="eyebrow"><span></span> v13 · 深空远征</p>
+        <h1 id="hero-title">从晨昏线，<br>打进巨舰深处。</h1>
+        <p class="hero-description">驾驶赤焰战机，拆掉首领的火力。<br>在连击中暴走，在每次进化后继续向前。</p>
+        <div class="hero-actions"><a class="button button-primary" href="index.html">立即试玩 <span aria-hidden="true">→</span></a><a class="trailer-link" href="media/trailer.mp4"><span class="play-symbol" aria-hidden="true">▶</span> 看 30 秒演示</a></div>
+        <p class="platform-note">电脑浏览器 · 键盘操作 · 单人无尽生存</p>
+      </div>
+      <img class="hero-fighter" src="assets/red-fighter.png" alt="红色重装战机，舰首向右，双引擎喷出尾焰">
+      <div class="hero-caption"><span>CRIMSON / ASSAULT FIGHTER</span><strong>赤焰重装突击型</strong></div>
+      <div class="hero-bottom"><span>一段不断向前的太空旅程</span><a href="#brief">向下了解作战方式 <span aria-hidden="true">↓</span></a></div>
+    </section>
+
+    <section class="brief section-wrap" id="brief" aria-labelledby="brief-title">
+      <div class="section-heading"><p class="eyebrow">FLIGHT BRIEF / 作战简报</p><h2 id="brief-title">飞行只是开始。<br><span>怎么打，由你决定。</span></h2><p>自动射击让你把注意力放在瞄准、走位和反击时机。活得越久，敌军越强，战机也拥有更多可能。</p></div>
+      <div class="feature-layout">
+        <figure class="boss-figure"><div class="target-orbit"></div><img src="assets/bosses/boss-0.png" alt="苍穹霸主首领，两侧安装厚重金属炮组" loading="lazy"><figcaption><span>THREAT IDENTIFIED</span>苍穹霸主 · 瞄准炮组，削弱火力</figcaption></figure>
+        <div class="feature-list">
+          <article><span class="feature-index">01 / DISARM</span><h3>先拆炮，再击破首领</h3><p>瞄准上、下炮组可以停掉对应攻击。直击中轴，或逐个拆掉武器，选择你的突破口。后期还有双首领协同挑战。</p></article>
+          <article><span class="feature-index">02 / OVERDRIVE</span><h3>把连击，打成一轮暴走</h3><p>连续击毁敌军，积攒更猛烈的火力。切换扩散或聚焦姿态，在清场和集中攻击之间找到节奏。</p></article>
+          <article><span class="feature-index">03 / EVOLVE</span><h3>击破之后，三选一进化</h3><p>翼刃穿透、焚星爆破、赤金壁垒。能力和机型一起变化，三条路线可以混合搭配。</p></article>
+        </div>
+      </div>
+      <div class="controls"><div><kbd>WASD</kbd><span>或方向键移动</span></div><div><kbd>Shift</kbd><span>切换射击姿态</span></div><div><kbd>Space</kbd><span>释放贯星炮</span></div><div><kbd>V</kbd><span>开启护盾</span></div><p>点击战场取得键盘控制。切走窗口会暂停。</p></div>
+    </section>
+
+    <section class="journey" id="journey" aria-labelledby="journey-title">
+      <div class="section-heading section-wrap"><p class="eyebrow">THE LONG FLIGHT / 五片星域</p><h2 id="journey-title">战场从身边经过，<br><span>远方不断展开。</span></h2><p>每段航程 75 秒，最后 10 秒平滑换景。行星、陨石、舰队残骸和巨舰组成持续向左流动的太空旅程。</p></div>
+      <div class="scene-strip" tabindex="0" role="region" aria-label="五片星域预览，可横向滚动">
+        <figure><img src="assets/scenery/orbit.png" alt="山脉与蓝色大气层的曙光轨道" loading="lazy"><figcaption><span>01 / DAWN</span><strong>曙光轨道</strong></figcaption></figure>
+        <figure><img src="assets/scenery/belt.png" alt="巨行星附近的陨石带" loading="lazy"><figcaption><span>02 / SHATTERED</span><strong>碎星航道</strong></figcaption></figure>
+        <figure><img src="assets/scenery/wreck.png" alt="破损舰队留下的金属残骸" loading="lazy"><figcaption><span>03 / AFTERMATH</span><strong>余烬墓场</strong></figcaption></figure>
+        <figure><img src="assets/scenery/citadel.png" alt="巨型战舰的装甲与机库" loading="lazy"><figcaption><span>04 / CITADEL</span><strong>深空壁垒</strong></figcaption></figure>
+        <figure><img src="assets/scenery/rift.png" alt="深空中的黑洞与紫色气体光环" loading="lazy"><figcaption><span>05 / BEYOND</span><strong>虚空之眼</strong></figcaption></figure>
+      </div>
+      <p class="scroll-note section-wrap">向右滚动，查看航程 <span aria-hidden="true">⟶</span></p>
+    </section>
+
+    <section class="recruit section-wrap" id="feedback" aria-labelledby="feedback-title">
+      <div class="recruit-copy"><p class="eyebrow"><span></span> FIRST FLIGHT / 首批试玩招募中</p><h2 id="feedback-title">想找 10 位，<br>第一次飞进来的你。</h2><p>这款游戏从零开始，用 vibe coding 一步步做到了 v13。现在想听听第一次玩的人，最真实的感受。</p><p>不用写长评。玩一局，留下三个瞬间就好。</p><a class="button button-primary" href="index.html">先飞一局 <span aria-hidden="true">↗</span></a><p class="feedback-note">完成后把反馈发给邀请你试玩的人。此页可帮你整理文字。</p></div>
+      <form class="feedback-form" id="feedback-form">
+        <div class="form-heading"><span>YOUR FLIGHT REPORT</span><strong>一局之后，告诉我</strong></div>
+        <label for="first-death"><span>01</span>第一次死亡发生在哪里？</label><textarea id="first-death" name="first-death" rows="2" placeholder="例如：第一只 Boss 的光束，或没看清的小怪……"></textarea>
+        <label for="best-moment"><span>02</span>哪个瞬间让你觉得最爽？</label><textarea id="best-moment" name="best-moment" rows="2" placeholder="例如：拆掉炮组、暴走清场、第一次开大招……"></textarea>
+        <label for="leave-reason"><span>03</span>你想继续，还是想退出？为什么？</label><textarea id="leave-reason" name="leave-reason" rows="2" placeholder="难度、节奏、操作、画面，都可以说。"></textarea>
+        <button class="button button-outline" type="submit">复制我的反馈 <span aria-hidden="true">↗</span></button>
+        <p class="copy-status" id="copy-status" role="status" aria-live="polite">填写后复制，再发给邀请你试玩的人。</p>
+        <textarea class="copy-fallback" id="copy-fallback" aria-label="可手动复制的反馈文字" readonly hidden></textarea>
+      </form>
+    </section>
+
+    <footer class="site-footer section-wrap"><div class="footer-name"><span class="brand-star" aria-hidden="true">✦</span><strong>星际突围 <small>STAR BREAKER</small></strong></div><p>原生 Canvas 2D · 原创生成素材与 2.5D 视差 · Web Audio 合成音乐</p><a href="index.html">回到战场 <span aria-hidden="true">→</span></a></footer>
+  </main>
+</body>
+</html>
