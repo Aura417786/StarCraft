@@ -232,6 +232,7 @@ fighterImage.addEventListener("error", readyFighter);
 if (fighterImage.complete) readyFighter();
 
 function showScreen(nextState) {
+  resetShipVisuals();
   resetBattlefield();
   resetCombatEffects();
   resetEvolution();
@@ -893,7 +894,8 @@ function drawPlayer() {
     context.stroke();
   }
   context.globalAlpha = 1;
-  if (!drawEvolvedPlayer(context, player, evolution, reducedMotion.matches, battleTime))
+  if (!drawEvolvedPlayer(context, player, evolution, reducedMotion.matches, battleTime)
+    && !drawShipPBR(context, player, "crimson", null, reducedMotion.matches, shipVisuals.clock))
     context.drawImage(fighterImage, player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
   context.restore();
 }
@@ -907,6 +909,7 @@ function drawFrame(time) {
   updateEvolution(seconds);
   updateShield(seconds);
   updatePlayer(seconds);
+  updateShipVisuals(seconds);
   updateShooting(seconds);
   updateEncounter(seconds);
   updateBossEncounter(seconds);

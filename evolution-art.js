@@ -7,6 +7,7 @@ function drawEvolvedPlayer(ctx, ship, upgrades, quiet = false, time = 0) {
   const pierce = rank(upgrades?.pierce), blast = rank(upgrades?.blast), aegis = rank(upgrades?.aegis);
   if (!(pierce || blast || aegis)) return false;
   if (!(ship.width > 0 && ship.height > 0)) return false;
+  if (drawShipPBR(ctx, ship, "crimson", { pierce, blast, aegis }, quiet, time)) return true;
   const phase = quiet ? 0 : Math.sin((Number(time) || 0) * 7.5);
   ctx.save();
   ctx.translate(ship.x, ship.y);
