@@ -100,6 +100,7 @@ function formationPlan(kind) {
 }
 
 function trySpawnFormation(kind) {
+  if (aceBlocksWaves() || gravityTideBusy()) return false;
   if (!isBattleActive() || bossBlocksWaves() || battleTime < formationRules.firstArrival
     || formationState.warning || formationState.active) return false;
   if (typeof battlefieldEventBlocksWaves === "function" && battlefieldEventBlocksWaves()) return false;
@@ -116,6 +117,7 @@ function trySpawnFormation(kind) {
 }
 
 function launchFormation(plan) {
+  if (aceBlocksWaves() || gravityTideBusy()) return false;
   if (bossBlocksWaves() || enemies.length + plan.slots.length > enemyRules.maxOnScreen) return false;
   if (plan.kind === "pincer" && plan.safeBottom - plan.safeTop < player.height + 24) return false;
   const group = { ...plan, id: formationState.nextId++, x: viewport.width + 84, age: 0,

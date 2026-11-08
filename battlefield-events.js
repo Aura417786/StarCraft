@@ -38,6 +38,7 @@ function spawnBattlefieldObject(kind) {
   return object;
 }
 function spawnSupplyTransport() {
+  if (aceBlocksWaves() || gravityTideBusy()) return null;
   if (enemies.length > enemyRules.maxOnScreen - 3 || viewport.width < 520 || viewport.height < 380) return null;
   const width = Math.min(155, player.width * 0.96), x = viewport.width + width;
   const y = flightBounds.top + (flightBounds.bottom - flightBounds.top) * (battlefieldEvents.objectCount % 2 ? 0.35 : 0.65);
@@ -94,6 +95,7 @@ function updateBattlefieldEvents(seconds) {
     spawnBattlefieldObject(); battlefieldEvents.nextObject = battleTime + 18;
   }
   if (battleTime >= battlefieldEvents.nextTransport && !battlefieldEventBlocksWaves()
+      && !aceBlocksWaves() && !gravityTideBusy()
       && !(typeof formationsBlockWaves === "function" && formationsBlockWaves())) {
     if (spawnSupplyTransport()) battlefieldEvents.nextTransport = battleTime + 76;
     else battlefieldEvents.nextTransport = battleTime + 3;

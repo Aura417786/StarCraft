@@ -93,7 +93,7 @@ const position = () => vm.runInContext('({ x: player.x, y: player.y })', sandbox
 const bounds = vm.runInContext('flightBounds', sandbox);
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
 // 各旧功能用例隔离自动刷新的事件；v13-check 会显式开启新事件计时。
-function begin() { emit(window, 'focus'); emit(nodes.get('#start-button'), 'click'); vm.runInContext('powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity; formationState.nextTime = Infinity; battlefieldEvents.nextObject = Infinity; battlefieldEvents.nextTransport = Infinity;', sandbox); step(); }
+function begin() { emit(window, 'focus'); emit(nodes.get('#start-button'), 'click'); vm.runInContext('powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity; formationState.nextTime = Infinity; battlefieldEvents.nextObject = Infinity; battlefieldEvents.nextTransport = Infinity; if(typeof aceEncounter!=="undefined")aceEncounter.nextTime=Infinity;', sandbox); step(); }
 function key(code, type = 'keydown', extra) { return emit(window, type, { code, ...extra }); }
 function samePosition(a, b) { assert.equal(a.x, b.x); assert.equal(a.y, b.y); }
 let checks = 0;
@@ -653,5 +653,6 @@ check('transient zero-size notifications leave the current battle untouched', ()
 
 process.stdout.write(`\n${checks} v13 integration checks passed, ${failedChecks} failed.\n`);
 if (failedChecks) process.exitCode=1;
+
 
 

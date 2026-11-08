@@ -49,6 +49,7 @@ function tryPerfectShield() {
   // 先消费机会，再结算伤害。击杀 Boss 可能清空弹幕并开始解体演出。
   shield.perfectUsed = true;
   shield.perfectRemaining = 0;
+  armCannonLink();
   shield.flash = 0.65;
   shield.slowRemaining = reducedMotion.matches ? 0 : shieldRules.slowDuration;
   gainShieldEnergy(evolutionShieldChargeTime() * shieldRules.refundFraction);
@@ -71,8 +72,8 @@ function tryPerfectShield() {
       damageLog: Math.min(counterLog, target.healthLog + Math.log(shieldRules.bossDamageCap)) }, target);
   }
   updateShieldDisplay();
-  if (isBattleActive()) statusMessage.textContent = "完美格挡！赤焰反击，返还 25% 护盾充能。";
-  else shield.slowRemaining = 0;
+  if (isBattleActive()) statusMessage.textContent = "完美格挡！返还 25% 护盾充能，3 秒内可消耗已存贯星炮速蓄连携。";
+  else { shield.slowRemaining = 0; resetCannonLink(); }
   return true;
 }
 function shieldFrameSeconds(realSeconds) {

@@ -4,6 +4,9 @@
 const ultimateRules = { maxCharges: 5, energyPerCharge: 100, enemyEnergy: 12, bossEnergy: 180,
   chargeTime: 0.85, bossDamageCap: 0.18 };
 const ultimate = { charges: 0, energy: 0, phase: "idle", elapsed: 0, shot: null, audioActive: false };
+// 连携只缩短下一次成功消费的蓄力；时长在按下空格时锁定，不追溯改变正在蓄力的炮。
+const cannonLink = { remaining: 0, chargeDuration: ultimateRules.chargeTime, chargingLinked: false };
+const cannonLinkRules = { duration: 3, chargeTime: 0.45 };
 const ultimatePanel = document.querySelector("#ultimate-hud");
 const ultimateCount = document.querySelector("#ultimate-count");
 const ultimateMeter = document.querySelector("#ultimate-meter");
@@ -20,11 +23,38 @@ function updateUltimateDisplay() {
   ultimateMeter.setAttribute("aria-valuetext", full ? "已储满 5 次" : "积能 " + Math.floor(progress) + "%");
   ultimatePanel.dataset.ready = String(ultimate.charges > 0);
   ultimatePanel.dataset.phase = ultimate.phase;
+  ultimatePanel.dataset.linked = String(cannonLink.remaining > 1e-9 || cannonLink.chargingLinked);
   ultimateSlots.forEach((slot, index) => { slot.dataset.filled = String(index < ultimate.charges); });
-  ultimateLabel.textContent = ultimate.phase === "charging" ? "蓄力中 · 保持瞄准"
-    : ultimate.phase === "firing" ? "贯穿发射"
+  const countdown = (Math.ceil(cannonLink.remaining * 10) / 10).toFixed(1);
+  const opportunity = cannonLink.remaining > 1e-9;
+  ultimateLabel.textContent = ultimate.phase === "charging" ? (cannonLink.chargingLinked ? "完美连携速蓄 · 保持瞄准"
+      : opportunity ? "蓄力中 · 连携保留 " + countdown + " 秒" : "蓄力中 · 保持瞄准")
+    : ultimate.phase === "firing" ? (cannonLink.chargingLinked ? "完美连携 · 贯穿发射"
+      : opportunity ? "贯穿发射 · 连携 " + countdown + " 秒" : "贯穿发射")
+    : opportunity ? "完美连携 " + countdown + " 秒 · " + (ultimate.charges ? "空格速蓄" : "需已存炮弹")
     : full ? "储能已满 · 空格释放"
     : ultimate.charges ? "空格释放 · 命中继续积能" : "命中敌军积能";
+}
+function armCannonLink() {
+  if (!isBattleActive()) return false;
+  cannonLink.remaining = cannonLinkRules.duration;
+  updateUltimateDisplay();
+  return true;
+}
+function resetCannonLink() {
+  cannonLink.remaining = 0;
+  updateUltimateDisplay();
+}
+function updateCannonLink(seconds) {
+  // 暂停和隐藏只冻结窗口；战斗结束、Boss 解体或选卡会彻底清除机会。
+  if (state !== "battle" || evolution.pending || isBossDeathPlaying()) {
+    if (cannonLink.remaining) resetCannonLink();
+    return;
+  }
+  if (!isBattleActive() || !Number.isFinite(seconds) || seconds <= 0 || cannonLink.remaining <= 0) return;
+  cannonLink.remaining = Math.max(0, cannonLink.remaining - seconds);
+  if (cannonLink.remaining < 1e-9) cannonLink.remaining = 0;
+  updateUltimateDisplay();
 }
 function gainUltimateEnergy(fraction, kind = "enemy") {
   if (state !== "battle" || !Number.isFinite(fraction) || fraction <= 0 || ultimate.charges >= ultimateRules.maxCharges) return;
@@ -45,6 +75,9 @@ function ultimateDamageLog() {
 function ultimateSuppressesFire() { return ultimate.phase === "charging" || ultimate.phase === "firing"; }
 function requestUltimate() {
   if (!isBattleActive() || ultimate.phase !== "idle" || ultimate.charges <= 0) return false;
+  cannonLink.chargingLinked = cannonLink.remaining > 1e-9;
+  cannonLink.chargeDuration = cannonLink.chargingLinked ? cannonLinkRules.chargeTime : ultimateRules.chargeTime;
+  if (cannonLink.chargingLinked) cannonLink.remaining = 0;
   ultimate.charges--;
   ultimate.phase = "charging";
   ultimate.elapsed = 0;
@@ -52,17 +85,18 @@ function requestUltimate() {
   pendingShots = 0;
   muzzleFlash = 0;
   movementHint.hidden = true;
-  gameAudio.chargeUltimate(ultimateRules.chargeTime);
+  gameAudio.chargeUltimate(cannonLink.chargeDuration);
   ultimate.audioActive = !gameAudio.muted;
   updateUltimateDisplay();
-  statusMessage.textContent = "赤焰贯星炮蓄力中，对准目标，随后自动发射。";
+  statusMessage.textContent = cannonLink.chargingLinked ? "完美连携！赤焰贯星炮 0.45 秒速蓄，对准目标，随后自动发射。"
+    : "赤焰贯星炮蓄力中，对准目标，随后自动发射。";
   return true;
 }
 function syncUltimateAudio(active) {
   const audible = active && !gameAudio.muted;
   if (ultimate.audioActive && !audible) gameAudio.stopUltimate();
   if (!ultimate.audioActive && audible && ultimate.phase === "charging") {
-    gameAudio.chargeUltimate(Math.max(0.02, ultimateRules.chargeTime - ultimate.elapsed));
+    gameAudio.chargeUltimate(Math.max(0.02, cannonLink.chargeDuration - ultimate.elapsed));
   }
   ultimate.audioActive = audible;
 }
@@ -75,12 +109,16 @@ function cancelUltimate(refundCharge = false) {
   ultimate.elapsed = 0;
   ultimate.shot = null;
   ultimate.audioActive = false;
+  cannonLink.chargeDuration = ultimateRules.chargeTime;
+  cannonLink.chargingLinked = false;
+  if (state !== "battle" || evolution.pending || isBossDeathPlaying()) cannonLink.remaining = 0;
   gameAudio.stopUltimate();
   updateUltimateDisplay();
 }
 function resetUltimate() {
   ultimate.charges = 0;
   ultimate.energy = 0;
+  cannonLink.remaining = 0;
   cancelUltimate();
 }
 function fireUltimate() {
@@ -90,7 +128,7 @@ function fireUltimate() {
   ultimate.elapsed = 0;
   ultimate.shot = { x: muzzle.x, previousX: muzzle.x, startX: muzzle.x, y: muzzle.y,
     radius: Math.min(40, player.height * 0.28 + 8), length: clamp(viewport.width * 0.56, 360, 900),
-    speed, damageLog: ultimateDamageLog(), source: "ultimate", hitTargets: new WeakSet() };
+    speed, damageLog: ultimateDamageLog(), source: "ultimate", linked: cannonLink.chargingLinked, hitTargets: new WeakSet() };
   gameAudio.stopUltimate();
   gameAudio.fireUltimate();
   updateUltimateDisplay();
@@ -138,10 +176,10 @@ function updateUltimate(seconds) {
   if (!isBattleActive() || seconds <= 0 || ultimate.phase === "idle") return;
   let remaining = seconds;
   if (ultimate.phase === "charging") {
-    const used = Math.min(remaining, Math.max(0, ultimateRules.chargeTime - ultimate.elapsed));
+    const used = Math.min(remaining, Math.max(0, cannonLink.chargeDuration - ultimate.elapsed));
     ultimate.elapsed += used;
     remaining -= used;
-    if (ultimate.elapsed + 1e-9 < ultimateRules.chargeTime) return;
+    if (ultimate.elapsed + 1e-9 < cannonLink.chargeDuration) return;
     fireUltimate();
   }
   if (ultimate.phase === "firing") {
@@ -158,6 +196,8 @@ function updateUltimate(seconds) {
     ultimate.phase = "idle";
     ultimate.elapsed = 0;
     ultimate.shot = null;
+    cannonLink.chargeDuration = ultimateRules.chargeTime;
+    cannonLink.chargingLinked = false;
     gameAudio.stopUltimate();
     updateUltimateDisplay();
   }
@@ -167,7 +207,7 @@ function drawUltimate() {
   context.save();
   if (ultimate.phase === "charging") {
     const muzzle = muzzlePosition();
-    const progress = clamp(ultimate.elapsed / ultimateRules.chargeTime, 0, 1);
+    const progress = clamp(ultimate.elapsed / cannonLink.chargeDuration, 0, 1);
     const radius = 8 + progress * Math.min(32, player.height * 0.26);
     const halo = context.createRadialGradient(muzzle.x, muzzle.y, 0, muzzle.x, muzzle.y, radius * 2.1);
     halo.addColorStop(0, "#fff1df"); halo.addColorStop(0.22, "#ff7b77");
@@ -176,6 +216,10 @@ function drawUltimate() {
     context.beginPath(); context.arc(muzzle.x, muzzle.y, radius * 2.1, 0, Math.PI * 2); context.fill();
     context.strokeStyle = "#ff7a88"; context.lineWidth = 2;
     context.beginPath(); context.ellipse(muzzle.x, muzzle.y, radius * 0.4, radius * 1.3, 0, 0, Math.PI * 2); context.stroke();
+    if (cannonLink.chargingLinked) {
+      context.strokeStyle = "#c1f4ff"; context.lineWidth = 2.5;
+      context.beginPath(); context.ellipse(muzzle.x, muzzle.y, radius * 0.55, radius * 1.55, 0, 0, Math.PI * 2); context.stroke();
+    }
     if (!reducedMotion.matches) {
       for (let index = 0; index < 10; index++) {
         const angle = index * Math.PI / 5 + ultimate.elapsed * 2;
@@ -193,7 +237,7 @@ function drawUltimate() {
       context.shadowColor = "#ff172a"; context.shadowBlur = reducedMotion.matches ? 0 : 25;
       const body = context.createLinearGradient(0, shot.y - radius, 0, shot.y + radius);
       body.addColorStop(0, "#b70e24dd"); body.addColorStop(0.18, "#ff2339");
-      body.addColorStop(0.46, "#ffab94"); body.addColorStop(0.5, "#ffe6cf");
+      body.addColorStop(0.46, shot.linked ? "#ffe9e0" : "#ffab94"); body.addColorStop(0.5, shot.linked ? "#ffffff" : "#ffe6cf");
       body.addColorStop(0.65, "#ff695d"); body.addColorStop(1, "#bf1029dd");
       context.fillStyle = body;
       context.fillRect(left, shot.y - radius, right - left, radius * 2);
@@ -206,6 +250,10 @@ function drawUltimate() {
       }
       context.strokeStyle = "#fff2df"; context.lineWidth = 2;
       context.beginPath(); context.ellipse(right, shot.y, radius * 0.32, radius, 0, 0, Math.PI * 2); context.stroke();
+      if (shot.linked) {
+        context.strokeStyle = "#c1f4ff"; context.lineWidth = 2;
+        context.beginPath(); context.ellipse(right, shot.y, radius * 0.4, radius * 1.08, 0, 0, Math.PI * 2); context.stroke();
+      }
     }
   }
   context.restore();

@@ -8,6 +8,7 @@ const allowed = new Map([
   ...['game.js', 'bosses.js', 'boss-art.js', 'audio.js', 'ultimate.js', 'shield.js', 'enemy-art.js', 'enemies.js', 'duo-bosses.js', 'evolution.js', 'momentum.js', 'fire-control.js', 'combat-effects.js', 'evolution-art.js'].map(name => ['/' + name, [name, 'text/javascript']]),
   ['/styles.css', ['styles.css', 'text/css']],
   ['/ship-renderer.js', ['ship-renderer.js', 'text/javascript']],
+  ...['ace.js', 'gravity.js'].map(name => ['/' + name, [name, 'text/javascript']]),
   ...['crimson', 'scout', 'armored', 'gunner'].map(kind => ['/assets/ships/' + kind + '-pbr.png', ['assets/ships/' + kind + '-pbr.png', 'image/png']]),
   ['/assets/ships/aegis-pod.png', ['assets/ships/aegis-pod.png', 'image/png']],
   ...['crimson', 'scout', 'armored', 'gunner', 'fairing', 'rail'].map(kind => ['/assets/ships/' + kind + '-sleek.png', ['assets/ships/' + kind + '-sleek.png', 'image/png']]),

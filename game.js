@@ -215,6 +215,8 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
     resizePincerFormation(plan);
   }
   // 重建尺寸后重新预警，避免旧弹道或激光在新位置立即命中玩家。
+  resizeAceEncounter(scaleX, scaleY, resizeY);
+  resizeGravityTide(scaleX, resizeY);
   enemyProjectiles.length = 0;
   explosions.length = 0;
   const previousGrace = bossHitGrace;
@@ -457,6 +459,7 @@ function updateShooting(seconds) {
   for (let index = bullets.length - 1; index >= 0; index--) {
     const bullet = bullets[index];
     bullet.previousX = bullet.x; bullet.previousY = bullet.y;
+    applyGravityTide(bullet, seconds, "player");
     bullet.x += (bullet.vx ?? weapon.speed) * seconds;
     bullet.y += (bullet.vy ?? 0) * seconds;
   }
@@ -491,6 +494,8 @@ function updateShooting(seconds) {
   }
 }
 function resetEncounter(resetScore = true) {
+  if (resetScore) resetAceEncounter();
+  resetGravityTide();
   resetBattlefieldEvents(resetScore);
   resetEnemyCombat(resetScore);
   if (resetScore) resetBossEncounter();
@@ -555,6 +560,7 @@ function defeatEnemy(index, bullet = null) {
   if (!enemy) return;
   onFormationEnemyDefeated(enemy);
   onBattlefieldEnemyDefeated(enemy);
+  onAceDefeated(enemy);
   createExplosion(enemy);
   enemies.splice(index, 1);
   score += enemy.points ?? enemyRules.points;
@@ -608,6 +614,7 @@ function updateEncounter(seconds) {
   if (!isBattleActive()) return;
   battleTime += seconds;
   updateDifficultyDisplay();
+  updateAceEncounter(seconds);
   updateBattlefieldEvents(seconds);
   updateFormations(seconds);
   updateEnemyProjectiles(seconds);
@@ -623,7 +630,7 @@ function updateEncounter(seconds) {
     const displayed = enemy.displayHp ?? enemy.hp;
     enemy.displayHp = reducedMotion.matches ? enemy.hp : displayed + (enemy.hp - displayed) * (1 - Math.exp(-seconds * 14));
   }
-  if (!bossBlocksWaves() && !formationsBlockWaves() && !battlefieldEventBlocksWaves()) {
+  if (!bossBlocksWaves() && !formationsBlockWaves() && !battlefieldEventBlocksWaves() && !aceBlocksWaves()) {
     enemyCooldown -= seconds;
     if (enemyCooldown <= 0.00000001) {
       if (enemies.length < enemyRules.maxOnScreen) spawnEnemy();
@@ -781,6 +788,7 @@ function updatePlayerDamage(seconds) {
 }
 function endGame() {
   state = "over";
+  resetGravityTide();
   resetBossComponents();
   resetCombatEffects();
   endMomentumBattle();
@@ -908,8 +916,10 @@ function drawFrame(time) {
   updateMomentum(seconds);
   updateEvolution(seconds);
   updateShield(seconds);
+  updateCannonLink(seconds);
   updatePlayer(seconds);
   updateShipVisuals(seconds);
+  updateGravityTide(seconds);
   updateShooting(seconds);
   updateEncounter(seconds);
   updateBossEncounter(seconds);
@@ -927,9 +937,11 @@ function drawFrame(time) {
   context.save();
   const cameraOffset = combatShakeOffset();
   context.translate(cameraOffset.x, cameraOffset.y);
+  drawGravityTide();
   drawFormationSignals();
   drawBattlefieldObjects();
   drawEnemies();
+  drawAceThreats(context);
   drawEnemyThreats();
   drawBossBattle();
   drawPowerups();

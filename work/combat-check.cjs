@@ -92,7 +92,7 @@ const position = () => vm.runInContext('({ x: player.x, y: player.y })', sandbox
 const bounds = vm.runInContext('flightBounds', sandbox);
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
 // 各旧功能用例隔离自动刷新的事件；v13-check 会显式开启新事件计时。
-function begin() { emit(window, 'focus'); emit(nodes.get('#start-button'), 'click'); vm.runInContext('powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity; formationState.nextTime = Infinity; battlefieldEvents.nextObject = Infinity; battlefieldEvents.nextTransport = Infinity;', sandbox); step(); }
+function begin() { emit(window, 'focus'); emit(nodes.get('#start-button'), 'click'); vm.runInContext('powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity; formationState.nextTime = Infinity; aceEncounter.nextTime = Infinity; battlefieldEvents.nextObject = Infinity; battlefieldEvents.nextTransport = Infinity;', sandbox); step(); }
 function key(code, type = 'keydown', extra) { return emit(window, type, { code, ...extra }); }
 function samePosition(a, b) { assert.equal(a.x, b.x); assert.equal(a.y, b.y); }
 let checks = 0;
@@ -2634,6 +2634,123 @@ check('perfect guard ring and counter drawing remain finite, canvas-balanced and
     assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
     assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
     assert.ok(drawOperations.some(op=>op.name==='ellipse'||op.name==='arc'));
+  }
+  execute('reducedMotion.matches=false;');
+});
+
+// 完美护盾只提供一次速蓄机会，弹药、伤害和原有连发规则保持独立。
+const cannonLinkState = () => JSON.parse(execute('JSON.stringify(cannonLink)'));
+function earnCannonLink(extra='') {
+  activateParry(extra);
+  execute(contactShell()+'updateEnemyProjectileDamage();');
+  assert.equal(protection().perfectUsed,true);
+}
+check('a real perfect guard grants a three-second cannon opportunity without ammunition and later shells cannot renew it', () => {
+  earnCannonLink('ultimate.energy=47;');
+  near(cannonLinkState().remaining,3); assert.equal(ult().charges,0); near(ult().energy,47);
+  assert.match(nodes.get('#ultimate-label').textContent,/3\.0 秒.*需已存炮弹/);
+  execute('updateCannonLink(1);'+contactShell().repeat(5)+'updateEnemyProjectileDamage();tryPerfectShield();');
+  near(cannonLinkState().remaining,2); assert.equal(ult().charges,0); near(ult().energy,47);
+});
+check('cannon link expires exactly at three active seconds and rejects invalid time steps', () => {
+  for(const [elapsed,linked] of [[2.999,true],[3,false],[3.001,false]]) {
+    earnCannonLink('ultimate.charges=1;');
+    execute('updateCannonLink(NaN);updateCannonLink(Infinity);updateCannonLink(-1);'); near(cannonLinkState().remaining,3);
+    execute(`updateCannonLink(${elapsed});requestUltimate();`);
+    assert.equal(cannonLinkState().chargingLinked,linked); near(cannonLinkState().chargeDuration,linked?.45:.85);
+    assert.equal(ult().charges,0); near(cannonLinkState().remaining,0);
+  }
+});
+check('failed cannon requests preserve the link until a focused idle cannon with ammunition can consume it', () => {
+  earnCannonLink(); assert.equal(execute('requestUltimate()'),false); near(cannonLinkState().remaining,3);
+  primeUltimate(2); emit(window,'blur'); assert.equal(execute('requestUltimate()'),false); near(cannonLinkState().remaining,3);
+  emit(window,'focus'); nodes.get('#sound-button').focus(); assert.equal(execute('requestUltimate()'),false); near(cannonLinkState().remaining,3);
+  emit(canvas,'pointerdown'); assert.equal(execute('requestUltimate()'),true);
+  assert.equal(ult().charges,1); near(cannonLinkState().remaining,0); near(cannonLinkState().chargeDuration,.45);
+  assert.equal(execute('requestUltimate()'),false); assert.equal(ult().charges,1);
+});
+check('a perfect guard never accelerates an existing charge and its opportunity can be spent on the following cannon', () => {
+  earnCannonLink('ultimate.charges=2;requestUltimate();updateUltimate(.3);');
+  near(cannonLinkState().chargeDuration,.85); assert.equal(cannonLinkState().chargingLinked,false);
+  assert.equal(execute('requestUltimate()'),false); near(cannonLinkState().remaining,3);
+  execute('updateUltimate(.54);'); assert.equal(ult().phase,'charging');
+  execute('updateUltimate(.01);'); assert.equal(ult().phase,'firing'); assert.equal(execute('ultimate.shot.linked'),false);
+  execute('updateUltimate(1.2);updateCannonLink(1.75);'); assert.equal(ult().phase,'idle');
+  assert.equal(execute('requestUltimate()'),true); near(cannonLinkState().chargeDuration,.45); assert.equal(ult().charges,0);
+});
+check('cannon link countdown shares the gameplay step and freezes on window blur, hidden tabs and control focus', () => {
+  for(const route of ['window','hidden','control']) {
+    earnCannonLink(); const before=cannonLinkState().remaining, time=scene().battleTime;
+    step(); near(before-cannonLinkState().remaining,scene().battleTime-time); near(before-cannonLinkState().remaining,.05*.4);
+    if(route==='window') emit(window,'blur');
+    if(route==='hidden') {document.hidden=true;emit(document,'visibilitychange');}
+    if(route==='control') nodes.get('#sound-button').focus();
+    const frozen=cannonLinkState(); frames(100); execute('updateCannonLink(500);'); assert.deepEqual(cannonLinkState(),frozen);
+    if(route==='window') emit(window,'focus');
+    if(route==='hidden') {document.hidden=false;emit(document,'visibilitychange');}
+    if(route==='control') emit(canvas,'pointerdown');
+    step(); assert.deepEqual(cannonLinkState(),frozen);
+    step(); assert.ok(cannonLinkState().remaining<frozen.remaining);
+  }
+});
+check('linked charge audio uses 0.45 seconds and resumes the correct remaining duration after pause or mute', () => {
+  gameAudio.setMuted(false); earnCannonLink('ultimate.charges=2;'); audioCalls.length=0;
+  execute('requestUltimate();updateUltimate(.15);');
+  near(audioCalls.filter(call=>call.name==='chargeUltimate').at(-1).args[0],.45);
+  emit(window,'blur'); frames(5); near(ult().elapsed,.15); assert.ok(audioCalls.some(call=>call.name==='stopUltimate'));
+  emit(window,'focus'); step(); near(audioCalls.filter(call=>call.name==='chargeUltimate').at(-1).args[0],.3);
+  gameAudio.setMuted(true); execute('syncGameAudio();updateUltimate(.1);');
+  const soundCount=audioCalls.filter(call=>call.name==='chargeUltimate').length;
+  execute('syncGameAudio();'); assert.equal(audioCalls.filter(call=>call.name==='chargeUltimate').length,soundCount);
+  gameAudio.setMuted(false); execute('syncGameAudio();'); near(audioCalls.filter(call=>call.name==='chargeUltimate').at(-1).args[0],.2);
+  execute('updateUltimate(.2);'); assert.equal(ult().phase,'firing'); assert.equal(execute('ultimate.shot.linked'),true);
+  assert.equal(audioCalls.filter(call=>call.name==='fireUltimate').length,1);
+});
+check('resize preserves an unspent link but cancellation refunds only the cannon charge without restoring its consumed link', () => {
+  earnCannonLink('ultimate.charges=2;ultimate.energy=37;'); execute('updateCannonLink(.75);');
+  emit(window,'resize'); emit(document,'fullscreenchange'); near(cannonLinkState().remaining,2.25);
+  surface={width:1500,height:850};emit(window,'resize'); near(cannonLinkState().remaining,2.25);
+  execute('requestUltimate();updateUltimate(.2);'); assert.equal(ult().charges,1); near(cannonLinkState().remaining,0);
+  surface={width:1600,height:900};emit(window,'resize'); assert.equal(ult().phase,'idle'); assert.equal(ult().charges,2); near(ult().energy,37);
+  emit(document,'fullscreenchange');assert.equal(ult().charges,2);near(cannonLinkState().remaining,0);
+  execute('requestUltimate();');near(cannonLinkState().chargeDuration,.85);assert.equal(cannonLinkState().chargingLinked,false);
+});
+check('death, menu, new rounds, evolution and lethal parry Boss transitions discard cannon opportunities', () => {
+  for(const action of ['endGame();','showScreen("menu");','showScreen("battle");','openEvolutionChoice();']) {
+    earnCannonLink(); execute(action+'updateCannonLink(0);'); near(cannonLinkState().remaining,0);
+  }
+  readyBoss(0,'weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
+  execute(bossProjectile()+'updateBossDamage();'); assert.equal(execute('isBossDeathPlaying()'),true);near(cannonLinkState().remaining,0);
+  finishBossPresentation();assert.equal(execute('evolution.pending'),true);near(cannonLinkState().remaining,0);
+});
+check('linked cannon damage remains unchanged and caps each simultaneous Boss hit at eighteen percent without generating energy', () => {
+  readyDuo('player.y=boss.y;wingBoss.y=boss.y;weapon.tier=10000;ultimate.charges=2;');
+  const originalDamage=execute('ultimateDamageLog()');execute('armCannonLink();requestUltimate();updateUltimate(.449);');
+  assert.equal(ult().phase,'charging');execute('updateUltimate(.001);');assert.equal(ult().phase,'firing');
+  near(ult().shot.damageLog,originalDamage);assert.equal(execute('ultimate.shot.linked'),true);
+  execute('updateUltimate(.5);resolveUltimateHits();resolveUltimateHits();');
+  near(duoState().boss.hp,.82);near(duoState().wingBoss.hp,.82);near(ult().energy,0);assert.equal(ult().charges,1);
+});
+check('linked cannons spend only one charge and fresh consecutive presses revert to normal charge time without buffered repeats', () => {
+  earnCannonLink('ultimate.charges=3;'); key('Space');key('Space','keydown',{repeat:true});
+  execute('updateUltimate(.45);'); assert.equal(execute('ultimate.shot.linked'),true);assert.equal(ult().charges,2);
+  key('Space','keydown',{repeat:true});execute('updateUltimate(5);');assert.equal(ult().phase,'idle');
+  key('Space');assert.equal(ult().phase,'idle');assert.equal(ult().charges,2);
+  key('Space','keyup');key('Space');key('Space','keyup');near(cannonLinkState().chargeDuration,.85);assert.equal(ult().charges,1);
+  execute('updateUltimate(.45);');assert.equal(ult().phase,'charging');execute('updateUltimate(.4);');
+  assert.equal(execute('ultimate.shot.linked'),false);execute('updateUltimate(5);');
+  key('Space');key('Space','keyup');assert.equal(ult().phase,'charging');assert.equal(ult().charges,0);
+});
+check('linked charge and red cannon show a small ice-blue signature with finite balanced drawing in reduced motion', () => {
+  for(const reduced of [false,true]) for(const phase of ['charging','firing']) {
+    earnCannonLink(`ultimate.charges=1;reducedMotion.matches=${reduced};`);
+    execute(`requestUltimate();updateUltimate(${phase==='charging'?.2:.6});`);
+    captureDraws=true;drawOperations.length=0;execute('drawUltimate();');captureDraws=false;
+    assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
+    assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
+    assert.ok(drawOperations.some(op=>op.name==='set:strokeStyle'&&op.args[0]==='#c1f4ff'));
+    assert.ok(drawOperations.some(op=>op.name==='ellipse'));
+    if(phase==='firing') {assert.ok(drawOperations.some(op=>op.name==='fillRect'));assert.ok(drawOperations.some(op=>op.name==='set:shadowColor'&&op.args[0]==='#ff172a'));}
   }
   execute('reducedMotion.matches=false;');
 });

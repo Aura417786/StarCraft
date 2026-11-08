@@ -4,7 +4,7 @@ function drawEnemyHull(enemy) {
       !Number.isFinite(enemy.width) || !Number.isFinite(enemy.height) ||
       enemy.width <= 0 || enemy.height <= 0) return;
 
-  const spriteKind = ["scout", "armored", "gunner"].includes(enemy.kind) ? enemy.kind : "scout";
+  const spriteKind = enemy.kind === "ace" ? "gunner" : ["scout", "armored", "gunner"].includes(enemy.kind) ? enemy.kind : "scout";
   if (drawShipPBR(context, enemy, spriteKind, null, reducedMotion.matches, shipVisuals.clock)) return;
 
   const ctx = context, w = enemy.width, h = enemy.height;

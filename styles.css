@@ -143,6 +143,8 @@ h1 > span { color: var(--red); }
 .ultimate-hud[data-ready="true"] .ultimate-label { color: #e5b0b9; }
 .ultimate-hud[data-phase="charging"], .ultimate-hud[data-phase="firing"] { border-color: #ff5575; box-shadow: 0 0 24px #ff315a22; }
 .ultimate-hud[data-phase="charging"] .ultimate-label, .ultimate-hud[data-phase="firing"] .ultimate-label { color: #ffa5b1; }
+.ultimate-hud[data-linked="true"] { border-color: #9ddce2; box-shadow: 0 0 18px #69d9e51a; }
+.ultimate-hud[data-linked="true"] .ultimate-label { color: #c0edf1; }
 .shield-hud { position: absolute; left: calc(3.4vw + 246px); bottom: 76px; width: 205px; padding: 12px 15px 10px; border: 1px solid #a7435155; border-radius: 8px; background: linear-gradient(125deg, #21121dde, #0b1121e8); box-shadow: 0 7px 24px #02040c55; }
 .shield-heading { display: flex; align-items: center; gap: 10px; }
 .shield-name { color: #e8b4b8; font-size: 12px; font-weight: 600; letter-spacing: .1em; }

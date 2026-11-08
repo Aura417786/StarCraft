@@ -53,6 +53,7 @@ function fireEnemyGun(enemy) {
 function updateEnemyMovement(enemy, seconds) {
   enemy.previousX = enemy.x;
   enemy.previousY = enemy.y;
+  if (updateAceMovement(enemy, seconds)) return;
   if (!enemy.kind || enemy.summoned) { enemy.x -= enemy.speed * seconds; return; }
   if (typeof formationControlsEnemy === "function" && formationControlsEnemy(enemy, seconds)) return;
   enemy.age = (enemy.age ?? 0) + seconds;
@@ -84,6 +85,7 @@ function updateEnemyProjectiles(seconds) {
   for (let index = enemyProjectiles.length - 1; index >= 0; index--) {
     const shot = enemyProjectiles[index];
     shot.previousX = shot.x; shot.previousY = shot.y;
+    applyGravityTide(shot, seconds, "enemy");
     shot.x += shot.vx * seconds; shot.y += shot.vy * seconds; shot.age += seconds;
     if (shot.age >= enemyCombatRules.projectileLife || shot.x < -40 || shot.x > viewport.width + 40
       || shot.y < -40 || shot.y > viewport.height + 40) enemyProjectiles.splice(index, 1);
