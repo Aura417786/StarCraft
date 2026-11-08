@@ -10,6 +10,7 @@ const allowed = new Map([
   ['/ship-renderer.js', ['ship-renderer.js', 'text/javascript']],
   ...['crimson', 'scout', 'armored', 'gunner'].map(kind => ['/assets/ships/' + kind + '-pbr.png', ['assets/ships/' + kind + '-pbr.png', 'image/png']]),
   ['/assets/ships/aegis-pod.png', ['assets/ships/aegis-pod.png', 'image/png']],
+  ...['crimson', 'scout', 'armored', 'gunner', 'fairing', 'rail'].map(kind => ['/assets/ships/' + kind + '-sleek.png', ['assets/ships/' + kind + '-sleek.png', 'image/png']]),
   ['/assets/red-fighter.png', ['assets/red-fighter.png', 'image/png']],
   ...['battlefield.js', 'battlefield-events.js', 'formations.js', 'boss-components.js'].map(name => ['/' + name, [name, 'text/javascript']]),
   ...['orbit', 'belt', 'wreck', 'citadel', 'rift', 'foreground-rock'].map(name => ['/assets/scenery/' + name + '.png', ['assets/scenery/' + name + '.png', 'image/png']]),
