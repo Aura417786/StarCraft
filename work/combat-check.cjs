@@ -433,10 +433,12 @@ check('pause freezes orb movement, spawning and notice countdown', () => {
   frames(100); assert.deepEqual(orbScene(),hiddenState);
   document.hidden=false; emit(document,'visibilitychange');
 });
-check('resize preserves upgrades and notice while clearing old orbs and bullets', () => {
+check('resize preserves upgrades, live orbs and notice while clearing old bullets', () => {
   isolatedBattle(orb('red')+shot()+'applyPowerup("blue");applyPowerup("yellow");');
+  execute('var retainedResizeOrb=powerups[0];');
   const before=weaponState(); surface={width:640,height:360}; emit(window,'resize');
-  assert.deepEqual(weaponState(),before); assert.equal(orbScene().powerups.length,0);
+  assert.deepEqual(weaponState(),before); assert.equal(orbScene().powerups.length,1);
+  assert.equal(execute('powerups[0]===retainedResizeOrb'),true);
   assert.equal(shots().length,0); assert.equal(orbScene().upgradeNoticeTime,2);
 });
 check('game over freezes orbs; restart and menu restore all initial upgrades', () => {
@@ -1692,8 +1694,10 @@ check('ordinary warnings and projectiles freeze through blur, hidden tabs and co
 });
 check('resize clears unsafe ordinary shells while preserving unlocked type history', () => {
   readyGunner(enemyShot('600','200')); execute('spawnEnemy("armored");');
+  execute('var retainedResizeEnemies=enemies.slice();');
   const introduced=enemyCombat().introduced.sort(); surface={width:640,height:360}; emit(window,'resize');
-  assert.equal(enemyCombat().enemyProjectiles.length,0); assert.equal(scene().enemies.length,0);
+  assert.equal(enemyCombat().enemyProjectiles.length,0); assert.equal(scene().enemies.length,2);
+  assert.equal(execute('enemies.every((enemy,index)=>enemy===retainedResizeEnemies[index])'),true);
   assert.deepEqual(enemyCombat().introduced.sort(),introduced); assert.equal(execute('chooseEnemyKind(.1)'),'scout');
 });
 check('canceling ordinary combat clears shells and unfinished warnings without secretly firing or scoring', () => {

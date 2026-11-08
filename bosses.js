@@ -76,6 +76,7 @@ function resizeBossEncounter() {
   if (!boss) return;
   Object.assign(boss, bossArena());
   boss.previousX = boss.x;
+  boss.previousY = boss.y;
   boss.phase = "recover";
   boss.phaseTime = 0;
   bossHitGrace = bossRules.grace;

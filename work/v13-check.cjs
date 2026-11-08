@@ -411,11 +411,13 @@ check('evolution selection freezes scenery transition and object timers', () => 
   const previous=snapshot('({t:battlefieldState.transition,s:battlefieldState.clock,e:battlefieldEvents.clock})');step(.05);
   assert.deepEqual(snapshot('({t:battlefieldState.transition,s:battlefieldState.clock,e:battlefieldEvents.clock})'),previous);
 });
-check('resize preserves scenery progression and Boss part damage but clears transient objects', () => {
+check('resize preserves scenery progression, Boss part damage and live world objects', () => {
   activeBoss();execute('advanceBattlefield();damageBossComponent(boss,boss.components[0],1);spawnBattlefieldObject();');
+  execute('var retainedBossResizeObject=battlefieldEvents.objects[0];');
   surface={width:900,height:540};emit(window,'resize');
   assert.equal(execute('battlefieldState.sector'),1);assert.equal(execute('boss.components[0].destroyed'),true);
-  assert.equal(execute('battlefieldEvents.objects.length'),0);assert.equal(execute('bossComponentWrecks.length'),0);
+  assert.equal(execute('battlefieldEvents.objects.length'),1);assert.equal(execute('bossComponentWrecks.length'),0);
+  assert.equal(execute('battlefieldEvents.objects[0]===retainedBossResizeObject'),true);
 });
 check('restart resets sector, event clock, formation cycle and debris', () => {
   isolated('advanceBattlefield();battleTime=50;trySpawnFormation();updateFormations(1.4);spawnBattlefieldObject();');
@@ -502,6 +504,150 @@ check('resize reuses decoded images and failed or absent Image loaders leave a s
   execute('drawBattlefield();');
   delete sandbox.Image;execute('sceneryCache.clear();sceneryForeground=null;');assert.equal(execute('sceneryLayer(0)'),null);
   execute('drawBattlefield();');
+});
+
+check('fullscreen enter and exit keep every enemy identity and health in either browser event order', () => {
+  for (const resizeFirst of [true,false]) {
+    isolated(`battleTime=52;enemyCooldown=.73;powerupCooldown=2.4;
+      spawnEnemy('scout');spawnEnemy('armored');spawnEnemy('gunner');
+      enemies.forEach((enemy,index)=>Object.assign(enemy,{x:720+index*120,y:300+index*70,
+        previousX:720+index*120,previousY:300+index*70,baseY:300+index*70,
+        hp:.2+index*.1,displayHp:.3+index*.1,age:1.7,gunPhase:'recover',gunTime:.25}));
+      var fullscreenEnemies=enemies.slice();`);
+    const before=snapshot('({hp:enemies.map(e=>e.hp),display:enemies.map(e=>e.displayHp),age:enemies.map(e=>e.age),gun:enemies.map(e=>e.gunTime),score,kills,battleTime,enemyCooldown,powerupCooldown})');
+    for (const fullscreen of [true,false,true,false]) {
+      surface=fullscreen?{width:1920,height:1080}:{width:1280,height:720};
+      document.fullscreenElement=fullscreen?nodes.get('#game-app'):null;
+      if(resizeFirst){emit(window,'resize');emit(document,'fullscreenchange');}
+      else{emit(document,'fullscreenchange');emit(window,'resize');}
+      assert.equal(execute('enemies.length'),3);
+      assert.equal(execute('enemies.every((enemy,index)=>enemy===fullscreenEnemies[index])'),true);
+      assert.deepEqual(snapshot('({hp:enemies.map(e=>e.hp),display:enemies.map(e=>e.displayHp),age:enemies.map(e=>e.age),gun:enemies.map(e=>e.gunTime),score,kills,battleTime,enemyCooldown,powerupCooldown})'),before);
+      assert.equal(execute('enemies.every(e=>Number.isFinite(e.x)&&Number.isFinite(e.y)&&e.previousX===e.x&&e.previousY===e.y)'),true);
+      assert.equal(document.activeElement,canvas);
+    }
+  }
+});
+check('same-size resize and fullscreen notifications do not clear trajectories or refund a charging cannon', () => {
+  isolated(`bossHitGrace=.45;spawnEnemy('gunner');enemies[0].gunPhase='warning';enemies[0].gunTime=.35;
+    bullets.push({x:500,y:300,previousX:450,previousY:300});
+    enemyProjectiles.push({x:650,y:300,previousX:670,previousY:300});
+    ultimate.charges=2;requestUltimate();updateUltimate(.2);`);
+  const before=snapshot('({enemies,bullets,enemyProjectiles,ultimate,shotCooldown,enemyCooldown,powerupCooldown,bossHitGrace})');
+  emit(window,'resize');document.fullscreenElement=nodes.get('#game-app');emit(document,'fullscreenchange');
+  emit(document,'fullscreenchange');document.fullscreenElement=null;emit(document,'fullscreenchange');
+  assert.deepEqual(snapshot('({enemies,bullets,enemyProjectiles,ultimate,shotCooldown,enemyCooldown,powerupCooldown,bossHitGrace})'),before);
+});
+check('shrinking the flight area cannot immediately damage the player and preserves longer existing protection', () => {
+  for(const previousGrace of [0,3.4]) {
+    isolated(`player.x=player.previousX=400;player.y=player.previousY=350;
+      spawnEnemy('scout');Object.assign(enemies[0],{x:400,previousX:400,y:450,previousY:450,baseY:450});
+      bossHitGrace=${previousGrace};`);
+    assert.equal(execute('enemyTouchesPlayer(enemies[0])'),false);
+    surface={width:640,height:360};emit(window,'resize');
+    assert.equal(execute('enemyTouchesPlayer(enemies[0])'),true);
+    near(execute('bossHitGrace'),Math.max(previousGrace,execute('bossRules.grace')));
+    execute('updatePlayerDamage(.05);');assert.equal(execute('player.lives'),3);
+  }
+});
+check('a pixel-ratio-only change redraws the canvas without clearing the battle', () => {
+  isolated('spawnEnemy("scout");bullets.push({x:500,y:300});var dpiEnemy=enemies[0];');
+  const before=snapshot('({enemies,bullets,battleTime,enemyCooldown})');
+  window.devicePixelRatio=2;emit(window,'resize');
+  assert.equal(canvas.width,2560);assert.equal(canvas.height,1440);
+  assert.equal(execute('enemies[0]===dpiEnemy'),true);
+  assert.deepEqual(snapshot('({enemies,bullets,battleTime,enemyCooldown})'),before);
+  window.devicePixelRatio=1;emit(window,'resize');
+});
+check('visible supplements and neutral props keep health, references and event timers through resizing', () => {
+  isolated(`battleTime=50;spawnPowerup();spawnBattlefieldObject('wreck');
+    Object.assign(powerups[0],{x:800,y:350});Object.assign(battlefieldEvents.objects[0],{x:950,y:450,hp:.42,age:3});
+    battlefieldEvents.nextObject=57;battlefieldEvents.nextTransport=76;
+    var resizeBall=powerups[0],resizeProp=battlefieldEvents.objects[0];`);
+  const before=snapshot('({nextObject:battlefieldEvents.nextObject,nextTransport:battlefieldEvents.nextTransport,count:battlefieldEvents.objectCount,clock:battlefieldEvents.clock,powerupCooldown,powerupSpawnCount})');
+  surface={width:1600,height:900};emit(window,'resize');
+  assert.equal(execute('powerups.length===1&&powerups[0]===resizeBall'),true);
+  assert.equal(execute('battlefieldEvents.objects.length===1&&battlefieldEvents.objects[0]===resizeProp'),true);
+  near(execute('resizeProp.hp'),.42);near(execute('resizeProp.age'),3);
+  near(execute('resizeBall.x'),1000);near(execute('resizeProp.x'),1187.5);
+  assert.equal(execute('[resizeBall,resizeProp].every(e=>e.previousX===e.x&&e.previousY===e.y&&e.y>=flightBounds.top&&e.y<=flightBounds.bottom)'),true);
+  assert.deepEqual(snapshot('({nextObject:battlefieldEvents.nextObject,nextTransport:battlefieldEvents.nextTransport,count:battlefieldEvents.objectCount,clock:battlefieldEvents.clock,powerupCooldown,powerupSpawnCount})'),before);
+});
+check('active formations keep their members and continue from their resized anchor without a horizontal snap', () => {
+  isolated(`battleTime=60;trySpawnFormation('command');updateFormations(1.351);
+    formationState.active.x=850;formationState.active.age=1.2;
+    for(const enemy of enemies)formationControlsEnemy(enemy,0);
+    enemies[0].hp=.37;var resizeGroup=formationState.active;var resizeMembers=enemies.slice();`);
+  const before=snapshot('({sequence:formationState.sequence,nextTime:formationState.nextTime,suppression:formationState.suppression,age:formationState.active.age})');
+  surface={width:1600,height:900};emit(window,'resize');
+  assert.equal(execute('formationState.active===resizeGroup'),true);
+  assert.equal(execute('enemies.every((enemy,index)=>enemy===resizeMembers[index]&&enemy.formationId===resizeGroup.id)'),true);
+  near(execute('enemies[0].hp'),.37);
+  assert.deepEqual(snapshot('({sequence:formationState.sequence,nextTime:formationState.nextTime,suppression:formationState.suppression,age:formationState.active.age})'),before);
+  const positions=snapshot('enemies.map(e=>e.x)');
+  execute('updateFormations(.05);for(const enemy of enemies)updateEnemyMovement(enemy,.05);');
+  snapshot('enemies.map(e=>e.x)').forEach((x,index)=>near(x,positions[index]-execute('resizeGroup.speed')*.05));
+  assert.equal(execute('enemies.every(e=>Math.abs(e.x-resizeGroup.x-e.formationSlotX)<1e-7)'),true);
+});
+check('a pending formation retains its warning countdown and launches the same resized plan', () => {
+  isolated(`battleTime=60;trySpawnFormation('command');updateFormations(.25);
+    var resizeWarning=formationState.warning;`);
+  const remaining=execute('resizeWarning.remaining');surface={width:1600,height:900};emit(window,'resize');
+  assert.equal(execute('formationState.warning===resizeWarning'),true);near(execute('resizeWarning.remaining'),remaining);
+  execute(`updateFormations(${remaining+.001});`);
+  assert.equal(execute('formationState.active.kind'),'command');assert.equal(execute('enemies.length'),5);
+});
+check('pincer wings retain a complete player-sized corridor through narrow-window round trips and subsequent frames', () => {
+  isolated(`battleTime=60;trySpawnFormation('pincer');updateFormations(1.351);
+    formationState.active.x=700;
+    enemies.forEach((enemy,index)=>{enemy.hp=.2+index*.1;formationControlsEnemy(enemy,0);});
+    var pincerResizeGroup=formationState.active,pincerResizeMembers=enemies.slice();`);
+  assert.equal(execute('enemies.length'),4);
+  const health=snapshot('enemies.map(e=>e.hp)');
+  for(const size of [{width:640,height:360},{width:390,height:260},{width:1280,height:720}]) {
+    surface=size;emit(window,'resize');
+    assert.equal(execute('formationState.active===pincerResizeGroup'),true);
+    assert.equal(execute('enemies.every((enemy,index)=>enemy===pincerResizeMembers[index])'),true);
+    assert.deepEqual(snapshot('enemies.map(e=>e.hp)'),health);
+    for(const advance of [false,true]) {
+      if(advance)execute('updateFormations(.05);for(const enemy of enemies)updateEnemyMovement(enemy,.05);');
+      else execute('for(const enemy of enemies)formationControlsEnemy(enemy,0);');
+      const gap=execute(`Math.min(...enemies.filter(e=>e.formationSlotY>0).map(e=>e.y-e.height/2))
+        -Math.max(...enemies.filter(e=>e.formationSlotY<0).map(e=>e.y+e.height/2))`);
+      assert.ok(gap+1e-8>=execute('player.height+24'),JSON.stringify({size,advance,gap}));
+      execute('player.x=player.previousX=pincerResizeGroup.x;player.y=player.previousY=pincerResizeGroup.centerY;');
+      assert.equal(execute('enemies.every(enemy=>!enemyTouchesPlayer(enemy))'),true);
+      assert.equal(execute('enemies.every(e=>e.y-e.height/2>=-1e-8&&e.y+e.height/2<=viewport.height+1e-8)'),true);
+    }
+  }
+});
+check('supply transport and escorts survive resizing and retain their movement baseline next frame', () => {
+  isolated(`battleTime=55;spawnSupplyTransport();var resizeCargo=battlefieldEvents.transport;
+    for(const enemy of enemies)Object.assign(enemy,{x:800,y:350,previousX:800,previousY:350,baseY:350});
+    resizeCargo.hp=.44;resizeCargo.age=0;var resizeEscort=enemies[1];
+    battlefieldEvents.nextTransport=131;`);
+  surface={width:1600,height:900};emit(window,'resize');
+  assert.equal(execute('battlefieldEvents.transport===resizeCargo&&enemies.includes(resizeCargo)&&enemies.includes(resizeEscort)'),true);
+  assert.equal(execute('enemies.length'),3);near(execute('resizeCargo.hp'),.44);
+  near(execute('battlefieldEvents.nextTransport'),131);assert.equal(execute('powerups.length'),0);
+  const x=execute('resizeCargo.x'),y=execute('resizeCargo.y');execute('updateEncounter(.05);');
+  near(execute('resizeCargo.x'),x-execute('resizeCargo.speed')*.05);
+  assert.ok(Math.abs(execute('resizeCargo.y')-y)<1);
+  assert.equal(execute('battlefieldEvents.transport===resizeCargo'),true);assert.equal(execute('score'),0);
+});
+check('not-yet-entered enemies, orbs and props stay beyond the new right edge', () => {
+  isolated('spawnEnemy("scout");spawnEnemy("armored");spawnEnemy("gunner");spawnPowerup();spawnBattlefieldObject();');
+  for(const size of [{width:640,height:360},{width:1920,height:1080},{width:900,height:600}]) {
+    surface=size;emit(window,'resize');
+    assert.equal(execute('[...enemies,...powerups,...battlefieldEvents.objects].every(e=>e.x>viewport.width)'),true);
+    assert.equal(execute('enemies.length'),3);assert.equal(execute('powerups.length'),1);assert.equal(execute('battlefieldEvents.objects.length'),1);
+  }
+});
+check('transient zero-size notifications leave the current battle untouched', () => {
+  isolated('spawnEnemy("armored");bullets.push({x:500,y:300});');
+  const before=snapshot('({viewport,player,enemies,bullets,enemyCooldown})');
+  for(const size of [{width:0,height:720},{width:1280,height:0}]){surface=size;emit(window,'resize');}
+  assert.deepEqual(snapshot('({viewport,player,enemies,bullets,enemyCooldown})'),before);
 });
 
 process.stdout.write(`\n${checks} v13 integration checks passed, ${failedChecks} failed.\n`);

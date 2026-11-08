@@ -30,6 +30,34 @@ function formationsBlockWaves() {
   return !!formationState.warning || formationState.suppression > 0;
 }
 
+function resizePincerFormation(plan) {
+  if (plan.kind !== "pincer" || plan.broken) return;
+  const members = plan.members || [];
+  const scoutHeight = Math.min(100, player.width * 0.65) * enemyTypes.scout.width * enemyTypes.scout.height;
+  const halfBody = Math.max(scoutHeight, ...members.map(enemy => enemy.height)) / 2;
+  const halfGap = player.height / 2 + 12;
+  const minimumOffset = halfGap + halfBody;
+  const currentOffset = Math.max(...plan.slots.map(slot => Math.abs(slot.y)));
+  const maximumOffset = Math.max(minimumOffset, Math.abs(formationPlan("pincer").slots[0].y));
+  const offset = clamp(currentOffset, minimumOffset, maximumOffset);
+  const minimumCenter = offset + halfBody;
+  const maximumCenter = viewport.height - minimumCenter;
+  plan.centerY = minimumCenter <= maximumCenter
+    ? clamp(plan.centerY, minimumCenter, maximumCenter) : viewport.height / 2;
+  plan.safeTop = plan.centerY - (offset - halfBody);
+  plan.safeBottom = plan.centerY + (offset - halfBody);
+  plan.slots.forEach((slot, index) => {
+    slot.y = (index < plan.slots.length / 2 ? -1 : 1) * offset;
+  });
+  members.forEach((enemy, index) => {
+    if (!enemies.includes(enemy)) return;
+    enemy.formationSlotY = plan.slots[index].y;
+    enemy.y = plan.centerY + enemy.formationSlotY;
+    enemy.previousY = enemy.y;
+    enemy.baseY = enemy.y;
+  });
+}
+
 function formationPlan(kind) {
   const top = flightBounds.top + 15, bottom = flightBounds.bottom - 15;
   const middle = (top + bottom) / 2, span = Math.max(1, bottom - top);
@@ -102,7 +130,8 @@ function launchFormation(plan) {
     enemy.formationSlotX = slot.x;
     enemy.formationSlotY = slot.y;
     enemy.x = group.x + slot.x;
-    enemy.y = clamp(plan.centerY + slot.y, flightBounds.top + enemy.height * 0.2, flightBounds.bottom - enemy.height * 0.2);
+    enemy.y = plan.kind === "pincer" ? plan.centerY + slot.y
+      : clamp(plan.centerY + slot.y, flightBounds.top + enemy.height * 0.2, flightBounds.bottom - enemy.height * 0.2);
     enemy.previousX = enemy.x;
     enemy.previousY = enemy.y;
     enemy.baseY = enemy.y;
@@ -190,8 +219,10 @@ function formationControlsEnemy(enemy, seconds) {
   }
   enemy.x = group.x + enemy.formationSlotX;
   const bob = group.kind === "pincer" ? 0 : Math.sin(group.age * 1.25) * Math.min(12, player.height * 0.08);
-  enemy.y = clamp(group.centerY + enemy.formationSlotY + bob,
-    flightBounds.top + enemy.height * 0.2, flightBounds.bottom - enemy.height * 0.2);
+  // 已在场的包抄队在窄窗借用上下边缘，不让旧玩家飞行边界把两翼挤回中央。
+  enemy.y = group.kind === "pincer" ? group.centerY + enemy.formationSlotY
+    : clamp(group.centerY + enemy.formationSlotY + bob,
+      flightBounds.top + enemy.height * 0.2, flightBounds.bottom - enemy.height * 0.2);
   if (enemy.kind === "gunner") {
     // 不从屏幕外开火，不因编队移动缩短原有的锁定预警。
     if (enemy.x > viewport.width - enemy.width * 0.6) return true;

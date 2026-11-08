@@ -90,6 +90,7 @@ const movementKeys = new Set([
 ]);
 // viewport 使用屏幕像素作为坐标；高清画布另按设备像素密度绘制。
 const viewport = { width: 1280, height: 720 };
+let battlefieldInitialized = false;
 const playerRules = { maxLives: 3 };
 const player = { x: 200, y: 360, width: 180, height: 120, speed: 300, lives: 3, hitFlash: 0 };
 const flightBounds = { left: 0, right: 0, top: 0, bottom: 0 };
@@ -135,14 +136,23 @@ function resetPlayer() {
 }
 function resizeBattlefield() {
   const rect = canvas.getBoundingClientRect();
+  // 浏览器切换显示模式时可能短暂报告零尺寸，等布局稳定后再适配。
+  if (rect.width <= 0 || rect.height <= 0) return;
   const oldWidth = viewport.width;
   const oldHeight = viewport.height;
-  viewport.width = Math.max(1, Math.round(rect.width));
-  viewport.height = Math.max(1, Math.round(rect.height));
+  const oldBounds = { ...flightBounds };
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.round(viewport.width * pixelRatio);
-  canvas.height = Math.round(viewport.height * pixelRatio);
+  const pixelWidth = Math.round(width * pixelRatio);
+  const pixelHeight = Math.round(height * pixelRatio);
+  if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+  if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  // 全屏通常连续发出 resize 和 fullscreenchange，同尺寸不重复调整战斗。
+  if (battlefieldInitialized && width === oldWidth && height === oldHeight) return;
+  viewport.width = width;
+  viewport.height = height;
   player.width = Math.min(180, viewport.width * 0.24, viewport.height * 0.28);
   player.height = player.width * 2 / 3;
   // HUD 和底部按钮之外，整架战机（包含尾焰）都应留在战场内。
@@ -152,17 +162,63 @@ function resizeBattlefield() {
   const bottomBar = Math.min(65, viewport.height * 0.18);
   flightBounds.top = Math.min(viewport.height / 2, topBar + player.height / 2 + 8);
   flightBounds.bottom = Math.max(flightBounds.top, viewport.height - bottomBar - player.height / 2 - 8);
-  player.x = clamp(player.x / oldWidth * viewport.width, flightBounds.left, flightBounds.right);
-  player.y = clamp(player.y / oldHeight * viewport.height, flightBounds.top, flightBounds.bottom);
+  const scaleX = width / oldWidth;
+  const oldSpan = oldBounds.bottom - oldBounds.top;
+  const scaleY = oldSpan > 0 ? (flightBounds.bottom - flightBounds.top) / oldSpan : height / oldHeight;
+  const resizeY = y => oldSpan > 0 ? flightBounds.top + (y - oldBounds.top) * scaleY : y * scaleY;
+  player.x = clamp(player.x * scaleX, flightBounds.left, flightBounds.right);
+  player.y = clamp(resizeY(player.y), flightBounds.top, flightBounds.bottom);
   if (state === "menu") resetPlayer();
   player.previousX = player.x; player.previousY = player.y;
   cancelUltimate(true);
   resetWeapons();
-  resetEncounter(false);
+  resizeEncounter(scaleX, scaleY, resizeY);
+  player.previousX = player.x; player.previousY = player.y;
   resizeCombatEffects(oldWidth, oldHeight);
   resizeScenery();
   clearMovement();
   refreshEvolutionChoice();
+  battlefieldInitialized = true;
+}
+
+function resizeEncounter(scaleX, scaleY, resizeY) {
+  // 保留实体及其血量、事件归属和刷新进度，只转换到新战场的坐标。
+  for (const entity of [...enemies, ...powerups, ...battlefieldEvents.objects]) {
+    entity.x *= scaleX;
+    entity.y = resizeY(entity.y);
+    entity.previousX = entity.x;
+    entity.previousY = entity.y;
+  }
+  for (const enemy of enemies) {
+    if (Number.isFinite(enemy.baseY)) enemy.baseY = resizeY(enemy.baseY);
+    if (Number.isFinite(enemy.waveAmplitude)) enemy.waveAmplitude *= scaleY;
+    if (Number.isFinite(enemy.holdX)) enemy.holdX *= scaleX;
+    if (Number.isFinite(enemy.aimX)) enemy.aimX *= scaleX;
+    if (Number.isFinite(enemy.aimY)) enemy.aimY = resizeY(enemy.aimY);
+    if (Number.isFinite(enemy.formationSlotX)) enemy.formationSlotX *= scaleX;
+    if (Number.isFinite(enemy.formationSlotY)) enemy.formationSlotY *= scaleY;
+    if (Number.isFinite(enemy.formationDrift)) enemy.formationDrift *= scaleY;
+    if (enemy.kind === "gunner" && enemy.gunPhase === "warning") enemy.gunTime = 0;
+  }
+  for (const plan of [formationState.warning, formationState.active]) {
+    if (!plan) continue;
+    if (Number.isFinite(plan.x)) plan.x *= scaleX;
+    plan.centerY = resizeY(plan.centerY);
+    if (Number.isFinite(plan.safeTop)) plan.safeTop = resizeY(plan.safeTop);
+    if (Number.isFinite(plan.safeBottom)) plan.safeBottom = resizeY(plan.safeBottom);
+    for (const slot of plan.slots) {
+      slot.x *= scaleX;
+      slot.y *= scaleY;
+    }
+    resizePincerFormation(plan);
+  }
+  // 重建尺寸后重新预警，避免旧弹道或激光在新位置立即命中玩家。
+  enemyProjectiles.length = 0;
+  explosions.length = 0;
+  const previousGrace = bossHitGrace;
+  resizeBossEncounter();
+  // 缩小可飞区域可能暂时挤近机身，给玩家重新走位的时间。
+  bossHitGrace = Math.max(previousGrace, bossHitGrace, bossRules.grace);
 }
 
 function readyFighter() {
