@@ -492,7 +492,8 @@ check('decoded backgrounds and transparent foreground render through drawImage a
     const images=drawOperations.filter(op=>op.name==='drawImage');
     const expected=snapshot('(()=>{const j=sceneryJourney();return [battlefieldSectors[j.current].asset,battlefieldSectors[j.next].asset];})()');
     for(const asset of expected)assert.ok(images.some(op=>op.args[0].src===asset),'draw '+asset);
-    assert.equal(images.filter(op=>op.args[0].src==='assets/scenery/foreground-rock.png').length,3);
+    const debrisWeight=execute('(()=>{const j=sceneryJourney();return battlefieldSectors[j.current].foreground*(1-j.blend)+battlefieldSectors[j.next].foreground*j.blend;})()');
+    assert.equal(images.filter(op=>op.args[0].src==='assets/scenery/foreground-rock.png').length,debrisWeight>0?2:0,'near debris only in belt/fleet sectors');
     for(const op of drawOperations)for(const arg of op.args)if(typeof arg==='number')assert.ok(Number.isFinite(arg),op.name+' finite image geometry');
   }
 });

@@ -1,0 +1,47 @@
+内置 imagegen 生成；静谧深空五片星域中的轨道背景。实际输出 1672x941。
+
+Use case: stylized-concept. Asset type: high-resolution cinematic background plate for a side scrolling space game, standalone new artwork. Generate a single wide 16:9 composition at 2048x1152.
+Primary request: a profoundly quiet, mysterious, enormous universe, the silence and unknowable depth of space, premium photorealistic cinematic astronomical photography. This is a background, not a game screenshot.
+Scene: deep midnight indigo almost-black void fills at least 65% of the composition. Extremely faint dusty cobalt and violet interstellar filaments drift through the upper far distance, many layers of shadow with delicate detail just above black. Sparse tiny distant stars of naturally varied brightness, one or two barely perceptible distant galaxies, no decorative large starbursts.
+Low orbit: a distant immense night-side planet only reveals a slim curved atmospheric rim and a little dark surface along the very bottom right edge, occupying no more than 20% of the image height. The planet must feel far away, its sun below the horizon and not visible. A thin very subtle cool atmospheric blue rim, faint texture and night haze. No bright sunrise, no daytime continents filling the screen, no space station or buildings.
+Composition: a clear dark open corridor across the middle 60%, including most of left and center. Asymmetric celestial scale and subtle spatial depth, not uniform black. Background is slowly panned left and magnified, so keep visual masses toward extreme edges. Rich photographic tonal separation, restrained saturation. Mood contemplative, ancient, silent, unknowable, immense, subtle rather than dramatic flashy.
+Avoid: text, symbols, interface, watermark, spacecraft, bullets, battle, explosions, lasers, bright rainbow nebula, decorative glowing grids, thick fog everywhere, huge lens flare, giant star spikes, flat gradients, oversharpened gritty noise, cartoon painting, symmetrical mandalas.
+
+
+------------------------
+
+# Quiet deep-space assets
+
+Generated using the built-in image_gen tool, opaque landscape backgrounds. No API/CLI fallback used. The prompts requested 2048x1152; the tool controls actual output dimensions.
+
+## belt-silent.png
+
+Use case: stylized-concept.
+Asset type: one standalone wide cinematic background plate for a horizontal 2.5D space shooter, 2048x1152, 16:9 landscape, edge-to-edge opaque image.
+Primary request: a profoundly quiet, mysterious and immense asteroid-belt vista, with the visual subtlety of expensive science-fiction cinematography and deep-space astrophotography. The viewer should feel the cold silence and incomprehensible depth of the universe.
+Composition: at least 65 percent of the frame, especially the central horizontal combat corridor and left half, is almost black indigo empty space with exquisitely faint smoky nebular texture and just a small scattering of tiny dim stars. A few small, dark, far-away asteroids sit at the extreme top and bottom edges only; they must not crowd the center. A barely visible diffuse dust band recedes diagonally across the distant background. At most two tiny very distant galaxies, minute in scale.
+Lighting and palette: low-key exposure, velvety blue-black shadows with retained fine shadow detail, muted cool teal and violet hints, very restrained cold rim lighting on a few edge rocks. Extreme spatial scale and atmospheric depth, realistic rock texture, restrained photographic grain, no bright fog.
+Constraints: single coherent panorama, not a collage. No spacecraft, characters, planets, UI, text, logos, borders, weapons, projectiles, lens flare streaks, large starbursts, colored candy-cloud nebulae, dense bright stars, light beams or geometric grid lines. Do not turn this into an illustration or a busy space wallpaper. The image is a quiet stage behind bright gameplay objects.
+
+## rift-silent.png
+
+Use case: stylized-concept.
+Asset type: one standalone 16:9 landscape cinematic deep-space background plate, request 2048x1152, opaque edge-to-edge, for the final sector of a horizontal 2.5D space shooter.
+Primary request: convey the mysterious silence and unfathomable depth of the universe through a very distant black hole seen across a vast dark gulf. Sophisticated restrained science-fiction cinematography, photorealistic astrophotographic detail, never painterly or a game illustration.
+Composition: the black hole is small and far away, centered approximately 80 percent from the left and 24 percent from the top; the entire dark disk diameter is no more than 18 percent of the image width. Its thin accretion ring is dim icy-violet white, not blinding, with delicate gravitational lensing and wispy almost invisible filaments close to the ring. The central 60 percent and left half remain extremely dark indigo negative space with subtle dusty depth, a few tiny distant stars, and one minute remote galaxy. Keep the drama remote and spatially immense; do not let the black hole or surrounding swirls occupy the full frame.
+Lighting: deep blue-black shadow gradations, barely perceptible violet and blue nebular haze, small restrained rim glows, no strong bloom. Preserve shadow texture instead of a blank pure-black fill.
+Constraints: single coherent panorama. No spacecraft, planets, foreground rocks, people, weapons, beams, UI, text, typography, borders, logos, grids, geometric lines, large starbursts, dense bright stars, rainbow candy clouds, explosive effects or a huge centered vortex. Keep it quiet, cinematic, physically convincing, and usable behind bright gameplay.
+
+
+
+------------------------
+
+Generated with the built-in imagegen tool (2026-11-08).
+Output assets are production background plates. No API or fallback CLI was used.
+
+WRECK SILENT
+Use case: stylized-concept. Asset type: production background plate for a 2.5D side-scrolling space game, landscape 16:9, requested 2048x1152. Create a cinematic photorealistic silent fleet graveyard in extremely deep space. The visual emotion is cosmic stillness, mystery, unimaginable distance and solemn vastness, not action. At least 65% of the frame, especially the central and left regions, is open dark indigo-black space with delicately layered barely-visible violet/blue interstellar dust and a few tiny distant stars. A small number of abandoned capital-ship silhouettes drift at a great distance, confined mainly to the upper-right and far outer edges. Their surfaces are almost lost in shadow, only subtle cold rim lighting reveals their distant shapes. Very few tiny dim amber embers remain. Fine physically credible materials, restrained high dynamic range with clear dark detail, enormous depth and empty scale, astrophotographic realism. These are background wreck silhouettes, not foreground active fighter ships. No bright explosion, no fire sea, no rainbow clouds, no graphic illustration, no dense star speckles, no large starbursts, no lens flare streaks, no luminous grids, no text, no UI, no bullets, no watermark. Keep the central combat area clean, quiet and spacious. No border, no collage.
+
+CITADEL SILENT
+Use case: stylized-concept. Asset type: production background plate for a 2.5D side-scrolling space game, landscape 16:9, requested 2048x1152. Create a photorealistic cinematic view of a vast silent cosmic abyss, mysterious and contemplative. Central 65% and left side remain open near-black indigo space with wisps of extremely faint blue-violet interstellar dust, a few tiny sharp distant stars, and barely discernible far galaxies. At the extreme upper-right outer edge a partial silhouette of an enormous but VERY DISTANT capital spacecraft enters the composition, occupying no more than 22% of the frame. It should feel majestic through scale and distance, never close up. Only subtle backlit metal edges and a handful of minute dim cold-white porthole lights reveal its structure; its bulk disappears into shadow. High quality plausible 3D cinematic materials, quiet low exposure with visible fine shadow gradation, immense multilayer depth. Preserve the void as the main subject. Avoid a ship filling the center, warm action lighting, bright multicolored nebulae, large bright rings, dense starbursts, lens flare streaks, HUD, grids, text, game fighter aircraft, projectiles, watermark, or collage. Full rectangular image, no border.
+
