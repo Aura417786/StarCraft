@@ -84,6 +84,7 @@ const gameAudio={ muted:false,
   bossAttack(...args){audioCalls.push({name:'bossAttack',args});},
   bossEnrage(){audioCalls.push({name:'bossEnrage',args:[]});},
   overdrive(){audioCalls.push({name:'overdrive',args:[]});},
+  perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
 const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
 for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js')) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
@@ -1364,7 +1365,7 @@ check('a held or premature space press never buffers another cannon after the fi
 const protection = () => JSON.parse(execute('JSON.stringify(shield)'));
 function primeShield(charges=1) { execute(`shield.charges=${charges};updateShieldDisplay();`); }
 check('a new round has zero shield energy and two accessible empty storage slots', () => {
-  isolatedBattle(); assert.deepEqual(protection(),{charges:0,energy:0,remaining:0});
+  isolatedBattle(); const {charges,energy,remaining}=protection(); assert.deepEqual({charges,energy,remaining},{charges:0,energy:0,remaining:0});
   assert.equal(nodes.get('#shield-count').textContent,'0 / 2');
   assert.equal(nodes.get('#shield-meter').attributes['aria-valuenow'],'0');
   assert.equal(protectionSlots.filter(s=>s.dataset.filled==='true').length,0);
@@ -1471,8 +1472,8 @@ check('death ends active protection and restart or returning to menu clears all 
   isolatedBattle('shield.energy=18;'); primeShield(2); execute('requestShield();endGame();');
   near(protection().remaining,0); assert.equal(execute('shieldIsActive()'),false); const ended=protection();
   frames(100); execute('updateShield(100);'); assert.deepEqual(protection(),ended);
-  emit(nodes.get('#restart-button'),'click'); assert.deepEqual(protection(),{charges:0,energy:0,remaining:0});
-  execute('updateShield(31);requestShield();'); emit(nodes.get('#menu-button'),'click'); assert.deepEqual(protection(),{charges:0,energy:0,remaining:0});
+  emit(nodes.get('#restart-button'),'click'); assert.deepEqual(protection(),{charges:0,energy:0,remaining:0,perfectRemaining:0,perfectUsed:false,flash:0,slowRemaining:0,effect:null});
+  execute('updateShield(31);requestShield();'); emit(nodes.get('#menu-button'),'click'); assert.deepEqual(protection(),{charges:0,energy:0,remaining:0,perfectRemaining:0,perfectUsed:false,flash:0,slowRemaining:0,effect:null});
 });
 check('shield drawing is a translucent red enclosing ellipse with finite geometry and balanced canvas state', () => {
   for(const reduced of [false,true]) for(const size of [{width:390,height:844},{width:1280,height:720}]) {
@@ -2478,6 +2479,163 @@ check('all 63 evolved silhouettes and hybrids preserve player geometry and the o
     visualSignatures.add(JSON.stringify(drawOperations.filter(op=>['moveTo','lineTo'].includes(op.name))));
   }
   assert.equal(visualSignatures.size,63); assert.equal(execute('JSON.stringify(player)'),before);
+});
+
+
+// 完美护盾按实际弹药接触与有效战斗时间检查，不能凭靠近或旧轨迹刷收益。
+const parrySoundCount = () => audioCalls.filter(call=>call.name==='perfectShield').length;
+const contactShell = (extra='') => `enemyProjectiles.push({x:player.x,y:player.y,previousX:player.x,previousY:player.y,vx:0,vy:0,radius:6,age:0${extra?','+extra:''}});`;
+function activateParry(extra='') { isolatedBattle('bossHitGrace=0;'+extra); primeShield(); execute('requestShield();'); }
+check('perfect guard expires at one quarter second while ordinary shield still protects for two seconds', () => {
+  for(const [elapsed,perfect] of [[0,true],[.249,true],[.25,false],[.251,false]]) {
+    activateParry(); const sounds=parrySoundCount();
+    execute(`updateShield(${elapsed});${contactShell()}updateEnemyProjectileDamage();`);
+    assert.equal(protection().perfectUsed,perfect); assert.equal(parrySoundCount()-sounds,Number(perfect));
+    assert.equal(health().lives,3); near(protection().remaining,2-elapsed);
+    near(protection().energy,elapsed+(perfect?6.25:0));
+  }
+});
+check('many ordinary and Boss shells yield only one perfect guard and refund per shield activation', () => {
+  activateParry(); const sounds=parrySoundCount();
+  execute(contactShell().repeat(6)+bossProjectile().repeat(6)+'updateEnemyProjectileDamage();updateBossDamage();');
+  assert.equal(protection().perfectUsed,true); near(protection().energy,6.25);
+  assert.equal(parrySoundCount()-sounds,1); assert.equal(execute('enemyProjectiles.length+bossProjectiles.length'),0);
+  execute(contactShell()+'updateEnemyProjectileDamage();'); near(protection().energy,6.25);
+  execute('updateShield(2);shield.charges=1;requestShield();'+contactShell()+'updateEnemyProjectileDamage();');
+  assert.equal(parrySoundCount()-sounds,2);
+});
+check('perfect guard refunds a quarter of the current evolved recharge period and cannot hide a third charge', () => {
+  for(let level=0;level<=3;level++) {
+    activateParry(`evolution.aegis=${level};shield.energy=0;`);
+    const period=execute('evolutionShieldChargeTime()');
+    execute(contactShell()+'updateEnemyProjectileDamage();'); near(protection().energy,period*.25);
+    activateParry(`evolution.aegis=${level};shield.energy=evolutionShieldChargeTime()*.9;`);
+    execute(contactShell()+'updateEnemyProjectileDamage();');
+    assert.equal(protection().charges,1); near(protection().energy,period*.15);
+    isolatedBattle(`bossHitGrace=0;evolution.aegis=${level};shield.charges=2;shield.energy=evolutionShieldChargeTime()*.9;requestShield();`);
+    execute(contactShell()+'updateEnemyProjectileDamage();');
+    assert.equal(protection().charges,2); near(protection().energy,0);
+  }
+});
+check('ordinary damage and existing hurt grace cannot award a perfect guard without an eligible shield', () => {
+  isolatedBattle('bossHitGrace=0;'); const sounds=parrySoundCount();
+  execute(contactShell()+'updateEnemyProjectileDamage();'); assert.equal(health().lives,2);
+  assert.equal(protection().perfectUsed,false); near(protection().energy,0);
+  primeShield(); execute('requestShield();'+contactShell()+'updateEnemyProjectileDamage();');
+  assert.equal(protection().perfectUsed,false); near(protection().energy,0); assert.equal(parrySoundCount(),sounds);
+  activateParry(); execute('updateShield(2);'+contactShell()+'updateEnemyProjectileDamage();');
+  assert.equal(protection().perfectUsed,false); assert.equal(health().lives,2);
+});
+check('enemy contact and active beam or mine hazards remain ordinary shield blocks', () => {
+  activateParry(); const sounds=parrySoundCount(); collide();
+  assert.equal(health().lives,3); assert.equal(protection().perfectUsed,false); near(protection().energy,0);
+  for(const kind of ['beam','zone']) {
+    readyBoss(kind==='beam'?4:2,'shield.charges=1;requestShield();');
+    execute(`addBossHazard("${kind}",{x:player.x,y:player.y,radius:35,thickness:20,warning:.1,duration:5});bossHazards[0].age=.2;updateBossDamage();`);
+    assert.equal(health().lives,3); assert.equal(protection().perfectUsed,false); near(protection().energy,0);
+    assert.equal(execute('bossHazards.length'),1);
+  }
+  assert.equal(parrySoundCount(),sounds);
+});
+check('visible shield ellipse intercepts edge shots and high-speed relative sweeps without enlarging the bare fighter', () => {
+  activateParry();
+  execute('var edgeShot={x:player.x+player.width*.55,y:player.y,previousX:player.x+player.width*.55,previousY:player.y,radius:0};');
+  assert.equal(execute('shieldInterceptsProjectile(edgeShot)'),true);
+  execute('edgeShot.x=edgeShot.previousX=player.x+player.width*.61;');
+  assert.equal(execute('shieldInterceptsProjectile(edgeShot)'),false);
+  execute('enemyProjectiles.push({x:player.x-250,previousX:player.x+250,y:player.y+player.height*.5,previousY:player.y+player.height*.5,vx:-1000,vy:0,radius:5,age:0});updateEnemyProjectileDamage();');
+  assert.equal(protection().perfectUsed,true); assert.equal(execute('enemyProjectiles.length'),0);
+  isolatedBattle('bossHitGrace=0;enemyProjectiles.push({x:player.x+player.width*.55,previousX:player.x+player.width*.55,y:player.y,previousY:player.y,vx:0,vy:0,radius:0,age:0});updateEnemyProjectileDamage();');
+  assert.equal(health().lives,3); assert.equal(execute('enemyProjectiles.length'),1);
+});
+check('aegis opening clears nearby shells but rewards only present ellipse contact rather than stale shot paths', () => {
+  for(const contact of [false,true]) {
+    isolatedBattle(`bossHitGrace=0;evolution.aegis=1;shield.charges=1;enemyProjectiles.push({x:player.x+player.width*${contact?.5:.85},previousX:player.x,y:player.y,previousY:player.y,vx:0,vy:0,radius:6,age:0});`);
+    const sounds=parrySoundCount(); execute('requestShield();');
+    assert.equal(protection().perfectUsed,contact); assert.equal(execute('enemyProjectiles.length'),0);
+    near(protection().energy,contact?execute('evolutionShieldChargeTime()')*.25:0);
+    assert.equal(parrySoundCount()-sounds,Number(contact));
+  }
+});
+check('perfect counter uses the complete base firepower only in the visible forward band without recursive blast or cannon energy', () => {
+  activateParry('weapon.damage=4;weapon.lanes=2;weapon.interval=.2;evolution.blast=3;');
+  execute(`enemies.length=0;${target(500,position().y,100,100)}${target(50,position().y,100,100)}${target(1400,position().y,100,100)}${target(600,position().y+250,100,100)}${contactShell()}updateEnemyProjectileDamage();`);
+  near(execute('enemies[0].hp'),100-4*2/.2*.65);
+  for(let i=1;i<4;i++) near(execute(`enemies[${i}].hp`),100);
+  near(ult().energy,0); near(execute('evolutionBlastCooldown'),0); assert.equal(health().kills,0);
+});
+check('counter kills use normal one-time score and combo settlement without charging the cannon', () => {
+  activateParry('evolution.blast=3;');
+  execute(target(500,position().y,100,1)+contactShell()+'updateEnemyProjectileDamage();updateBossDamage();');
+  assert.equal(scene().score,100); assert.equal(health().kills,1); assert.equal(momentumState().count,1);
+  assert.equal(scene().enemies.length,0); near(ult().energy,0); near(execute('evolutionBlastCooldown'),0);
+  execute(contactShell()+'updateEnemyProjectileDamage();'); assert.equal(scene().score,100); assert.equal(health().kills,1);
+});
+check('perfect counter is capped at three percent for each simultaneous Boss even with unbounded weapon tiers', () => {
+  readyDuo('player.y=boss.y;wingBoss.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();');
+  execute(bossProjectile().repeat(5)+'updateBossDamage();');
+  near(duoState().boss.hp,.97); near(duoState().wingBoss.hp,.97); near(ult().energy,0);
+  assert.equal(protection().perfectUsed,true); assert.equal(execute('activeBosses().every(target=>target.components.every(part=>!part.destroyed))'),true);
+});
+check('lethal perfect counters safely finish a Boss after collecting contact bullets and never settle it twice', () => {
+  readyBoss(0,'weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
+  execute(bossProjectile().repeat(8)+'updateBossDamage();updateBossDamage();');
+  assert.equal(execute('boss'),null); assert.equal(execute('bossDefeated'),1); assert.equal(scene().score,2000);
+  assert.equal(execute('bossProjectiles.length'),0); assert.equal(execute('isBossDeathPlaying()'),true); near(ult().energy,0);
+});
+check('perfect window and all shield feedback timers freeze on hidden tabs, window blur and control focus', () => {
+  for(const route of ['window','hidden','control']) {
+    activateParry(); execute('updateShield(.1);'); const before=protection();
+    if(route==='window') emit(window,'blur');
+    if(route==='hidden') {document.hidden=true;emit(document,'visibilitychange');}
+    if(route==='control') nodes.get('#sound-button').focus();
+    frames(3); execute('updateShield(500);shieldFrameSeconds(1);'); assert.deepEqual(protection(),before);
+    if(route==='window') emit(window,'focus');
+    if(route==='hidden') {document.hidden=false;emit(document,'visibilitychange');}
+    if(route==='control') emit(canvas,'pointerdown');
+    step(); execute(contactShell()+'updateEnemyProjectileDamage();'); assert.equal(protection().perfectUsed,true);
+  }
+});
+check('brief perfect-guard slow motion advances all gameplay on one shared step and expires by active real time', () => {
+  activateParry('ultimate.charges=1;requestUltimate();');
+  execute(contactShell()+'updateEnemyProjectileDamage();');
+  const time=scene().battleTime, shieldTime=protection().remaining, cannon=ult().elapsed, backdrop=execute('battlefieldState.clock');
+  step(); near(scene().battleTime-time,.05*.4); near(shieldTime-protection().remaining,.05*.4);
+  near(ult().elapsed-cannon,.05*.4); near(execute('battlefieldState.clock')-backdrop,.05*.4);
+  const left=protection().slowRemaining;
+  const delta=execute('shieldFrameSeconds(.2)'); near(delta,left*.4+(.2-left)); near(protection().slowRemaining,0);
+  activateParry('reducedMotion.matches=true;'); execute(contactShell()+'updateEnemyProjectileDamage();');
+  near(execute('shieldFrameSeconds(.05)'),.05); execute('reducedMotion.matches=false;');
+});
+check('resize and duplicate fullscreen events preserve the perfect window and its consumed flag rather than renewing it', () => {
+  for(const used of [false,true]) {
+    activateParry(); if(used) execute(contactShell()+'updateEnemyProjectileDamage();');
+    execute('updateShield(.1);'); const before=protection();
+    // 同尺寸事件连格挡演出也保留；真实缩放只清理旧坐标上的瞬时效果。
+    emit(window,'resize');emit(document,'fullscreenchange');assert.deepEqual(protection(),before);
+    surface={width:1920,height:1080};emit(window,'resize');
+    const resized=protection();
+    for(const name of ['remaining','perfectRemaining','perfectUsed','charges','energy']) assert.equal(resized[name],before[name]);
+    near(resized.flash,0);near(resized.slowRemaining,0);assert.equal(resized.effect,null);
+    emit(document,'fullscreenchange');emit(window,'resize');assert.deepEqual(protection(),resized);
+  }
+});
+check('new games clear consumed perfect guard, transient feedback and slow motion completely', () => {
+  activateParry();execute(contactShell()+'updateEnemyProjectileDamage();'); assert.equal(protection().perfectUsed,true);
+  execute('endGame();showScreen("battle");');
+  for(const name of ['remaining','energy','charges','perfectRemaining','flash','slowRemaining']) near(protection()[name],0);
+  assert.equal(protection().perfectUsed,false);
+  assert.equal(execute('tryPerfectShield()'),false);
+});
+check('perfect guard ring and counter drawing remain finite, canvas-balanced and readable with reduced motion', () => {
+  for(const reduced of [false,true]) {
+    activateParry(`reducedMotion.matches=${reduced};`); execute(contactShell()+'updateEnemyProjectileDamage();');
+    captureDraws=true;drawOperations.length=0;execute('drawShield();');captureDraws=false;
+    assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
+    assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
+    assert.ok(drawOperations.some(op=>op.name==='ellipse'||op.name==='arc'));
+  }
+  execute('reducedMotion.matches=false;');
 });
 
 process.stdout.write('All '+checks+' combat checks passed.\n');

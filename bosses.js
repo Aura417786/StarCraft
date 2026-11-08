@@ -451,6 +451,7 @@ function defeatBoss(target = boss) {
   startBossDeathPresentation(fallen);
 }
 function bossShotHitsPlayer(shot) {
+  if (shieldInterceptsProjectile(shot)) return true;
   const radius = player.height * 0.16 + shot.radius;
   const dx = shot.x - shot.previousX, dy = shot.y - shot.previousY;
   const distance = dx * dx + dy * dy;
@@ -463,6 +464,7 @@ function updateBossDamage() {
   for (let index = bossProjectiles.length - 1; index >= 0; index--) {
     if (bossShotHitsPlayer(bossProjectiles[index])) { bossProjectiles.splice(index, 1); hit = true; }
   }
+  if (hit) tryPerfectShield();
   for (const hazard of bossHazards) {
     if (hazard.age < hazard.warning) continue;
     if (hazard.kind === "beam") {

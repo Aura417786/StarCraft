@@ -90,6 +90,7 @@ function updateEnemyProjectiles(seconds) {
   }
 }
 function enemyShotHitsPlayer(shot) {
+  if (shieldInterceptsProjectile(shot)) return true;
   // 用双方相对移动检测擦身而过，避免低帧率时穿过战机却不受伤。
   const x0 = shot.previousX - (player.previousX ?? player.x);
   const y0 = shot.previousY - (player.previousY ?? player.y);
@@ -104,7 +105,7 @@ function updateEnemyProjectileDamage() {
   for (let index = enemyProjectiles.length - 1; index >= 0; index--) {
     if (enemyShotHitsPlayer(enemyProjectiles[index])) { enemyProjectiles.splice(index, 1); hit = true; }
   }
-  if (hit) damagePlayer("被炮击机命中");
+  if (hit) { tryPerfectShield(); damagePlayer("被炮击机命中"); }
 }
 function drawEnemyThreats() {
   context.save();

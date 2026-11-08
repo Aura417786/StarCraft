@@ -163,6 +163,8 @@ function resizeBattlefield() {
   flightBounds.top = Math.min(viewport.height / 2, topBar + player.height / 2 + 8);
   flightBounds.bottom = Math.max(flightBounds.top, viewport.height - bottomBar - player.height / 2 - 8);
   const scaleX = width / oldWidth;
+  // 尺寸改变只清除格挡的瞬时演出，不重新授予完美窗口或退还已消费的机会。
+  shield.effect = null; shield.flash = 0; shield.slowRemaining = 0;
   const oldSpan = oldBounds.bottom - oldBounds.top;
   const scaleY = oldSpan > 0 ? (flightBounds.bottom - flightBounds.top) / oldSpan : height / oldHeight;
   const resizeY = y => oldSpan > 0 ? flightBounds.top + (y - oldBounds.top) * scaleY : y * scaleY;
@@ -784,6 +786,8 @@ function endGame() {
   resetEnemyCombat(false);
   cancelUltimate();
   shield.remaining = 0;
+  shield.perfectRemaining = 0; shield.perfectUsed = false;
+  shield.flash = 0; shield.slowRemaining = 0; shield.effect = null;
   updateShieldDisplay();
   setBossWarning();
   syncGameAudio();
@@ -894,8 +898,9 @@ function drawPlayer() {
   context.restore();
 }
 function drawFrame(time) {
-  const seconds = previousTime ? Math.min((time - previousTime) / 1000, 0.05) : 0;
+  const realSeconds = previousTime ? Math.min((time - previousTime) / 1000, 0.05) : 0;
   previousTime = time;
+  const seconds = shieldFrameSeconds(realSeconds);
   syncGameAudio();
   updateCombatEffects(seconds);
   updateMomentum(seconds);

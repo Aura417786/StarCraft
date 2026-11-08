@@ -88,7 +88,7 @@ async function run() {
   await check("unsupported browsers stay silent and every public method is safe", async () => {
     const { api } = world();
     api.sync(true, true, true); api.shoot(); api.explode(true); api.warning(); api.setMuted(true);
-    api.shoot(true); api.overdrive();
+    api.shoot(true); api.overdrive(); api.perfectShield();
     api.chargeUltimate(); api.fireUltimate(); api.stopUltimate(); api.bossAttack("beam"); api.bossEnrage();
     assert.equal(api.muted, true); assert.equal(await api.unlock(), false); api.destroy();
   });
@@ -104,7 +104,7 @@ async function run() {
   const testWorld = world(FakeContext), api = testWorld.api;
   await check("loading and pre-unlock sync never create an AudioContext", () => {
     api.sync(true, true); api.shoot(); api.chargeUltimate(); api.fireUltimate(); api.stopUltimate();
-    api.shoot(true); api.overdrive();
+    api.shoot(true); api.overdrive(); api.perfectShield();
     api.bossAttack(); api.bossEnrage();
     assert.equal(instances.length, 0);
   });
@@ -631,6 +631,75 @@ async function run() {
     assert.equal(pressureAudio.living, 0); assert.equal(pressureWorld.timers.size, 0);
   });
   peak = Math.max(peak, dynamicPeak); pressure.destroy();
+  const parryWorld = world(FakeContext), parry = parryWorld.api;
+  parry.sync(true, true); await parry.unlock(); const parryAudio = instances.at(-1);
+  count = parryAudio.sources.length; parry.perfectShield();
+  const parryImpact = parryAudio.sources.slice(count);
+  await check("perfect shield combines a quick metallic attack with a short bass countershock", () => {
+    assert.ok(parryImpact.length >= 4 && parryImpact.length <= 6);
+    assert.ok(parryImpact.some(node => !node.oscillator && node.stopAt - node.startAt < 0.08));
+    assert.ok(parryImpact.filter(node => node.oscillator && node.frequency.events[0].value > 1000).length >= 2);
+    assert.ok(parryImpact.some(node => node.oscillator && node.frequency.events.at(-1).value <= 60));
+    assert.ok(parryImpact.some(node => !node.oscillator && node.startAt > parryAudio.currentTime));
+    assert.ok(parryImpact.every(node => node.stopAt <= parryAudio.currentTime + 0.4));
+    assert.equal(parryWorld.timers.size, 1);
+  });
+  await check("same-frame perfect shield spam coalesces and a later independent block can sound again", () => {
+    const emitted = parryAudio.sources.length;
+    for (let index = 0; index < 1000; index++) parry.perfectShield();
+    parryAudio.advance(0.34); parry.perfectShield();
+    assert.equal(parryAudio.sources.length, emitted);
+    parryAudio.advance(0.02); parry.perfectShield();
+    assert.ok(parryAudio.sources.length > emitted);
+  });
+  parry.sync(false, true); parryAudio.advance(0.1);
+  await check("pause cancels metallic and countershock tails without replaying a block on resume", () => {
+    assert.equal(parryAudio.living, 0); assert.equal(parryWorld.timers.size, 0);
+    count = parryAudio.sources.length; parryAudio.advance(2); parry.perfectShield();
+    assert.equal(parryAudio.sources.length, count);
+    parry.sync(true, false); parryAudio.advance(0.5);
+    onlyNewMusic(parryAudio, count); assert.equal(parryAudio.livingEffects, 0);
+  });
+  parry.perfectShield(); parry.setMuted(true); parryAudio.advance(0.1);
+  await check("mute stops perfect shield immediately and does not defer missed blocks until unmute", () => {
+    assert.equal(parryAudio.living, 0); count = parryAudio.sources.length;
+    parryAudio.advance(1); parry.perfectShield();
+    assert.equal(parryAudio.sources.length, count);
+    parry.setMuted(false); parryAudio.advance(0.5);
+    onlyNewMusic(parryAudio, count); assert.equal(parryAudio.livingEffects, 0);
+  });
+  parry.sync(true, true, true, { combo: 80, overdrive: true });
+  count = parryAudio.sources.length; parry.chargeUltimate();
+  const parryProtected = parryAudio.sources.slice(count), parryStops = parryProtected.map(node => node.stopAt);
+  parry.perfectShield(); parry.explode(true); parry.overdrive();
+  for (const kind of ["beam", "summon", "burst", "volley"]) parry.bossAttack(kind);
+  parry.shoot(true);
+  await check("perfect shield during dense combat cannot interrupt protected ultimate charge voices", () => {
+    assert.deepEqual(parryProtected.map(node => node.stopAt), parryStops);
+    assert.ok(parryAudio.living <= 48);
+  });
+  let parryPeak = parryAudio.living;
+  for (let frame = 0; frame < 1000; frame++) {
+    parryAudio.advance(0.02);
+    if (frame % 2 === 0) tickScheduler(parryWorld);
+    parry.perfectShield(); parry.shoot(true);
+    if (frame % 5 === 0) parry.explode();
+    if (frame % 15 === 0) parry.bossAttack("volley");
+    if (frame % 40 === 0) parry.bossAttack("beam");
+    if (frame % 100 === 0) parry.chargeUltimate();
+    if (frame % 100 === 43) parry.fireUltimate();
+    parryPeak = Math.max(parryPeak, parryAudio.living);
+  }
+  await check("continuous perfect shield requests with Boss music and weapons respect the real voice budget", () => {
+    assert.ok(parryPeak <= 48, "observed " + parryPeak);
+    assert.equal(parryWorld.timers.size, 1);
+    assert.ok(parryAudio.sources.every(node => Number.isFinite(node.startAt) && Number.isFinite(node.stopAt)));
+  });
+  peak = Math.max(peak, parryPeak); parry.destroy();
+  await check("perfect shield is safe and silent after audio destruction", () => {
+    count = parryAudio.sources.length; parry.perfectShield();
+    assert.equal(parryAudio.sources.length, count); assert.equal(parryWorld.timers.size, 0);
+  });
   process.stdout.write("All " + checks + " audio simulation checks passed; observed peak " + peak + " active/scheduled sources.\n");
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

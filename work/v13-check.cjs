@@ -85,6 +85,7 @@ const gameAudio={ muted:false,
   bossAttack(...args){audioCalls.push({name:'bossAttack',args});},
   bossEnrage(){audioCalls.push({name:'bossEnrage',args:[]});},
   overdrive(){audioCalls.push({name:'overdrive',args:[]});},
+  perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
 const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
 for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js')) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);

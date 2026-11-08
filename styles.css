@@ -159,6 +159,8 @@ h1 > span { color: var(--red); }
 .shield-hud[data-ready="true"] .shield-label { color: #e5b0b9; }
 .shield-hud[data-active="true"] { border-color: #ff8995; box-shadow: 0 0 24px #ff315a22; }
 .shield-hud[data-active="true"] .shield-label { color: #ffc5c4; }
+.shield-hud[data-perfect="true"] { border-color: #ffe0b7; box-shadow: 0 0 28px #ff315a44, inset 0 0 20px #ff6f3d18; }
+.shield-hud[data-perfect="true"] .shield-label { color: #ffe0b7; }
 @media (max-width: 520px) { .ultimate-hud { left: 14px; bottom: 70px; width: 205px; padding: 9px 11px; } .ultimate-name { font-size: 11px; } }
 @media (max-height: 450px) and (min-width: 521px) { .ultimate-hud { bottom: 53px; width: 215px; padding: 7px 12px; } .ultimate-slots { margin: 6px 0 5px; height: 6px; } .ultimate-label { margin-top: 4px; } }
 @media (max-width: 520px) { .ultimate-hud, .shield-hud { bottom: 70px; width: calc((100vw - 38px) / 2); padding: 9px 10px; } .shield-hud { left: auto; right: 14px; } .ultimate-heading, .shield-heading { gap: 5px; } .ultimate-name, .shield-name { font-size: 10px; letter-spacing: 0; } .ultimate-heading strong, .shield-heading strong { font-size: 12px; } .ultimate-label, .shield-label { font-size: 9px; } }

@@ -32,6 +32,7 @@ const gameAudio = (() => {
   let lastWarningTime = -Infinity;
   let lastEnrageTime = -Infinity;
   let lastOverdriveTime = -Infinity;
+  let lastPerfectShieldTime = -Infinity;
   const lastBossAttack = { volley: -Infinity, beam: -Infinity, summon: -Infinity, burst: -Infinity };
 
   function disconnect(node) {
@@ -416,6 +417,23 @@ const gameAudio = (() => {
     note({ time: time + 0.14, duration: 0.38, frequency: 105, endFrequency: 48,
       type: "sine", volume: 0.2, cutoff: 380, attack: 0.012 });
   }
+  function perfectShield() {
+    if (!canPlay()) return;
+    const time = audio.currentTime;
+    if (time - lastPerfectShieldTime < 0.35) return;
+    lastPerfectShieldTime = time;
+    // 清脆金属撞击接低频反冲；两道不谐和泛音形成格挡质感，避开射击音的尖锐滑音。
+    note({ time, noise: true, duration: 0.045, volume: 0.13,
+      filterType: "bandpass", cutoff: 3300, endCutoff: 1700, resonance: 1.1, attack: 0.001 });
+    note({ time, duration: 0.23, frequency: 1390, endFrequency: 1210,
+      type: "sine", volume: 0.075, cutoff: 4200, attack: 0.001 });
+    note({ time, duration: 0.15, frequency: 2075, endFrequency: 1810,
+      type: "sine", volume: 0.035, cutoff: 4300, attack: 0.001 });
+    note({ time: time + 0.025, duration: 0.27, frequency: 160, endFrequency: 50,
+      type: "sine", volume: 0.18, cutoff: 450, attack: 0.005 });
+    note({ time: time + 0.02, noise: true, duration: 0.22, volume: 0.07,
+      filterType: "bandpass", cutoff: 650, endCutoff: 2100, resonance: 0.55, attack: 0.014 });
+  }
   function explode(isBoss = false) {
     if (!canPlay()) return;
     const time = audio.currentTime;
@@ -549,6 +567,6 @@ const gameAudio = (() => {
     }
     audio = null;
   }
-  return { unlock, setMuted, get muted() { return muted; }, sync, shoot, overdrive, explode, warning, bossAttack, bossEnrage,
+  return { unlock, setMuted, get muted() { return muted; }, sync, shoot, overdrive, perfectShield, explode, warning, bossAttack, bossEnrage,
     chargeUltimate, fireUltimate, stopUltimate, destroy };
 })();
