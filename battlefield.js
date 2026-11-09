@@ -3,11 +3,11 @@
 // Original generated cinematic plates, animated as a continuous leftward journey.
 // No backdrop object participates in collision. Preserve open, readable combat lanes.
 const battlefieldSectors = [
-  { id: "orbit", name: "曙光轨道", enName: "Dawn Orbit", subtitle: "DAWN / LOW ORBIT", color: "#78c8f4", dark: "#030610", asset: "assets/scenery/orbit-silent.png", anchorY: 0.66, foreground: 0 },
-  { id: "belt", name: "碎星航道", enName: "Shattered Passage", subtitle: "SHATTERED / ASTEROID BELT", color: "#c9a680", dark: "#060710", asset: "assets/scenery/belt-silent.png", anchorY: 0.24, foreground: 0.12 },
-  { id: "wreck", name: "余烬墓场", enName: "Ember Graveyard", subtitle: "AFTERMATH / FLEET GRAVEYARD", color: "#ed9d70", dark: "#070610", asset: "assets/scenery/wreck-silent.png", anchorY: 0.22, foreground: 0.08 },
-  { id: "citadel", name: "深空壁垒", enName: "Deep-Space Citadel", subtitle: "CITADEL / CAPITAL SHIP", color: "#82bfc8", dark: "#030810", asset: "assets/scenery/citadel-silent.png", anchorY: 0.16, foreground: 0.05 },
-  { id: "rift", name: "虚空之眼", enName: "Eye of the Void", subtitle: "BEYOND / EVENT HORIZON", color: "#ad9af4", dark: "#050513", asset: "assets/scenery/rift-silent.png", anchorY: 0.20, foreground: 0 },
+  { id: "orbit", name: "曙光轨道", enName: "Dawn Orbit", subtitle: "DAWN / LOW ORBIT", color: "#78c8f4", dark: "#030610", asset: "assets/scenery/orbit.png", anchorY: 0.66, foreground: 0 },
+  { id: "belt", name: "碎星航道", enName: "Shattered Passage", subtitle: "SHATTERED / ASTEROID BELT", color: "#c9a680", dark: "#060710", asset: "assets/scenery/belt.png", anchorY: 0.24, foreground: 0.12 },
+  { id: "wreck", name: "余烬墓场", enName: "Ember Graveyard", subtitle: "AFTERMATH / FLEET GRAVEYARD", color: "#ed9d70", dark: "#070610", asset: "assets/scenery/wreck.png", anchorY: 0.22, foreground: 0.08 },
+  { id: "citadel", name: "深空壁垒", enName: "Deep-Space Citadel", subtitle: "CITADEL / CAPITAL SHIP", color: "#82bfc8", dark: "#030810", asset: "assets/scenery/citadel.png", anchorY: 0.16, foreground: 0.05 },
+  { id: "rift", name: "虚空之眼", enName: "Eye of the Void", subtitle: "BEYOND / EVENT HORIZON", color: "#ad9af4", dark: "#050513", asset: "assets/scenery/rift.png", anchorY: 0.20, foreground: 0 },
 ];
 const sceneryRules = { interval: 75, blend: 10, zoom: 1.28, maxImages: 3 };
 const battlefieldState = { sector: 0, previous: 0, completed: 0, clock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 };
@@ -21,13 +21,15 @@ const sceneryDust = Array.from({ length: 12 }, (_, i) => ({
 }));
 function sceneryHash(n) { const value = Math.sin(n * 127.1 + 311.7) * 43758.5453123; return value - Math.floor(value); }
 function sceneryClamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
-function sceneryLayer(sector) {
+function sceneryLayer(sector, menu = false) {
   const index = ((sector % battlefieldSectors.length) + battlefieldSectors.length) % battlefieldSectors.length;
-  if (sceneryCache.has(index)) return sceneryCache.get(index);
+  const key = menu ? "menu" : index;
+  if (sceneryCache.has(key)) return sceneryCache.get(key);
   if (typeof Image === "undefined") return null;
   const image = new Image();
-  const record = { image, ready: false, failed: false, width: 0, height: 0, asset: battlefieldSectors[index].asset };
-  sceneryCache.set(index, record);
+  const asset = menu ? "assets/scenery/orbit-silent.png" : battlefieldSectors[index].asset;
+  const record = { image, ready: false, failed: false, width: 0, height: 0, asset };
+  sceneryCache.set(key, record);
   image.decoding = "async";
   image.onload = () => {
     if (!image.naturalWidth || !image.naturalHeight) { record.failed = true; return; }
@@ -112,13 +114,12 @@ function sceneryFrame(imageWidth, imageHeight, age, sector) {
 }
 function sceneryDrawSector(sector, alpha, age) {
   if (alpha <= 0) return;
-  const ctx = context, w = viewport.width, h = viewport.height, layer = sceneryLayer(sector);
+  const ctx = context, w = viewport.width, h = viewport.height, layer = sceneryLayer(sector, state === "menu");
   ctx.save(); ctx.globalAlpha = alpha;
   if (layer && layer.ready) {
     const frame = sceneryFrame(layer.width, layer.height, age, sector);
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
     ctx.drawImage(layer.image, frame.x, frame.y, frame.width, frame.height);
-    // The plates already contain deep shadows; keep their faint filaments visible.
   } else { ctx.fillStyle = battlefieldSectors[sector].dark; ctx.fillRect(0, 0, w, h); }
   ctx.restore();
 }
@@ -162,6 +163,11 @@ function drawBattlefield() {
   ctx.save(); ctx.fillStyle = "#03060c"; ctx.fillRect(0, 0, w, h);
   sceneryDrawSector(journey.current, 1, journey.currentAge);
   if (journey.blend > 0) sceneryDrawSector(journey.next, journey.blend, journey.nextAge);
+  // Dim the blended scenery once so the landmarks stay visible and combat effects read clearly.
+  if (state !== "menu") {
+    ctx.fillStyle = "#03060c66";
+    ctx.fillRect(0, 0, w, h);
+  }
   sceneryDrawParticles();
   const vignette = ctx.createLinearGradient(0, 0, 0, h);
   vignette.addColorStop(0, "#02040b40"); vignette.addColorStop(0.12, "#02040b18"); vignette.addColorStop(0.24, "#02040b00");
