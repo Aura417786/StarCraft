@@ -2,7 +2,7 @@
 
 Shoot the guns off a boss, upgrade your fighter, and survive five sectors of deep space. Star Breaker is a single-player, side-scrolling shooter for desktop browsers.
 
-[Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Watch the 30-second trailer](media/trailer.mp4) · [中文说明](README.md)
+[Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Watch the 30-second trailer](media/trailer.mp4) · [中文说明](README.md)
 
 ![Star Breaker gameplay](media/gameplay.gif)
 

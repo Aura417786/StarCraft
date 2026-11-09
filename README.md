@@ -6,7 +6,7 @@
 
 [![星际突围实机封面](media/promo-cover.jpg)](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/)
 
-[▶ 在线试玩](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [观看 30 秒演示](media/trailer.mp4) · [了解游戏与制作过程](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/about.html) · [English quick start](README.en.md)
+[▶ 在线试玩](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [itch.io 免费试玩](https://aura417786.itch.io/star-breaker) · [观看 30 秒演示](media/trailer.mp4) · [了解游戏与制作过程](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/about.html) · [English quick start](README.en.md)
 
 - **拆掉 Boss 的武器。** 瞄准上下炮组，削弱对应攻击。后期还会遇到双首领协同挑战。
 - **强化主炮，进化战机。** 射中能量球提升火力，累积连击触发暴走。击败首领后选择翼炮、僚机或壁垒。
