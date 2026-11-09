@@ -319,6 +319,9 @@ h1 > span { color: var(--red); }
 html[lang="en"] .start-copy h1 { font-size: clamp(28px, 5vw, 80px); letter-spacing: .02em; }
 html[lang="en"] .start-copy .intro { letter-spacing: .07em; }
 html[lang="en"] .boss-hud span, html[lang="en"] .rage-label { white-space: normal; }
+@media (min-width: 741px) {
+  html[lang="en"] .hud { right: calc(3.4vw + 330px); }
+}
 @media (max-width: 400px) {
   html[lang="en"] .app[data-boss-active="true"] .combo-value::after { content: "Combo"; }
 }
