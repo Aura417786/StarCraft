@@ -9,6 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff414e' d='M30 16 3 3 9 16 3 29Z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script src="audio.js" defer></script>
+  <script src="ship-renderer.js" defer></script>
   <script src="boss-art.js" defer></script>
   <script src="boss-components.js" defer></script>
   <script src="bosses.js" defer></script>
@@ -25,6 +26,11 @@
   <script src="evolution-art.js" defer></script>
   <script src="battlefield.js" defer></script>
   <script src="battlefield-events.js" defer></script>
+  <script src="ace.js" defer></script>
+  <script src="gravity.js" defer></script>
+  <script src="progression.js" defer></script>
+  <script src="evolution-weapons.js" defer></script>
+  <script src="evolution-preview.js" defer></script>
   <script src="game.js" defer></script>
   <link rel="stylesheet" href="showcase.css">
   <script src="showcase.js" defer></script>
@@ -108,9 +114,9 @@
             <button id="evolution-card-blast" class="evolution-card" type="button" data-choice="blast" data-tone="blast">
               <span class="evolution-card-top"><span class="evolution-card-level">0级 → 1级</span><kbd>2</kbd></span>
               <svg class="evolution-card-icon" viewBox="0 0 200 80" aria-hidden="true"><path class="evolution-icon-glow" d="m137 7 8 20 25-12-14 23 26 12-29 2-9 21-13-21-25 9 13-20-17-19 27 5Z"/><path d="m32 18 60 11 31 11-31 11-60 11 18-22Z"/><path class="evolution-icon-core" d="m72 34 45 6-45 6 8-6Z"/><path class="evolution-icon-line" d="m55 30 20 3m-20 17 20-3m65-17 6 10-6 10"/></svg>
-              <strong class="evolution-card-title">焚星爆破</strong>
-              <span class="evolution-card-effect">普通子弹击毁敌机后，爆炸对周围 105 范围造成 2 倍子弹伤害。</span>
-              <span class="evolution-card-art">橙红爆破舱逐级增设。对首领每次最多造成 1% 伤害。</span>
+              <strong class="evolution-card-title">星隼僚机</strong>
+              <span class="evolution-card-effect">一架星隼伴飞，自动瞄准前方敌人。</span>
+              <span class="evolution-card-art">继续升级可展开双机编队和协同齐射。</span>
               <span class="evolution-card-action">选择</span>
             </button>
             <button id="evolution-card-aegis" class="evolution-card" type="button" data-choice="aegis" data-tone="aegis">

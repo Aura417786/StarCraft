@@ -83,7 +83,7 @@ function resizeBossEncounter() {
   player.x = Math.min(player.x, bossPlayerRight());
 }
 function bossBlocksWaves() { return !!boss || battleTime >= nextBossTime - bossRules.warning; }
-function weaponDamageLog() { return Math.log(weapon.damage) + (weapon.tier - 1) * Math.log(maxWeaponLanes); }
+function weaponDamageLog() { return progressionPacketDamageLog(); }
 function bossAttackSpeed(base) {
   const screenScale = clamp(viewport.width / 1280, 0.7, 1.05);
   const encounterScale = 1 + Math.min(0.25, bossDefeated * 0.035);
@@ -96,8 +96,8 @@ function spawnBoss(type = chooseBossType(), partnerType = null) {
   const arena = bossArena();
   const data = bossTypes[type];
   const endurance = Math.min(85, 55 + bossDefeated * 5);
-  // 归一化生命避免后期极高武器阶数溢出。基准在出生时固定，战中升级仍有收益。
-  const healthLog = weaponDamageLog() + Math.log(weapon.lanes / weapon.interval) + Math.log(endurance);
+  // 按独立的战斗阶段生成，玩家升级不会立即换来同步增厚的首领。
+  const healthLog = progressionBossHealthLog(battleTime, endurance);
   boss = { ...arena, type, color: data.color, name: data.name, hp: 1, maxHp: 1, displayHp: 1,
     healthLog, endurance, x: viewport.width + arena.width / 2, previousX: viewport.width + arena.width / 2,
     phase: "enter", phaseTime: 0, age: 0, hitFlash: 0, attackIndex: -1, fired: 0, targetY: player.y,
@@ -415,7 +415,7 @@ function applyBossHit(shot, target = boss, component = null) {
   if (hitsComponent) damageBossComponent(target, component, fraction);
   target.hitFlash = 0.08;
   recordCombatImpact(target, shot, true);
-  if (shot.source !== "ultimate" && shot.source !== "blast") gainUltimateEnergy(before - target.hp, "boss");
+  if (!shot.noEnergy && shot.source !== "ultimate" && shot.source !== "blast") gainUltimateEnergy(before - target.hp, "boss");
   if (target.hp <= 0.000000000001) { defeatBoss(target); return; }
   else if (target.hp <= 0.5 && !target.enraged) {
     target.enraged = true;
@@ -423,7 +423,6 @@ function applyBossHit(shot, target = boss, component = null) {
     if (!duoEncounter) setBossMessage(target.name, "狂暴模式 · 攻势加速，保持移动");
     statusMessage.textContent = target.name + "进入狂暴模式。" + (duoEncounter ? "协同攻击仍保留安全通道和反击空档。" : "弹幕速度和密度提升。");
   }
-  onEvolutionHit(target, shot);
 }
 function defeatBoss(target = boss) {
   if (!target || !activeBosses().includes(target)) return;
@@ -451,7 +450,7 @@ function defeatBoss(target = boss) {
   startBossDeathPresentation(fallen);
 }
 function bossShotHitsPlayer(shot) {
-  if (shieldInterceptsProjectile(shot)) return true;
+  if (consumeEvolutionShieldProjectile(shot)) return true;
   const radius = player.height * 0.16 + shot.radius;
   const dx = shot.x - shot.previousX, dy = shot.y - shot.previousY;
   const distance = dx * dx + dy * dy;

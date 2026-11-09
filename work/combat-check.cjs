@@ -96,7 +96,11 @@ function begin() { emit(window, 'focus'); emit(nodes.get('#start-button'), 'clic
 function key(code, type = 'keydown', extra) { return emit(window, type, { code, ...extra }); }
 function samePosition(a, b) { assert.equal(a.x, b.x); assert.equal(a.y, b.y); }
 let checks = 0;
-function check(name, test) { test(); checks++; process.stdout.write('PASS ' + name + '\n'); }
+let failedChecks = 0;
+function check(name, test) {
+  try { test(); checks++; process.stdout.write('PASS ' + name + '\n'); }
+  catch (error) { failedChecks++; process.stderr.write('FAIL ' + name + ': ' + error.message + '\n'); }
+}
 
 check('all eight movement keys, release, and prevented page scrolling', () => {
   for (const [code, axis, direction] of [
@@ -404,13 +408,13 @@ check('three-second first blue spawn, seven-second interval and varied fixed fli
   assert.ok(['blue','yellow','red','heal'].includes(result.powerups.at(-1).type)); assert.notEqual(result.powerups.at(-1).y,laneY);
   frames(140); assert.equal(orbScene().powerupSpawnCount,3);
 });
-check('three lanes stay parallel and two blue upgrades increase fire rate moderately', () => {
+check('three lanes stay symmetric and two blue upgrades increase fire rate moderately', () => {
   surface={width:2400,height:900}; emit(window,'resize'); begin();
   execute('enemies.length=0;enemyCooldown=999;applyPowerup("blue");applyPowerup("blue");applyPowerup("yellow");applyPowerup("yellow");applyPowerup("red");applyPowerup("red");resetWeapons();updateShooting(0);');
   assert.equal(shots().length,3); assert.equal(new Set(shots().map(b=>b.y)).size,3);
   assert.equal(shots()[1].y,position().y); frames(20);
   assert.equal(shots().length,21);
-  assert.equal(execute('bullets.every(bullet=>bullet.damage===3)'),true);
+  assert.equal(execute('bullets.every(bullet=>Math.abs(bullet.damage-3)<1e-8)'),true);
 });
 check('red upgrade affects only bullets fired after the upgrade', () => {
   isolatedBattle('resetWeapons();updateShooting(0);applyPowerup("red");'); frames(4);
@@ -574,7 +578,7 @@ check('muzzle flashes share the exact symmetry axis of each emitted volley', () 
     assert.deepEqual(flashes.map(op=>op.args[1]),emitted().map(b=>b.y));
   }
 });
-check('four lanes stay in the first tier; the fifth becomes one lane with the same volley damage', () => {
+check('four lanes stay in the first tier; the fifth consolidates with a twelve-percent promotion reward', () => {
   isolatedBattle('battleTime=0;');
   for(let i=0;i<3;i++) execute('applyPowerup("yellow");');
   assert.equal(weaponState().tier,1); assert.equal(weaponState().lanes,4);
@@ -583,19 +587,19 @@ check('four lanes stay in the first tier; the fifth becomes one lane with the sa
   const totalDamage=fullVolley.reduce((sum,b)=>sum+b.damage,0);
   execute('applyPowerup("yellow");resetWeapons();updateShooting(0);');
   assert.equal(weaponState().tier,2); assert.equal(weaponState().lanes,1);
-  assert.equal(emitted().length,1); assert.equal(emitted()[0].damage,totalDamage);
+  assert.equal(emitted().length,1); near(emitted()[0].damage,totalDamage*1.12);
   assert.equal(emitted()[0].y,position().y);
 });
 check('every tier follows yellow green purple green blue red and cycles while damage grows', () => {
   isolatedBattle('battleTime=0;');
   const names=['黄色','绿色','紫色','绿色','蓝色','红色','黄色','绿色'];
-  const expectedDamage=[1,4,16,64,256,1024,4096,16384];
+  const expectedDamage=Array.from({length:8},(_,tier)=>Math.pow(4.48,tier));
   const colors=[];
   for(let i=0;i<names.length;i++) {
     assert.equal(weaponState().tier,i+1); assert.equal(weaponState().lanes,1);
     assert.equal(palette().name,names[i]); colors.push(palette().color);
     execute('resetWeapons();updateShooting(0);');
-    assert.equal(emitted()[0].damage,expectedDamage[i]);
+    near(emitted()[0].damage,expectedDamage[i],Math.max(1e-8,expectedDamage[i]*1e-12));
     assert.equal(emitted()[0].color,palette().color); assert.equal(emitted()[0].core,palette().core);
     for(let j=0;j<4;j++) execute('applyPowerup("yellow");');
   }
@@ -612,10 +616,10 @@ check('red damage multiplies each tier and an old bullet retains its original da
     assert.equal(after[i].damage,before[i].damage);
     assert.equal(after[i].color,before[i].color); assert.equal(after[i].core,before[i].core);
   }
-  assert.equal(after[4].damage,8); assert.notEqual(after[4].color,before[0].color);
+  near(after[4].damage,8.96); assert.notEqual(after[4].color,before[0].color);
   execute('battleTime=360;applyPowerup("red");updateShooting(.2);');
-  assert.equal(weaponState().damage,5); assert.equal(emitted().at(-1).damage,20);
-  assert.equal(emitted()[4].damage,8);
+  near(weaponState().damage,5); near(emitted().at(-1).damage,22.4);
+  near(emitted()[4].damage,8.96);
 });
 check('rendering mixed old and new bullets uses the color and core stored on each bullet', () => {
   isolatedBattle('battleTime=0;weapon.lanes=4;resetWeapons();updateShooting(0);applyPowerup("yellow");updateShooting(.2);');
@@ -627,7 +631,7 @@ check('rendering mixed old and new bullets uses the color and core stored on eac
 check('tiered damage is applied to enemies exactly once per projectile', () => {
   isolatedBattle('battleTime=0;weapon.tier=3;weapon.damage=2;resetWeapons();updateShooting(0);');
   execute(target(400,position().y,100,50)+'bullets[0].previousX=350;bullets[0].x=400;resolveProjectileHits();');
-  assert.equal(scene().enemies[0].hp,18); assert.equal(scene().score,0); assert.equal(shots().length,0);
+  near(scene().enemies[0].hp,50-2*4.48**2); assert.equal(scene().score,0); assert.equal(shots().length,0);
   execute('updateShooting(.2);bullets[0].previousX=350;bullets[0].x=400;resolveProjectileHits();');
   assert.equal(scene().enemies.length,0); assert.equal(scene().score,100); assert.equal(health().kills,1);
 });
@@ -656,7 +660,7 @@ check('high-rate four-lane fire preserves total damage across frame rates with b
     isolatedBattle('weapon.tier=3;weapon.lanes=4;weapon.damage=1000;weapon.interval=.001;resetWeapons();updateShooting(0);');
     execute(`for(let i=0;i<${fps};i++) updateShooting(1/${fps});`);
     const attack=execute('bullets.reduce((sum,b)=>sum+b.damage,0)+pendingShots*weapon.lanes*projectileDamage()');
-    assert.equal(attack,64064000);
+    near(attack,1001*4*1000*4.48**2,1e-6);
     assert.ok(shots().length<=84);
     assert.equal(execute('shotLanes().length'),4);
   }
@@ -862,7 +866,7 @@ check('nearest orb or normal enemy intercepts a projectile before the boss', () 
   assert.equal(bossState().boss.hp,1); assert.equal(scene().enemies.length,0); assert.equal(scene().score,100);
 });
 check('real high-tier emitted shots carry finite log damage through aggregation and boss collision', () => {
-  isolatedBattle('weapon.tier=500;weapon.damage=1000;weapon.interval=.001;spawnBoss(4);Object.assign(boss,bossArena());boss.previousX=boss.x;boss.phase="recover";resetWeapons();updateShooting(0);updateShooting(.05);');
+  isolatedBattle('weapon.tier=500;weapon.damage=1000;weapon.interval=.001;spawnBoss(4);Object.assign(boss,bossArena());boss.previousX=boss.x;boss.phase="recover";boss.healthLog=weaponDamageLog()+Math.log(55000);resetWeapons();updateShooting(0);updateShooting(.05);');
   assert.equal(execute('Number.isFinite(bullets.at(-1).damageLog)'),true);
   near(execute('bullets.at(-1).damageLog-weaponDamageLog()'),Math.log(50),1e-10);
   execute('bullets.splice(0,bullets.length-1);bullets[0].previousX=boss.x-boss.width;bullets[0].x=boss.x;bullets[0].y=boss.y;resolveProjectileHits();');
@@ -870,7 +874,7 @@ check('real high-tier emitted shots carry finite log damage through aggregation 
   assert.equal(shots().length,0); assert.ok(Number.isFinite(bossState().boss.hp));
 });
 check('aggregated high-rate bullets preserve boss damage and no infinite arithmetic leaks into HP', () => {
-  readyBoss(4,'weapon.tier=500;weapon.damage=1000;weapon.interval=.001;spawnBoss(4);boss.phase="recover";');
+  readyBoss(4,'weapon.tier=500;weapon.damage=1000;weapon.interval=.001;boss.healthLog=weaponDamageLog()+Math.log(25000);');
   const healthLog=bossState().boss.healthLog;
   execute('applyBossHit({damage:Infinity,damageLog:weaponDamageLog()+Math.log(100)});');
   near(1-bossState().boss.hp,Math.exp(execute('weaponDamageLog()')+Math.log(100)-healthLog),1e-9);
@@ -942,15 +946,16 @@ check('blue increases fire rate moderately and late blue/red gains do not change
   for(const [time,gain] of [[0,1],[180,2],[360,3],[3600,21]]) {
     execute('battleTime='+time); const before=weaponState(); execute('applyPowerup("blue");applyPowerup("red");');
     const after=weaponState(); assert.equal(after.speedLevel-before.speedLevel,gain);
-    assert.equal(after.damage-before.damage,gain); assert.ok(after.interval<before.interval);
+    near(after.damage,Math.max(before.damage+gain,before.damage*1.12**gain));
+    near(1/after.interval,Math.max(1/before.interval+.75*gain,1/before.interval*1.08**gain));
     assert.equal(after.tier,4); assert.equal(after.lanes,3);
   }
 });
 check('collecting every scheduled orb for five minutes no longer jumps through many projectile tiers', () => {
   isolatedBattle();
   execute('for(let time=3,index=0;time<=300;time+=7,index++){battleTime=time;applyPowerup(["blue","yellow","red","blue","yellow","red","blue","yellow","red","heal"][index%10]);}');
-  const result=weaponState(); assert.ok(result.tier<=4); assert.ok(result.damage<20);
-  assert.ok(1/result.interval<20); assert.ok(result.lanes>=1&&result.lanes<=4);
+  const result=weaponState(); assert.ok(result.tier>=3&&result.tier<=4); assert.ok(result.damage>20&&result.damage<35);
+  assert.ok(1/result.interval>18&&1/result.interval<30); assert.ok(result.lanes>=1&&result.lanes<=4);
 });
 check('opening enemies die in one hit while later enemies keep a frozen growing health snapshot', () => {
   isolatedBattle('battleTime=19.9;spawnEnemy("scout");'); assert.equal(scene().enemies[0].healthLog,0);
@@ -962,27 +967,28 @@ check('opening enemies die in one hit while later enemies keep a frozen growing 
   execute('weapon.damage=100000;weapon.tier=30;battleTime=3600;');
   assert.equal(scene().enemies[0].healthLog,first.healthLog); assert.equal(scene().enemies[0].hp,1);
 });
-check('normal enemies resist single current-tier bullets even after hours of progression', () => {
-  for(const [time,tier,damage] of [[60,2,5],[300,6,30],[1800,100,300],[36000,5000,10000]]) {
-    isolatedBattle(`battleTime=${time};weapon.tier=${tier};weapon.damage=${damage};weapon.lanes=4;weapon.interval=.025;spawnEnemy("scout");`);
-    assert.ok(Number.isFinite(scene().enemies[0].healthLog));
-    execute('applyEnemyHit(enemies[0],{damage:projectileDamage(),damageLog:weaponDamageLog()});');
-    const hp=scene().enemies[0].hp; assert.ok(Number.isFinite(hp)); assert.ok(hp>0&&hp<1);
-    execute('applyEnemyHit(enemies[0],{damage:projectileDamage(),damageLog:weaponDamageLog()});');
-    assert.ok(scene().enemies[0].hp>0);
+check('normal enemy births follow time and remain independent of the current weapon for hours', () => {
+  let previous=0;
+  for(const time of [60,300,1800,36000]) {
+    isolatedBattle(`battleTime=${time};spawnEnemy("scout");`);
+    const birth=scene().enemies[0].healthLog;
+    assert.ok(Number.isFinite(birth)&&birth>previous);
+    execute('weapon.tier=5000;weapon.damage=10000;weapon.lanes=4;weapon.interval=.025;spawnEnemy("scout");');
+    assert.equal(scene().enemies[1].healthLog,birth);
+    previous=birth;
   }
 });
 check('upgrades during a fight still improve damage against an already spawned enemy', () => {
-  isolatedBattle('battleTime=360;weapon.tier=10;weapon.damage=10;spawnEnemy("scout");');
+  isolatedBattle('battleTime=360;weapon.tier=3;weapon.damage=10;spawnEnemy("scout");');
   const birth=scene().enemies[0].healthLog;
   execute('applyEnemyHit(enemies[0],{damageLog:weaponDamageLog()});'); const firstLoss=1-scene().enemies[0].hp;
   const before=scene().enemies[0].hp; execute('applyPowerup("red");applyEnemyHit(enemies[0],{damageLog:weaponDamageLog()});');
   const nextLoss=before-scene().enemies[0].hp;
-  assert.ok(nextLoss>firstLoss); near(nextLoss/firstLoss,1.3,1e-7); assert.equal(scene().enemies[0].healthLog,birth);
+  assert.ok(nextLoss>firstLoss); near(nextLoss/firstLoss,1.12**3,1e-7); assert.equal(scene().enemies[0].healthLog,birth);
 });
 check('huge-tier actual projectiles damage normalized enemies without Infinity-minus-Infinity or lost kills', () => {
-  isolatedBattle('battleTime=3600;weapon.tier=500;weapon.damage=1000;spawnEnemy("scout");enemies[0].x=500;enemies[0].previousX=500;enemies[0].y=player.y;resetWeapons();updateShooting(0);bullets[0].previousX=400;bullets[0].x=500;resolveProjectileHits();');
-  assert.equal(scene().enemies.length,1); assert.ok(scene().enemies[0].hp>0&&scene().enemies[0].hp<1);
+  isolatedBattle('battleTime=3600;weapon.tier=500;weapon.damage=1000;spawnEnemy("scout");enemies[0].x=500;enemies[0].previousX=500;enemies[0].y=player.y;enemies[0].healthLog=weaponDamageLog()+Math.log(4);resetWeapons();updateShooting(0);bullets[0].previousX=400;bullets[0].x=500;resolveProjectileHits();');
+  assert.equal(scene().enemies.length,1); near(scene().enemies[0].hp,.75);
   assert.ok(Number.isFinite(scene().enemies[0].hp)); assert.equal(shots().length,0);
   execute('bullets.push({x:500,previousX:400,y:player.y,damage:Infinity,damageLog:enemies[0].healthLog+1});resolveProjectileHits();');
   assert.equal(scene().enemies.length,0); assert.equal(scene().score,100); assert.equal(health().kills,1);
@@ -1079,15 +1085,18 @@ check('enrage makes subsequent projectiles faster, patterns denser and preparati
   const calm=sample(false),rage=sample(true);
   assert.ok(rage.count>calm.count); assert.ok(rage.speed>calm.speed); assert.ok(rage.warning<calm.warning); assert.ok(rage.warning>=.65);
 });
-check('boss durability withstands roughly a minute of current total fire and remains finite at extreme tiers', () => {
-  for(const tier of [1,6,100,500,10000]) {
-    isolatedBattle(); execute(`weapon.tier=${tier};weapon.lanes=4;weapon.damage=999;weapon.interval=.025;spawnBoss(0);boss.phase="recover";`);
-    const b=bossState().boss; assert.ok(Number.isFinite(b.healthLog)); assert.equal(b.hp,1);
-    const endurance=execute('Math.exp(boss.healthLog-weaponDamageLog())*weapon.interval/weapon.lanes');
-    assert.ok(endurance>=50&&endurance<=65);
-    execute('applyBossHit({damageLog:weaponDamageLog()});'); const loss=1-bossState().boss.hp;
-    assert.ok(loss>0&&loss<.001); assert.ok(Number.isFinite(bossState().boss.hp));
-    execute('weapon.damage*=2;applyBossHit({damageLog:weaponDamageLog()});'); near(1-bossState().boss.hp,loss*3,1e-9);
+check('Boss durability uses a growing time reference and stays finite at extreme tiers', () => {
+  let previous=0;
+  for(const time of [90,360,3600,36000]) {
+    isolatedBattle(`battleTime=${time};spawnBoss(0);boss.phase="recover";`);
+    const birth=bossState().boss.healthLog;
+    assert.ok(Number.isFinite(birth)&&birth>previous);
+    near(execute('Math.exp(boss.healthLog-progressionReferenceDpsLog(battleTime))'),55,1e-7);
+    execute('weapon.tier=10000;weapon.lanes=4;weapon.damage=999;weapon.interval=.025;spawnBoss(0);boss.phase="recover";');
+    assert.equal(bossState().boss.healthLog,birth);
+    execute('applyBossHit({damageLog:boss.healthLog+Math.log(.2)});');
+    near(bossState().boss.hp,.8,1e-8);
+    previous=birth;
   }
 });
 check('full-screen warning shows the selected boss once and clears on spawn, defeat, death and menu', () => {
@@ -1339,13 +1348,16 @@ check('removed purple rewards cannot add a future use during charging or duplica
   surface={width:1200,height:700}; emit(window,'resize'); assert.equal(ult().charges,2);
   emit(window,'resize'); assert.equal(ult().charges,2); assert.equal(ult().phase,'idle');
 });
-check('four-lane progression uses the same damage multiplier in weapons, enemies and bosses', () => {
+check('four-lane promotion adds twelve percent without changing a simultaneous Boss birth', () => {
   isolatedBattle('weapon.damage=3;weapon.tier=6;');
-  near(execute('Math.exp(weaponDamageLog())'),3*4**5,1e-7);
-  near(execute('projectileDamage()'),3*4**5);
+  near(execute('Math.exp(weaponDamageLog())'),3*4.48**5,1e-7);
+  near(execute('projectileDamage()'),3*4.48**5);
   execute('weapon.lanes=4;spawnBoss(1);');
   const durability=bossState().boss.healthLog;
-  near(durability,Math.log(3*4**5)+Math.log(4/.2)+Math.log(55));
+  const before=execute('projectileDamage()*weapon.lanes');
+  execute('applyPowerup("yellow");spawnBoss(1);');
+  near(execute('projectileDamage()*weapon.lanes')/before,1.12);
+  assert.equal(bossState().boss.healthLog,durability);
 });
 check('cannon exit restores idle in the same frame and the next fresh press immediately starts charging', () => {
   isolatedBattle(); primeUltimate(3); key('Space'); key('Space','keyup'); execute('updateUltimate(.85);');
@@ -1918,7 +1930,8 @@ check('dual hulls and shared guidance render finite geometry and restore the can
 const evolutionState=()=>JSON.parse(execute('JSON.stringify(evolution)'));
 function evolutionKey(code, extra={}) { return emit(document,'keydown',{code,...extra}); }
 check('a new round has no evolutions and only one pending reward can be collected once', () => {
-  isolatedBattle(); assert.deepEqual(evolutionState(),{pierce:0,blast:0,aegis:0,pending:false,choice:'',pulses:[]});
+  isolatedBattle(); assert.deepEqual(evolutionState(),{pierce:0,blast:0,aegis:0,pending:false,choice:'',pulses:[],
+    links:{falcon:false,phalanx:false,lance:false},overclock:0,refits:0});
   assert.equal(execute('chooseEvolution("pierce")'),false);
   assert.equal(execute('openEvolutionChoice()'),true); assert.equal(execute('openEvolutionChoice()'),false);
   assert.equal(nodes.get('#evolution-screen').hidden,false); assert.equal(execute('chooseEvolution("unknown")'),false);
@@ -1957,15 +1970,25 @@ check('three evolution routes stack independently up to three while maxed cards 
   assert.equal(evolutionState().pierce,3); assert.equal(evolutionState().blast,3); assert.equal(evolutionState().aegis,3);
   assert.ok(nodes.get('#evolution-readout').textContent.includes('3级'));
 });
-check('fully evolved ships receive useful capped supplies with a damage fallback when health and shield are full', () => {
+check('fully evolved ships activate each link once, then gain repeatable refits with capped supplies', () => {
   isolatedBattle('evolution.pierce=evolution.blast=evolution.aegis=3;shield.charges=2;player.lives=3;openEvolutionChoice();');
-  assert.deepEqual(evolutionCards.map(card=>card.dataset.choice),['heal','shield','red']);
-  assert.equal(evolutionCards[0].disabled,true); assert.equal(evolutionCards[1].disabled,true); assert.equal(evolutionCards[2].disabled,false);
-  assert.equal(execute('chooseEvolution("heal")'),false); assert.equal(execute('chooseEvolution("shield")'),false);
-  const damage=weaponState().damage; assert.equal(execute('chooseEvolution("red")'),true); assert.equal(weaponState().damage,damage+1);
-  execute('player.lives=1;openEvolutionChoice();chooseEvolution("heal");'); assert.equal(health().lives,2);
-  execute('shield.charges=1;shield.energy=15;openEvolutionChoice();chooseEvolution("shield");');
+  assert.deepEqual(evolutionCards.map(card=>card.dataset.choice),['falcon','phalanx','lance']);
+  for(const kind of ['falcon','phalanx','lance']) {
+    assert.equal(execute(`chooseEvolution("${kind}")`),true);
+    assert.equal(evolutionState().links[kind],true);
+    execute('openEvolutionChoice();');
+    assert.equal(execute(`chooseEvolution("${kind}")`),false);
+  }
+  assert.deepEqual(evolutionCards.map(card=>card.dataset.choice),['refit-fire','refit-heal','refit-shield']);
+  assert.deepEqual(evolutionCards.map(card=>card.disabled),[false,true,true]);
+  assert.equal(execute('chooseEvolution("refit-heal")'),false); assert.equal(execute('chooseEvolution("refit-shield")'),false);
+  const damage=weaponState().damage; assert.equal(execute('chooseEvolution("refit-fire")'),true); assert.equal(weaponState().damage,damage);
+  near(Math.exp(evolutionState().overclock),1.08);
+  execute('player.lives=1;openEvolutionChoice();chooseEvolution("refit-heal");'); assert.equal(health().lives,2);
+  execute('shield.charges=1;shield.energy=15;openEvolutionChoice();chooseEvolution("refit-shield");');
   assert.equal(protection().charges,2); assert.equal(protection().energy,0);
+  near(Math.exp(evolutionState().overclock),1.08*1.04**2);
+  assert.equal(evolutionState().refits,3);
 });
 check('number shortcuts, pointer clicks and focus trapping cannot double-pick or bypass the evolution dialog', () => {
   isolatedBattle('openEvolutionChoice();'); assert.equal(canvas.inert,true); assert.equal(document.activeElement,evolutionCards[0]);
@@ -2014,29 +2037,36 @@ check('energy orbs still consume a penetrating bullet and an old bullet keeps it
   isolatedBattle('player.y=300;resetWeapons();updateShooting(0);evolution.pierce=3;'+target(400,300,40,10)+target(600,300,40,10));
   execute('bullets[0].previousX=300;bullets[0].x=800;resolveProjectileHits();'); assert.deepEqual(scene().enemies.map(enemy=>enemy.hp),[9,10]);
 });
-check('blast progression expands radius and damage while excluding targets outside the circle', () => {
-  for(let level=1;level<=3;level++) {
-    const radius=85+level*20;
-    isolatedBattle(`evolution.blast=${level};`+target(400,300,40,1)+target(400+radius,300,40,10)+target(400+radius+.1,300,40,10));
-    execute('applyEnemyHit(enemies[0],{damage:1});defeatEnemy(0,{damage:1});');
-    assert.deepEqual(scene().enemies.map(enemy=>enemy.hp),[10-(level+1),10]); assert.equal(scene().score,100);
-    assert.equal(evolutionState().pulses.length,1); near(evolutionState().pulses[0].radius,radius);
+function droneAttackScene(level=1, extra='') {
+  isolatedBattle(`evolution.blast=${level};player.x=200;player.y=360;globalThis.supportY=getEvolutionDronePositions()[0].muzzleY;`+extra);
+}
+function fireFirstDroneRound() { execute('updateEvolutionWeapons(.1);updateEvolutionWeapons(.05);'); }
+check('Falcon ranks field one drone, two drones and a real coordinated volley every third firing cycle', () => {
+  for(let rank=1;rank<=3;rank++) {
+    droneAttackScene(rank); fireFirstDroneRound();
+    const oneCycle=rank===1?1:2;
+    assert.equal(execute('evolutionWeapons.drones.length'),oneCycle);
+    assert.equal(execute('bullets.filter(b=>b.source==="evolution-drone").length'),oneCycle);
+    execute('for(let i=0;i<20;i++)updateEvolutionWeapons(.1);');
+    assert.equal(execute('bullets.filter(b=>b.source==="evolution-drone").length'),rank===3?10:oneCycle*3);
+    assert.equal(execute('bullets.every(b=>b.auxiliary&&b.hitTargets.size===0)'),true);
   }
 });
-check('blast kills do not recurse into a chain beyond their radius or duplicate score when several targets disappear', () => {
-  isolatedBattle('evolution.blast=1;'+target(400,300,40,1)+target(475,300,40,1)+target(500,320,40,1)+target(550,300,40,1));
-  execute('applyEnemyHit(enemies[0],{damage:1});defeatEnemy(0,{damage:1});');
-  assert.equal(scene().score,300); assert.equal(health().kills,3); assert.equal(scene().enemies.length,1);
-  assert.equal(scene().enemies[0].x,550); assert.equal(scene().enemies[0].hp,1); assert.equal(evolutionState().pulses.length,1);
+check('a real unlinked Falcon round stops at the first enemy and does not explode into its neighbors', () => {
+  droneAttackScene(1,target(400,'supportY',40,1)+target(475,'supportY',40,1)+target(490,'supportY+25',40,1));
+  fireFirstDroneRound();
+  execute('updateShooting(.6);resolveProjectileHits();resolveProjectileHits();');
+  assert.equal(scene().score,100); assert.equal(health().kills,1);
+  assert.deepEqual(scene().enemies.map(enemy=>[enemy.x,enemy.hp]),[[475,1],[490,1]]);
+  near(ult().energy,12); assert.equal(shots().length,0);
 });
-check('ultimate kills cannot trigger extra blast damage and blast caps each nearby boss at its rank-specific ceiling', () => {
+check('ultimate kills remain isolated from Falcon firing and do not charge another cannon', () => {
   isolatedBattle('evolution.blast=3;'+target(400,300,40,1)+target(450,300,40,10));
   execute('applyEnemyHit(enemies[0],{damage:1,source:"ultimate"});defeatEnemy(0,{damage:1,source:"ultimate"});');
-  assert.equal(scene().enemies[0].hp,10); assert.equal(evolutionState().pulses.length,0);
-  readyDuo('evolution.blast=3;wingBoss.y=boss.y;wingBoss.previousY=boss.y;applyEvolutionBlast({x:boss.x-20,y:boss.y},{damageLog:boss.healthLog+100});');
-  near(duoState().boss.hp,.985); near(duoState().wingBoss.hp,.985);
+  assert.equal(scene().enemies[0].hp,10); assert.equal(shots().length,0); near(ult().energy,0);
+  assert.equal(evolutionState().pulses.length,0);
 });
-check('piercing kills with blast removal still hit the correct next surviving target exactly once', () => {
+check('piercing main rounds still hit the correct next surviving target after removing a kill', () => {
   isolatedBattle('evolution.pierce=3;evolution.blast=1;player.y=300;resetWeapons();updateShooting(0);'+target(400,300,40,1)+target(475,300,40,1)+target(650,300,40,10)+target(800,300,40,10));
   execute('bullets[0].previousX=300;bullets[0].x=900;resolveProjectileHits();');
   assert.equal(scene().score,200); assert.deepEqual(scene().enemies.map(enemy=>enemy.hp),[8.35,8.35]);
@@ -2071,9 +2101,11 @@ check('combo counts real kills once but not a miss, an orb, enemy escape or cont
   execute(target(position().x,position().y,40,1)+'updatePlayerDamage(0);'); assert.equal(momentumState().count,1);
   execute('defeatEnemy(-1);'); assert.equal(momentumState().count,1);
 });
-check('blast and ultimate kills contribute separately and each Boss hull counts only once', () => {
-  isolatedBattle('evolution.blast=1;'+target(400,300,40,1)+target(450,300,40,1));
-  execute('defeatEnemy(0,{damage:1});'); assert.equal(momentumState().count,2);
+check('Falcon and ultimate kills contribute separately and each Boss hull counts only once', () => {
+  droneAttackScene(1,target(400,'supportY',40,1));
+  fireFirstDroneRound();
+  execute('updateShooting(.5);resolveProjectileHits();resolveProjectileHits();');
+  assert.equal(momentumState().count,1); assert.equal(scene().score,100);
   isolatedBattle(target(400,300,40,1)); execute('defeatEnemy(0,{source:"ultimate",damage:1});'); assert.equal(momentumState().count,1);
   readyDuo('globalThis.comboDead=boss;defeatBoss();defeatBoss(globalThis.comboDead);'); assert.equal(momentumState().count,1);
   execute('defeatBoss();'); assert.equal(momentumState().count,2); finishBossPresentation(); assert.equal(execute('evolution.pending'),true);
@@ -2158,7 +2190,7 @@ check('spread and focus preserve full volley damage, log damage and tier color f
     isolatedBattle(`weapon.lanes=${lanes};weapon.tier=${tier};weapon.damage=3;resetWeapons();updateShooting(0);`);
     const spread=emitted(); const total=spread.reduce((sum,b)=>sum+b.damage,0); const original=weaponState();
     execute('toggleFiringStyle();resetWeapons();updateShooting(0);'); const focus=emitted();
-    assert.equal(spread.length,lanes); assert.equal(focus.length,1); assert.equal(focus[0].damage,total);
+    assert.equal(spread.length,lanes); assert.equal(focus.length,1); near(focus[0].damage,total,Math.max(1e-8,total*1e-12));
     near(focus[0].damageLog,Math.log(total)); assert.equal(focus[0].angle,0); assert.equal(focus[0].y,position().y);
     assert.equal(focus[0].color,spread[0].color); assert.equal(focus[0].core,spread[0].core); assert.deepEqual(weaponState(),original);
     if(lanes===1) near(focus[0].halfHeight,spread[0].halfHeight);
@@ -2208,7 +2240,7 @@ check('rage accelerates emission by sixty percent without multiplying projectile
       isolatedBattle(`weapon.lanes=4;weapon.tier=2;firingStyle.mode="${mode}";resetWeapons();`); comboKills(20);
       execute(`updateShooting(0);for(let i=0;i<${fps};i++) updateShooting(1/${fps});`);
       const total=execute('bullets.reduce((sum,b)=>sum+b.damage,0)+pendingShots*weapon.lanes*projectileDamage()');
-      assert.equal(total,9*16); assert.equal(execute('weapon.interval'),.2); assert.equal(execute('weaponDamageLog()'),Math.log(4));
+      near(total,9*4*4.48); assert.equal(execute('weapon.interval'),.2); near(execute('weaponDamageLog()'),Math.log(4.48));
     }
   }
 });
@@ -2230,12 +2262,13 @@ check('focused piercing shots deliver the combined damage to each distinct enemy
   execute('bullets[0].previousX=300;bullets[0].x=900;resolveProjectileHits();resolveProjectileHits();');
   assert.deepEqual(scene().enemies.map(e=>e.hp),[14.2,14.2,14.2,20]);
 });
-check('focused blast uses the combined shot once, does not recurse or charge energy, and retains each Boss cap', () => {
+check('focused main fire keeps its combined damage separate from scheduled Falcon rounds', () => {
   isolatedBattle('weapon.lanes=4;evolution.blast=1;firingStyle.mode="focus";player.y=300;resetWeapons();updateShooting(0);'+target(400,300,40,4)+target(475,300,40,20));
   execute('bullets[0].previousX=300;bullets[0].x=420;resolveProjectileHits();');
-  near(scene().enemies[0].hp,12); near(ult().energy,12); assert.equal(evolutionState().pulses.length,1);
-  readyDuo('evolution.blast=3;wingBoss.y=boss.y;wingBoss.previousY=boss.y;applyEvolutionBlast({x:boss.x-20,y:boss.y},{damageLog:boss.healthLog+100});');
-  near(duoState().boss.hp,.985); near(duoState().wingBoss.hp,.985); near(ult().energy,0);
+  near(scene().enemies[0].hp,20); near(ult().energy,12); assert.equal(shots().length,0);
+  fireFirstDroneRound();
+  assert.equal(execute('bullets[0].source'),'evolution-drone');
+  near(execute('bullets[0].damage'),5*4*.26);
 });
 check('diagonal swept orbs are hit along the path even when neither endpoint overlaps', () => {
   isolatedBattle(orb('yellow',500,300));
@@ -2295,44 +2328,43 @@ check('permanent evolution benefits are not erased by stronger automatic enemy o
     near(execute('ultimateDamageLog()'),ultimateLog);
   }
 });
-check('blast now damages its living hit target and nearby enemies at every rank without charging secondary energy', () => {
-  for (let level=1;level<=3;level++) {
-    const radius=85+level*20, multiplier=[0,1,1.5,2][level];
-    isolatedBattle(`evolution.blast=${level};`+target(400,300,40,100)+target(400+radius,300,40,100)+target(400+radius+.1,300,40,100));
-    execute('applyEnemyHit(enemies[0],{damage:10,damageLog:Math.log(10)});');
-    assert.deepEqual(scene().enemies.map(enemy=>enemy.hp),[90-10*multiplier,100-10*multiplier,100]);
-    near(ult().energy,1.2); assert.equal(evolutionState().pulses.length,1); assert.equal(scene().score,0);
-  }
+check('Falcon rounds pass through supply orbs without collecting them and hit the enemy behind', () => {
+  droneAttackScene(1,orb('red',350,'supportY')+target(500,'supportY',60,20));
+  fireFirstDroneRound();
+  execute('updateShooting(.6);resolveProjectileHits();');
+  assert.equal(orbScene().powerups.length,1); near(weaponState().damage,1);
+  near(scene().enemies[0].hp,20-1.3); near(ult().energy,12*1.3/20);
 });
-check('living hit and lethal blast share one cooldown and cannot chain, double-score or refill from blast damage', () => {
-  isolatedBattle('evolution.blast=1;'+target(400,300,40,1.5)+target(460,300,40,.5)+target(580,300,40,10));
-  execute('bullets.push({x:420,previousX:350,y:300,previousY:300,damage:1});resolveProjectileHits();resolveProjectileHits();');
+check('Falcon fire-control links pierce two aligned enemies and count each kill once', () => {
+  droneAttackScene(1,'evolution.links.falcon=true;'+target(400,'supportY',40,1.4)+target(490,'supportY',40,1.4)+target(580,'supportY',40,1.4));
+  fireFirstDroneRound();
+  assert.equal(execute('bullets[0].piercesLeft'),1);
+  near(execute('bullets[0].damage'),1.3*1.15);
+  execute('updateShooting(.6);resolveProjectileHits();resolveProjectileHits();');
   assert.equal(scene().score,200); assert.equal(health().kills,2); assert.equal(momentumState().count,2);
-  assert.equal(scene().enemies.length,1); assert.equal(scene().enemies[0].hp,10);
-  assert.equal(evolutionState().pulses.length,1); near(ult().energy,8);
-  execute('applyEnemyHit(enemies[0],{damage:1});'); assert.equal(scene().enemies[0].hp,9); assert.equal(evolutionState().pulses.length,1);
-  execute('updateEvolution(.649);applyEnemyHit(enemies[0],{damage:1});'); assert.equal(scene().enemies[0].hp,8);
-  execute('updateEvolution(.001001);applyEnemyHit(enemies[0],{damage:1});'); assert.equal(scene().enemies[0].hp,6);
+  assert.deepEqual(scene().enemies.map(enemy=>[enemy.x,enemy.hp]),[[580,1.4]]);
+  near(ult().energy,24); assert.equal(shots().length,0);
 });
-check('blast cooldown is rank-specific, freezes when paused and rejects ultimate and secondary sources', () => {
-  for (let level=1;level<=3;level++) {
-    const cooldown=[0,.65,.55,.45][level];
-    isolatedBattle(`evolution.blast=${level};`+target(400,300,40,100));
-    execute('applyEnemyHit(enemies[0],{damage:1,source:"ultimate"});applyEnemyHit(enemies[0],{damage:1,source:"blast"});');
-    assert.equal(evolutionState().pulses.length,0); near(execute('evolutionBlastCooldown'),0);
-    execute('applyEnemyHit(enemies[0],{damage:1});'); near(execute('evolutionBlastCooldown'),cooldown);
-    emit(window,'blur'); execute('updateEvolution(10);'); near(execute('evolutionBlastCooldown'),cooldown);
-    emit(window,'focus'); canvas.focus(); execute(`updateEvolution(${cooldown});`); near(execute('evolutionBlastCooldown'),0);
-  }
+check('Falcon attack cadence freezes while paused and resumes without a queued volley', () => {
+  droneAttackScene(2); fireFirstDroneRound();
+  const cooldown=execute('evolutionWeapons.droneCooldown'), origin=emitted();
+  emit(window,'blur'); execute('updateEvolutionWeapons(10);updateShooting(10);');
+  near(execute('evolutionWeapons.droneCooldown'),cooldown); assert.deepEqual(emitted(),origin);
+  emit(window,'focus'); canvas.focus();
+  execute('for(let i=0;i<9;i++)updateEvolutionWeapons(.1);');
+  assert.equal(execute('bullets.length'),2); near(execute('evolutionWeapons.droneCooldown'),.05);
+  execute('updateEvolutionWeapons(.05);'); assert.equal(execute('bullets.length'),4);
 });
-check('living blast respects each rank Boss cap even with infinite-scale log damage and cannot recurse', () => {
-  for (let level=1;level<=3;level++) {
-    readyDuo(`evolution.blast=${level};wingBoss.x=boss.x;wingBoss.y=boss.y;`);
-    execute('onEvolutionHit(boss,{damageLog:boss.healthLog+10000});');
-    const cap=[0,.01,.0125,.015][level]; near(duoState().boss.hp,1-cap); near(duoState().wingBoss.hp,1-cap);
-    near(ult().energy,0); assert.equal(evolutionState().pulses.length,1);
-    execute('onEvolutionHit(boss,{damageLog:boss.healthLog+10000});'); near(duoState().boss.hp,1-cap);
-  }
+check('a penetrating support shot damages each intersected Boss once without chaining', () => {
+  readyDuo('boss.phase=wingBoss.phase="recover";wingBoss.x=boss.x+40;wingBoss.y=boss.y;boss.previousX=boss.x;wingBoss.previousX=wingBoss.x;for(const hull of activeBosses())for(const part of hull.components)part.destroyed=true;');
+  execute('spawnEvolutionRound({x:boss.x-boss.width*1.5,y:boss.y},"lance",.65,{pierces:3});');
+  const damage=execute('bullets[0].damage');
+  const initial=duoState();
+  execute('updateShooting(.3);resolveProjectileHits();resolveProjectileHits();');
+  near(duoState().boss.hp,1-damage/Math.exp(initial.boss.healthLog));
+  near(duoState().wingBoss.hp,1-damage/Math.exp(initial.wingBoss.healthLog));
+  assert.equal(execute('bullets[0].hitTargets.size'),2);
+  assert.equal(evolutionState().pulses.length,0);
 });
 check('aegis ranks charge in 25, 20, 17 and 14 seconds with frame-independent storage capped at two', () => {
   for (let level=0;level<=3;level++) {
@@ -2364,10 +2396,10 @@ check('aegis counter damages its full forward corridor but leaves rear and outsi
     assert.equal(evolutionState().pulses.filter(p=>p.direction==='front').length,1);
   }
 });
-check('aegis counter kills score once, never trigger a blast cascade or gain cannon energy, and caps each Boss', () => {
+check('aegis counter kills score once without spawning support fire or gaining cannon energy, and caps each Boss', () => {
   isolatedBattle('evolution.aegis=3;evolution.blast=3;player.x=200;player.y=300;'+target(500,300,40,1)+target(550,550,40,1));
   execute('shield.charges=1;requestShield();requestShield();'); assert.equal(scene().score,100); assert.equal(scene().enemies.length,1);
-  assert.equal(momentumState().count,1); near(ult().energy,0); near(execute('evolutionBlastCooldown'),0);
+  assert.equal(momentumState().count,1); near(ult().energy,0); assert.equal(shots().length,0);
   for(let level=1;level<=3;level++) {
     readyDuo(`evolution.aegis=${level};player.y=boss.y;wingBoss.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();`);
     const cap=[0,.03,.04,.05][level]; near(duoState().boss.hp,1-cap); near(duoState().wingBoss.hp,1-cap);
@@ -2466,19 +2498,23 @@ check('reduced motion forces stationary minimal debris and zero shake while all 
   assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
   execute('reducedMotion.matches=false;shakePreference="low";');
 });
-check('all 63 evolved silhouettes and hybrids preserve player geometry and the original centered nose', () => {
-  isolatedBattle(); const before=execute('JSON.stringify(player)'); const visualSignatures=new Set();
+check('all 63 evolved combinations preserve the centered raster nose and draw the selected Falcon count', () => {
+  isolatedBattle(); const before=execute('JSON.stringify(player)');
+  const muzzle=JSON.parse(execute('JSON.stringify(muzzlePosition())'));
+  const [tipX,tipY]=JSON.parse(execute('JSON.stringify(shipRenderSources.crimson.tip)'));
   for(let p=0;p<=3;p++) for(let b=0;b<=3;b++) for(let a=0;a<=3;a++) {
     captureDraws=true; drawOperations.length=0;
-    const drawn=execute(`drawEvolvedPlayer(context,player,{pierce:${p},blast:${b},aegis:${a}},true,1)`); captureDraws=false;
+    const drawn=execute(`(()=>{evolution.pierce=${p};evolution.blast=${b};evolution.aegis=${a};
+      const result=drawEvolvedPlayer(context,player,evolution,true,1);drawEvolutionWeapons();return result;})()`); captureDraws=false;
     assert.equal(drawn,!!(p||b||a)); if(!drawn) continue;
     assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
     assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
-    assert.ok(drawOperations.some(op=>op.name==='lineTo'&&op.args[0]===93&&op.args[1]===0));
-    assert.ok(!drawOperations.some(op=>['moveTo','lineTo'].includes(op.name)&&op.args[0]>93));
-    visualSignatures.add(JSON.stringify(drawOperations.filter(op=>['moveTo','lineTo'].includes(op.name))));
+    const raster=drawOperations.filter(op=>op.name==='drawImage'&&op.args[0]===nodes.get('#fighter-art'));
+    assert.equal(raster.length,1+(b===0?0:b===1?1:2));
+    const [,sx,sy,sw,sh,x,y,w,h]=raster[0].args;
+    near(x+(tipX-sx)*w/sw,muzzle.x); near(y+(tipY-sy)*h/sh,muzzle.y);
   }
-  assert.equal(visualSignatures.size,63); assert.equal(execute('JSON.stringify(player)'),before);
+  assert.equal(execute('JSON.stringify(player)'),before);
 });
 
 
@@ -2557,18 +2593,18 @@ check('aegis opening clears nearby shells but rewards only present ellipse conta
     assert.equal(parrySoundCount()-sounds,Number(contact));
   }
 });
-check('perfect counter uses the complete base firepower only in the visible forward band without recursive blast or cannon energy', () => {
+check('perfect counter uses the complete base firepower only in the visible forward band without spawning support fire or gaining cannon energy', () => {
   activateParry('weapon.damage=4;weapon.lanes=2;weapon.interval=.2;evolution.blast=3;');
   execute(`enemies.length=0;${target(500,position().y,100,100)}${target(50,position().y,100,100)}${target(1400,position().y,100,100)}${target(600,position().y+250,100,100)}${contactShell()}updateEnemyProjectileDamage();`);
   near(execute('enemies[0].hp'),100-4*2/.2*.65);
   for(let i=1;i<4;i++) near(execute(`enemies[${i}].hp`),100);
-  near(ult().energy,0); near(execute('evolutionBlastCooldown'),0); assert.equal(health().kills,0);
+  near(ult().energy,0); assert.equal(shots().length,0); assert.equal(health().kills,0);
 });
 check('counter kills use normal one-time score and combo settlement without charging the cannon', () => {
   activateParry('evolution.blast=3;');
   execute(target(500,position().y,100,1)+contactShell()+'updateEnemyProjectileDamage();updateBossDamage();');
   assert.equal(scene().score,100); assert.equal(health().kills,1); assert.equal(momentumState().count,1);
-  assert.equal(scene().enemies.length,0); near(ult().energy,0); near(execute('evolutionBlastCooldown'),0);
+  assert.equal(scene().enemies.length,0); near(ult().energy,0); assert.equal(shots().length,0);
   execute(contactShell()+'updateEnemyProjectileDamage();'); assert.equal(scene().score,100); assert.equal(health().kills,1);
 });
 check('perfect counter is capped at three percent for each simultaneous Boss even with unbounded weapon tiers', () => {
@@ -2755,4 +2791,5 @@ check('linked charge and red cannon show a small ice-blue signature with finite 
   execute('reducedMotion.matches=false;');
 });
 
-process.stdout.write('All '+checks+' combat checks passed.\n');
+process.stdout.write(checks+' combat checks passed, '+failedChecks+' failed.\n');
+if (failedChecks) process.exitCode = 1;

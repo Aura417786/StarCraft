@@ -62,7 +62,7 @@ function spawnAceEnemy() {
     y: aceEncounter.warningY, previousX: viewport.width + width * 0.6, previousY: aceEncounter.warningY,
     hp: 1, maxHp: 1, displayHp: 1, hitFlash: 0, points: 800,
     healthLog: Math.max(enemyHealthLogForTime() + Math.log(3),
-      weaponDamageLog() + Math.log(weapon.lanes / weapon.interval) + Math.log(4.5)),
+      progressionReferenceDpsLog(battleTime) + Math.log(4.5)),
     age: 0, speed: aceRules.moveSpeed, acePhase: "entry", acePhaseTime: 0,
     aceCycle: 0, aceDodgeCooldown: 0.85, aceDodgeTime: 0, aceSettled: false,
     aceRoute: null, aceAim: null };

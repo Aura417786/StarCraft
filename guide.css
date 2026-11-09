@@ -1,0 +1,88 @@
+.start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+}
+.start-actions > .primary-button {
+  width: clamp(148px, 20vw, 235px);
+  margin: 0;
+  gap: .6rem;
+}
+.start-actions > .secondary-button { white-space: nowrap; }
+
+.flight-guide {
+  width: min(700px, calc(100% - 32px));
+  max-width: none;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: #f5f2f3;
+  border: 1px solid #374457;
+  border-radius: 14px;
+  background: radial-gradient(ellipse at 10% 0, #2e1b29 0, transparent 54%), #0d1421;
+  box-shadow: 0 24px 80px #000a, inset 0 1px #fff1;
+}
+.flight-guide::backdrop { background: #03060cc9; }
+.flight-guide-content { padding: clamp(18px, 4vw, 34px); }
+.flight-guide-heading { margin-bottom: 22px; }
+.flight-guide-heading .eyebrow { color: #efafb4; }
+.flight-guide h2 {
+  margin: 5px 0 8px;
+  font-size: clamp(25px, 4vw, 34px);
+  line-height: 1.25;
+  letter-spacing: .08em;
+}
+.flight-guide-heading p {
+  margin: 0;
+  color: #c1cbd9;
+  font-size: 14px;
+}
+.flight-guide-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.flight-guide-section {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #263345;
+  border-radius: 8px;
+  background: #101a29;
+}
+.flight-guide h3 {
+  margin: 0 0 10px;
+  color: #e7edf8;
+  font-size: 14px;
+  letter-spacing: .08em;
+}
+.flight-guide-keys { margin: 0; }
+.flight-guide-keys > div { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: start; }
+.flight-guide-keys > div + div { margin-top: 9px; }
+.flight-guide kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid #3b506a;
+  border-radius: 4px;
+  background: #18283b;
+  color: #e0f4ff;
+  font: 600 11px/1.55 Consolas, "Microsoft YaHei", sans-serif;
+  white-space: nowrap;
+}
+.flight-guide-keys dd { margin: 0; }
+.flight-guide-keys dd, .flight-guide-tips { color: #c1cbd9; font-size: 13px; line-height: 1.55; }
+.flight-guide-tips { display: grid; gap: 10px; margin: 0; padding-left: 1.2em; }
+.flight-guide-tips strong { color: #f5f2f3; }
+.flight-guide .guide-orb-blue { color: #7ec9ff; }
+.flight-guide .guide-orb-yellow { color: #ffe297; }
+.flight-guide .guide-orb-red { color: #ff9aa2; }
+.flight-guide .guide-orb-green { color: #8fe4ac; }
+.flight-guide-actions { display: flex; justify-content: flex-end; margin-top: 22px; }
+.flight-guide-actions .primary-button { width: 164px; min-height: 44px; padding: 8px 15px; font-size: 15px; }
+.flight-guide-actions .primary-button span { font-size: 18px; }
+
+@media (max-width: 610px) {
+  .flight-guide-columns { grid-template-columns: 1fr; gap: 10px; }
+  .flight-guide-heading { margin-bottom: 14px; }
+  .flight-guide-actions { margin-top: 16px; }
+}
+@media (max-width: 520px) { .start-actions { justify-content: center; } }

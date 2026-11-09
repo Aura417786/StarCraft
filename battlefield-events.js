@@ -30,7 +30,7 @@ function spawnBattlefieldObject(kind) {
   const y = flightBounds.top + (flightBounds.bottom - flightBounds.top) * lane;
   const x = viewport.width + width;
   const object = { kind, x, previousX: x, y, previousY: y, width, height: width * (kind === "wreck" ? 0.65 : 0.72),
-    hp: 1, maxHp: 1, healthLog: weaponDamageLog() + Math.log(Math.max(2, weapon.lanes / weapon.interval * (kind === "wreck" ? 1.3 : 0.45))),
+    hp: 1, maxHp: 1, healthLog: progressionReferenceDpsLog(battleTime) + Math.log(kind === "wreck" ? 1.3 : .45),
     speed: kind === "wreck" ? 62 : 86, hitFlash: 0, phase: battlefieldEvents.objectCount * 1.7, age: 0 };
   battlefieldEvents.objects.push(object); battlefieldEvents.objectCount++;
   if (battlefieldEvents.objectCount <= 2) announceBattlefieldEvent(kind === "cell"
@@ -43,7 +43,7 @@ function spawnSupplyTransport() {
   const width = Math.min(155, player.width * 0.96), x = viewport.width + width;
   const y = flightBounds.top + (flightBounds.bottom - flightBounds.top) * (battlefieldEvents.objectCount % 2 ? 0.35 : 0.65);
   const target = { kind: "transport", x, previousX: x, y, previousY: y, baseY: y, width, height: width * 0.61,
-    hp: 1, maxHp: 1, displayHp: 1, healthLog: weaponDamageLog() + Math.log(weapon.lanes / weapon.interval * 2.6),
+    hp: 1, maxHp: 1, displayHp: 1, healthLog: progressionReferenceDpsLog(battleTime) + Math.log(2.6),
     speed: Math.min(145, 82 + battleTime * 0.045), hitFlash: 0, age: 0, points: 600 };
   enemies.push(target); battlefieldEvents.transport = target;
   for (const side of [-1, 1]) {

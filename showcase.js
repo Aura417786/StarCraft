@@ -23,7 +23,7 @@ const showcaseDownload = document.querySelector("#showcase-download");
 const showcaseScenes = [
   { start: 0, title: "拆掉炮组，改写战局", subtitle: "聚焦射击可摧毁首领武器，削弱对应攻击", sector: 3, time: 96 },
   { start: 7, title: "连击点燃暴走", subtitle: "持续击杀，释放更快、更猛烈的主炮", sector: 1, time: 60 },
-  { start: 13, title: "进化，决定你的战斗方式", subtitle: "破阵翼刃 · 焚星爆破 · 赤金壁垒", sector: 0, time: 180 },
+  { start: 13, title: "进化，决定你的战斗方式", subtitle: "破阵翼刃 · 星隼僚机 · 赤金壁垒", sector: 0, time: 180 },
   { start: 20, title: "双舰来袭，寻找突破口", subtitle: "协同弹幕留有安全通道，抓住反击时机", sector: 4, time: 390 },
   { start: 27, title: "星际突围", subtitle: "电脑浏览器 · 免费试玩 · 挑战你的第一只首领", sector: 0, time: 0 },
 ];
@@ -78,6 +78,7 @@ function enterShowcaseScene(index) {
   pauseHint.hidden = true;
   enemyCooldown = powerupCooldown = nextBossTime = Infinity;
   battlefieldEvents.nextObject = battlefieldEvents.nextTransport = formationState.nextTime = Infinity;
+  aceEncounter.nextTime = Infinity;
   const scene = showcaseScenes[index];
   battleTime = scene.time;
   battlefieldState.clock = scene.sector * sceneryRules.interval + 22;

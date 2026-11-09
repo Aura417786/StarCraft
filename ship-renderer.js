@@ -118,10 +118,12 @@ function drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, foreground)
       if (!module(fairing, -70, span, 64 + aegis * 5)) shipModulePlate(ctx, -32, span, 54, 13, "#b64a3f");
     }
     if (foreground && blast) {
-      const rows = blast === 3 ? [24, 38] : [27 + blast * 2];
-      for (const y of rows) {
-        const length = 57 + blast * 6;
-        if (!module(rail, -32, y, length)) shipModulePlate(ctx, 0, y, length, 9, "#84939f");
+      // Low-profile launch fairings replace the former explosive gun barrels.
+      const span = 20 + blast * 2;
+      if (!module(fairing, -67, span, 43 + blast * 4)) shipModulePlate(ctx, -42, span, 34, 8, "#a94046");
+      ctx.fillStyle = blast === 3 ? "#bce7ff" : "#92b8d0";
+      for (let slot = 0; slot < Math.min(2, blast); slot++) {
+        ctx.beginPath(); ctx.ellipse(-36 - slot * 7, span - 1, 1.5, .7, 0, 0, Math.PI * 2); ctx.fill();
       }
     }
   ctx.restore();
@@ -133,7 +135,7 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0) 
   if (!asset?.ready || !asset.image || !(ship.width > 0 && ship.height > 0)) return false;
   const playerShip = kind === "crimson", geometry = shipRenderGeometry(asset, ship, playerShip);
   const clock = quiet ? 0 : time;
-  const bank = quiet || ship.disabled ? 0 : playerShip ? shipVisuals.bank : Math.sin((ship.age ?? clock) * 1.7) * 0.22;
+  const bank = quiet || ship.disabled ? 0 : Number.isFinite(ship.visualBank) ? ship.visualBank : playerShip ? shipVisuals.bank : Math.sin((ship.age ?? clock) * 1.7) * 0.22;
   const cached = shipRenderSurface(asset, geometry.width, geometry.height);
   ctx.save(); ctx.translate(geometry.anchorX, geometry.anchorY);
   ctx.transform(1, 0, bank * 0.09, 1 - Math.abs(bank) * 0.10, 0, 0);
@@ -177,5 +179,55 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0) 
     ctx.beginPath(); ctx.arc(geometry.width * 0.65, 0, ship.height * 0.3, 2.2, 3.8); ctx.stroke(); ctx.restore();
   }
   ctx.restore();
+  if (playerShip && upgrades?.pierce) drawEvolutionWingCannons(ctx, ship, upgrades.pierce, quiet, time);
+  return true;
+}
+
+function drawEvolutionWingCannons(ctx, ship, level, quiet = false, time = 0) {
+  const rank = Math.max(0, Math.min(3, Number(level) || 0));
+  if (!rank || !(ship.width > 0 && ship.height > 0)) return;
+  const muzzles = typeof getEvolutionWingMuzzles === "function" ? getEvolutionWingMuzzles(ship)
+    : [-1, 1].map(side => ({ x: ship.x + ship.width * .20, y: ship.y + side * ship.height * .30, side }));
+  const rail = shipRenderAssets.rail, length = ship.width * (.26 + rank * .028);
+  ctx.save();
+  for (const muzzle of muzzles) {
+    if (rail.ready && rail.image) {
+      const scale = length / rail.crop[2];
+      ctx.drawImage(rail.image, ...rail.crop, muzzle.x - (rail.tip[0] - rail.crop[0]) * scale,
+        muzzle.y - (rail.tip[1] - rail.crop[1]) * scale, length, rail.crop[3] * scale);
+    } else {
+      shipModulePlate(ctx, muzzle.x - length * .5, muzzle.y, length, ship.height * .065, "#8b9ba8");
+    }
+    ctx.fillStyle = rank === 3 ? "#c2f8ff" : "#83d6e2";
+    ctx.beginPath(); ctx.ellipse(muzzle.x, muzzle.y, Math.max(.8, ship.width * .006), Math.max(.6, ship.height * .009), 0, 0, Math.PI * 2); ctx.fill();
+    if (rank >= 2) {
+      ctx.strokeStyle = "#98d8e1"; ctx.lineWidth = Math.max(.5, ship.width * .003);
+      ctx.beginPath(); ctx.moveTo(muzzle.x - length * .70, muzzle.y - ship.height * .026);
+      ctx.lineTo(muzzle.x - length * .24, muzzle.y - ship.height * .026); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// The same unmodified crimson raster gives companions a real, coherent hull.
+function drawEvolutionDroneBody(ctx, drone, level = 1, quiet = false, time = 0) {
+  if (!drone || !(drone.width > 0 && drone.height > 0)) return false;
+  const ship = { ...drone, visualBank: 0, disabled: false };
+  const drawn = drawShipPBR(ctx, ship, "crimson", null, quiet, time);
+  if (!drawn) {
+    const source = shipRenderSources.crimson;
+    if (typeof fighterImage === "undefined" || !fighterImage?.complete || !fighterImage.naturalWidth) return false;
+    const geometry = shipRenderGeometry(source, ship, true);
+    ctx.drawImage(fighterImage, ...source.crop, geometry.anchorX + geometry.x, geometry.anchorY + geometry.y, geometry.width, geometry.height);
+  }
+  if (level >= 3) {
+    const x = drone.x - drone.width * .12;
+    ctx.save(); ctx.strokeStyle = "#9ccedf"; ctx.globalAlpha *= .55; ctx.lineWidth = Math.max(.6, drone.width * .012);
+    for (const side of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(x - drone.width * .1, drone.y + side * drone.height * .28);
+      ctx.lineTo(x + drone.width * .15, drone.y + side * drone.height * .22); ctx.stroke();
+    }
+    ctx.restore();
+  }
   return true;
 }

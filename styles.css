@@ -179,7 +179,7 @@ h1 > span { color: var(--red); }
 .evolution-panel > p { color: #a4adbe; text-align: center; font-size: 12px; margin: 0 0 25px; }
 .evolution-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .evolution-card { --evolution-color: #88dfef; --evolution-dim: #204757; display: flex; flex-direction: column; align-items: stretch; min-width: 0; padding: 20px; text-align: left; color: #e6eef6; background: linear-gradient(145deg, #1a2739ed, #101422f5); border: 1px solid #465367; border-radius: 12px; transition: transform .15s, border-color .15s; }
-.evolution-card[data-tone="blast"] { --evolution-color: #ffb177; --evolution-dim: #643b2e; background: linear-gradient(145deg, #38232aed, #161520f5); }
+.evolution-card[data-tone="blast"] { --evolution-color: #91e6d5; --evolution-dim: #245554; background: linear-gradient(145deg, #193638ed, #101721f5); }
 .evolution-card[data-tone="aegis"] { --evolution-color: #ffb8a1; --evolution-dim: #5f343d; background: linear-gradient(145deg, #342334ed, #161520f5); }
 .evolution-card[data-tone="heal"] { --evolution-color: #94edbd; --evolution-dim: #305143; }
 .evolution-card:not(:disabled):hover { transform: translateY(-4px); border-color: var(--evolution-color); }
@@ -188,18 +188,15 @@ h1 > span { color: var(--red); }
 .evolution-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .evolution-card-level { color: var(--evolution-color); font-size: 11px; letter-spacing: .04em; }
 .evolution-card kbd { width: 22px; line-height: 23px; color: #d8dbe5; border: 1px solid #596174; border-radius: 4px; text-align: center; font: 12px/23px Consolas, monospace; }
-.evolution-card-icon { width: 100%; height: 93px; margin: 14px 0 13px; overflow: visible; fill: #952d41; stroke: var(--evolution-color); stroke-width: 1.2; }
-.evolution-icon-glow { fill: var(--evolution-dim); stroke: var(--evolution-color); stroke-opacity: .65; }
-.evolution-icon-core { fill: #e8e8e6; stroke: none; }
-.evolution-icon-line { fill: none; stroke: var(--evolution-color); stroke-width: 2.5; }
+.evolution-card-preview { display: block; width: 100%; height: auto; aspect-ratio: 20 / 7; margin: 14px 0 13px; object-fit: contain; border: 1px solid #a5c0df25; border-radius: 7px; background: #080e19; }
 .evolution-card-title { color: #fbede8; font-size: 21px; letter-spacing: .09em; font-weight: 700; }
 .evolution-card-effect { color: #e0dce0; font-size: 12px; line-height: 1.9; margin-top: 12px; min-height: 69px; }
 .evolution-card-art { color: #97a1b4; font-size: 11px; line-height: 1.8; margin: 13px 0 22px; }
 .evolution-card-action { display: block; margin-top: auto; padding-top: 12px; border-top: 1px solid #a4a0bd2c; color: var(--evolution-color); font-size: 12px; text-align: right; letter-spacing: .18em; }
 .evolution-panel > .evolution-controls { margin: 20px 0 0; color: #8e99af; font-size: 11px; }
-@media (max-width: 650px) { .evolution-screen { padding: 20px; } .evolution-cards { grid-template-columns: 1fr; gap: 12px; } .evolution-card { padding: 14px 16px; display: grid; grid-template-columns: 1fr 95px; column-gap: 12px; } .evolution-card-top, .evolution-card-title, .evolution-card-effect, .evolution-card-art { grid-column: 1; } .evolution-card-icon { grid-column: 2; grid-row: 1 / 4; height: 80px; margin: 5px 0; align-self: center; } .evolution-card-title { font-size: 19px; margin-top: 5px; } .evolution-card-effect { min-height: 0; margin-top: 5px; font-size: 11px; } .evolution-card-art { grid-column: 1 / -1; margin: 7px 0 10px; } .evolution-card-action { grid-column: 2; grid-row: 4 / 6; align-self: end; border: 0; padding: 0; margin-bottom: 10px; } .evolution-panel > p { margin-bottom: 16px; font-size: 11px; } .evolution-panel h2 { font-size: 22px; } }
+@media (max-width: 650px) { .evolution-screen { padding: 20px; } .evolution-cards { grid-template-columns: 1fr; gap: 12px; } .evolution-card { padding: 14px 16px; } .evolution-card-preview { max-height: 105px; margin: 9px 0; } .evolution-card-title { font-size: 19px; } .evolution-card-effect { min-height: 0; margin-top: 5px; font-size: 11px; } .evolution-card-art { margin: 7px 0 10px; } .evolution-card-action { padding-top: 7px; } .evolution-panel > p { margin-bottom: 16px; font-size: 11px; } .evolution-panel h2 { font-size: 22px; } }
 @media (max-width: 520px) { .evolution-readout { bottom: 178px; left: 14px; max-width: calc(100% - 28px); font-size: 9px; } }
-@media (max-height: 600px) and (min-width: 651px) { .evolution-screen { padding: 18px 4vw; } .evolution-panel h2 { font-size: 25px; margin: 5px 0; } .evolution-panel > p { margin-bottom: 14px; font-size: 11px; } .evolution-card { padding: 12px 17px; } .evolution-card-icon { height: 60px; margin: 8px 0; } .evolution-card-title { font-size: 18px; } .evolution-card-effect { margin-top: 7px; min-height: 63px; font-size: 11px; } .evolution-card-art { margin: 7px 0 13px; font-size: 10px; } .evolution-card-action { padding-top: 7px; } .evolution-panel > .evolution-controls { margin-top: 12px; } }
+@media (max-height: 600px) and (min-width: 651px) { .evolution-screen { padding: 18px 4vw; } .evolution-panel h2 { font-size: 25px; margin: 5px 0; } .evolution-panel > p { margin-bottom: 14px; font-size: 11px; } .evolution-card { padding: 12px 17px; } .evolution-card-preview { max-height: 76px; margin: 8px 0; } .evolution-card-title { font-size: 18px; } .evolution-card-effect { margin-top: 7px; min-height: 63px; font-size: 11px; } .evolution-card-art { margin: 7px 0 13px; font-size: 10px; } .evolution-card-action { padding-top: 7px; } .evolution-panel > .evolution-controls { margin-top: 12px; } }
 @media (max-height: 450px) and (min-width: 521px) { .evolution-readout { bottom: 151px; font-size: 9px; } }
 
 /* 右下连击面板与左侧技能分开；不盖住上方首领提示。 */

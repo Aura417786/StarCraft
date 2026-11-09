@@ -24,7 +24,7 @@ function clearDuoAttacks() { bossProjectiles.length = 0; bossHazards.length = 0;
 function duoTitle() { return activeBosses().map(target => target.name).join(" × "); }
 function spawnDuoEncounter(first, second) {
   const endurance = Math.min(85, 55 + bossDefeated * 5) * duoRules.healthShare;
-  const healthLog = weaponDamageLog() + Math.log(weapon.lanes / weapon.interval) + Math.log(endurance);
+  const healthLog = progressionBossHealthLog(battleTime, endurance);
   const make = (type, slot) => {
     const arena = duoArena(slot), data = bossTypes[type];
     return { ...arena, type, slot, color: data.color, name: data.name,

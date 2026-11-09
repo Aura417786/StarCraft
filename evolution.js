@@ -1,35 +1,68 @@
 "use strict";
 
-// 三条进化路线可叠加；成长上限与本局的基础武器强化互相独立。
-const evolution = { pierce: 0, blast: 0, aegis: 0, pending: false, choice: "", pulses: [] };
+// 路线等级、跨路线联动和超限整备只在本局有效。
+const evolution = { pierce: 0, blast: 0, aegis: 0, pending: false, choice: "", pulses: [],
+  links: { falcon: false, phalanx: false, lance: false }, overclock: 0, refits: 0 };
 const evolutionScreen = document.querySelector("#evolution-screen");
 const evolutionTitle = document.querySelector("#evolution-title");
 const evolutionDescription = document.querySelector("#evolution-description");
 const evolutionReadout = document.querySelector("#evolution-readout");
 const evolutionKeys = ["pierce", "blast", "aegis"];
 const evolutionCards = evolutionKeys.map((kind) => document.querySelector("#evolution-card-" + kind));
-const evolutionNames = { pierce: "破阵翼刃", blast: "焚星爆破", aegis: "赤金壁垒" };
+const evolutionNames = { pierce: "破阵翼刃", blast: "星隼僚机", aegis: "赤金壁垒" };
+const evolutionLinks = {
+  falcon: { name: "锋隼联动", effect: "两架星隼的射击伤害提高 15%，并可多穿透一个目标。", art: "翼刃校准星隼火控，齐射可击穿前排。", tone: "blast" },
+  phalanx: { name: "隼盾联动", effect: "开盾后 2.4 秒内，两架星隼每轮都发射三连齐射。", art: "利用护盾争取一段集中反攻时间。", tone: "aegis" },
+  lance: { name: "锋盾联动", effect: "吸收后发射的反击弹变为穿甲矛，伤害提高 50%，额外穿透两个目标。", art: "金色反击矛沿前方弹道贯穿。", tone: "pierce" },
+};
+const evolutionRefits = {
+  "refit-fire": { name: "火力整备", factor: 1.08, effect: "本局辅助武器伤害提高 8%。", tone: "blast" },
+  "refit-heal": { name: "战地修复", factor: 1.04, effect: "恢复 1 点生命，本局辅助武器伤害提高 4%。", tone: "heal" },
+  "refit-shield": { name: "护盾整备", factor: 1.04, effect: "补充 1 次护盾，本局辅助武器伤害提高 4%。", tone: "aegis" },
+};
 const evolutionBackground = new Map();
-let evolutionBlastCooldown = 0;
 
 function evolutionPierceCount() { return evolution.pierce; }
 function evolutionMainDamageMultiplier() { return [1, 1.25, 1.45, 1.65][evolution.pierce]; }
 function evolutionShieldChargeTime() { return [25, 20, 17, 14][evolution.aegis]; }
 function evolutionAllComplete() { return evolutionKeys.every((kind) => evolution[kind] >= 3); }
+function evolutionChoiceOptions() {
+  if (!evolutionAllComplete()) return evolutionKeys;
+  const links = Object.keys(evolutionLinks);
+  return links.every(kind => evolution.links[kind]) ? Object.keys(evolutionRefits) : links;
+}
 function updateEvolutionDisplay() {
-  const selected = evolutionKeys.filter((kind) => evolution[kind] > 0);
+  const selected = evolutionKeys.filter(kind => evolution[kind] > 0)
+    .map(kind => evolutionNames[kind] + " " + evolution[kind] + "级");
+  const linked = Object.values(evolution.links).filter(Boolean).length;
+  if (linked) selected.push("联动 " + linked + "/3");
+  if (evolution.refits) selected.push("超限 " + evolution.refits + " 次");
   evolutionReadout.hidden = !selected.length;
-  evolutionReadout.textContent = selected.map((kind) => evolutionNames[kind] + " " + evolution[kind] + "级").join("  ·  ");
+  evolutionReadout.textContent = selected.join("  ·  ");
 }
 function evolutionCardDetails(kind) {
-  if (kind === "heal") return { name: "紧急修复", level: "战后补给", effect: "恢复 1 点生命，最多 3 点。", art: "让赤焰战机重新投入战斗。", disabled: player.lives >= playerRules.maxLives };
-  if (kind === "shield") return { name: "护盾补给", level: "战后补给", effect: "获得 1 次护盾，最多储存 2 次。", art: "为下一轮联合攻势预留一次保护。", disabled: shield.charges >= shieldRules.maxCharges };
-  if (kind === "red") return { name: "火力补给", level: "战后补给", effect: "立即获得一次红色能量球的伤害强化。", art: "强化幅度随当前战斗时间成长。", disabled: false };
+  const link = evolutionLinks[kind];
+  if (link) return { ...link, level: "双路线联动", disabled: evolution.links[kind], unavailable: "已激活" };
+  const refit = evolutionRefits[kind];
+  if (refit) {
+    const healing = kind === "refit-heal", shielding = kind === "refit-shield";
+    const disabled = (healing && player.lives >= playerRules.maxLives) || (shielding && shield.charges >= shieldRules.maxCharges);
+    return { ...refit, level: "超限整备 · " + (evolution.refits + 1),
+      art: "当前辅助伤害 ×" + progressionFormatLog(evolution.overclock) + "，提升可持续叠加。",
+      disabled, unavailable: healing ? "生命已满" : "已储满" };
+  }
   const current = evolution[kind], next = Math.min(3, current + 1), complete = current >= 3;
   const level = complete ? "已达最高 · 3级" : current + "级 → " + next + "级";
-  if (kind === "pierce") return { name: evolutionNames[kind], level, effect: "主炮伤害提高 " + [0, 25, 45, 65][next] + "%，额外穿透 " + next + " 个敌人，沿途伤害不衰减。", art: "青白翼刃逐级展开，3 级成为修长的破阵终式。", disabled: complete };
-  if (kind === "blast") return { name: evolutionNames[kind], level, effect: "命中触发 " + [0, 1, 1.5, 2][next] + " 倍子弹伤害的范围爆破；击杀爆破提高至 " + (next + 1) + " 倍。", art: "共享冷却 " + [0, .65, .55, .45][next] + " 秒，范围 " + (85 + next * 20) + "。首领单次上限 " + [0, 1, 1.25, 1.5][next] + "%；重炮机身逐级展开。", disabled: complete };
-  return { name: evolutionNames[kind], level, effect: "立即获得 1 次护盾，充能缩短至 " + [25, 20, 17, 14][next] + " 秒；开盾清弹并向前反击。", art: "清弹范围 " + (130 + next * 50) + "，反击造成基础主炮每秒伤害的 " + [0, 55, 80, 105][next] + "%，首领上限 " + [0, 3, 4, 5][next] + "%。激光与雷区不被清除。", disabled: complete };
+  const details = { name: evolutionNames[kind], level, tone: kind, disabled: complete, unavailable: "本路线已完成" };
+  if (kind === "pierce") return { ...details,
+    effect: ["", "展开双翼副炮，持续向前齐射。", "双翼定期蓄能，发射可穿过多架敌机的重型穿甲弹。", "双翼重射更频繁，穿甲弹火力与穿透提升。"][next],
+    art: "主炮伤害 +" + [0, 25, 45, 65][next] + "% · 额外穿透 " + next + " 个目标。" };
+  if (kind === "blast") return { ...details,
+    effect: ["", "一架星隼伴飞，自动瞄准前方敌人。", "两架星隼从上下两侧协同射击。", "双星隼每三轮触发一次三连齐射。"][next],
+    art: "僚机无碰撞判定，跟随战机移动。" };
+  return { ...details,
+    effect: "护盾接住最多 " + [0, 3, 5, 8][next] + " 发实体敌弹，结束时化为金色反击齐射。",
+    art: "立即补充 1 次护盾 · " + [25, 20, 17, 14][next] + " 秒充能 · 保留开盾清弹与反击。" };
 }
 function focusEvolutionCard(preferred = evolution.choice) {
   const card = evolutionCards.find((entry) => entry.dataset.choice === preferred && !entry.disabled)
@@ -38,22 +71,28 @@ function focusEvolutionCard(preferred = evolution.choice) {
 }
 function refreshEvolutionChoice() {
   if (!evolution.pending) return;
-  const allComplete = evolutionAllComplete();
-  evolutionTitle.textContent = allComplete ? "进化已完成，整备再出击" : "首领击破，选择战机进化";
-  evolutionDescription.textContent = allComplete
-    ? "选择一份战后补给。战斗已暂停，准备好后继续突围。"
-    : "本局效果可以叠加，每条路线最多 3 级。战斗已暂停，选好再出发。";
+  const options = evolutionChoiceOptions();
+  if (options === evolutionKeys) {
+    evolutionTitle.textContent = "首领击破，选择战机进化";
+    evolutionDescription.textContent = "每条路线最多 3 级，能力可以叠加。战斗已暂停，选好再出发。";
+  } else if (options[0] === "falcon") {
+    evolutionTitle.textContent = "三路线满级，选择联动";
+    evolutionDescription.textContent = "每种联动可激活一次，效果持续到本局结束。";
+  } else {
+    evolutionTitle.textContent = "超限整备";
+    evolutionDescription.textContent = "每次整备都会继续强化辅助武器。";
+  }
   evolutionCards.forEach((card, index) => {
-    const kind = allComplete ? ["heal", "shield", "red"][index] : evolutionKeys[index];
+    const kind = options[index];
     const details = evolutionCardDetails(kind);
     card.dataset.choice = kind;
-    card.dataset.tone = allComplete ? ["heal", "aegis", "blast"][index] : kind;
+    card.dataset.tone = details.tone;
     card.disabled = details.disabled;
     card.querySelector(".evolution-card-level").textContent = details.level;
     card.querySelector(".evolution-card-title").textContent = details.name;
     card.querySelector(".evolution-card-effect").textContent = details.effect;
     card.querySelector(".evolution-card-art").textContent = details.art;
-    card.querySelector(".evolution-card-action").textContent = details.disabled ? (allComplete ? (kind === "heal" ? "生命已满" : "已储满") : "本路线已完成") : "选择";
+    card.querySelector(".evolution-card-action").textContent = details.disabled ? details.unavailable : "选择";
   });
   if (!evolutionScreen.contains(document.activeElement) || document.activeElement.disabled) focusEvolutionCard();
 }
@@ -79,6 +118,7 @@ function openEvolutionChoice() {
   bossHazards.length = 0;
   enemyProjectiles.length = 0;
   evolution.pulses.length = 0;
+  clearEvolutionWeaponTransients();
   movementHint.hidden = true;
   evolutionScreen.hidden = false;
   setEvolutionBackgroundInert(true);
@@ -88,15 +128,13 @@ function openEvolutionChoice() {
   return true;
 }
 function chooseEvolution(kind) {
-  if (!evolution.pending) return false;
-  const complete = evolutionAllComplete();
-  if (complete ? !["heal", "shield", "red"].includes(kind) : !evolutionKeys.includes(kind)) return false;
+  if (!evolution.pending || !evolutionChoiceOptions().includes(kind)) return false;
   if (evolutionCardDetails(kind).disabled) return false;
   // 先关闭待选状态，双击或按键连发不会重复领取。
   evolution.pending = false;
   evolution.choice = kind;
   let message;
-  if (!complete) {
+  if (evolutionKeys.includes(kind)) {
     const shieldProgress = shield.energy / evolutionShieldChargeTime();
     evolution[kind]++;
     if (kind === "aegis") {
@@ -105,19 +143,24 @@ function chooseEvolution(kind) {
       updateShieldDisplay();
     }
     updateWeaponDisplay();
+    onEvolutionUpgrade(kind);
     message = evolutionNames[kind] + "进化至 " + evolution[kind] + " 级";
-  } else if (kind === "heal") {
-    player.lives = Math.min(playerRules.maxLives, player.lives + 1);
-    updateLifeDisplay();
-    message = "战后修复 · 恢复 1 点生命";
-  } else if (kind === "shield") {
-    shield.charges = Math.min(shieldRules.maxCharges, shield.charges + 1);
-    if (shield.charges === shieldRules.maxCharges) shield.energy = 0;
-    updateShieldDisplay();
-    message = "战后补给 · 护盾次数 +1";
+  } else if (evolutionLinks[kind]) {
+    evolution.links[kind] = true;
+    message = evolutionLinks[kind].name + "已激活";
   } else {
-    applyPowerup("red");
-    message = "战后补给 · 火力强化完成";
+    const refit = evolutionRefits[kind];
+    evolution.overclock += Math.log(refit.factor);
+    evolution.refits++;
+    if (kind === "refit-heal") {
+      player.lives = Math.min(playerRules.maxLives, player.lives + 1);
+      updateLifeDisplay();
+    } else if (kind === "refit-shield") {
+      shield.charges = Math.min(shieldRules.maxCharges, shield.charges + 1);
+      if (shield.charges === shieldRules.maxCharges) shield.energy = 0;
+      updateShieldDisplay();
+    }
+    message = refit.name + " · " + refit.effect;
   }
   evolutionScreen.hidden = true;
   setEvolutionBackgroundInert(false);
@@ -126,7 +169,7 @@ function chooseEvolution(kind) {
   bossHitGrace = Math.max(bossHitGrace, 1.5);
   updateEvolutionDisplay();
   powerupNotice.textContent = message;
-  powerupNotice.dataset.type = kind === "pierce" ? "blue" : kind === "heal" ? "heal" : "red";
+  powerupNotice.dataset.type = kind === "pierce" || kind === "lance" ? "blue" : kind === "refit-heal" ? "heal" : "red";
   powerupNotice.hidden = false;
   upgradeNoticeTime = 3;
   statusMessage.textContent = message + "。战斗继续。";
@@ -138,7 +181,9 @@ function resetEvolution() {
   evolution.pending = false;
   evolution.pierce = 0; evolution.blast = 0; evolution.aegis = 0;
   evolution.choice = ""; evolution.pulses.length = 0;
-  evolutionBlastCooldown = 0;
+  for (const kind of Object.keys(evolution.links)) evolution.links[kind] = false;
+  evolution.overclock = 0; evolution.refits = 0;
+  resetEvolutionWeapons();
   evolutionScreen.hidden = true;
   setEvolutionBackgroundInert(false);
   updateEvolutionDisplay();
@@ -147,36 +192,12 @@ function addEvolutionPulse(x, y, radius, color, duration) {
   if (evolution.pulses.length >= 16) evolution.pulses.shift();
   evolution.pulses.push({ x, y, radius, color, age: 0, duration });
 }
-function triggerEvolutionBlast(center, bullet, multiplier, excluded = null) {
-  if (!evolution.blast || evolutionBlastCooldown > 0 || !bullet || bullet.source === "ultimate" || bullet.source === "blast") return false;
-  evolutionBlastCooldown = [0, .65, .55, .45][evolution.blast];
-  const radius = 85 + evolution.blast * 20;
-  const damageLog = (bullet.damageLog ?? Math.log(bullet.damage ?? projectileDamage())) + Math.log(multiplier);
-  const blastShot = { source: "blast", damageLog, x: center.x, y: center.y };
-  addEvolutionPulse(center.x, center.y, radius, "#ff914f", 0.38);
-  // 对象快照配合重新取下标，连锁击杀改变数组时仍只结算一次。
-  const targets = enemies.filter((enemy) => enemy !== excluded && enemy.hp > 0 && Math.hypot(enemy.x - center.x, enemy.y - center.y) <= radius);
-  for (const enemy of targets) {
-    if (!enemies.includes(enemy)) continue;
-    applyEnemyHit(enemy, blastShot);
-    if (enemy.hp <= 0) defeatEnemy(enemies.indexOf(enemy), blastShot);
-  }
-  const bossCap = [0, .01, .0125, .015][evolution.blast];
-  for (const target of activeBosses()) {
-    const edgeDistance = Math.hypot(target.x - center.x, target.y - center.y) - Math.min(target.width, target.height) * 0.3;
-    if (target.hp > 0 && edgeDistance <= radius) applyBossHit({ ...blastShot, damageLog: Math.min(damageLog, target.healthLog + Math.log(bossCap)) }, target);
-  }
-  return true;
-}
-function applyEvolutionBlast(fallen, bullet) {
-  return triggerEvolutionBlast(fallen, bullet, evolution.blast + 1, fallen);
-}
-function onEvolutionHit(target, bullet) {
-  if (!target || target.hp <= 0) return false;
-  return triggerEvolutionBlast(target, bullet, [0, 1, 1.5, 2][evolution.blast]);
-}
 function onEvolutionShield() {
   if (!evolution.aegis) return;
+  if (evolution.links.phalanx) {
+    evolutionWeapons.shieldLinkRemaining = 2.4;
+    evolutionWeapons.droneCooldown = Math.min(evolutionWeapons.droneCooldown, .08);
+  }
   const radius = 130 + evolution.aegis * 50;
   for (const shots of [bossProjectiles, enemyProjectiles]) {
     for (let index = shots.length - 1; index >= 0; index--) {
@@ -202,7 +223,6 @@ function onEvolutionShield() {
 }
 function updateEvolution(seconds) {
   if (!isBattleActive() || !Number.isFinite(seconds) || seconds <= 0) return;
-  evolutionBlastCooldown = Math.max(0, evolutionBlastCooldown - seconds);
   for (let index = evolution.pulses.length - 1; index >= 0; index--) {
     evolution.pulses[index].age += seconds;
     if (evolution.pulses[index].age >= evolution.pulses[index].duration) evolution.pulses.splice(index, 1);

@@ -34,12 +34,17 @@ function shieldInterceptsProjectile(shot, swept = true) {
   const t = length ? clamp(-(x0 * dx + y0 * dy) / length, 0, 1) : 0;
   return Math.hypot(x0 + dx * t, y0 + dy * t) <= 1;
 }
+function consumeEvolutionShieldProjectile(shot, swept = true) {
+  if (!shieldInterceptsProjectile(shot, swept)) return false;
+  captureEvolutionProjectile(shot);
+  return true;
+}
 function consumeShieldContacts() {
   let intercepted = false;
   for (const shots of [enemyProjectiles, bossProjectiles]) {
     for (let index = shots.length - 1; index >= 0; index--) {
       // 开盾只检查此刻接触，过去一帧已经飞过的弹不会补判。
-      if (shieldInterceptsProjectile(shots[index], false)) { shots.splice(index, 1); intercepted = true; }
+      if (consumeEvolutionShieldProjectile(shots[index], false)) { shots.splice(index, 1); intercepted = true; }
     }
   }
   if (intercepted) tryPerfectShield();
@@ -91,7 +96,9 @@ function updateShieldDisplay() {
   const remaining = Math.ceil(shield.remaining * 10) / 10;
   const perfect = shield.flash > 0;
   const ready = shield.perfectRemaining > 1e-9 && !shield.perfectUsed;
-  const key = [shield.charges, percent.toFixed(1), remaining, perfect, ready].join("/");
+  const absorbLimit = evolutionWeaponRules.absorbLimit[evolution.aegis];
+  const absorbed = evolutionWeapons.absorbed.length;
+  const key = [shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed].join("/");
   if (key === shieldDisplayKey) return;
   shieldDisplayKey = key;
   shieldCount.textContent = shield.charges + " / " + shieldRules.maxCharges;
@@ -104,10 +111,12 @@ function updateShieldDisplay() {
   shieldSlots.forEach((slot, index) => { slot.dataset.filled = String(index < shield.charges); });
   shieldLabel.textContent = perfect ? "完美格挡 · 返还 25% 充能"
     : ready ? "完美窗口 · 迎击敌弹"
+    : shieldIsActive() && absorbLimit ? "吸收弹药 " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + " 秒"
     : shieldIsActive() ? "无敌保护 · " + remaining.toFixed(1) + " 秒"
     : full ? "储能已满 · V 迎弹反击"
     : shield.charges ? "V 迎弹格挡 · 2 秒无敌" : "自动充能 · " + Math.ceil(chargeTime - shield.energy) + " 秒";
-  shieldPanel.title = "敌弹触盾前按 V：最初 0.25 秒可完美格挡，触发反击并返还 25% 充能。";
+  shieldPanel.title = "敌弹触盾前按 V，最初 0.25 秒可完美格挡，触发反击并返还 25% 充能。"
+    + (absorbLimit ? " 当前壁垒可吸收 " + absorbLimit + " 发接触护盾的敌弹，并在护盾结束时释放。" : "");
 }
 function requestShield() {
   if (!isBattleActive() || shield.charges <= 0 || shieldIsActive()) return false;
@@ -116,6 +125,7 @@ function requestShield() {
   shield.perfectRemaining = shieldRules.perfectWindow;
   shield.perfectUsed = false;
   shield.flash = 0; shield.slowRemaining = 0; shield.effect = null;
+  beginEvolutionShieldCapture();
   consumeShieldContacts();
   if (isBattleActive()) onEvolutionShield();
   player.hitFlash = 0;
@@ -126,8 +136,10 @@ function requestShield() {
 }
 function updateShield(seconds) {
   if (!isBattleActive() || !Number.isFinite(seconds) || seconds <= 0) return;
+  const wasActive = shieldIsActive();
   shield.remaining = Math.max(0, shield.remaining - seconds);
   if (shield.remaining < 1e-9) shield.remaining = 0;
+  if (wasActive && !shieldIsActive()) finishEvolutionShieldCapture();
   shield.perfectRemaining = Math.max(0, shield.perfectRemaining - seconds);
   shield.flash = Math.max(0, shield.flash - seconds);
   if (!shield.flash) shield.effect = null;
@@ -143,6 +155,7 @@ function resetShield() {
   shield.remaining = 0;
   shield.perfectRemaining = 0; shield.perfectUsed = false;
   shield.flash = 0; shield.slowRemaining = 0; shield.effect = null;
+  beginEvolutionShieldCapture();
   updateShieldDisplay();
 }
 function drawShield() {

@@ -8,6 +8,7 @@
   <title>星际突围 · 深空远征</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff414e' d='M30 16 3 3 9 16 3 29Z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="guide.css">
   <script src="audio.js" defer></script>
   <script src="ship-renderer.js" defer></script>
   <script src="boss-art.js" defer></script>
@@ -28,6 +29,10 @@
   <script src="battlefield-events.js" defer></script>
   <script src="ace.js" defer></script>
   <script src="gravity.js" defer></script>
+  <script src="progression.js" defer></script>
+  <script src="evolution-weapons.js" defer></script>
+  <script src="evolution-preview.js" defer></script>
+  <script src="guide.js" defer></script>
   <script src="game.js" defer></script>
 </head>
 <body>
@@ -44,7 +49,10 @@
           <span class="eyebrow"><span></span> 赤焰战机 / CRIMSON</span>
           <h1>星际<span>突围</span></h1>
           <p class="intro">穿过行星的晨昏线，深入敌舰的阴影。</p>
-          <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">→</span></button>
+          <div class="start-actions">
+            <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">→</span></button>
+            <button id="guide-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="flight-guide">玩法说明</button>
+          </div>
           <p class="start-caption">方向键 / WASD 操控 · 空格贯星炮 · V 护盾<br>精准格挡 → 3 秒内空格速蓄连携炮<br>Shift 切换扩散 / 聚焦 · 连击开启暴走<br>交锋王牌 · 拆毁武装 · 截获补给<br>持续穿越五片星域 · 击破首领选择进化</p>
           <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>
         </div>
@@ -100,26 +108,26 @@
           <div class="evolution-cards">
             <button id="evolution-card-pierce" class="evolution-card" type="button" data-choice="pierce" data-tone="pierce">
               <span class="evolution-card-top"><span class="evolution-card-level">0级 → 1级</span><kbd>1</kbd></span>
-              <svg class="evolution-card-icon" viewBox="0 0 200 80" aria-hidden="true"><path class="evolution-icon-glow" d="M47 12 125 30 180 40 125 50 47 68 76 42Z"/><path d="m37 21 74 11 37 8-37 8-74 11 18-19Z"/><path class="evolution-icon-core" d="m82 35 62 5-62 5 13-5Z"/><path class="evolution-icon-line" d="m101 24 46 7m-46 25 46-7m6-12 30 3-30 3"/></svg>
+              <canvas class="evolution-card-preview" width="320" height="112" aria-hidden="true"></canvas>
               <strong class="evolution-card-title">破阵翼刃</strong>
-              <span class="evolution-card-effect">普通子弹额外穿透 1 个敌人，沿途伤害不衰减。</span>
-              <span class="evolution-card-art">青白翼刃与双侧炮管逐级展开。</span>
+              <span class="evolution-card-effect">解锁双翼副炮，主炮增伤并额外穿透一架敌机。</span>
+              <span class="evolution-card-art">后续可解锁蓄能穿甲炮。</span>
               <span class="evolution-card-action">选择</span>
             </button>
             <button id="evolution-card-blast" class="evolution-card" type="button" data-choice="blast" data-tone="blast">
               <span class="evolution-card-top"><span class="evolution-card-level">0级 → 1级</span><kbd>2</kbd></span>
-              <svg class="evolution-card-icon" viewBox="0 0 200 80" aria-hidden="true"><path class="evolution-icon-glow" d="m137 7 8 20 25-12-14 23 26 12-29 2-9 21-13-21-25 9 13-20-17-19 27 5Z"/><path d="m32 18 60 11 31 11-31 11-60 11 18-22Z"/><path class="evolution-icon-core" d="m72 34 45 6-45 6 8-6Z"/><path class="evolution-icon-line" d="m55 30 20 3m-20 17 20-3m65-17 6 10-6 10"/></svg>
-              <strong class="evolution-card-title">焚星爆破</strong>
-              <span class="evolution-card-effect">普通子弹击毁敌机后，爆炸对周围 105 范围造成 2 倍子弹伤害。</span>
-              <span class="evolution-card-art">橙红爆破舱逐级增设。对首领每次最多造成 1% 伤害。</span>
+              <canvas class="evolution-card-preview" width="320" height="112" aria-hidden="true"></canvas>
+              <strong class="evolution-card-title">星隼僚机</strong>
+              <span class="evolution-card-effect">出动一架僚机，在侧翼自行瞄准射击。</span>
+              <span class="evolution-card-art">后续可扩为双机编队，协同齐射。</span>
               <span class="evolution-card-action">选择</span>
             </button>
             <button id="evolution-card-aegis" class="evolution-card" type="button" data-choice="aegis" data-tone="aegis">
               <span class="evolution-card-top"><span class="evolution-card-level">0级 → 1级</span><kbd>3</kbd></span>
-              <svg class="evolution-card-icon" viewBox="0 0 200 80" aria-hidden="true"><ellipse class="evolution-icon-glow" cx="103" cy="40" rx="72" ry="32"/><path d="m44 20 62 11 39 9-39 9-62 11 18-20Z"/><path class="evolution-icon-core" d="m83 35 54 5-54 5 11-5Z"/><path class="evolution-icon-line" d="M165 24q13 16 0 32M28 25q-10 15 0 30m48-40 4 50"/></svg>
+              <canvas class="evolution-card-preview" width="320" height="112" aria-hidden="true"></canvas>
               <strong class="evolution-card-title">赤金壁垒</strong>
-              <span class="evolution-card-effect">开启护盾时，清除周围 180 范围的敌方炮弹。</span>
-              <span class="evolution-card-art">红金侧甲与能量环逐级展开；激光和雷区仍需躲避。</span>
+              <span class="evolution-card-effect">护盾可吸收接触到的实体敌弹，结束时朝前反击。</span>
+              <span class="evolution-card-art">升级后吸收上限增加，护盾充能更快。</span>
               <span class="evolution-card-action">选择</span>
             </button>
           </div>
@@ -140,6 +148,37 @@
       </section>
       <footer class="lesson-note"><span class="lesson-badge">正式出击</span><p id="control-instructions">方向键 / WASD 移动<span class="training-note"> · 自动射击 · Shift 切换姿态 · 空格大招 · V 护盾</span></p></footer>
     </section>
+    <dialog id="flight-guide" class="flight-guide" aria-labelledby="flight-guide-title" aria-describedby="flight-guide-intro">
+      <form class="flight-guide-content" method="dialog">
+        <header class="flight-guide-heading">
+          <span class="eyebrow"><span></span> 飞行手册 / FLIGHT MANUAL</span>
+          <h2 id="flight-guide-title" tabindex="-1" autofocus>玩法说明</h2>
+          <p id="flight-guide-intro">战机自动向右开火。上下移动对准敌机，看到粉色瞄准线就换个高度躲开。</p>
+        </header>
+        <div class="flight-guide-columns">
+          <section class="flight-guide-section" aria-labelledby="flight-guide-keys-title">
+            <h3 id="flight-guide-keys-title">飞行与按键</h3>
+            <dl class="flight-guide-keys">
+              <div><dt><kbd>方向键</kbd> <kbd>WASD</kbd></dt><dd>向四个方向移动</dd></div>
+              <div><dt><kbd>Shift</kbd></dt><dd>切换扩散和聚焦射击</dd></div>
+              <div><dt><kbd>V</kbd></dt><dd>护盾充好后开启，保护战机 2 秒</dd></div>
+              <div><dt><kbd>空格</kbd></dt><dd>命中敌军积攒能量，存好一发后释放贯星炮</dd></div>
+            </dl>
+          </section>
+          <section class="flight-guide-section" aria-labelledby="flight-guide-tips-title">
+            <h3 id="flight-guide-tips-title">战斗与升级</h3>
+            <ul class="flight-guide-tips">
+              <li><strong>躲开敌机和敌弹。</strong>撞机或中弹会扣生命，打不到的敌机可以放过去。</li>
+              <li><strong>射中能量球。</strong><span class="guide-orb-blue">蓝球提攻速</span>、<span class="guide-orb-yellow">黄球加弹道</span>、<span class="guide-orb-red">红球加伤害</span>、<span class="guide-orb-green">绿球回生命</span>。</li>
+              <li><strong>击败首领后选进化。</strong>选择破阵翼刃、星隼僚机或赤金壁垒，获得新的战斗能力。</li>
+            </ul>
+          </section>
+        </div>
+        <footer class="flight-guide-actions">
+          <button class="primary-button" type="submit">明白了 <span aria-hidden="true">→</span></button>
+        </footer>
+      </form>
+    </dialog>
     <p id="status" class="sr-only" role="status" aria-live="polite">开始画面已就绪。</p>
   </main>
 </body>

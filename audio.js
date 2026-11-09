@@ -384,11 +384,12 @@ const gameAudio = (() => {
     overdriveMusic = nextOverdrive;
     if (changed) reconcile();
   }
-  function shoot(overdrive = false) {
+  function shoot(overdrive = false, tier = 1) {
     if (!canPlay()) return;
     const time = audio.currentTime;
     if (time - lastShotTime < 0.043) return;
     lastShotTime = time;
+    const weight = Math.min(4, Math.max(0, tier - 1));
     if (overdrive) {
       // 保留清晰的短射击节奏，以较低的主音和低频脉冲表现引擎过载。
       note({ time, duration: 0.065, frequency: 920, endFrequency: 320,
@@ -399,10 +400,12 @@ const gameAudio = (() => {
         type: "sine", volume: 0.07, cutoff: 360 });
       return;
     }
-    note({ time, duration: 0.043, frequency: 1400, endFrequency: 510,
+    note({ time, duration: 0.043 + weight * .005, frequency: 1400 / (1 + weight * .12), endFrequency: 510 / (1 + weight * .1),
       type: "triangle", volume: 0.082, cutoff: 3300 });
     note({ time, duration: 0.023, frequency: 2100, endFrequency: 1050,
       type: "square", volume: 0.016, cutoff: 2800 });
+    if (weight) note({ time, duration: .055, frequency: 145 - weight * 12, endFrequency: 75,
+      type: "sine", volume: .025 + weight * .006, cutoff: 400 });
   }
   function overdrive() {
     if (!canPlay()) return;

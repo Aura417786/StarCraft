@@ -92,7 +92,7 @@ function updateEnemyProjectiles(seconds) {
   }
 }
 function enemyShotHitsPlayer(shot) {
-  if (shieldInterceptsProjectile(shot)) return true;
+  if (consumeEvolutionShieldProjectile(shot)) return true;
   // 用双方相对移动检测擦身而过，避免低帧率时穿过战机却不受伤。
   const x0 = shot.previousX - (player.previousX ?? player.x);
   const y0 = shot.previousY - (player.previousY ?? player.y);
