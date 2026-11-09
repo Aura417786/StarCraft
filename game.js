@@ -38,7 +38,7 @@ let windowActive = true;
 // interval 是发射间隔（秒），speed 是子弹每秒前进的距离。
 const weapon = { interval: 0.2, speed: 720, length: 26, damage: 1, speedLevel: 1, lanes: 1, tier: 1, damageOverflow: 0, rateOverflow: 0 };
 // 攻速仍持续成长；过密的连续射击合并伤害，每轮最多绘制 4 条弹道。
-const firingRules = { baseRate: 5, ratePerLevel: 0.75, renderInterval: 0.05 };
+const firingRules = { baseRate: 5, ratePerLevel: 1.25, renderInterval: 0.05 };
 const maxWeaponLanes = 4;
 // 第四阶再次使用绿色；红色之后从黄色继续循环，阶数不封顶。
 const weaponPalettes = [
@@ -430,11 +430,12 @@ function applyPowerup(type) {
     return true;
   }
   const gain = powerupGainForTime(type);
-  const previousTier = weapon.tier;
-  let damageBoost = 0;
+  const previousTier = weapon.tier, previousLanes = weapon.lanes;
+  let boost = 0;
   if (type === "blue") {
     weapon.speedLevel += gain;
-    progressionGrowRate(gain);
+    const growth = progressionGrowRate(gain);
+    boost = growth.after - growth.before;
     reconcileShotCadence();
   } else if (type === "yellow") {
     // 按单次 +1 依次进位：4 条再加一次变为下一阶 1 条，不丢弃批量增益的余数。
@@ -443,17 +444,25 @@ function applyPowerup(type) {
     weapon.lanes = progress % maxWeaponLanes + 1;
   } else if (type === "red") {
     const growth = progressionGrowDamage(gain);
-    damageBoost = growth.after - growth.before;
+    boost = growth.after - growth.before;
   }
   updateWeaponDisplay();
   const palette = weaponPalette();
-  const extra = progressionFormatLog((weapon.tier - previousTier) * Math.log(progressionRules.tierBonus));
-  const laneCount = weapon.lanes + "/" + maxWeaponLanes;
-  powerupNotice.textContent = type === "yellow" && weapon.tier > previousTier
-    ? tr(`弹幕晋升 ${weapon.tier}阶 · 额外火力 ×${extra} · ${palette.name} · ${laneCount}条`, `Tier ${weapon.tier} unlocked · Bonus ×${extra} · ${palette.english} · ${laneCount} lanes`)
-    : type === "red" ? tr("单发伤害 ×", "Damage per shot ×") + progressionFormatLog(damageBoost) + " · " + damageDisplay.textContent
-    : tr(details.label, details.english) + " +" + gain + " · "
-      + (type === "blue" ? speedDisplay.textContent : type === "yellow" ? lanesDisplay.textContent : damageDisplay.textContent);
+  const multiplier = progressionFormatLog(boost);
+  if (type === "yellow" && weapon.tier > previousTier) {
+    const extra = progressionFormatLog(Math.log(weapon.lanes / previousLanes)
+      + (weapon.tier - previousTier) * Math.log(maxWeaponLanes * progressionRules.tierBonus));
+    powerupNotice.textContent = tr(`弹幕晋升 · ${palette.name} · 火力 ×${extra} · ${lanesDisplay.textContent}`,
+      `Tier up · ${palette.english} · Power ×${extra} · ${lanesDisplay.textContent}`);
+  } else if (type === "yellow") {
+    powerupNotice.textContent = tr(`弹道 ${previousLanes} → ${weapon.lanes} 条`, `Lanes ${previousLanes} → ${weapon.lanes}`);
+  } else if (type === "blue") {
+    powerupNotice.textContent = tr("攻速 ×", "Fire rate ×") + multiplier + " · " + speedDisplay.textContent;
+  } else {
+    powerupNotice.textContent = tr("单发伤害 ×", "Damage per shot ×") + multiplier + " · " + damageDisplay.textContent;
+  }
+  const muzzle = muzzlePosition();
+  combatBurst(muzzle.x, muzzle.y, .65, details.color);
   powerupNotice.dataset.type = type;
   powerupNotice.hidden = false;
   upgradeNoticeTime = 2;
@@ -489,20 +498,22 @@ function updateShooting(seconds) {
     const palette = weaponPalette();
     // High rates group visible volleys. Damage held during each gap goes into the next packet.
     const grouped = weapon.speedLevel >= 8 && interval <= .10;
-    const heavyPacket = grouped && pendingShots > 1;
+    const packetStrength = grouped ? Math.min(0.22, Math.log2(pendingShots) * .05) : 0;
+    const damageStrength = .26 * (1 - Math.exp(-progressionBaseDamageLog() / 2));
     for (const lane of shotLanes()) {
       const angle = lane.angle, overdrive = isOverdriveActive();
       const tierShape = Math.min(4, weapon.tier - 1);
-      const halfHeight = (firingStyle.mode === "focus" ? 2.5 + Math.log2(weapon.lanes) * 0.65 : 2.5) * (1 + tierShape * .12) * (overdrive ? 1.5 : 1) * (heavyPacket ? 1.08 : 1);
+      const halfHeight = (firingStyle.mode === "focus" ? 2.5 + Math.log2(weapon.lanes) * 0.65 : 2.5) * (1 + tierShape * .12) * (overdrive ? 1.5 : 1) * (1 + packetStrength + damageStrength);
       bullets.push({ x: muzzle.x + 3, previousX: muzzle.x + 3, y: muzzle.y + lane.offset, previousY: muzzle.y + lane.offset,
         angle, vx: Math.cos(angle) * weapon.speed, vy: Math.sin(angle) * weapon.speed,
-        halfHeight, length: weapon.length + tierShape * 5, overdrive, mode: firingStyle.mode, tier: weapon.tier,
+        halfHeight, length: weapon.length * (1 + packetStrength + damageStrength) + tierShape * 5, overdrive, mode: firingStyle.mode, tier: weapon.tier,
         piercesLeft: evolutionPierceCount(), hitTargets: new Set(),
         damage: projectileDamage() * pendingShots * lane.weight * evolutionMainDamageMultiplier(),
         damageLog: weaponDamageLog() + Math.log(pendingShots) + Math.log(lane.weight) + Math.log(evolutionMainDamageMultiplier()), color: palette.color, core: palette.core });
     }
     pendingShots = 0;
-    renderShotCooldown = grouped ? highRateBurstSpacing[burstStep] : firingRules.renderInterval;
+    const burstTempo = 0.92 + 0.8 * interval;
+    renderShotCooldown = grouped ? highRateBurstSpacing[burstStep] * burstTempo : firingRules.renderInterval;
     burstStep = grouped ? (burstStep + 1) % highRateBurstSpacing.length : 0;
     muzzleFlash = 0.055;
     gameAudio.shoot(isOverdriveActive(), weapon.tier);
@@ -543,7 +554,6 @@ function enemyHealthForTime(time = battleTime) {
 function enemyHealthLogForTime() {
   return progressionEnemyHealthLog(battleTime);
 }
-function enemyIntervalForTime() { return Math.max(0.65, enemyRules.interval - battleTime * 0.0018); }
 function enemySpeedForTime() {
   return enemyRules.speed + 235 * (1 - Math.exp(-battleTime / 300)) + Math.sqrt(battleTime) * 1.8;
 }
@@ -551,7 +561,13 @@ function applyEnemyHit(enemy, bullet) {
   const before = enemy.hp;
   if (enemy.healthLog !== undefined) {
     const damageLog = bullet.damageLog ?? Math.log(bullet.damage ?? weapon.damage);
-    enemy.hp = Math.max(0, enemy.hp - Math.exp(Math.min(0, damageLog - enemy.healthLog)));
+    let damage = Math.exp(Math.min(0, damageLog - enemy.healthLog));
+    // Fresh late heavy fighters absorb the excess from the first oversized projectile.
+    if (enemy.reinforced && before === enemy.maxHp && !bullet.source && damage > enemyCombatRules.armorHitLimit) {
+      damage = enemyCombatRules.armorHitLimit;
+      combatBurst(enemy.x - enemy.width * .3, enemy.y, .7, "#d0e9ff", true);
+    }
+    enemy.hp = Math.max(0, enemy.hp - damage);
     if (enemy.hp < 1e-12) enemy.hp = 0;
   } else {
     const damage = bullet.damage ?? (bullet.damageLog !== undefined
@@ -600,6 +616,7 @@ function spawnEnemy(kind = chooseEnemyKind()) {
   // 第一架突击机居中直飞，方便新手体验命中；后续同类开始波浪飞行。
   enemies.push({ kind, x, previousX: x, y, previousY: y, baseY: y, waveAmplitude, age: 0,
     width, height: width * type.height, hp: 1, maxHp: 1, displayHp: 1, healthLog, hitFlash: 0,
+    reinforced: kind === "armored" && battleTime >= enemyCombatRules.armorReinforcementTime,
     points: type.points, speed: enemySpeedForTime() * type.speed * (0.9 + Math.random() * 0.2),
     gunPhase: "entry", gunTime: 0, gunShots: 0, holdX: viewport.width * (0.72 + lane * 0.1) });
   enemyIntroduced.add(kind);

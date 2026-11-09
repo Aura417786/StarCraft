@@ -6,10 +6,15 @@ const enemyTypes = {
   armored: { name: "重甲机", health: 2.8, speed: 0.65, width: 1.18, height: 0.72, points: 200 },
   gunner: { name: "炮击机", health: 1.5, speed: 0.8, width: 1.03, height: 0.62, points: 150 },
 };
-const enemyCombatRules = { armorArrival: 18, gunnerArrival: 40, maxGunners: 2,
-  warning: 0.9, recovery: 0.65, shotsPerGunner: 2, maxProjectiles: 20, projectileLife: 8 };
+const enemyCombatRules = { armorArrival: 18, gunnerArrival: 40, maxGunners: 2, minSpawnInterval: 0.42, spawnRampSeconds: 170,
+  armorReinforcementTime: 120, armorHitLimit: 0.85, warning: 0.9, recovery: 0.65, shotsPerGunner: 2, maxProjectiles: 20, projectileLife: 8 };
 const enemyProjectiles = [];
 const enemyIntroduced = new Set();
+
+function enemyIntervalForTime() {
+  const minimum = enemyCombatRules.minSpawnInterval;
+  return minimum + (enemyRules.interval - minimum) * Math.exp(-battleTime / enemyCombatRules.spawnRampSeconds);
+}
 
 function chooseEnemyKind(roll = Math.random()) {
   const gunnerAvailable = battleTime >= enemyCombatRules.gunnerArrival

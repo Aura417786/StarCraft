@@ -121,6 +121,20 @@ function activeBoss(type = 0, duo = false) {
 function setEnemy(x = 800, y = 350, hp = 100) {
   execute(`spawnEnemy('scout');var target=enemies.at(-1);Object.assign(target,{x:${x},previousX:${x},y:${y},previousY:${y},waveAmplitude:0,healthLog:Math.log(${hp})});`);
 }
+function placeWaveTarget(kind, distance = 300) {
+  execute(`{
+    spawnEnemy(${JSON.stringify(kind)});
+    const target = enemies.at(-1);
+    target.x = target.previousX = player.x + ${distance};
+    target.y = target.previousY = player.y;
+  }`);
+}
+function fireSinglePacket() {
+  execute('shotCooldown=renderShotCooldown=0;updateShooting(0);shotCooldown=999;');
+  const packet = snapshot('bullets.at(-1)');
+  execute('updateShooting(.45);resolveProjectileHits();');
+  return packet;
+}
 function supportFrames(count) {
   execute(`for(let frame=0;frame<${count};frame++)updateEvolutionWeapons(.05);`);
 }
@@ -133,17 +147,68 @@ function shieldContacts(count, family = 'enemyProjectiles') {
   });`);
 }
 
-check('sweeping a red orb improves main fire without raising the health of same-stage arrivals', () => {
-  isolated('battleTime=96;spawnEnemy("armored");');
-  const before=snapshot('({health:enemies[0].healthLog,damage:weaponDamageLog()})');
-  execute(`powerups.push({type:"red",x:player.x+240,previousX:player.x+240,y:player.y,previousY:player.y,radius:16});
-    shotCooldown=renderShotCooldown=0;updateShooting(0);shotCooldown=999;updateShooting(.4);resolveProjectileHits();spawnEnemy("armored");`);
+check('a first red orb gives a bigger shot that deals double damage to the same existing enemy', () => {
+  isolated('battleTime=96;');
+  placeWaveTarget('armored');
+  const originalHealth = execute('enemies[0].healthLog');
+  const originalPacket = fireSinglePacket();
+  const healthAfterOriginal = execute('enemies[0].hp');
+  assert.ok(healthAfterOriginal < 1 && healthAfterOriginal > 0);
+  execute('powerups.push({type:"red",x:player.x+180,previousX:player.x+180,y:player.y,previousY:player.y,radius:16});');
+  fireSinglePacket();
   assert.equal(execute('powerups.length'),0);
-  assert.equal(execute('enemies[0].healthLog'),before.health);
-  assert.equal(execute('enemies[1].healthLog'),before.health);
-  assert.ok(execute('weaponDamageLog()')>before.damage);
-  execute('enemies.length=0;spawnEnemy("armored");enemies[0].x=enemies[0].previousX=player.x+260;enemies[0].y=enemies[0].previousY=player.y;shotCooldown=0;renderShotCooldown=0;updateShooting(0);shotCooldown=999;updateShooting(.45);resolveProjectileHits();');
-  near(execute('1-enemies[0].hp'),2*Math.exp(-before.health));
+  assert.equal(execute('enemies[0].hp'), healthAfterOriginal);
+  const upgradedPacket = fireSinglePacket();
+  near(healthAfterOriginal - execute('enemies[0].hp'), 2 * (1 - healthAfterOriginal));
+  assert.ok(upgradedPacket.length > originalPacket.length && upgradedPacket.halfHeight > originalPacket.halfHeight);
+  execute('spawnEnemy("armored");');
+  assert.deepEqual(snapshot('enemies.map(enemy=>enemy.healthLog)'), [originalHealth, originalHealth]);
+});
+check('first blue and yellow orbs add real firing cadence and independent symmetric lanes', () => {
+  function fire(type) {
+    isolated();
+    if (type) {
+      execute(`powerups.push({type:${JSON.stringify(type)},x:player.x+180,previousX:player.x+180,y:player.y,previousY:player.y,radius:16});`);
+      fireSinglePacket();
+      assert.equal(execute('powerups.length'), 0);
+    }
+    execute('resetWeapons();updateShooting(0);');
+    const lanes = snapshot('bullets.map(shot=>({offset:shot.y-player.y,vy:shot.vy,damage:shot.damage}))');
+    execute('for(let frame=0;frame<50;frame++)updateShooting(.02);');
+    return { lanes, rounds: execute('bullets.length') };
+  }
+  const original = fire(), blue = fire('blue'), yellow = fire('yellow');
+  assert.deepEqual(blue.lanes, original.lanes);
+  assert.ok(blue.rounds > original.rounds);
+  assert.equal(yellow.lanes.length, 2);
+  assert.equal(yellow.rounds, 2 * original.rounds);
+  assert.ok(yellow.lanes[0].offset < 0 && yellow.lanes[0].vy < 0);
+  near(yellow.lanes[0].offset, -yellow.lanes[1].offset);
+  near(yellow.lanes[0].vy, -yellow.lanes[1].vy);
+  assert.ok(yellow.lanes.every(lane=>lane.damage === original.lanes[0].damage));
+});
+check('the 2:19 tier-three screenshot loadout damages but does not one-shot ordinary wave fighters', () => {
+  for (const kind of ['scout', 'gunner', 'armored']) {
+    isolated(`battleTime=139;weapon.tier=3;weapon.lanes=1;weapon.speedLevel=12;weapon.interval=1/13.96;
+      weapon.damage=628.34/(maxWeaponLanes*progressionRules.tierBonus)**2;firingStyle.mode="focus";`);
+    placeWaveTarget(kind);
+    const shot = fireSinglePacket();
+    near(shot.damage, 628.34);
+    assert.equal(shot.tier, 3);
+    assert.equal(execute('enemies.length'), 1, kind + ' died to the first shot');
+    assert.ok(execute('enemies[0].hp>0&&enemies[0].hp<1'), kind + ' took no damage');
+  }
+});
+check('reinforced armor absorbs an oversized normal shot, then a follow-up can finish it', () => {
+  isolated('battleTime=180;weapon.damage=1e10;');
+  placeWaveTarget('armored');
+  const first = fireSinglePacket();
+  assert.ok(Math.log(first.damage) > execute('enemies[0].healthLog') + Math.log(100));
+  assert.equal(execute('enemies[0].reinforced'), true);
+  near(execute('enemies[0].hp'), 1 - execute('enemyCombatRules.armorHitLimit'));
+  fireSinglePacket();
+  assert.equal(execute('enemies.length'), 0);
+  assert.equal(execute('kills'), 1);
 });
 check('ace, transport and dual Boss births use the same stage after a player upgrades', () => {
   function sample(gear) {
@@ -167,13 +232,23 @@ check('the independent firepower curve grows without a jump at thirty-second bou
     before=right;
   }
 });
-check('high-rate three-beat fire holds every scheduled shot while bounding visible packets', () => {
+check('late three-beat fire holds every scheduled shot and bounds visible packets over sustained fire', () => {
   for(const fps of [20,60,144]) {
-    isolated('weapon.speedLevel=8;weapon.interval=.01;weapon.lanes=4;resetWeapons();updateShooting(0);');
+    isolated('battleTime=600;weapon.speedLevel=8;weapon.interval=.01;weapon.lanes=4;resetWeapons();updateShooting(0);');
     execute(`for(let frame=0;frame<${fps};frame++)updateShooting(1/${fps});`);
     near(execute('bullets.reduce((damage,shot)=>damage+shot.damage,0)+pendingShots*weapon.lanes*projectileDamage()'),404);
     assert.ok(execute('bullets.length')<72);
     assert.ok(execute('bullets.some(shot=>shot.damage>=10)'));
+    const peakVisiblePackets = execute(`(()=>{
+      const seconds = 1/${fps};
+      let peak = 0;
+      for(let frame=0;frame<20*${fps};frame++){
+        updateShooting(seconds);updatePowerups(seconds);
+        peak = Math.max(peak,bullets.length);
+      }
+      return peak;
+    })()`);
+    assert.ok(peakVisiblePackets <= 76, `${fps} FPS retained ${peakVisiblePackets} packets`);
   }
 });
 check('extreme timed blue, red and yellow upgrades retain finite projectiles and readable indicators', () => {

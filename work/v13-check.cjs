@@ -136,6 +136,34 @@ check('v13 production modules load in index order without missing hooks', () => 
   for (const name of ['updateFormations','drawFormationSignals','updateBattlefieldEvents','drawBattlefield','projectileBossHit','drawBossComponents'])
     assert.equal(execute('typeof '+name),'function');
 });
+check('normal wave scheduler sends more enemies per second as the battle progresses', () => {
+  const arrivals = [0, 120, 300, 600].map(time => {
+    isolated(`battleTime = ${time}; enemyCooldown = enemyIntervalForTime();`);
+    const start = execute('enemySpawnCount');
+    // Measure the production scheduler independently of the occupancy cap.
+    execute(`for (let frame = 0; frame < 240; frame++) {
+      updateEncounter(0.05);
+      enemies.length = 0;
+    }`);
+    return execute('enemySpawnCount') - start;
+  });
+  assert.ok(arrivals[0] >= 10 && arrivals[0] <= 11, JSON.stringify(arrivals));
+  assert.ok(arrivals[3] >= 26 && arrivals[3] <= 28, JSON.stringify(arrivals));
+  assert.ok(arrivals.every((count, index) => index === 0 || count > arrivals[index - 1]), JSON.stringify(arrivals));
+});
+check('late wave cadence still respects the enemy cap and Boss warning without a backlog', () => {
+  isolated(`battleTime = 600;
+    for (let i = 0; i < enemyRules.maxOnScreen; i++) spawnEnemy("scout");
+    enemyCooldown = 0;`);
+  const cap = execute('enemyRules.maxOnScreen');
+  execute('updateEncounter(0.05);');
+  assert.equal(execute('enemies.length'), cap);
+  isolated('battleTime = 600; nextBossTime = battleTime + bossRules.warning; enemyCooldown = 0;');
+  execute('for (let i = 0; i < 20; i++) updateEncounter(0.05);');
+  assert.equal(execute('enemies.length'), 0);
+  execute('nextBossTime = Infinity; updateEncounter(0.05);');
+  assert.equal(execute('enemies.length'), 1);
+});
 check('formations retain the first 24 seconds for learning normal enemies', () => {
   isolated('battleTime=23.99;formationState.nextTime=24;');
   assert.equal(execute('trySpawnFormation()'),false); execute('updateFormations(.01);');

@@ -9,7 +9,9 @@ Shoot the guns off a boss, upgrade your fighter, and survive five sectors of dee
 ![Star Breaker gameplay](media/gameplay.gif)
 
 - **Disarm bosses.** Destroy their upper or lower gun mounts to shut down the attacks they control. Later battles pit you against two bosses at once.
-- **Evolve your fighter.** Shoot power-up orbs to strengthen your main gun. After a boss victory, choose wing guns, an AI wingman, or a shield that absorbs enemy shots and fires them back.
+- **Upgrade your main gun.** Shoot power-up orbs to fire faster, add firing lanes, or launch harder-hitting rounds. Later orbs can grant several levels at once.
+- **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. After two minutes, newly spawned armored fighters can survive a single heavy hit from your main gun.
+- **Evolve after boss victories.** Choose wing guns, an AI wingman, or a shield that absorbs enemy shots and fires them back.
 - **Time your shield.** A perfect block gives you three seconds to trigger a faster charge for a cannon shot you already have stored.
 - **Travel through five sectors.** Fly past planets, debris, and capital ships. Each galaxy casts a different tint on the Crimson Fighter's wings and canopy.
 

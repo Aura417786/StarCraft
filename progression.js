@@ -2,7 +2,7 @@
 
 // Player gains and the enemy schedule are deliberately independent. Extra pickups
 // and evolution can put the player ahead of this fixed, time-based reference.
-const progressionRules = { tierBonus: 1.12, redMultiplier: 1.12, blueMultiplier: 1.08,
+const progressionRules = { tierBonus: 1.12, redMultiplier: 1.16, blueMultiplier: 1.10,
   maxPhysicalRate: 200, stageSeconds: 30 };
 function progressionLogSum(a, b) {
   const high = Math.max(a, b), low = Math.min(a, b);
@@ -38,23 +38,51 @@ function progressionExpectedGain(time, step) {
   // Average one pickup of each color every 27 seconds, with the same time gains.
   return (step * periods * (periods + 1) / 2 + remainder * (periods + 1)) / 27;
 }
+function progressionLaneLog(gain) {
+  const whole = Math.floor(gain), fraction = gain - whole;
+  const laneLog = level => Math.floor(level / maxWeaponLanes) * Math.log(maxWeaponLanes * progressionRules.tierBonus)
+    + Math.log(level % maxWeaponLanes + 1);
+  return laneLog(whole) * (1 - fraction) + laneLog(whole + 1) * fraction;
+}
 function progressionReferenceAt(time) {
+  // Bosses, the ace and transports retain their existing encounter reference.
   const red = progressionExpectedGain(time, 180), blue = red;
-  const yellow = progressionExpectedGain(time, 360), whole = Math.floor(yellow), fraction = yellow - whole;
-  const laneLog = level => Math.floor(level / 4) * Math.log(4 * progressionRules.tierBonus) + Math.log(level % 4 + 1);
-  const damageLog = Math.log(1 + Math.min(9, red)) + Math.max(0, red - 9) * Math.log(progressionRules.redMultiplier);
-  const rateLog = Math.log(5 + .75 * Math.min(10, blue)) + Math.max(0, blue - 10) * Math.log(progressionRules.blueMultiplier);
-  return damageLog + rateLog + laneLog(whole) * (1 - fraction) + laneLog(whole + 1) * fraction;
+  const yellow = progressionExpectedGain(time, 360);
+  const damageLog = Math.log(1 + Math.min(9, red)) + Math.max(0, red - 9) * Math.log(1.12);
+  const rateLog = Math.log(5 + .75 * Math.min(10, blue)) + Math.max(0, blue - 10) * Math.log(1.08);
+  return damageLog + rateLog + progressionLaneLog(yellow);
 }
 function progressionReferenceDpsLog(time = battleTime) {
   const t = Math.max(0, Number.isFinite(time) ? time : 0), period = progressionRules.stageSeconds;
   const start = Math.floor(t / period) * period, mix = (t - start) / period;
   return progressionReferenceAt(start) * (1 - mix) + progressionReferenceAt(start + period) * mix;
 }
+function progressionWaveReferenceAt(time) {
+  // Account for the extra RGB orbs supplied by combos, transports and Boss clears.
+  const extraGain = step => Math.max(0, progressionExpectedGain(time, step) - progressionExpectedGain(45, step)) * 27 / 145;
+  const red = progressionExpectedGain(time, 180) + extraGain(180);
+  const yellow = progressionExpectedGain(time, 360) + extraGain(360);
+  const weaponLog = (gain, base, increment, multiplier) => {
+    const additiveLevels = Math.floor(1 / (multiplier - 1) - base / increment) + 1;
+    return Math.log(base + increment * Math.min(gain, additiveLevels))
+      + Math.max(0, gain - additiveLevels) * Math.log(multiplier);
+  };
+  return weaponLog(red, 1, 1, progressionRules.redMultiplier)
+    + weaponLog(red, firingRules.baseRate, firingRules.ratePerLevel, progressionRules.blueMultiplier)
+    + progressionLaneLog(yellow);
+}
 function progressionEnemyHealthLog(time = battleTime) {
-  const t = Math.max(0, time), baseline = enemyHealthForTime(t);
-  if (t < 20) return Math.log(baseline);
-  return Math.max(Math.log(baseline), progressionReferenceDpsLog(t) + Math.log(.38 + Math.min(.35, t / 1200)));
+  const t = Math.max(0, time), baseline = Math.log(enemyHealthForTime(t));
+  if (t < 20) return baseline;
+  const endurance = .38 + Math.min(.35, t / 1200);
+  const reference = progressionReferenceDpsLog(t);
+  if (t <= 55) return Math.max(baseline, reference + Math.log(endurance));
+  const period = progressionRules.stageSeconds;
+  const start = Math.floor(t / period) * period, mix = (t - start) / period;
+  const waveReference = progressionWaveReferenceAt(start) * (1 - mix) + progressionWaveReferenceAt(start + period) * mix;
+  const ramp = 1 - Math.exp(-(t - 55) / 70);
+  return Math.max(baseline, reference + Math.log(endurance),
+    reference + (waveReference - reference) * Math.min(1, (t - 55) / 35) + Math.log(endurance + .88 * ramp));
 }
 function progressionBossHealthLog(time, endurance) {
   return progressionReferenceDpsLog(time) + Math.log(endurance);

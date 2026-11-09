@@ -413,7 +413,7 @@ check('three lanes stay symmetric and two blue upgrades increase fire rate moder
   execute('enemies.length=0;enemyCooldown=999;applyPowerup("blue");applyPowerup("blue");applyPowerup("yellow");applyPowerup("yellow");applyPowerup("red");applyPowerup("red");resetWeapons();updateShooting(0);');
   assert.equal(shots().length,3); assert.equal(new Set(shots().map(b=>b.y)).size,3);
   assert.equal(shots()[1].y,position().y); frames(20);
-  assert.equal(shots().length,21);
+  assert.equal(shots().length,24);
   assert.equal(execute('bullets.every(bullet=>Math.abs(bullet.damage-3)<1e-8)'),true);
 });
 check('red upgrade affects only bullets fired after the upgrade', () => {
@@ -940,22 +940,22 @@ check('yellow batched gains preserve every step across promotions at the new slo
   }
 });
 check('blue increases fire rate moderately and late blue/red gains do not change the current tier', () => {
-  isolatedBattle('applyPowerup("blue");'); near(1/weaponState().interval,5.75);
-  execute('applyPowerup("blue");'); near(1/weaponState().interval,6.5);
+  isolatedBattle('applyPowerup("blue");'); near(1/weaponState().interval,6.25);
+  execute('applyPowerup("blue");'); near(1/weaponState().interval,7.5);
   execute('weapon.tier=4;weapon.lanes=3;');
   for(const [time,gain] of [[0,1],[180,2],[360,3],[3600,21]]) {
     execute('battleTime='+time); const before=weaponState(); execute('applyPowerup("blue");applyPowerup("red");');
     const after=weaponState(); assert.equal(after.speedLevel-before.speedLevel,gain);
-    near(after.damage,Math.max(before.damage+gain,before.damage*1.12**gain));
-    near(1/after.interval,Math.max(1/before.interval+.75*gain,1/before.interval*1.08**gain));
+    near(after.damage,Math.max(before.damage+gain,before.damage*1.16**gain));
+    near(1/after.interval,Math.max(1/before.interval+1.25*gain,1/before.interval*1.10**gain));
     assert.equal(after.tier,4); assert.equal(after.lanes,3);
   }
 });
 check('collecting every scheduled orb for five minutes no longer jumps through many projectile tiers', () => {
   isolatedBattle();
   execute('for(let time=3,index=0;time<=300;time+=7,index++){battleTime=time;applyPowerup(["blue","yellow","red","blue","yellow","red","blue","yellow","red","heal"][index%10]);}');
-  const result=weaponState(); assert.ok(result.tier>=3&&result.tier<=4); assert.ok(result.damage>20&&result.damage<35);
-  assert.ok(1/result.interval>18&&1/result.interval<30); assert.ok(result.lanes>=1&&result.lanes<=4);
+  const result=weaponState(); assert.ok(result.tier>=3&&result.tier<=4); assert.ok(result.damage>36&&result.damage<46);
+  assert.ok(1/result.interval>34&&1/result.interval<45); assert.ok(result.lanes>=1&&result.lanes<=4);
 });
 check('opening enemies die in one hit while later enemies keep a frozen growing health snapshot', () => {
   isolatedBattle('battleTime=19.9;spawnEnemy("scout");'); assert.equal(scene().enemies[0].healthLog,0);
@@ -984,7 +984,7 @@ check('upgrades during a fight still improve damage against an already spawned e
   execute('applyEnemyHit(enemies[0],{damageLog:weaponDamageLog()});'); const firstLoss=1-scene().enemies[0].hp;
   const before=scene().enemies[0].hp; execute('applyPowerup("red");applyEnemyHit(enemies[0],{damageLog:weaponDamageLog()});');
   const nextLoss=before-scene().enemies[0].hp;
-  assert.ok(nextLoss>firstLoss); near(nextLoss/firstLoss,1.12**3,1e-7); assert.equal(scene().enemies[0].healthLog,birth);
+  assert.ok(nextLoss>firstLoss); near(nextLoss/firstLoss,1.16**3,1e-7); assert.equal(scene().enemies[0].healthLog,birth);
 });
 check('huge-tier actual projectiles damage normalized enemies without Infinity-minus-Infinity or lost kills', () => {
   isolatedBattle('battleTime=3600;weapon.tier=500;weapon.damage=1000;spawnEnemy("scout");enemies[0].x=500;enemies[0].previousX=500;enemies[0].y=player.y;enemies[0].healthLog=weaponDamageLog()+Math.log(4);resetWeapons();updateShooting(0);bullets[0].previousX=400;bullets[0].x=500;resolveProjectileHits();');
@@ -999,7 +999,7 @@ check('enemy health and speed continue increasing while spawn cadence remains pl
   for(const time of [0,20,60,120,300,1800,36000]) {
     execute(`battleTime=${time};`); const nextHealth=execute('enemyHealthLogForTime()'),nextSpeed=execute('enemySpeedForTime()');
     assert.ok(nextHealth>healthLog); assert.ok(nextSpeed>speed); assert.ok(Number.isFinite(nextHealth));
-    assert.ok(execute('enemyIntervalForTime()')>=.65); healthLog=nextHealth; speed=nextSpeed;
+    assert.ok(execute('enemyIntervalForTime()>=enemyCombatRules.minSpawnInterval')); healthLog=nextHealth; speed=nextSpeed;
   }
   assert.ok(execute('enemyHealthForTime()')>1000000);
 });
