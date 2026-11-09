@@ -36,6 +36,7 @@
   line-height: 1.25;
   letter-spacing: .08em;
 }
+.flight-guide h2:focus { outline: none; }
 .flight-guide-heading p {
   margin: 0;
   color: #c1cbd9;
@@ -69,7 +70,11 @@
   white-space: nowrap;
 }
 .flight-guide-keys dd { margin: 0; }
-.flight-guide-keys dd, .flight-guide-tips { color: #c1cbd9; font-size: 13px; line-height: 1.55; }
+.flight-guide-keys dd, .flight-guide-tips, .flight-guide-perfect p { color: #c1cbd9; font-size: 13px; line-height: 1.55; }
+.flight-guide-perfect { margin-top: 14px; padding-top: 12px; border-top: 1px solid #314156; }
+.flight-guide-perfect h4 { margin: 0 0 7px; color: #ffadb7; font-size: 13px; }
+.flight-guide-perfect p { margin: 0; }
+.flight-guide-perfect p + p { margin-top: 6px; }
 .flight-guide-tips { display: grid; gap: 10px; margin: 0; padding-left: 1.2em; }
 .flight-guide-tips strong { color: #f5f2f3; }
 .flight-guide .guide-orb-blue { color: #7ec9ff; }
