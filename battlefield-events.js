@@ -34,7 +34,8 @@ function spawnBattlefieldObject(kind) {
     speed: kind === "wreck" ? 62 : 86, hitFlash: 0, phase: battlefieldEvents.objectCount * 1.7, age: 0 };
   battlefieldEvents.objects.push(object); battlefieldEvents.objectCount++;
   if (battlefieldEvents.objectCount <= 2) announceBattlefieldEvent(kind === "cell"
-    ? "能源罐 · 射爆可清除附近敌弹，并炸伤敌军" : "漂浮残骸 · 可挡普通敌弹，也会挡住主炮");
+    ? tr("能源罐 · 射爆可清除附近敌弹，并炸伤敌军", "Energy canister · Shoot to clear nearby bullets and damage enemies")
+    : tr("漂浮残骸 · 可挡普通敌弹，也会挡住主炮", "Drifting wreckage · Blocks enemy shots and your main gun"));
   return object;
 }
 function spawnSupplyTransport() {
@@ -54,7 +55,7 @@ function spawnSupplyTransport() {
     escort.y = escort.previousY = escort.baseY = clamp(y + side * width * 0.55, flightBounds.top, flightBounds.bottom);
     escort.speed = target.speed * 1.2; escort.waveAmplitude = Math.min(12, escort.waveAmplitude);
   }
-  announceBattlefieldEvent("截获补给运输舰 · 击毁获得三色补给，逃脱无惩罚", 5);
+  announceBattlefieldEvent(tr("截获补给运输舰 · 击毁获得三色补给，逃脱无惩罚", "Supply transport · Shoot it down for three pickups. No penalty if it escapes."), 5);
   return target;
 }
 function updateSupplyTransport(enemy, seconds) {
@@ -71,7 +72,7 @@ function onBattlefieldEnemyDefeated(enemy) {
     powerups.push({ x, previousX: x, y: clamp(enemy.y + (index - 1) * 56, flightBounds.top, flightBounds.bottom),
       radius: powerupRules.radius, type });
   }
-  announceBattlefieldEvent("运输舰截获成功 · 射击散落的蓝、黄、红补给", 4);
+  announceBattlefieldEvent(tr("运输舰截获成功 · 射击散落的蓝、黄、红补给", "Transport intercepted · Shoot the blue, yellow, and red pickups"), 4);
 }
 function updateBattlefieldEvents(seconds) {
   if (!isBattleActive() || seconds <= 0) return;

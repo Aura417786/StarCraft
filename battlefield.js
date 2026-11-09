@@ -3,11 +3,11 @@
 // Original generated cinematic plates, animated as a continuous leftward journey.
 // No backdrop object participates in collision. Preserve open, readable combat lanes.
 const battlefieldSectors = [
-  { id: "orbit", name: "曙光轨道", subtitle: "DAWN / LOW ORBIT", color: "#78c8f4", dark: "#030610", asset: "assets/scenery/orbit-silent.png", anchorY: 0.66, foreground: 0 },
-  { id: "belt", name: "碎星航道", subtitle: "SHATTERED / ASTEROID BELT", color: "#c9a680", dark: "#060710", asset: "assets/scenery/belt-silent.png", anchorY: 0.24, foreground: 0.12 },
-  { id: "wreck", name: "余烬墓场", subtitle: "AFTERMATH / FLEET GRAVEYARD", color: "#ed9d70", dark: "#070610", asset: "assets/scenery/wreck-silent.png", anchorY: 0.22, foreground: 0.08 },
-  { id: "citadel", name: "深空壁垒", subtitle: "CITADEL / CAPITAL SHIP", color: "#82bfc8", dark: "#030810", asset: "assets/scenery/citadel-silent.png", anchorY: 0.16, foreground: 0.05 },
-  { id: "rift", name: "虚空之眼", subtitle: "BEYOND / EVENT HORIZON", color: "#ad9af4", dark: "#050513", asset: "assets/scenery/rift-silent.png", anchorY: 0.20, foreground: 0 },
+  { id: "orbit", name: "曙光轨道", enName: "Dawn Orbit", subtitle: "DAWN / LOW ORBIT", color: "#78c8f4", dark: "#030610", asset: "assets/scenery/orbit-silent.png", anchorY: 0.66, foreground: 0 },
+  { id: "belt", name: "碎星航道", enName: "Shattered Passage", subtitle: "SHATTERED / ASTEROID BELT", color: "#c9a680", dark: "#060710", asset: "assets/scenery/belt-silent.png", anchorY: 0.24, foreground: 0.12 },
+  { id: "wreck", name: "余烬墓场", enName: "Ember Graveyard", subtitle: "AFTERMATH / FLEET GRAVEYARD", color: "#ed9d70", dark: "#070610", asset: "assets/scenery/wreck-silent.png", anchorY: 0.22, foreground: 0.08 },
+  { id: "citadel", name: "深空壁垒", enName: "Deep-Space Citadel", subtitle: "CITADEL / CAPITAL SHIP", color: "#82bfc8", dark: "#030810", asset: "assets/scenery/citadel-silent.png", anchorY: 0.16, foreground: 0.05 },
+  { id: "rift", name: "虚空之眼", enName: "Eye of the Void", subtitle: "BEYOND / EVENT HORIZON", color: "#ad9af4", dark: "#050513", asset: "assets/scenery/rift-silent.png", anchorY: 0.20, foreground: 0 },
 ];
 const sceneryRules = { interval: 75, blend: 10, zoom: 1.28, maxImages: 3 };
 const battlefieldState = { sector: 0, previous: 0, completed: 0, clock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 };
@@ -172,7 +172,7 @@ function drawBattlefield() {
     const emphasis = battlefieldState.titleTime > 0 ? Math.min(1, battlefieldState.titleTime / 1.2) : 0;
     ctx.globalAlpha = 0.55 + emphasis * 0.3; ctx.fillStyle = theme.color;
     ctx.fillRect(x, y - 10, 2, 27); ctx.font = "11px Consolas, Microsoft YaHei, sans-serif";
-    ctx.fillText(theme.name, x + 11, y); ctx.font = "8px Consolas, monospace"; ctx.globalAlpha *= 0.7;
+    ctx.fillText(tr(theme.name, theme.enName), x + 11, y); ctx.font = "8px Consolas, monospace"; ctx.globalAlpha *= 0.7;
     ctx.fillText(theme.subtitle, x + 11, y + 14);
   }
   ctx.restore();

@@ -9,6 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff414e' d='M30 16 3 3 9 16 3 29Z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="guide.css">
+  <script src="i18n.js" defer></script>
   <script src="audio.js" defer></script>
   <script src="ship-renderer.js" defer></script>
   <script src="boss-art.js" defer></script>
@@ -32,6 +33,7 @@
   <script src="progression.js" defer></script>
   <script src="evolution-weapons.js" defer></script>
   <script src="evolution-preview.js" defer></script>
+  <script src="i18n-static.js" defer></script>
   <script src="guide.js" defer></script>
   <script src="game.js" defer></script>
 </head>
@@ -52,6 +54,7 @@
           <div class="start-actions">
             <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">→</span></button>
             <button id="guide-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="flight-guide">玩法说明</button>
+            <button id="language-button" class="secondary-button" type="button" aria-label="切换游戏语言为英文">English</button>
           </div>
           <p class="start-caption">方向键 / WASD 操控 · 空格贯星炮 · V 护盾<br>精准格挡 → 3 秒内空格速蓄连携炮<br>Shift 切换扩散 / 聚焦 · 连击开启暴走<br>交锋王牌 · 拆毁武装 · 截获补给<br>持续穿越五片星域 · 击破首领选择进化</p>
           <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>

@@ -72,7 +72,7 @@ function spawnAceEnemy() {
   enemy.aceAnchorY = enemy.y;
   enemy.aceTargetX = enemy.aceAnchorX; enemy.aceTargetY = enemy.y;
   enemies.push(enemy); aceEncounter.target = enemy; aceEncounter.sequence++;
-  announceAce("敌方王牌进入战区 · 追踪闪避后的航线，抓住冷却空档", 3.5);
+  announceAce(tr("敌方王牌进入战区 · 追踪闪避后的航线，抓住冷却空档", "Enemy ace in range · Track the dodge and strike during cooldown"), 3.5);
   return enemy;
 }
 function finishAceEncounter(enemy, defeated = false, announce = true) {
@@ -81,7 +81,7 @@ function finishAceEncounter(enemy, defeated = false, announce = true) {
   if (aceEncounter.target === enemy) aceEncounter.target = null;
   aceEncounter.warning = 0; aceEncounter.nextTime = battleTime + aceRules.interval;
   clearAceProjectiles();
-  if (announce) announceAce(defeated ? "王牌击落 · +800" : "敌方王牌脱离战区", 2.5);
+  if (announce) announceAce(defeated ? tr("王牌击落 · +800", "Ace down · +800") : tr("敌方王牌脱离战区", "Enemy ace escaped"), 2.5);
   return true;
 }
 function onAceDefeated(enemy) {
@@ -93,7 +93,7 @@ function beginAceRetreat(enemy, bossApproaching = false) {
   if (enemy.acePhase === "retreat") return;
   aceSetPhase(enemy, "retreat"); enemy.aceRoute = null; enemy.aceAim = null;
   enemy.aceDodgeTime = 0; clearAceProjectiles();
-  if (!bossApproaching) announceAce("王牌正在撤离 · 最后一次集火机会", 1);
+  if (!bossApproaching) announceAce(tr("王牌正在撤离 · 最后一次集火机会", "Ace retreating · Last chance to fire"), 1);
 }
 function removeEscapedAce(enemy) {
   const index = enemies.indexOf(enemy);
@@ -129,7 +129,7 @@ function updateAceEncounter(seconds) {
   aceEncounter.warning = aceRules.warning;
   const lane = aceEncounter.sequence % 2 ? 0.7 : 0.3;
   aceEncounter.warningY = flightBounds.top + (flightBounds.bottom - flightBounds.top) * lane;
-  announceAce("敌方王牌接近 · 短暂闪避后会露出反击空档", aceRules.warning + 1.5);
+  announceAce(tr("敌方王牌接近 · 短暂闪避后会露出反击空档", "Enemy ace approaching · Wait for a gap after its dodge"), aceRules.warning + 1.5);
 }
 
 function aceVisibleIncomingBullet(enemy) {
@@ -317,10 +317,14 @@ function drawAceThreats(ctx = context) {
     }
   }
   // 独立的一行状态提示，避开机体血条与底部姿态/大招控件。
-  const phaseHints = { entry: "王牌入场 · 跟随航线集火", strafe: "王牌侧移 · 闪避后仍有追击机会",
-    feint: "王牌锁线 · 离开橙色突进航线", dash: "王牌突进 · 随后准备反击",
-    fire: "王牌蓄射 · 虚线之间留有空隙", recover: "王牌冷却 · 现在集中火力", retreat: "王牌撤离 · 最后一次集火机会" };
-  const hint = aceEncounter.warning > 0 ? "敌方王牌接近 · 观察机动，抓住冷却空档"
+  const phaseHints = { entry: tr("王牌入场 · 跟随航线集火", "Ace arriving · Track its flight path"),
+    strafe: tr("王牌侧移 · 闪避后仍有追击机会", "Ace strafing · Stay on its tail after the dodge"),
+    feint: tr("王牌锁线 · 离开橙色突进航线", "Ace locking on · Clear the orange line"),
+    dash: tr("王牌突进 · 随后准备反击", "Ace dashing · Get ready to counter"),
+    fire: tr("王牌蓄射 · 虚线之间留有空隙", "Ace charging · Find a gap between the dashed lines"),
+    recover: tr("王牌冷却 · 现在集中火力", "Ace cooling · Focus fire now"),
+    retreat: tr("王牌撤离 · 最后一次集火机会", "Ace retreating · Last chance to fire") };
+  const hint = aceEncounter.warning > 0 ? tr("敌方王牌接近 · 观察机动，抓住冷却空档", "Enemy ace approaching · Watch its moves and strike during cooldown")
     : enemy ? phaseHints[enemy.acePhase] : aceEncounter.notice;
   if (hint && !bossBlocksWaves()) {
     ctx.globalAlpha = enemy || aceEncounter.warning > 0 ? 0.94 : Math.min(0.94, aceEncounter.noticeTime);

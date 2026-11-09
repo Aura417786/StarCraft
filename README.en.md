@@ -13,7 +13,7 @@ Shoot the guns off a boss, upgrade your fighter, and survive five sectors of dee
 
 ## Quick start
 
-Use a desktop browser and keyboard. The game interface is in Chinese. On your first visit, select **明白了** (Got it) to close the guide, then **开始游戏** (Start Game). Your main gun fires automatically.
+Use a desktop browser and keyboard. On your first visit, select **明白了** (Got it) to close the guide. Select **English** on the main menu to switch the whole game to English, then select **Start Game**. You can reopen the guide with **How to Play**. Your main gun fires automatically.
 
 | Key | Action |
 | --- | --- |

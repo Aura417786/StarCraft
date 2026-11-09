@@ -77,7 +77,8 @@ function tryPerfectShield() {
       damageLog: Math.min(counterLog, target.healthLog + Math.log(shieldRules.bossDamageCap)) }, target);
   }
   updateShieldDisplay();
-  if (isBattleActive()) statusMessage.textContent = "完美格挡！返还 25% 护盾充能，3 秒内可消耗已存贯星炮速蓄连携。";
+  if (isBattleActive()) statusMessage.textContent = tr("完美格挡！返还 25% 护盾充能，3 秒内可消耗已存贯星炮速蓄连携。",
+    "Perfect Guard! Restored 25% shield charge. Use a stored Crimson Beam shot within 3 seconds to charge it faster.");
   else { shield.slowRemaining = 0; resetCannonLink(); }
   return true;
 }
@@ -98,25 +99,30 @@ function updateShieldDisplay() {
   const ready = shield.perfectRemaining > 1e-9 && !shield.perfectUsed;
   const absorbLimit = evolutionWeaponRules.absorbLimit[evolution.aegis];
   const absorbed = evolutionWeapons.absorbed.length;
-  const key = [shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed].join("/");
+  const key = [gameLanguage, shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed].join("/");
   if (key === shieldDisplayKey) return;
   shieldDisplayKey = key;
   shieldCount.textContent = shield.charges + " / " + shieldRules.maxCharges;
   shieldFill.style.width = percent.toFixed(1) + "%";
   shieldMeter.setAttribute("aria-valuenow", String(Math.floor(percent)));
-  shieldMeter.setAttribute("aria-valuetext", full ? "护盾已储满 2 次" : "护盾充能 " + Math.floor(percent) + "%");
+  shieldMeter.setAttribute("aria-valuetext", full ? tr("护盾已储满 2 次", "Both shield charges stored")
+    : tr("护盾充能 " + Math.floor(percent) + "%", "Shield charge " + Math.floor(percent) + "%"));
   shieldPanel.dataset.ready = String(shield.charges > 0);
   shieldPanel.dataset.active = String(shieldIsActive());
   shieldPanel.dataset.perfect = String(perfect);
   shieldSlots.forEach((slot, index) => { slot.dataset.filled = String(index < shield.charges); });
-  shieldLabel.textContent = perfect ? "完美格挡 · 返还 25% 充能"
-    : ready ? "完美窗口 · 迎击敌弹"
-    : shieldIsActive() && absorbLimit ? "吸收弹药 " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + " 秒"
-    : shieldIsActive() ? "无敌保护 · " + remaining.toFixed(1) + " 秒"
-    : full ? "储能已满 · V 迎弹反击"
-    : shield.charges ? "V 迎弹格挡 · 2 秒无敌" : "自动充能 · " + Math.ceil(chargeTime - shield.energy) + " 秒";
-  shieldPanel.title = "敌弹触盾前按 V，最初 0.25 秒可完美格挡，触发反击并返还 25% 充能。"
-    + (absorbLimit ? " 当前壁垒可吸收 " + absorbLimit + " 发接触护盾的敌弹，并在护盾结束时释放。" : "");
+  shieldLabel.textContent = perfect ? tr("完美格挡 · 返还 25% 充能", "Perfect Guard · 25% back")
+    : ready ? tr("完美窗口 · 迎击敌弹", "Perfect Guard window")
+    : shieldIsActive() && absorbLimit ? tr("吸收弹药 " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + " 秒",
+      "Absorbed " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + "s")
+    : shieldIsActive() ? tr("无敌保护 · " + remaining.toFixed(1) + " 秒", "Protected · " + remaining.toFixed(1) + "s")
+    : full ? tr("储能已满 · V 迎弹反击", "Fully charged · V to guard")
+    : shield.charges ? tr("V 迎弹格挡 · 2 秒无敌", "V to guard · 2s protection")
+    : tr("自动充能 · " + Math.ceil(chargeTime - shield.energy) + " 秒", "Recharging · " + Math.ceil(chargeTime - shield.energy) + "s");
+  shieldPanel.title = tr("敌弹触盾前按 V，最初 0.25 秒可完美格挡，触发反击并返还 25% 充能。",
+    "Press V just before a shot reaches you. Block within 0.25 seconds to counter and restore 25% shield charge.")
+    + (absorbLimit ? tr(" 当前壁垒可吸收 " + absorbLimit + " 发接触护盾的敌弹，并在护盾结束时释放。",
+      " Your Aegis absorbs up to " + absorbLimit + " shots it blocks and releases them when the shield ends.") : "");
 }
 function requestShield() {
   if (!isBattleActive() || shield.charges <= 0 || shieldIsActive()) return false;
@@ -131,7 +137,8 @@ function requestShield() {
   player.hitFlash = 0;
   movementHint.hidden = true;
   updateShieldDisplay();
-  if (!shield.perfectUsed) statusMessage.textContent = "赤焰护盾开启，2 秒内无敌；最初 0.25 秒挡住敌弹可完美反击，剩余 " + shield.charges + " 次。";
+  if (!shield.perfectUsed) statusMessage.textContent = tr("赤焰护盾开启，2 秒内无敌；最初 0.25 秒挡住敌弹可完美反击，剩余 " + shield.charges + " 次。",
+    "Crimson Shield active for 2 seconds. Block within the first 0.25 seconds for a Perfect Guard. Charges left: " + shield.charges + ".");
   return true;
 }
 function updateShield(seconds) {
@@ -145,7 +152,8 @@ function updateShield(seconds) {
   if (!shield.flash) shield.effect = null;
   if (shield.charges < shieldRules.maxCharges) {
     const gained = gainShieldEnergy(seconds);
-    if (gained) statusMessage.textContent = "护盾充能完成，已储存 " + shield.charges + " 次。按 V 开启 2 秒无敌。";
+    if (gained) statusMessage.textContent = tr("护盾充能完成，已储存 " + shield.charges + " 次。按 V 开启 2 秒无敌。",
+      "Shield ready. Charges stored: " + shield.charges + ". Press V for 2 seconds of protection.");
   }
   updateShieldDisplay();
 }
@@ -222,6 +230,6 @@ function drawPerfectShield() {
   context.shadowBlur = 0;
   context.font = "700 18px Microsoft YaHei, sans-serif"; context.textAlign = "center";
   context.fillStyle = "#ffe5d7";
-  context.fillText("完美格挡", player.x, player.y - player.height * 0.9 - (reducedMotion.matches ? 0 : progress * 18));
+  context.fillText(tr("完美格挡", "PERFECT GUARD"), player.x, player.y - player.height * 0.9 - (reducedMotion.matches ? 0 : progress * 18));
   context.restore();
 }

@@ -3,12 +3,13 @@
 const bossRules = { firstArrival: 90, interval: 75, warning: 5, entry: 1.5,
   recovery: 0.65, grace: 1.1, maxProjectiles: 260 };
 const bossTypes = [
-  { name: "苍穹霸主", color: "#69cfff", attacks: ["半月星弧", "侧翼扫射", "舰队召唤"] },
-  { name: "赤焰裁决", color: "#ff747f", attacks: ["五向追瞄炮", "交替焚烧", "破片核心"] },
-  { name: "紫电幽影", color: "#c58aff", attacks: ["折线电矢", "交错弹墙", "锁点雷击"] },
-  { name: "翡翠蜂后", color: "#71efa7", attacks: ["蜂群追猎", "荆棘旋涡", "护卫编队"] },
-  { name: "熔金堡垒", color: "#ffd16f", attacks: ["重炮齐射", "缺口弹幕", "聚能光束"] },
+  { name: "苍穹霸主", enName: "Sky Sovereign", color: "#69cfff", attacks: ["半月星弧", "侧翼扫射", "舰队召唤"], enAttacks: ["Crescent Arc", "Flank Sweep", "Fleet Call"] },
+  { name: "赤焰裁决", enName: "Crimson Judgment", color: "#ff747f", attacks: ["五向追瞄炮", "交替焚烧", "破片核心"], enAttacks: ["Five-Way Volley", "Alternating Scorch", "Fragment Core"] },
+  { name: "紫电幽影", enName: "Violet Wraith", color: "#c58aff", attacks: ["折线电矢", "交错弹墙", "锁点雷击"], enAttacks: ["Zigzag Bolts", "Staggered Walls", "Targeted Strike"] },
+  { name: "翡翠蜂后", enName: "Jade Hive Queen", color: "#71efa7", attacks: ["蜂群追猎", "荆棘旋涡", "护卫编队"], enAttacks: ["Hunting Swarm", "Thorn Vortex", "Escort Formation"] },
+  { name: "熔金堡垒", enName: "Molten Bastion", color: "#ffd16f", attacks: ["重炮齐射", "缺口弹幕", "聚能光束"], enAttacks: ["Heavy Barrage", "Gapped Salvo", "Charged Beam"] },
 ];
+function bossTypeName(type) { return tr(bossTypes[type].name, bossTypes[type].enName); }
 let boss = null;
 let nextBossTime = bossRules.firstArrival;
 let bossDefeated = 0;
@@ -98,7 +99,7 @@ function spawnBoss(type = chooseBossType(), partnerType = null) {
   const endurance = Math.min(85, 55 + bossDefeated * 5);
   // 按独立的战斗阶段生成，玩家升级不会立即换来同步增厚的首领。
   const healthLog = progressionBossHealthLog(battleTime, endurance);
-  boss = { ...arena, type, color: data.color, name: data.name, hp: 1, maxHp: 1, displayHp: 1,
+  boss = { ...arena, type, color: data.color, name: bossTypeName(type), hp: 1, maxHp: 1, displayHp: 1,
     healthLog, endurance, x: viewport.width + arena.width / 2, previousX: viewport.width + arena.width / 2,
     phase: "enter", phaseTime: 0, age: 0, hitFlash: 0, attackIndex: -1, fired: 0, targetY: player.y,
     enraged: false, attackEvents: Object.create(null) };
@@ -111,8 +112,8 @@ function spawnBoss(type = chooseBossType(), partnerType = null) {
   setBossWarning();
   player.x = Math.min(player.x, bossPlayerRight());
   movementHint.hidden = true;
-  setBossMessage(data.name, "旗舰抵达 · 瞄准上下炮组可拆毁武器，直击中轴更快击破");
-  statusMessage.textContent = data.name + "出现，普通敌机暂停生成。";
+  setBossMessage(boss.name, tr("旗舰抵达 · 瞄准上下炮组可拆毁武器，直击中轴更快击破", "Flagship arriving · Destroy gun mounts or fire at the core"));
+  statusMessage.textContent = tr(boss.name + "出现，普通敌机暂停生成。", boss.name + " has arrived. Regular enemy spawns are paused.");
 }
 function startBossAttack() {
   if (!boss) return;
@@ -133,13 +134,14 @@ function startBossAttack() {
   boss.sweepFrom = Math.random() < 0.5 ? bossArena().top : bossArena().bottom;
   boss.gapY = clamp(player.y, flightBounds.top + 30, flightBounds.bottom - 30);
   const advice = [
-    ["寻找弧形间隙", "闪避横向扫射", "拦截召唤的敌机"],
-    ["移动避开锁定点", "离开红色标线", "避开闪烁核心与碎片"],
-    ["留意折线轨迹", "穿过弹墙缺口", "离开紫色圆圈"],
-    ["诱导追踪弹，再转向", "从旋涡空隙穿过", "优先拦截护卫机"],
-    ["避开三排重炮", "对准弹墙缺口", "离开金色标线"],
+    [tr("寻找弧形间隙", "Find a gap in the arc"), tr("闪避横向扫射", "Dodge the sweep"), tr("拦截召唤的敌机", "Intercept summoned enemies")],
+    [tr("移动避开锁定点", "Move away from the aim point"), tr("离开红色标线", "Clear the red lines"), tr("避开闪烁核心与碎片", "Avoid the core and fragments")],
+    [tr("留意折线轨迹", "Watch the zigzag paths"), tr("穿过弹墙缺口", "Fly through a gap"), tr("离开紫色圆圈", "Clear the purple circles")],
+    [tr("诱导追踪弹，再转向", "Lure the homing shots, then turn"), tr("从旋涡空隙穿过", "Slip through the vortex gaps"), tr("优先拦截护卫机", "Intercept the escorts first")],
+    [tr("避开三排重炮", "Dodge the three rows"), tr("对准弹墙缺口", "Line up with the gap"), tr("离开金色标线", "Clear the gold line")],
   ];
-  setBossMessage(boss.name, (boss.enraged ? "狂暴 · " : "") + bossTypes[boss.type].attacks[boss.attackIndex] + " · " + advice[boss.type][boss.attackIndex]);
+  const { attacks, enAttacks } = bossTypes[boss.type];
+  setBossMessage(boss.name, (boss.enraged ? tr("狂暴 · ", "Enraged · ") : "") + tr(attacks[boss.attackIndex], enAttacks[boss.attackIndex]) + " · " + advice[boss.type][boss.attackIndex]);
   if (boss.type === 1 && boss.attackIndex === 1) {
     createRedBeamGroup(0, boss.telegraphDuration);
   }
@@ -372,9 +374,11 @@ function updateBossEncounter(seconds) {
         enemies.length = 0; resetEnemyCombat(false);
         gameAudio.warning();
       }
-      const names = bossTypes[pendingBossType].name + (pendingWingType === null ? "" : " × " + bossTypes[pendingWingType].name);
+      const names = bossTypeName(pendingBossType) + (pendingWingType === null ? "" : " × " + bossTypeName(pendingWingType));
       setBossWarning(names);
-      setBossMessage(names, (pendingWingType === null ? "旗舰接近" : "双舰协同接近") + " · " + Math.max(0, Math.ceil(nextBossTime - battleTime)) + " 秒后抵达");
+      const arrivalSeconds = Math.max(0, Math.ceil(nextBossTime - battleTime));
+      const arrival = pendingWingType === null ? tr("旗舰接近", "Flagship incoming") : tr("双舰协同接近", "Boss duo incoming");
+      setBossMessage(names, arrival + " · " + tr(arrivalSeconds + " 秒后抵达", "ETA " + arrivalSeconds + " s"));
       if (battleTime >= nextBossTime) spawnBoss(pendingBossType, pendingWingType);
     }
     return;
@@ -420,8 +424,10 @@ function applyBossHit(shot, target = boss, component = null) {
   else if (target.hp <= 0.5 && !target.enraged) {
     target.enraged = true;
     gameAudio.bossEnrage();
-    if (!duoEncounter) setBossMessage(target.name, "狂暴模式 · 攻势加速，保持移动");
-    statusMessage.textContent = target.name + "进入狂暴模式。" + (duoEncounter ? "协同攻击仍保留安全通道和反击空档。" : "弹幕速度和密度提升。");
+    if (!duoEncounter) setBossMessage(target.name, tr("狂暴模式 · 攻势加速，保持移动", "Enraged · Attacks speed up. Keep moving."));
+    statusMessage.textContent = tr(target.name + "进入狂暴模式。", target.name + " is enraged. ") + (duoEncounter
+      ? tr("协同攻击仍保留安全通道和反击空档。", "Coordinated attacks still leave a safe lane and openings to strike.")
+      : tr("弹幕速度和密度提升。", "Projectiles are faster and denser."));
   }
 }
 function defeatBoss(target = boss) {
@@ -440,7 +446,7 @@ function defeatBoss(target = boss) {
   for (const [index, type] of ["blue", "yellow", "red"].entries()) {
     powerups.push({ x: fallen.x, previousX: fallen.x, y: clamp(fallen.y + (index - 1) * 75, flightBounds.top, flightBounds.bottom), radius: powerupRules.radius, type });
   }
-  powerupNotice.textContent = fallen.name + "已击破 · +2000分 · 恢复1点生命";
+  powerupNotice.textContent = tr(fallen.name + "已击破 · +2000分 · 恢复1点生命", fallen.name + " defeated · +2,000 points · +1 life");
   powerupNotice.dataset.type = "yellow"; powerupNotice.hidden = false; upgradeNoticeTime = 3;
   statusMessage.textContent = powerupNotice.textContent;
   if (boss) { startDuoRecovery(duoRules.breakRecovery); return; }
@@ -470,7 +476,7 @@ function updateBossDamage() {
       if (player.x < hazard.right && Math.abs(player.y - hazard.y) < hazard.thickness / 2 + player.height * 0.16) hit = true;
     } else if (Math.hypot(player.x - hazard.x, player.y - hazard.y) < hazard.radius + player.height * 0.16) hit = true;
   }
-  if (hit) damagePlayer("被 Boss 攻击命中");
+  if (hit) damagePlayer(tr("被 Boss 攻击命中", "Hit by a boss attack"));
 }
 function drawBossBattle() {
   drawDuoGuidance();

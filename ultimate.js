@@ -20,20 +20,22 @@ function updateUltimateDisplay() {
   ultimateCount.textContent = ultimate.charges + " / " + ultimateRules.maxCharges;
   ultimateFill.style.width = progress + "%";
   ultimateMeter.setAttribute("aria-valuenow", String(Math.floor(progress)));
-  ultimateMeter.setAttribute("aria-valuetext", full ? "已储满 5 次" : "积能 " + Math.floor(progress) + "%");
+  ultimateMeter.setAttribute("aria-valuetext", full ? tr("已储满 5 次", "All 5 shots stored")
+    : tr("积能 " + Math.floor(progress) + "%", "Energy " + Math.floor(progress) + "%"));
   ultimatePanel.dataset.ready = String(ultimate.charges > 0);
   ultimatePanel.dataset.phase = ultimate.phase;
   ultimatePanel.dataset.linked = String(cannonLink.remaining > 1e-9 || cannonLink.chargingLinked);
   ultimateSlots.forEach((slot, index) => { slot.dataset.filled = String(index < ultimate.charges); });
   const countdown = (Math.ceil(cannonLink.remaining * 10) / 10).toFixed(1);
   const opportunity = cannonLink.remaining > 1e-9;
-  ultimateLabel.textContent = ultimate.phase === "charging" ? (cannonLink.chargingLinked ? "完美连携速蓄 · 保持瞄准"
-      : opportunity ? "蓄力中 · 连携保留 " + countdown + " 秒" : "蓄力中 · 保持瞄准")
-    : ultimate.phase === "firing" ? (cannonLink.chargingLinked ? "完美连携 · 贯穿发射"
-      : opportunity ? "贯穿发射 · 连携 " + countdown + " 秒" : "贯穿发射")
-    : opportunity ? "完美连携 " + countdown + " 秒 · " + (ultimate.charges ? "空格速蓄" : "需已存炮弹")
-    : full ? "储能已满 · 空格释放"
-    : ultimate.charges ? "空格释放 · 命中继续积能" : "命中敌军积能";
+  ultimateLabel.textContent = ultimate.phase === "charging" ? (cannonLink.chargingLinked ? tr("完美连携速蓄 · 保持瞄准", "Perfect Link · Quick charge")
+      : opportunity ? tr("蓄力中 · 连携保留 " + countdown + " 秒", "Charging · Link " + countdown + "s") : tr("蓄力中 · 保持瞄准", "Charging · Keep aiming"))
+    : ultimate.phase === "firing" ? (cannonLink.chargingLinked ? tr("完美连携 · 贯穿发射", "Perfect Link · Firing")
+      : opportunity ? tr("贯穿发射 · 连携 " + countdown + " 秒", "Firing · Link " + countdown + "s") : tr("贯穿发射", "Piercing beam firing"))
+    : opportunity ? tr("完美连携 " + countdown + " 秒 · " + (ultimate.charges ? "空格速蓄" : "需已存炮弹"),
+      "Perfect Link " + countdown + "s · " + (ultimate.charges ? "Space" : "Needs ammo"))
+    : full ? tr("储能已满 · 空格释放", "Fully stocked · Space")
+    : ultimate.charges ? tr("空格释放 · 命中继续积能", "Space to fire · Hit to charge") : tr("命中敌军积能", "Hit enemies to charge");
 }
 function armCannonLink() {
   if (!isBattleActive()) return false;
@@ -64,7 +66,8 @@ function gainUltimateEnergy(fraction, kind = "enemy") {
   ultimate.charges = Math.min(ultimateRules.maxCharges, ultimate.charges + gained);
   ultimate.energy = ultimate.charges === ultimateRules.maxCharges ? 0 : Math.max(0, total - gained * ultimateRules.energyPerCharge);
   updateUltimateDisplay();
-  if (gained) statusMessage.textContent = "赤焰贯星炮就绪，已储存 " + ultimate.charges + " 次。按空格蓄力发射。";
+  if (gained) statusMessage.textContent = tr("赤焰贯星炮就绪，已储存 " + ultimate.charges + " 次。按空格蓄力发射。",
+    "Crimson Beam ready. Shots stored: " + ultimate.charges + ". Press Space to charge and fire.");
 }
 function ultimateDamageLog() {
   // 相当于数秒完整火力，并保证能贯穿同期小怪。对数计算兼容无上限的武器阶数。
@@ -88,8 +91,9 @@ function requestUltimate() {
   gameAudio.chargeUltimate(cannonLink.chargeDuration);
   ultimate.audioActive = !gameAudio.muted;
   updateUltimateDisplay();
-  statusMessage.textContent = cannonLink.chargingLinked ? "完美连携！赤焰贯星炮 0.45 秒速蓄，对准目标，随后自动发射。"
-    : "赤焰贯星炮蓄力中，对准目标，随后自动发射。";
+  statusMessage.textContent = cannonLink.chargingLinked
+    ? tr("完美连携！赤焰贯星炮 0.45 秒速蓄，对准目标，随后自动发射。", "Perfect Link! Aim while the Crimson Beam charges for 0.45 seconds, then fires automatically.")
+    : tr("赤焰贯星炮蓄力中，对准目标，随后自动发射。", "Aim while the Crimson Beam charges. It fires automatically.");
   return true;
 }
 function syncUltimateAudio(active) {

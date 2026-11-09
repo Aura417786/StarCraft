@@ -3,18 +3,18 @@
 // 可拆武器是舰体的一部分。其耐久不额外增加 Boss 总生命，毁伤只结算一次。
 const bossComponentRules = { durability: 0.13, hullTransfer: 0.8, maxWrecks: 10 };
 const bossComponentLayouts = [
-  { x: -0.17, y: 0.29, width: 0.35, height: 0.23, turretX: -0.13, turretY: 0.28, shape: "cannon", labels: ["星弧炮组", "扫射炮组"] },
-  { x: -0.23, y: 0.30, width: 0.35, height: 0.23, turretX: -0.17, turretY: 0.30, shape: "fork", labels: ["追瞄炮组", "焚烧阵列"] },
-  { x: -0.13, y: 0.235, width: 0.31, height: 0.19, turretX: -0.055, turretY: 0.205, shape: "blade", labels: ["电矢发射器", "弹墙阵列"] },
-  { x: -0.12, y: 0.29, width: 0.34, height: 0.235, turretX: -0.31, turretY: 0.145, shape: "hive", labels: ["追猎蜂巢", "旋涡发生器"] },
-  { x: -0.17, y: 0.31, width: 0.35, height: 0.235, turretX: -0.13, turretY: 0.31, shape: "siege", labels: ["重炮炮组", "弹幕发生器"] },
+  { x: -0.17, y: 0.29, width: 0.35, height: 0.23, turretX: -0.13, turretY: 0.28, shape: "cannon", labels: ["星弧炮组", "扫射炮组"], enLabels: ["Arc Guns", "Sweep Guns"] },
+  { x: -0.23, y: 0.30, width: 0.35, height: 0.23, turretX: -0.17, turretY: 0.30, shape: "fork", labels: ["追瞄炮组", "焚烧阵列"], enLabels: ["Tracking Guns", "Scorch Array"] },
+  { x: -0.13, y: 0.235, width: 0.31, height: 0.19, turretX: -0.055, turretY: 0.205, shape: "blade", labels: ["电矢发射器", "弹墙阵列"], enLabels: ["Bolt Launcher", "Projectile Wall Array"] },
+  { x: -0.12, y: 0.29, width: 0.34, height: 0.235, turretX: -0.31, turretY: 0.145, shape: "hive", labels: ["追猎蜂巢", "旋涡发生器"], enLabels: ["Hunter Hive", "Vortex Generator"] },
+  { x: -0.17, y: 0.31, width: 0.35, height: 0.235, turretX: -0.13, turretY: 0.31, shape: "siege", labels: ["重炮炮组", "弹幕发生器"], enLabels: ["Heavy Guns", "Barrage Generator"] },
 ];
 const bossComponentWrecks = [];
 function ensureBossComponents(target) {
   if (!target) return [];
   if (!target.components) {
     const layout = bossComponentLayouts[target.type] || bossComponentLayouts[0];
-    target.components = [-1, 1].map((side, index) => ({ side, index, name: layout.labels[index],
+    target.components = [-1, 1].map((side, index) => ({ side, index, name: tr(layout.labels[index], layout.enLabels[index]),
       hp: bossComponentRules.durability, maxHp: bossComponentRules.durability,
       destroyed: false, hitFlash: 0, recoil: 0, damagedAge: 0 }));
   }
@@ -70,9 +70,9 @@ function damageBossComponent(target, part, damageFraction) {
       if (hazard.age < hazard.warning) bossHazards.splice(i, 1);
     }
   }
-  powerupNotice.textContent = target.name + " · " + part.name + "已摧毁";
+  powerupNotice.textContent = target.name + " · " + part.name + tr("已摧毁", " destroyed");
   powerupNotice.dataset.type = "yellow"; powerupNotice.hidden = false; upgradeNoticeTime = 2.1;
-  statusMessage.textContent = powerupNotice.textContent + "，对应武器停止工作。";
+  statusMessage.textContent = powerupNotice.textContent + tr("，对应武器停止工作。", ". Its weapon is offline.");
 }
 function updateBossComponents(seconds) {
   if (!(seconds >= 0) || !Number.isFinite(seconds)) return;

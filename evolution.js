@@ -10,18 +10,29 @@ const evolutionReadout = document.querySelector("#evolution-readout");
 const evolutionKeys = ["pierce", "blast", "aegis"];
 const evolutionCards = evolutionKeys.map((kind) => document.querySelector("#evolution-card-" + kind));
 const evolutionNames = { pierce: "破阵翼刃", blast: "星隼僚机", aegis: "赤金壁垒" };
+const evolutionEnglishNames = { pierce: "Piercing Wings", blast: "Falcon Wingman", aegis: "Crimson Aegis" };
 const evolutionLinks = {
-  falcon: { name: "锋隼联动", effect: "两架星隼的射击伤害提高 15%，并可多穿透一个目标。", art: "翼刃校准星隼火控，齐射可击穿前排。", tone: "blast" },
-  phalanx: { name: "隼盾联动", effect: "开盾后 2.4 秒内，两架星隼每轮都发射三连齐射。", art: "利用护盾争取一段集中反攻时间。", tone: "aegis" },
-  lance: { name: "锋盾联动", effect: "吸收后发射的反击弹变为穿甲矛，伤害提高 50%，额外穿透两个目标。", art: "金色反击矛沿前方弹道贯穿。", tone: "pierce" },
+  falcon: { name: "锋隼联动", nameEn: "Falcon Pierce Link", effect: "两架星隼的射击伤害提高 15%，并可多穿透一个目标。",
+    effectEn: "Both Falcons deal 15% more damage and pierce one extra target.", art: "翼刃校准星隼火控，齐射可击穿前排。",
+    artEn: "Piercing Wings tune the Falcons' guns to shoot through the front line.", tone: "blast" },
+  phalanx: { name: "隼盾联动", nameEn: "Falcon Shield Link", effect: "开盾后 2.4 秒内，两架星隼每轮都发射三连齐射。",
+    effectEn: "Both Falcons fire triple bursts for 2.4 seconds after you activate your shield.", art: "利用护盾争取一段集中反攻时间。",
+    artEn: "Use your shield to open a short window for concentrated fire.", tone: "aegis" },
+  lance: { name: "锋盾联动", nameEn: "Aegis Lance Link", effect: "吸收后发射的反击弹变为穿甲矛，伤害提高 50%，额外穿透两个目标。",
+    effectEn: "Absorbed shots fire back as lances that deal 50% more damage and pierce two extra targets.",
+    art: "金色反击矛沿前方弹道贯穿。", artEn: "Golden lances pierce enemies ahead.", tone: "pierce" },
 };
 const evolutionRefits = {
-  "refit-fire": { name: "火力整备", factor: 1.08, effect: "本局辅助武器伤害提高 8%。", tone: "blast" },
-  "refit-heal": { name: "战地修复", factor: 1.04, effect: "恢复 1 点生命，本局辅助武器伤害提高 4%。", tone: "heal" },
-  "refit-shield": { name: "护盾整备", factor: 1.04, effect: "补充 1 次护盾，本局辅助武器伤害提高 4%。", tone: "aegis" },
+  "refit-fire": { name: "火力整备", nameEn: "Firepower Refit", factor: 1.08, effect: "本局辅助武器伤害提高 8%。",
+    effectEn: "Deal 8% more auxiliary weapon damage this run.", tone: "blast" },
+  "refit-heal": { name: "战地修复", nameEn: "Field Repairs", factor: 1.04, effect: "恢复 1 点生命，本局辅助武器伤害提高 4%。",
+    effectEn: "Restore one life and deal 4% more auxiliary weapon damage this run.", tone: "heal" },
+  "refit-shield": { name: "护盾整备", nameEn: "Shield Refit", factor: 1.04, effect: "补充 1 次护盾，本局辅助武器伤害提高 4%。",
+    effectEn: "Gain one shield charge and deal 4% more auxiliary weapon damage this run.", tone: "aegis" },
 };
 const evolutionBackground = new Map();
 
+function evolutionName(kind) { return tr(evolutionNames[kind], evolutionEnglishNames[kind]); }
 function evolutionPierceCount() { return evolution.pierce; }
 function evolutionMainDamageMultiplier() { return [1, 1.25, 1.45, 1.65][evolution.pierce]; }
 function evolutionShieldChargeTime() { return [25, 20, 17, 14][evolution.aegis]; }
@@ -33,36 +44,47 @@ function evolutionChoiceOptions() {
 }
 function updateEvolutionDisplay() {
   const selected = evolutionKeys.filter(kind => evolution[kind] > 0)
-    .map(kind => evolutionNames[kind] + " " + evolution[kind] + "级");
+    .map(kind => evolutionName(kind) + tr(" " + evolution[kind] + "级", " Lv. " + evolution[kind]));
   const linked = Object.values(evolution.links).filter(Boolean).length;
-  if (linked) selected.push("联动 " + linked + "/3");
-  if (evolution.refits) selected.push("超限 " + evolution.refits + " 次");
+  if (linked) selected.push(tr("联动 " + linked + "/3", "Links " + linked + "/3"));
+  if (evolution.refits) selected.push(tr("超限 " + evolution.refits + " 次", "Refits " + evolution.refits));
   evolutionReadout.hidden = !selected.length;
   evolutionReadout.textContent = selected.join("  ·  ");
 }
 function evolutionCardDetails(kind) {
   const link = evolutionLinks[kind];
-  if (link) return { ...link, level: "双路线联动", disabled: evolution.links[kind], unavailable: "已激活" };
+  if (link) return { ...link, name: tr(link.name, link.nameEn), effect: tr(link.effect, link.effectEn), art: tr(link.art, link.artEn),
+    level: tr("双路线联动", "Evolution link"), disabled: evolution.links[kind], unavailable: tr("已激活", "Activated") };
   const refit = evolutionRefits[kind];
   if (refit) {
     const healing = kind === "refit-heal", shielding = kind === "refit-shield";
     const disabled = (healing && player.lives >= playerRules.maxLives) || (shielding && shield.charges >= shieldRules.maxCharges);
-    return { ...refit, level: "超限整备 · " + (evolution.refits + 1),
-      art: "当前辅助伤害 ×" + progressionFormatLog(evolution.overclock) + "，提升可持续叠加。",
-      disabled, unavailable: healing ? "生命已满" : "已储满" };
+    const damage = progressionFormatLog(evolution.overclock);
+    return { ...refit, name: tr(refit.name, refit.nameEn), effect: tr(refit.effect, refit.effectEn),
+      level: tr("超限整备 · " + (evolution.refits + 1), "Overlimit Refit · " + (evolution.refits + 1)),
+      art: tr("当前辅助伤害 ×" + damage + "，提升可持续叠加。", "Current auxiliary damage ×" + damage + ". Bonuses stack."),
+      disabled, unavailable: healing ? tr("生命已满", "Full health") : tr("已储满", "Fully charged") };
   }
   const current = evolution[kind], next = Math.min(3, current + 1), complete = current >= 3;
-  const level = complete ? "已达最高 · 3级" : current + "级 → " + next + "级";
-  const details = { name: evolutionNames[kind], level, tone: kind, disabled: complete, unavailable: "本路线已完成" };
+  const level = complete ? tr("已达最高 · 3级", "Max level · Lv. 3")
+    : tr(current + "级 → " + next + "级", "Lv. " + current + " → " + next);
+  const details = { name: evolutionName(kind), level, tone: kind, disabled: complete, unavailable: tr("本路线已完成", "Path complete") };
   if (kind === "pierce") return { ...details,
-    effect: ["", "展开双翼副炮，持续向前齐射。", "双翼定期蓄能，发射可穿过多架敌机的重型穿甲弹。", "双翼重射更频繁，穿甲弹火力与穿透提升。"][next],
-    art: "主炮伤害 +" + [0, 25, 45, 65][next] + "% · 额外穿透 " + next + " 个目标。" };
+    effect: ["", tr("展开双翼副炮，持续向前齐射。", "Deploy two wing cannons that fire forward continuously."),
+      tr("双翼定期蓄能，发射可穿过多架敌机的重型穿甲弹。", "Wing cannons periodically charge and fire heavy shots that pierce multiple enemies."),
+      tr("双翼重射更频繁，穿甲弹火力与穿透提升。", "Heavy wing shots fire more often, hit harder, and pierce more enemies.")][next],
+    art: tr("主炮伤害 +" + [0, 25, 45, 65][next] + "% · 额外穿透 " + next + " 个目标。",
+      "Main gun +" + [0, 25, 45, 65][next] + "% damage · Pierces " + next + (next === 1 ? " extra target" : " extra targets")) };
   if (kind === "blast") return { ...details,
-    effect: ["", "一架星隼伴飞，自动瞄准前方敌人。", "两架星隼从上下两侧协同射击。", "双星隼每三轮触发一次三连齐射。"][next],
-    art: "僚机无碰撞判定，跟随战机移动。" };
+    effect: ["", tr("一架星隼伴飞，自动瞄准前方敌人。", "One Falcon follows you and automatically targets enemies ahead."),
+      tr("两架星隼从上下两侧协同射击。", "Two Falcons fire together from above and below your fighter."),
+      tr("双星隼每三轮触发一次三连齐射。", "Both Falcons fire triple bursts every third volley.")][next],
+    art: tr("僚机无碰撞判定，跟随战机移动。", "Wingmen follow your fighter and cannot collide with other ships.") };
   return { ...details,
-    effect: "护盾接住最多 " + [0, 3, 5, 8][next] + " 发实体敌弹，结束时化为金色反击齐射。",
-    art: "立即补充 1 次护盾 · " + [25, 20, 17, 14][next] + " 秒充能 · 保留开盾清弹与反击。" };
+    effect: tr("护盾接住最多 " + [0, 3, 5, 8][next] + " 发实体敌弹，结束时化为金色反击齐射。",
+      "Absorb up to " + [0, 3, 5, 8][next] + " enemy projectiles and fire them back when the shield ends."),
+    art: tr("立即补充 1 次护盾 · " + [25, 20, 17, 14][next] + " 秒充能 · 保留开盾清弹与反击。",
+      "+1 shield charge · " + [25, 20, 17, 14][next] + "s recharge · Clears bullets and counters on activation.") };
 }
 function focusEvolutionCard(preferred = evolution.choice) {
   const card = evolutionCards.find((entry) => entry.dataset.choice === preferred && !entry.disabled)
@@ -73,14 +95,15 @@ function refreshEvolutionChoice() {
   if (!evolution.pending) return;
   const options = evolutionChoiceOptions();
   if (options === evolutionKeys) {
-    evolutionTitle.textContent = "首领击破，选择战机进化";
-    evolutionDescription.textContent = "每条路线最多 3 级，能力可以叠加。战斗已暂停，选好再出发。";
+    evolutionTitle.textContent = tr("首领击破，选择战机进化", "Boss defeated. Choose an evolution.");
+    evolutionDescription.textContent = tr("每条路线最多 3 级，能力可以叠加。战斗已暂停，选好再出发。",
+      "Each path has three levels. Abilities stack. Choose one to resume combat.");
   } else if (options[0] === "falcon") {
-    evolutionTitle.textContent = "三路线满级，选择联动";
-    evolutionDescription.textContent = "每种联动可激活一次，效果持续到本局结束。";
+    evolutionTitle.textContent = tr("三路线满级，选择联动", "All paths maxed. Choose a link.");
+    evolutionDescription.textContent = tr("每种联动可激活一次，效果持续到本局结束。", "Each link can be activated once and lasts for the rest of the run.");
   } else {
-    evolutionTitle.textContent = "超限整备";
-    evolutionDescription.textContent = "每次整备都会继续强化辅助武器。";
+    evolutionTitle.textContent = tr("超限整备", "Overlimit Refit");
+    evolutionDescription.textContent = tr("每次整备都会继续强化辅助武器。", "Each refit further boosts your auxiliary weapons.");
   }
   evolutionCards.forEach((card, index) => {
     const kind = options[index];
@@ -92,7 +115,7 @@ function refreshEvolutionChoice() {
     card.querySelector(".evolution-card-title").textContent = details.name;
     card.querySelector(".evolution-card-effect").textContent = details.effect;
     card.querySelector(".evolution-card-art").textContent = details.art;
-    card.querySelector(".evolution-card-action").textContent = details.disabled ? details.unavailable : "选择";
+    card.querySelector(".evolution-card-action").textContent = details.disabled ? details.unavailable : tr("选择", "Select");
   });
   if (!evolutionScreen.contains(document.activeElement) || document.activeElement.disabled) focusEvolutionCard();
 }
@@ -124,7 +147,7 @@ function openEvolutionChoice() {
   setEvolutionBackgroundInert(true);
   refreshEvolutionChoice();
   updatePauseHint();
-  statusMessage.textContent = "首领已击破，战斗暂停。请选择一项战机进化。";
+  statusMessage.textContent = tr("首领已击破，战斗暂停。请选择一项战机进化。", "Boss defeated. Combat paused. Choose a fighter evolution.");
   return true;
 }
 function chooseEvolution(kind) {
@@ -144,10 +167,11 @@ function chooseEvolution(kind) {
     }
     updateWeaponDisplay();
     onEvolutionUpgrade(kind);
-    message = evolutionNames[kind] + "进化至 " + evolution[kind] + " 级";
+    message = evolutionName(kind) + tr("进化至 " + evolution[kind] + " 级", " reached level " + evolution[kind]);
   } else if (evolutionLinks[kind]) {
     evolution.links[kind] = true;
-    message = evolutionLinks[kind].name + "已激活";
+    const link = evolutionLinks[kind];
+    message = tr(link.name + "已激活", link.nameEn + " activated");
   } else {
     const refit = evolutionRefits[kind];
     evolution.overclock += Math.log(refit.factor);
@@ -160,7 +184,7 @@ function chooseEvolution(kind) {
       if (shield.charges === shieldRules.maxCharges) shield.energy = 0;
       updateShieldDisplay();
     }
-    message = refit.name + " · " + refit.effect;
+    message = tr(refit.name + " · " + refit.effect, refit.nameEn + " · " + refit.effectEn);
   }
   evolutionScreen.hidden = true;
   setEvolutionBackgroundInert(false);
@@ -172,7 +196,7 @@ function chooseEvolution(kind) {
   powerupNotice.dataset.type = kind === "pierce" || kind === "lance" ? "blue" : kind === "refit-heal" ? "heal" : "red";
   powerupNotice.hidden = false;
   upgradeNoticeTime = 3;
-  statusMessage.textContent = message + "。战斗继续。";
+  statusMessage.textContent = message + tr("。战斗继续。", " Combat resumes.");
   canvas.focus({ preventScroll: true });
   updatePauseHint();
   return true;

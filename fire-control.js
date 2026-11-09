@@ -4,10 +4,11 @@ const firingStyle = { mode: "spread", lastInterval: 0.2 };
 const stanceButton = document.querySelector("#stance-button");
 function updateFiringStyleDisplay() {
   const focus = firingStyle.mode === "focus";
-  stanceButton.textContent = (focus ? "聚焦 · 集中火力" : "扩散 · 覆盖射击") + "  ⇧ Shift";
+  stanceButton.textContent = (focus ? tr("聚焦 · 集中火力", "Focused fire") : tr("扩散 · 覆盖射击", "Spread fire")) + "  ⇧ Shift";
   stanceButton.dataset.mode = firingStyle.mode;
   stanceButton.setAttribute("aria-pressed", String(focus));
-  stanceButton.setAttribute("aria-label", (focus ? "当前聚焦射击，切换为扩散" : "当前扩散射击，切换为聚焦") + "，快捷键 Shift");
+  stanceButton.setAttribute("aria-label", focus ? tr("当前聚焦射击，切换为扩散，快捷键 Shift", "Focused fire active. Press Shift to switch to spread fire.")
+    : tr("当前扩散射击，切换为聚焦，快捷键 Shift", "Spread fire active. Press Shift to switch to focused fire."));
 }
 function resetFiringStyle() { firingStyle.mode = "spread"; updateFiringStyleDisplay(); }
 function toggleFiringStyle() {
@@ -16,7 +17,8 @@ function toggleFiringStyle() {
   updateFiringStyleDisplay();
   updateWeaponDisplay();
   statusMessage.textContent = firingStyle.mode === "focus"
-    ? "聚焦射击：已有弹道火力合并到机头正前方。" : "扩散射击：弹道向上下对称展开，覆盖更大范围。";
+    ? tr("聚焦射击：已有弹道火力合并到机头正前方。", "Focused fire combines your shots into one lane ahead of the ship.")
+    : tr("扩散射击：弹道向上下对称展开，覆盖更大范围。", "Spread fire covers a wider area above and below the ship.");
   return true;
 }
 stanceButton.addEventListener("click", () => {

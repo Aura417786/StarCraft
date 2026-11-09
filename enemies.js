@@ -107,7 +107,7 @@ function updateEnemyProjectileDamage() {
   for (let index = enemyProjectiles.length - 1; index >= 0; index--) {
     if (enemyShotHitsPlayer(enemyProjectiles[index])) { enemyProjectiles.splice(index, 1); hit = true; }
   }
-  if (hit) { tryPerfectShield(); damagePlayer("被炮击机命中"); }
+  if (hit) { tryPerfectShield(); damagePlayer(tr("被炮击机命中", "Hit by a gunship")); }
 }
 function drawEnemyThreats() {
   context.save();

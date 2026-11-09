@@ -27,7 +27,7 @@ function spawnDuoEncounter(first, second) {
   const healthLog = progressionBossHealthLog(battleTime, endurance);
   const make = (type, slot) => {
     const arena = duoArena(slot), data = bossTypes[type];
-    return { ...arena, type, slot, color: data.color, name: data.name,
+    return { ...arena, type, slot, color: data.color, name: bossTypeName(type),
       x: viewport.width + arena.width / 2, previousX: viewport.width + arena.width / 2, previousY: arena.y,
       hp: 1, maxHp: 1, displayHp: 1, healthLog, endurance, phase: "enter", phaseTime: 0,
       age: 0, hitFlash: 0, attackIndex: 0, fired: 0, enraged: false, attackEvents: Object.create(null) };
@@ -43,8 +43,8 @@ function spawnDuoEncounter(first, second) {
   player.x = Math.min(player.x, bossPlayerRight());
   player.previousX = player.x; player.previousY = player.y;
   movementHint.hidden = true;
-  setBossMessage(duoTitle(), "双舰协同 · 恢复1点生命 / 至少1次护盾");
-  statusMessage.textContent = "双首领抵达。观察绿色通道，避开夹击；间歇期间瞄准上方或下方首领反击。";
+  setBossMessage(duoTitle(), tr("双舰协同 · 恢复1点生命 / 至少1次护盾", "Boss duo · +1 life / at least 1 shield charge"));
+  statusMessage.textContent = tr("双首领抵达。观察绿色通道，避开夹击；间歇期间瞄准上方或下方首领反击。", "Two bosses have arrived. Move into the green lane and strike either boss between attacks.");
 }
 function resizeDuoEncounter() {
   clearDuoAttacks();
@@ -57,7 +57,7 @@ function resizeDuoEncounter() {
   duoEncounter.rest = duoRules.breakRecovery;
   bossHitGrace = bossRules.grace;
   player.x = Math.min(player.x, bossPlayerRight());
-  setBossMessage(duoTitle(), "阵型调整 · 趁机反击");
+  setBossMessage(duoTitle(), tr("阵型调整 · 趁机反击", "Reforming · Strike now"));
 }
 function beginDuoAttack() {
   const fight = duoEncounter;
@@ -71,8 +71,9 @@ function beginDuoAttack() {
   fight.safeY = clamp(player.y + shift, flightBounds.top + fight.safeWidth / 2,
     flightBounds.bottom - fight.safeWidth / 2);
   for (const target of activeBosses()) { target.phase = "telegraph"; target.phaseTime = 0; target.attackIndex = fight.attackIndex; }
-  const name = ["交错弹墙", "双翼封锁", "外侧集火"][fight.attackIndex];
-  setBossMessage(duoTitle(), name + " · 移入绿色通道，随后寻找反击机会");
+  const name = tr(["交错弹墙", "双翼封锁", "外侧集火"][fight.attackIndex],
+    ["Staggered Walls", "Twin-Wing Blockade", "Outer Flank Volley"][fight.attackIndex]);
+  setBossMessage(duoTitle(), name + tr(" · 移入绿色通道，随后寻找反击机会", " · Enter the green lane, then counterattack"));
 }
 function duoShotIsOutsideLane(y, radius) {
   return Math.abs(y - duoEncounter.safeY) > duoEncounter.safeWidth / 2 + radius + player.height * 0.16 + 4;
@@ -156,7 +157,7 @@ function startDuoRecovery(duration = duoRules.recovery) {
   clearDuoAttacks();
   Object.assign(duoEncounter, { phase: "recover", time: 0, rest: duration, safeWidth: 0 });
   for (const target of activeBosses()) { target.phase = "recover"; target.phaseTime = 0; }
-  setBossMessage(duoTitle(), "武器冷却 · 移动瞄准，集中火力反击");
+  setBossMessage(duoTitle(), tr("武器冷却 · 移动瞄准，集中火力反击", "Weapons cooling · Line up a focused counterattack"));
 }
 function drawDuoBeam(hazard) {
   // 大面积封锁用半透明能量场表达，保留生命、技能和安全通道的可读性。
@@ -195,6 +196,6 @@ function drawDuoGuidance() {
   }
   context.setLineDash([]); context.fillStyle = "#a5f6d4";
   context.font = "11px Microsoft YaHei, sans-serif"; context.textAlign = "left";
-  context.fillText(fight.phase === "telegraph" ? "协同攻击预警 · 移入此通道" : "安全通道", left + 14, top + 17);
+  context.fillText(fight.phase === "telegraph" ? tr("协同攻击预警 · 移入此通道", "Duo attack incoming · Enter this lane") : tr("安全通道", "Safe lane"), left + 14, top + 17);
   context.restore();
 }

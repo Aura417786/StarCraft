@@ -32,21 +32,23 @@ function updateMomentumDisplay() {
   const percent = active
     ? momentum.remaining / Math.max(momentumRules.rageDuration, momentum.elapsed + momentum.remaining) * 100
     : Math.max(0, momentumRules.rageThreshold - untilRage) / momentumRules.rageThreshold * 100;
-  const key = [momentum.count, momentum.best, remaining, untilRage, percent.toFixed(1), active, frozen].join("/");
+  const key = [gameLanguage, momentum.count, momentum.best, remaining, untilRage, percent.toFixed(1), active, frozen].join("/");
   if (key === momentumDisplayKey) return;
   momentumDisplayKey = key;
   comboCount.textContent = String(momentum.count);
-  comboBest.textContent = "最高 " + momentum.best;
+  comboBest.textContent = tr("最高 " + momentum.best, "Best " + momentum.best);
   finalCombo.textContent = String(momentum.best);
   comboFill.style.width = clamp(percent, 0, 100).toFixed(1) + "%";
   comboMeter.setAttribute("aria-valuenow", String(Math.floor(clamp(percent, 0, 100))));
-  comboMeter.setAttribute("aria-label", active ? "暴走剩余时间" : "下一次暴走进度");
-  comboMeter.setAttribute("aria-valuetext", active ? "暴走剩余 " + remaining.toFixed(1) + " 秒" : "再增加 " + untilRage + " 连击进入暴走");
+  comboMeter.setAttribute("aria-label", active ? tr("暴走剩余时间", "Overdrive time remaining") : tr("下一次暴走进度", "Progress to next Overdrive"));
+  const nextOverdrive = tr("再增加 " + untilRage + " 连击进入暴走", untilRage + " more kills to Overdrive");
+  comboMeter.setAttribute("aria-valuetext", active ? tr("暴走剩余 " + remaining.toFixed(1) + " 秒",
+    "Overdrive: " + remaining.toFixed(1) + " seconds left") : nextOverdrive);
   momentumPanel.dataset.overdrive = String(active);
   momentumPanel.dataset.frozen = String(frozen);
-  comboCaption.textContent = frozen ? "连击保护 · 首领战" : "连击 / COMBO";
-  rageLabel.textContent = active ? "暴走 " + remaining.toFixed(1) + " 秒 · 攻速 ×1.6"
-    : "再增加 " + untilRage + " 连击进入暴走";
+  comboCaption.textContent = frozen ? tr("连击保护 · 首领战", "Combo held · Boss fight") : tr("连击 / COMBO", "COMBO");
+  rageLabel.textContent = active ? tr("暴走 " + remaining.toFixed(1) + " 秒 · 攻速 ×1.6",
+    "Overdrive " + remaining.toFixed(1) + "s · Fire rate ×1.6") : nextOverdrive;
 }
 function resetMomentum() {
   Object.assign(momentum, {
@@ -80,7 +82,8 @@ function registerMomentumKill() {
     momentum.rageStartCount = momentum.count;
     updateWeaponDisplay();
     gameAudio.overdrive?.();
-    statusMessage.textContent = "连击暴走！普通射击速度提升，继续击杀可延长时间。";
+    statusMessage.textContent = tr("连击暴走！普通射击速度提升，继续击杀可延长时间。",
+      "Overdrive! Fire rate increased. Keep destroying enemies to extend it.");
   }
   updateMomentumDisplay();
 }

@@ -11,6 +11,8 @@ const allowed = new Map([
   ...['ace.js', 'gravity.js'].map(name => ['/' + name, [name, 'text/javascript']]),
   ...['progression.js', 'evolution-weapons.js', 'evolution-preview.js'].map(name => ['/' + name, [name, 'text/javascript']]),
   ['/guide.js', ['guide.js', 'text/javascript']],
+  ['/i18n.js', ['i18n.js', 'text/javascript']],
+  ['/i18n-static.js', ['i18n-static.js', 'text/javascript']],
   ['/guide.css', ['guide.css', 'text/css']],
   ...['crimson', 'scout', 'armored', 'gunner'].map(kind => ['/assets/ships/' + kind + '-pbr.png', ['assets/ships/' + kind + '-pbr.png', 'image/png']]),
   ['/assets/ships/aegis-pod.png', ['assets/ships/aegis-pod.png', 'image/png']],

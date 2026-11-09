@@ -65,7 +65,7 @@ function formationPlan(kind) {
   const spacing = Math.min(unit * 0.9, span * 0.19);
   const safeCenter = clamp(player.y, top + spacing * 1.5, bottom - spacing * 1.5);
   if (kind === "escort") {
-    return { kind, title: "护航编队", hint: "绕过前卫，切入后排", color: "#f2c685", centerY: safeCenter,
+    return { kind, title: tr("护航编队", "Escort Formation"), hint: tr("绕过前卫，切入后排", "Flank the vanguard"), color: "#f2c685", centerY: safeCenter,
       speed: enemySpeedForTime() * 0.66,
       slots: [
         { kind: "armored", x: 0, y: 0, leader: true },
@@ -76,7 +76,7 @@ function formationPlan(kind) {
   }
   if (kind === "command") {
     const centerY = clamp(player.y, top + spacing * 1.75, bottom - spacing * 1.75);
-    return { kind, title: "指挥楔队", hint: "击毁金色前卫，打乱整支编队", color: "#92dffc", centerY,
+    return { kind, title: tr("指挥楔队", "Command Wedge"), hint: tr("击毁金色前卫，打乱整支编队", "Destroy the gold leader to break formation"), color: "#92dffc", centerY,
       speed: enemySpeedForTime() * 0.82,
       slots: [
         { kind: "armored", x: 0, y: 0, leader: true },
@@ -89,7 +89,7 @@ function formationPlan(kind) {
   // 上下两条航线始终留在中心走廊外。低矮窗口减少编队规模，不挤占出口。
   const halfGap = Math.min(span * 0.32, Math.max(player.height * 0.72, 74));
   const offset = Math.min(span * 0.42, halfGap + unit * 0.23);
-  return { kind: "pincer", title: "双翼包抄", hint: "上下夹击，中央航道保持畅通", color: "#a3b9ff", centerY: middle,
+  return { kind: "pincer", title: tr("双翼包抄", "Pincer Attack"), hint: tr("上下夹击，中央航道保持畅通", "Flanks closing · Keep to the center lane"), color: "#a3b9ff", centerY: middle,
     safeTop: middle - Math.max(20, offset - unit * 0.32),
     safeBottom: middle + Math.max(20, offset - unit * 0.32),
     speed: enemySpeedForTime() * 0.96,
@@ -154,7 +154,7 @@ function disruptFormation(group) {
   if (!group || group.broken) return;
   group.broken = true;
   group.disruption = formationRules.disruption;
-  formationState.notice = "指挥链中断 · 编队失序";
+  formationState.notice = tr("指挥链中断 · 编队失序", "Command lost · Formation broken");
   formationState.noticeTime = 1.8;
   for (const member of group.members) {
     if (!enemies.includes(member)) continue;

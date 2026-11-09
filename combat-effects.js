@@ -11,10 +11,11 @@ try {
 } catch { /* 本地文件禁用存储时仍可切换。 */ }
 function updateShakeButton() {
   if (!shakeButton) return;
-  const names = { off: "关", low: "轻", full: "强" };
-  shakeButton.textContent = "震动：" + names[shakePreference];
-  shakeButton.setAttribute("aria-label", "画面震动：" + names[shakePreference] + "，点击切换");
-  shakeButton.title = "切换画面震动：关闭 / 轻微 / 较强；系统减少动态效果时始终关闭";
+  const name = { off: tr("关", "Off"), low: tr("轻", "Low"), full: tr("强", "High") }[shakePreference];
+  shakeButton.textContent = tr("震动：" + name, "Shake: " + name);
+  shakeButton.setAttribute("aria-label", tr("画面震动：" + name + "，点击切换", "Screen shake: " + name + ". Click to change."));
+  shakeButton.title = tr("切换画面震动：关闭 / 轻微 / 较强；系统减少动态效果时始终关闭",
+    "Cycle screen shake through Off, Low, and High. Reduced motion always disables shake.");
 }
 if (shakeButton) shakeButton.addEventListener("click", () => {
   const choices = ["off", "low", "full"];
@@ -109,7 +110,7 @@ function startBossDeathPresentation(target) {
   combatEffects.choiceTarget = target;
   clearMovement(); cancelUltimate(true); bullets.length = 0;
   movementHint.hidden = true;
-  statusMessage.textContent = target.name + "正在解体，随后选择战机进化。";
+  statusMessage.textContent = tr(target.name + "正在解体，随后选择战机进化。", target.name + " is breaking apart. Choose an evolution next.");
   updatePauseHint();
 }
 function updateCombatEffects(seconds) {

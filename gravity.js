@@ -33,7 +33,8 @@ function startGravityWarning() {
   gravityTide.radiusX = viewport.width * 0.32;
   gravityTide.radiusY = Math.max(75, span * 0.48);
   gravityTide.phase = "warning"; gravityTide.elapsed = 0; gravityTide.strength = 0;
-  statusMessage.textContent = "引力潮汐预警，2.4 秒后区域内双方普通子弹将弯向引力核心。";
+  statusMessage.textContent = tr("引力潮汐预警，2.4 秒后区域内双方普通子弹将弯向引力核心。",
+    "Gravity tide warning. In 2.4 seconds, standard shots from both sides will bend toward the core.");
 }
 function updateGravityTide(seconds) {
   if (state !== "battle" || evolution.pending || isBossDeathPlaying()) { suspendGravityTide(); return; }
@@ -45,12 +46,13 @@ function updateGravityTide(seconds) {
   else if (gravityTide.phase === "warning" && t + 1e-9 >= gravityRules.warning) {
     // 保留完整的生效时长，长帧不会跳过预警或直接结算整次潮汐。
     gravityTide.phase = "active"; gravityTide.elapsed = 0;
-    statusMessage.textContent = "引力潮汐生效，双方普通弹道向紫色核心弯曲；可调整位置借势射击。";
+    statusMessage.textContent = tr("引力潮汐生效，双方普通弹道向紫色核心弯曲；可调整位置借势射击。",
+      "Gravity tide active. Standard shots bend toward the purple core. Reposition to use the curve.");
   } else if (gravityTide.phase === "active") {
     gravityTide.strength = Math.max(0, Math.min(1, t / 0.55, (gravityRules.duration - t) / 0.55));
     if (t + 1e-9 >= gravityRules.duration) {
       gravityTide.phase = "rest"; gravityTide.elapsed = 0; gravityTide.strength = 0;
-      statusMessage.textContent = "引力潮汐平息。";
+      statusMessage.textContent = tr("引力潮汐平息。", "The gravity tide has subsided.");
     }
   } else if (gravityTide.phase === "rest" && t + 1e-9 >= gravityRules.cooldown) startGravityWarning();
 }
@@ -113,8 +115,9 @@ function drawGravityTide() {
   const pulse = quiet ? 1 : 1 + Math.sin(g.elapsed * 3) * 0.08;
   context.beginPath(); context.ellipse(g.centerX, g.centerY, 12 * pulse, 6 * pulse, -0.35, 0, Math.PI * 2); context.stroke();
   context.globalAlpha = 0.9; context.fillStyle = "#0b1220e8";
-  const label = warning ? "引力潮汐预警 · " + Math.max(1, Math.ceil(gravityRules.warning - g.elapsed)) + " 秒"
-    : "引力潮汐 · 双方普通弹道弯曲";
+  const seconds = Math.max(1, Math.ceil(gravityRules.warning - g.elapsed));
+  const label = warning ? tr("引力潮汐预警 · " + seconds + " 秒", "Gravity tide warning · " + seconds + " s")
+    : tr("引力潮汐 · 双方普通弹道弯曲", "Gravity tide · Standard shots bend");
   const y = Math.min(150, viewport.height * 0.22);
   context.beginPath(); context.roundRect(viewport.width / 2 - 154, y - 16, 308, 31, 6); context.fill();
   context.fillStyle = color; context.textAlign = "center"; context.font = "12px Microsoft YaHei,sans-serif";

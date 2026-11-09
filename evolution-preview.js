@@ -123,7 +123,7 @@ function previewRefit(ctx, choice, upgraded) {
   if (upgraded) {
     ctx.fillStyle = "#bedbff";
     ctx.font = "11px sans-serif";
-    ctx.fillText("辅助 +4%", 90, 82);
+    ctx.fillText(tr("辅助 +4%", "Aux +4%"), 90, 82);
   }
 }
 
@@ -132,7 +132,7 @@ function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
   const ranks = { pierce: 0, blast: 0, aegis: 0 };
   const links = { ...evolution.links };
   const level = Math.min(3, (evolution[route] || 0) + Number(right && route === choice));
-  const label = right ? (choice.startsWith("refit-") ? "整备后" : "升级后") : "当前";
+  const label = right ? (choice.startsWith("refit-") ? tr("整备后", "Refitted") : tr("升级后", "Upgraded")) : tr("当前", "Current");
   if (Object.hasOwn(ranks, route)) ranks[route] = level;
   if (choice === "phalanx") ranks.aegis = evolution.aegis;
   if (right && evolutionPreviewLinkRoutes[choice]) links[choice] = true;
@@ -185,7 +185,7 @@ function drawEvolutionChoicePreviews(now) {
   }
   evolutionPreview.lastTime = now;
   const signature = [quiet, shipRenderAssets.crimson.ready, evolution.pierce, evolution.blast, evolution.aegis,
-    ...evolutionCards.map(card => card.dataset.choice)].join("/");
+    gameLanguage, ...evolutionCards.map(card => card.dataset.choice)].join("/");
   if (signature === evolutionPreview.signature && (quiet || now - evolutionPreview.lastPaint < 1000 / 30)) return;
   evolutionPreview.signature = signature;
   evolutionPreview.lastPaint = now;

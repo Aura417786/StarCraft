@@ -42,12 +42,12 @@ const firingRules = { baseRate: 5, ratePerLevel: 0.75, renderInterval: 0.05 };
 const maxWeaponLanes = 4;
 // 第四阶再次使用绿色；红色之后从黄色继续循环，阶数不封顶。
 const weaponPalettes = [
-  { name: "黄色", color: "#ffe16a", core: "#fff8d4" },
-  { name: "绿色", color: "#6df59b", core: "#e3ffea" },
-  { name: "紫色", color: "#c58aff", core: "#f4e6ff" },
-  { name: "绿色", color: "#6df59b", core: "#e3ffea" },
-  { name: "蓝色", color: "#55bdff", core: "#e2f5ff" },
-  { name: "红色", color: "#ff6676", core: "#ffe4e8" },
+  { name: "黄色", english: "Yellow", color: "#ffe16a", core: "#fff8d4" },
+  { name: "绿色", english: "Green", color: "#6df59b", core: "#e3ffea" },
+  { name: "紫色", english: "Purple", color: "#c58aff", core: "#f4e6ff" },
+  { name: "绿色", english: "Green", color: "#6df59b", core: "#e3ffea" },
+  { name: "蓝色", english: "Blue", color: "#55bdff", core: "#e2f5ff" },
+  { name: "红色", english: "Red", color: "#ff6676", core: "#ffe4e8" },
 ];
 let pendingShots = 0;
 let renderShotCooldown = 0;
@@ -59,10 +59,10 @@ let powerupCooldown = 3;
 let powerupSpawnCount = 0;
 let upgradeNoticeTime = 0;
 const powerupTypes = {
-  blue: { color: "#55bdff", label: "攻速", symbol: "»" },
-  yellow: { color: "#ffe16a", label: "弹道", symbol: "Ⅲ" },
-  red: { color: "#ff6676", label: "伤害", symbol: "+" },
-  heal: { color: "#70f0b0", label: "生命", symbol: "♥" },
+  blue: { color: "#55bdff", label: "攻速", english: "Fire rate", symbol: "»" },
+  yellow: { color: "#ffe16a", label: "弹道", english: "Lanes", symbol: "Ⅲ" },
+  red: { color: "#ff6676", label: "伤害", english: "Damage", symbol: "+" },
+  heal: { color: "#70f0b0", label: "生命", english: "Life", symbol: "♥" },
 };
 const powerupWeights = [ ["blue", 31], ["yellow", 31], ["red", 31], ["heal", 7] ];
 function choosePowerupType(roll = Math.random()) {
@@ -108,7 +108,7 @@ function clamp(value, minimum, maximum) {
 }
 function setBossWarning(name = "") {
   bossWarning.hidden = !name;
-  bossWarningName.textContent = name ? name + "即将出现" : "";
+  bossWarningName.textContent = name ? tr(name + "即将出现", name + " incoming") : "";
 }
 function syncGameAudio() {
   const active = isBattleActive();
@@ -118,7 +118,7 @@ function syncGameAudio() {
   syncUltimateAudio(active);
 }
 function updateSoundButton() {
-  soundButton.textContent = gameAudio.muted ? "声音：关" : "声音：开";
+  soundButton.textContent = gameAudio.muted ? tr("声音：关", "Sound: Off") : tr("声音：开", "Sound: On");
   soundButton.setAttribute("aria-pressed", String(!gameAudio.muted));
 }
 try { gameAudio.setMuted(window.localStorage.getItem("star-breaker-muted") === "true"); } catch { /* 本地文件也能使用声音，无法记忆设置时忽略。 */ }
@@ -258,12 +258,11 @@ function showScreen(nextState) {
   battleScreen.hidden = !inBattle;
   movementHint.hidden = false;
   canvas.tabIndex = inBattle ? 0 : -1;
-  canvas.setAttribute("aria-label", inBattle
-    ? "可操作的横向星空战场。红色战机自动向右射击，方向键或 WASD 按屏幕方向移动，空格蓄力发射大招，V 开启护盾，Shift 切换射击姿态。"
-    : "横向星空战场。点击开始游戏后，红色战机从左侧出发。");
+  updateGameCanvasLabel();
   statusMessage.textContent = inBattle
-    ? "已进入横向战场。上下移动瞄准敌机，机头自动向右射击。突击机波浪飞行，重甲机耐打，炮击机亮出瞄准线后开火。敌机碰撞或炮弹命中扣 1 点生命，飞过战机不会扣血。命中敌军积能，大招最多储存 5 次，按空格蓄力发射红色贯穿炮。护盾每 25 秒充好一次，最多 2 次，按 V 获得 2 秒无敌。生命归零结束。射击蓝、黄、红球增加攻速、弹道、伤害；稀有绿球恢复一点生命。"
-    : "已返回开始画面。";
+    ? tr("已进入横向战场。上下移动瞄准敌机，机头自动向右射击。突击机波浪飞行，重甲机耐打，炮击机亮出瞄准线后开火。敌机碰撞或炮弹命中扣 1 点生命，飞过战机不会扣血。命中敌军积能，大招最多储存 5 次，按空格蓄力发射红色贯穿炮。护盾每 25 秒充好一次，最多 2 次，按 V 获得 2 秒无敌。生命归零结束。射击蓝、黄、红球增加攻速、弹道、伤害；稀有绿球恢复一点生命。",
+      "Battle started. Move up or down to aim your automatic fire. Scouts weave, armored fighters take more hits, and gunners show an aim line before shooting. A collision or hit costs one life. Enemies that fly past do no damage. Hits charge up to five cannon shots. Press Space to fire one. The shield charges every 25 seconds and stores up to two uses. Press V for two seconds of protection. Shoot blue, yellow, and red orbs to improve fire rate, lanes, and damage. Rare green orbs restore one life.")
+    : tr("已返回开始画面。", "Returned to the main menu.");
   (inBattle ? canvas : startButton).focus({ preventScroll: true });
   updatePauseHint();
 }
@@ -281,15 +280,18 @@ fullscreenButton.addEventListener("click", async () => {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await app.requestFullscreen();
   } catch {
-    statusMessage.textContent = "浏览器未允许全屏。战场仍铺满当前窗口，也可以使用 F11。";
+    statusMessage.textContent = tr("浏览器未允许全屏。战场仍铺满当前窗口，也可以使用 F11。", "Fullscreen is unavailable. The game still fills this window, or you can press F11.");
   }
   if (evolution.pending) refreshEvolutionChoice();
   else if (state === "battle") canvas.focus({ preventScroll: true });
 });
-document.addEventListener("fullscreenchange", () => {
+function updateFullscreenDisplay() {
   const isFullscreen = document.fullscreenElement === app;
-  fullscreenButton.textContent = isFullscreen ? "⛶ 退出全屏" : "⛶ 全屏";
+  fullscreenButton.textContent = isFullscreen ? tr("⛶ 退出全屏", "⛶ Exit fullscreen") : tr("⛶ 全屏", "⛶ Fullscreen");
   fullscreenButton.setAttribute("aria-pressed", String(isFullscreen));
+}
+document.addEventListener("fullscreenchange", () => {
+  updateFullscreenDisplay();
   resizeBattlefield();
   if (evolution.pending) refreshEvolutionChoice();
   else if (state === "battle") canvas.focus({ preventScroll: true });
@@ -395,9 +397,11 @@ function resetWeapons(preserveUpgrades = true) {
   updateWeaponDisplay();
 }
 function updateWeaponDisplay() {
-  speedDisplay.textContent = weapon.speedLevel + "级 · " + progressionFormatLog(-Math.log(effectiveShotInterval()) + (weapon.rateOverflow || 0)) + "次/秒" + (isOverdriveActive() ? " · 暴走" : "");
-  lanesDisplay.textContent = weapon.tier + "阶 · " + weapon.lanes + "/" + maxWeaponLanes + "条";
-  damageDisplay.textContent = formattedProjectileDamage(firingStyle.mode === "focus" ? weapon.lanes : 1) + "点/发";
+  const rate = progressionFormatLog(-Math.log(effectiveShotInterval()) + (weapon.rateOverflow || 0));
+  const lanes = weapon.lanes + "/" + maxWeaponLanes;
+  speedDisplay.textContent = tr(weapon.speedLevel + "级 · " + rate + "次/秒", "Lv " + weapon.speedLevel + " · " + rate + "/s") + (isOverdriveActive() ? tr(" · 暴走", " · Overdrive") : "");
+  lanesDisplay.textContent = tr(weapon.tier + "阶 · " + lanes + "条", "T" + weapon.tier + " · " + lanes);
+  damageDisplay.textContent = formattedProjectileDamage(firingStyle.mode === "focus" ? weapon.lanes : 1) + tr("点/发", "/shot");
 }
 function weaponPalette() { return weaponPalettes[(weapon.tier - 1) % weaponPalettes.length]; }
 function projectileDamage() { return Math.exp(Math.min(690, weaponDamageLog())); }
@@ -418,7 +422,7 @@ function applyPowerup(type) {
     const full = player.lives === playerRules.maxLives;
     player.lives = Math.min(playerRules.maxLives, player.lives + 1);
     updateLifeDisplay();
-    powerupNotice.textContent = full ? "生命已满 · 3 / 3" : "生命 +1 · 剩余 " + player.lives + " / 3";
+    powerupNotice.textContent = full ? tr("生命已满 · 3 / 3", "Full lives · 3 / 3") : tr("生命 +1 · 剩余 " + player.lives + " / 3", "Life +1 · " + player.lives + " / 3 remaining");
     powerupNotice.dataset.type = type;
     powerupNotice.hidden = false;
     upgradeNoticeTime = 2;
@@ -442,10 +446,13 @@ function applyPowerup(type) {
     damageBoost = growth.after - growth.before;
   }
   updateWeaponDisplay();
+  const palette = weaponPalette();
+  const extra = progressionFormatLog((weapon.tier - previousTier) * Math.log(progressionRules.tierBonus));
+  const laneCount = weapon.lanes + "/" + maxWeaponLanes;
   powerupNotice.textContent = type === "yellow" && weapon.tier > previousTier
-    ? "弹幕晋升 " + weapon.tier + "阶 · 额外火力 ×" + progressionFormatLog((weapon.tier - previousTier) * Math.log(progressionRules.tierBonus)) + " · " + weaponPalette().name + " · " + weapon.lanes + "/" + maxWeaponLanes + "条"
-    : type === "red" ? "单发伤害 ×" + progressionFormatLog(damageBoost) + " · " + damageDisplay.textContent
-    : details.label + " +" + gain + " · "
+    ? tr(`弹幕晋升 ${weapon.tier}阶 · 额外火力 ×${extra} · ${palette.name} · ${laneCount}条`, `Tier ${weapon.tier} unlocked · Bonus ×${extra} · ${palette.english} · ${laneCount} lanes`)
+    : type === "red" ? tr("单发伤害 ×", "Damage per shot ×") + progressionFormatLog(damageBoost) + " · " + damageDisplay.textContent
+    : tr(details.label, details.english) + " +" + gain + " · "
       + (type === "blue" ? speedDisplay.textContent : type === "yellow" ? lanesDisplay.textContent : damageDisplay.textContent);
   powerupNotice.dataset.type = type;
   powerupNotice.hidden = false;
@@ -739,14 +746,14 @@ function drawPowerups() {
     context.font = "700 20px Consolas, monospace";
     context.fillText(details.symbol, 0, 7);
     context.font = "11px Microsoft YaHei, sans-serif";
-    context.fillText(details.label, 0, -orb.radius - 8);
+    context.fillText(tr(details.label, details.english), 0, -orb.radius - 8);
     context.restore();
   }
 }
 function updateLifeDisplay() {
   lifeDisplay.textContent = Array.from({ length: playerRules.maxLives }, (_, index) =>
     index < player.lives ? "♥" : "♡").join(" ");
-  lifeDisplay.setAttribute("aria-label", player.lives + " 点生命");
+  lifeDisplay.setAttribute("aria-label", tr(player.lives + " 点生命", player.lives + (player.lives === 1 ? " life" : " lives")));
 }
 function enemyTouchesPlayer(enemy) {
   // 主机身的椭圆碰撞区不包含图片透明边缘；用双方相对移动路径检测高速交错。
@@ -767,7 +774,7 @@ function damagePlayer(message) {
   bossHitGrace = bossRules.grace;
   movementHint.hidden = true;
   updateLifeDisplay();
-  statusMessage.textContent = message + "，剩余 " + player.lives + " 点生命。";
+  statusMessage.textContent = tr(message + "，剩余 " + player.lives + " 点生命。", message + ". Lives remaining: " + player.lives + ".");
   if (!player.lives) endGame();
   return true;
 }
@@ -779,7 +786,7 @@ function updatePlayerDamage(seconds) {
     if (enemyTouchesPlayer(enemy)) {
       enemies.splice(index, 1);
       createExplosion(enemy, 0);
-      damagePlayer("撞到敌机");
+      damagePlayer(tr("撞到敌机", "Crashed into an enemy"));
       if (state !== "battle") break;
     } else if (enemy.x + enemy.width / 2 < 0) {
       // 安全飞过玩家的敌机继续向左飞，离屏再清理，不扣血也不计分。
@@ -807,7 +814,7 @@ function endGame() {
   player.hitFlash = 0;
   updateLifeDisplay();
   canvas.tabIndex = -1;
-  canvas.setAttribute("aria-label", "本局已结束，战场已停止。选择重新开始可再玩一局。");
+  updateGameCanvasLabel();
   movementHint.hidden = true;
   pauseHint.hidden = true;
   powerupNotice.hidden = true;
@@ -817,7 +824,7 @@ function endGame() {
   finalKills.textContent = String(kills);
   document.querySelector("#final-combo").textContent = String(momentum.best);
   gameOverScreen.hidden = false;
-  statusMessage.textContent = "游戏结束。本局得分 " + score + "，击毁 " + kills + " 架敌机。";
+  statusMessage.textContent = tr("游戏结束。本局得分 " + score + "，击毁 " + kills + " 架敌机。", `Game over. Score: ${score}. Enemies destroyed: ${kills}.`);
   restartButton.focus({ preventScroll: true });
 }
 function drawEnemies() {
@@ -967,6 +974,29 @@ function drawFrame(time) {
   drawBattlefieldEventNotice();
   drawEvolutionChoicePreviews(time);
   window.requestAnimationFrame(drawFrame);
+}
+function updateGameCanvasLabel() {
+  const label = state === "over"
+    ? tr("本局已结束，战场已停止。选择重新开始可再玩一局。", "The run is over. Select Restart to play again.")
+    : state === "battle"
+    ? tr("可操作的横向星空战场。红色战机自动向右射击，方向键或 WASD 按屏幕方向移动，空格蓄力发射大招，V 开启护盾，Shift 切换射击姿态。", "Playable space battlefield. The red fighter fires automatically. Move with arrows or WASD, fire the charged cannon with Space, shield with V, and switch firing modes with Shift.")
+    : tr("横向星空战场。点击开始游戏后，红色战机从左侧出发。", "Side-scrolling space battlefield. Select Start Game to launch the red fighter.");
+  canvas.setAttribute("aria-label", label);
+}
+function refreshGameLanguage() {
+  updateGameCanvasLabel();
+  updateFullscreenDisplay();
+  updateSoundButton();
+  updateWeaponDisplay();
+  updateLifeDisplay();
+  updateFiringStyleDisplay();
+  updateShakeButton();
+  updateMomentumDisplay();
+  updateShieldDisplay();
+  updateUltimateDisplay();
+  updateEvolutionDisplay();
+  refreshEvolutionChoice();
+  if (state === "menu") statusMessage.textContent = tr("开始画面已就绪。", "Ready to start.");
 }
 updateLifeDisplay();
 resizeBattlefield();
