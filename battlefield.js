@@ -3,11 +3,11 @@
 // Original generated cinematic plates, animated as a continuous leftward journey.
 // No backdrop object participates in collision. Preserve open, readable combat lanes.
 const battlefieldSectors = [
-  { id: "orbit", name: "曙光轨道", enName: "Dawn Orbit", subtitle: "DAWN / LOW ORBIT", color: "#78c8f4", dark: "#030610", asset: "assets/scenery/orbit.png", anchorY: 0.66, foreground: 0 },
-  { id: "belt", name: "碎星航道", enName: "Shattered Passage", subtitle: "SHATTERED / ASTEROID BELT", color: "#c9a680", dark: "#060710", asset: "assets/scenery/belt.png", anchorY: 0.24, foreground: 0.12 },
-  { id: "wreck", name: "余烬墓场", enName: "Ember Graveyard", subtitle: "AFTERMATH / FLEET GRAVEYARD", color: "#ed9d70", dark: "#070610", asset: "assets/scenery/wreck.png", anchorY: 0.22, foreground: 0.08 },
-  { id: "citadel", name: "深空壁垒", enName: "Deep-Space Citadel", subtitle: "CITADEL / CAPITAL SHIP", color: "#82bfc8", dark: "#030810", asset: "assets/scenery/citadel.png", anchorY: 0.16, foreground: 0.05 },
-  { id: "rift", name: "虚空之眼", enName: "Eye of the Void", subtitle: "BEYOND / EVENT HORIZON", color: "#ad9af4", dark: "#050513", asset: "assets/scenery/rift.png", anchorY: 0.20, foreground: 0 },
+  { id: "orbit", name: "曙光轨道", enName: "Dawn Orbit", subtitle: "DAWN / LOW ORBIT", color: "#78c8f4", dark: "#030610", asset: "assets/scenery/orbit-galaxy.png", anchorY: 0.51, foreground: 0 },
+  { id: "belt", name: "碎星航道", enName: "Shattered Passage", subtitle: "SHATTERED / ASTEROID BELT", color: "#c9a680", dark: "#060710", asset: "assets/scenery/belt-galaxy.png", anchorY: 0.20, foreground: 0.24 },
+  { id: "wreck", name: "余烬墓场", enName: "Ember Graveyard", subtitle: "AFTERMATH / FLEET GRAVEYARD", color: "#ed9d70", dark: "#070610", asset: "assets/scenery/wreck-galaxy.png", anchorY: 0.30, foreground: 0.18 },
+  { id: "citadel", name: "深空壁垒", enName: "Deep-Space Citadel", subtitle: "CITADEL / CAPITAL SHIP", color: "#82bfc8", dark: "#030810", asset: "assets/scenery/citadel-galaxy.png", anchorY: 0.62, foreground: 0.08 },
+  { id: "rift", name: "虚空之眼", enName: "Eye of the Void", subtitle: "BEYOND / EVENT HORIZON", color: "#ad9af4", dark: "#050513", asset: "assets/scenery/rift-galaxy.png", anchorY: 0.16, foreground: 0 },
 ];
 const sceneryRules = { interval: 75, blend: 10, zoom: 1.28, maxImages: 3 };
 const battlefieldState = { sector: 0, previous: 0, completed: 0, clock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 };
@@ -102,14 +102,18 @@ function updateBattlefield(seconds) {
 function sceneryFrame(imageWidth, imageHeight, age, sector) {
   const w = viewport.width, h = viewport.height;
   const quiet = reducedMotion.matches;
-  const cover = Math.max(w / imageWidth, h / imageHeight);
-  const scale = cover * (quiet ? 1.06 : sceneryRules.zoom);
-  const width = imageWidth * scale, height = imageHeight * scale;
+  const menu = state === "menu";
   const travel = quiet ? 0.55 : sceneryClamp(age / (sceneryRules.interval + sceneryRules.blend), 0, 1);
+  const cover = Math.max(w / imageWidth, h / imageHeight);
+  // A slight approach complements the faster movement of the nearby rock layer.
+  const approach = sceneryClamp((age - sceneryRules.blend) / sceneryRules.interval, 0, 1);
+  const scale = cover * (quiet ? 1.06 : sceneryRules.zoom + (menu ? 0 : approach * 0.045));
+  const width = imageWidth * scale, height = imageHeight * scale;
   const marginX = Math.max(0, width - w), marginY = Math.max(0, height - h);
   // Image content keeps travelling left until it is fully crossfaded out at age 85 s.
-  const x = -marginX * travel - battlefieldState.driftX;
-  const y = -marginY * battlefieldSectors[sector].anchorY - battlefieldState.driftY;
+  const anchorY = menu ? 0.66 : battlefieldSectors[sector].anchorY;
+  const x = sceneryClamp(-marginX * travel - battlefieldState.driftX, -marginX, 0);
+  const y = sceneryClamp(-marginY * anchorY - battlefieldState.driftY, -marginY, 0);
   return { x, y, width, height, travel };
 }
 function sceneryDrawSector(sector, alpha, age) {
@@ -147,11 +151,12 @@ function sceneryDrawParticles() {
   const foreground = sceneryLoadForeground();
   if (foregroundWeight > 0 && foreground && foreground.ready) {
     for (let i = 0; i < 2; i++) {
-      const size = (i === 1 ? 94 : 72) * Math.min(1.1, Math.max(0.6, h / 720));
-      const span = w + size * 3, speed = 17 + i * 5;
+      const size = (i === 1 ? 156 : 112) * Math.min(1.28, Math.max(0.6, h / 720));
+      const span = w + size * 3, speed = 35 + i * 16;
       const x = ((sceneryHash(i * 7.4 + 12) * span - clock * speed) % span + span) % span - size * 1.5;
-      const y = i === 1 ? -size * 0.16 : h + size * 0.16;
-      ctx.save(); ctx.translate(x, y); ctx.rotate(i * 1.7 + Math.sin(clock * 0.018 + i) * 0.06);
+      const y = i === 1 ? size * 0.16 : h - size * 0.16;
+      ctx.save(); ctx.translate(x - battlefieldState.driftX * 2, y - battlefieldState.driftY * 2);
+      ctx.rotate(i * 1.7 + Math.sin(clock * 0.10 + i) * 0.12);
       ctx.globalAlpha = foregroundWeight;
       ctx.drawImage(foreground.image, -size / 2, -size / 3, size, size * 2 / 3);
       ctx.restore();

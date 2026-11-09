@@ -21,6 +21,7 @@ const allowed = new Map([
   ...['battlefield.js', 'battlefield-events.js', 'formations.js', 'boss-components.js'].map(name => ['/' + name, [name, 'text/javascript']]),
   ...['orbit', 'belt', 'wreck', 'citadel', 'rift', 'foreground-rock'].map(name => ['/assets/scenery/' + name + '.png', ['assets/scenery/' + name + '.png', 'image/png']]),
   ...['orbit', 'belt', 'wreck', 'citadel', 'rift'].map(name => ['/assets/scenery/' + name + '-silent.png', ['assets/scenery/' + name + '-silent.png', 'image/png']]),
+  ...['orbit', 'belt', 'wreck', 'citadel', 'rift'].map(name => ['/assets/scenery/' + name + '-galaxy.png', ['assets/scenery/' + name + '-galaxy.png', 'image/png']]),
   ...[0,1,2,3,4].map(index => ['/assets/bosses/boss-' + index + '.png', ['assets/bosses/boss-' + index + '.png', 'image/png']]),
 ]);
 http.createServer((req, res) => {
