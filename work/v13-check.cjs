@@ -386,6 +386,37 @@ check('crossfade starts at 65 seconds and finishes after ten seconds', () => {
   assert.equal(execute('sceneryJourney(75).current'),1);near(execute('sceneryJourney(75).blend'),0);
   execute('battlefieldState.clock=70;scenerySyncJourney();');near(execute('battlefieldState.transition'),5);
 });
+check('crimson reflection blends with the scenery and matches across sector boundaries', () => {
+  isolated('battlefieldState.clock=65;');
+  assert.deepEqual(snapshot('shipReflectionLight().channels'),[82,179,255]);
+  execute('battlefieldState.clock=70;');
+  assert.deepEqual(snapshot('shipReflectionLight().channels'),[169,179,164]);
+  near(execute('shipReflectionLight().side'),.01);
+  for(let leg=1;leg<=5;leg++){
+    execute(`battlefieldState.clock=${leg*75}-.000001;`);
+    const prior=snapshot('shipReflectionLight()');
+    execute(`battlefieldState.clock=${leg*75};`);
+    const next=snapshot('shipReflectionLight()');
+    assert.deepEqual(prior.channels,next.channels);
+    near(prior.side,next.side);
+  }
+});
+check('the player hull keeps reflection after evolution and under reduced motion', () => {
+  isolated();
+  execute('shipRenderAssets.crimson.image=fighterImage;shipRenderAssets.crimson.ready=true;');
+  try {
+    for(const setup of ['', 'evolution.aegis=1;reducedMotion.matches=true;']) {
+      execute(setup);
+      drawOperations.length=0;captureDraws=true;
+      execute('drawPlayer();');
+      captureDraws=false;
+      assert.equal(drawOperations.filter(op=>op.name==='set:globalCompositeOperation'&&op.args[0]==='screen').length,1);
+    }
+  } finally {
+    captureDraws=false;
+    execute('shipRenderAssets.crimson.image=null;shipRenderAssets.crimson.ready=false;');
+  }
+});
 check('panorama keeps moving left throughout its visible lifetime', () => {
   isolated('battlefieldState.driftX=0;');
   let prior=Infinity;

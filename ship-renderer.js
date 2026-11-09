@@ -27,6 +27,56 @@ const shipRenderAssets = Object.fromEntries(Object.entries(shipRenderSources).ma
   return [kind, asset];
 }));
 const shipVisuals = { clock: 0, bank: 0 };
+// Rim and canopy glints follow existing highlights on the original crimson texture.
+const crimsonReflectionSurfaces = [
+  { side: -1, weight: 1, points: [[330, 130], [400, 146], [520, 213], [640, 293], [700, 332]] },
+  { side: 1, weight: 1, points: [[325, 882], [400, 841], [520, 758], [640, 670], [740, 614]] },
+  { side: 0, weight: 0.55, points: [[703, 384], [777, 366], [871, 369], [963, 392], [1046, 425]] },
+];
+// Positive values light the lower wing, as with the planet in the first sector.
+const shipReflectionLights = {
+  orbit: { channels: [82, 179, 255], side: 0.72 },
+  belt: { channels: [255, 178, 72], side: -0.7 },
+  wreck: { channels: [255, 132, 126], side: -0.3 },
+  citadel: { channels: [96, 218, 216], side: 0.6 },
+  rift: { channels: [179, 139, 255], side: -0.48 },
+};
+
+function shipReflectionLight() {
+  const { current, next, blend } = sceneryJourney();
+  const from = shipReflectionLights[battlefieldSectors[current].id];
+  const to = shipReflectionLights[battlefieldSectors[next].id];
+  const mix = (a, b) => a + (b - a) * blend;
+  const channels = from.channels.map((value, index) => Math.round(mix(value, to.channels[index])));
+  return { channels, side: mix(from.side, to.side) };
+}
+
+function drawCrimsonReflection(ctx, geometry, bank) {
+  const light = shipReflectionLight(), color = light.channels.join(",");
+  const alpha = ctx.globalAlpha;
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (const surface of crimsonReflectionSurfaces) {
+    const points = surface.points.map(geometry.point);
+    const first = points[0], last = points.at(-1);
+    const gradient = ctx.createLinearGradient(first.x, first.y, last.x, last.y);
+    gradient.addColorStop(0, `rgba(${color},0)`);
+    gradient.addColorStop(0.34, `rgba(${color},0.9)`);
+    gradient.addColorStop(0.74, `rgba(${color},0.48)`);
+    gradient.addColorStop(1, `rgba(${color},0)`);
+    const weight = surface.weight * (0.75 + surface.side * (light.side * 0.30 + bank * 0.14));
+    ctx.strokeStyle = gradient;
+    ctx.beginPath(); ctx.moveTo(first.x, first.y);
+    for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+    ctx.globalAlpha = alpha * weight * 0.25;
+    ctx.lineWidth = geometry.width * 0.024; ctx.stroke();
+    ctx.globalAlpha = alpha * weight * 0.76;
+    ctx.lineWidth = geometry.width * 0.0085; ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function resetShipVisuals() { shipVisuals.clock = 0; shipVisuals.bank = 0; }
 function updateShipVisuals(seconds) {
   if (!isBattleActive() || !Number.isFinite(seconds) || seconds <= 0) return;
@@ -156,6 +206,7 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0) 
   if (cached) ctx.drawImage(cached.body, geometry.x, geometry.y, geometry.width, geometry.height);
   else ctx.drawImage(asset.image, ...asset.crop, geometry.x, geometry.y, geometry.width, geometry.height);
   ctx.restore();
+  if (playerShip && ship === player && !ship.disabled && !(ship.hitFlash > 0)) drawCrimsonReflection(ctx, geometry, bank);
   if (playerShip) drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, true);
   if (!playerShip && ship.formationLeader && !ship.disabled) {
     for (const side of [-1, 1]) {
