@@ -4,6 +4,8 @@ Shoot the guns off a boss, upgrade your fighter, and survive five sectors of dee
 
 [Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Watch the 30-second trailer](media/trailer.mp4) · [中文说明](README.md)
 
+[Fullscreen bug fix comparison video](media/fullscreen-compare.mp4) · [Development write-up in Chinese](promotion/全屏敌机消失复盘.md)
+
 ![Star Breaker gameplay](media/gameplay.gif)
 
 - **Disarm bosses.** Destroy their upper or lower gun mounts to shut down the attacks they control. Later battles pit you against two bosses at once.

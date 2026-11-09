@@ -8,6 +8,8 @@
 
 [▶ 在线试玩](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [itch.io 免费试玩](https://aura417786.itch.io/star-breaker) · [观看 30 秒演示](media/trailer.mp4) · [了解游戏与制作过程](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/about.html) · [English quick start](README.en.md)
 
+切换全屏曾经会清空敌机。看同一操作在两个版本里的实机对比，了解修复后怎样保留本局战斗进度。[全屏 Bug 复盘与短片](promotion/全屏敌机消失复盘.md)
+
 - **拆掉 Boss 的武器。** 瞄准上下炮组，削弱对应攻击。后期还会遇到双首领协同挑战。
 - **强化主炮，进化战机。** 射中能量球提升火力，累积连击触发暴走。击败首领后选择翼炮、僚机或壁垒。
 - **用护盾打出反击。** 等敌弹贴近再开盾，触发完美格挡后，可以更快发射已储存的贯星炮。
