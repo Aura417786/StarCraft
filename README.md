@@ -6,7 +6,7 @@
 
 [![星际突围实机封面](media/promo-cover.jpg)](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/)
 
-[▶ 在线试玩](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [观看 30 秒演示](media/trailer.mp4) · [了解游戏与制作过程](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/about.html)
+[▶ 在线试玩](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [观看 30 秒演示](media/trailer.mp4) · [了解游戏与制作过程](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/about.html) · [English quick start](README.en.md)
 
 - **拆掉 Boss 的武器。** 瞄准上下炮组，削弱对应攻击。后期还会遇到双首领协同挑战。
 - **强化主炮，进化战机。** 射中能量球提升火力，累积连击触发暴走。击败首领后选择翼炮、僚机或壁垒。
@@ -28,7 +28,7 @@
 
 主炮已有四条弹道时，再射中黄球即可合束晋阶，获得额外 **12%** 总火力。开盾后 **0.25 秒**内挡住实体敌弹可触发完美格挡，打出反击并返还 **25%** 护盾充能。如果已经存好一发贯星炮，可在接下来 **3 秒**内按空格，将这次蓄力从 **0.85 秒**缩短到 **0.45 秒**。
 
-试玩后欢迎告诉我第一次在哪里阵亡、最爽的瞬间，以及是什么让你想继续或退出。结束画面的截图有助于理解你的体验。
+试玩后欢迎告诉我第一次在哪里阵亡、最爽的瞬间，以及是什么让你想继续或退出。也可以附上结束画面的截图。[提交试玩反馈](https://github.com/Aura417786/StarCraft/issues/new?title=Star%20Breaker%20playtest%20feedback)
 
 ## 关于这份作品
 

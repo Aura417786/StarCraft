@@ -1,0 +1,29 @@
+# Star Breaker · 星际突围
+
+Shoot the guns off a boss, upgrade your fighter, and survive five sectors of deep space. Star Breaker is a single-player, side-scrolling shooter for desktop browsers.
+
+[Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Watch the 30-second trailer](media/trailer.mp4) · [中文说明](README.md)
+
+![Star Breaker gameplay](media/gameplay.gif)
+
+- **Disarm bosses.** Destroy their upper or lower gun mounts to shut down the attacks they control. Later battles pit you against two bosses at once.
+- **Evolve your fighter.** Shoot power-up orbs to strengthen your main gun. After a boss victory, choose wing guns, an AI wingman, or a shield that absorbs enemy shots and fires them back.
+- **Time your shield.** A perfect block gives you three seconds to trigger a faster charge for a cannon shot you already have stored.
+- **Travel through five sectors.** Fly past a planet, asteroid fields, wrecked fleets and capital ships on the way to a black hole.
+
+## Quick start
+
+Use a desktop browser and keyboard. The game interface is in Chinese. On your first visit, select **明白了** (Got it) to close the guide, then **开始游戏** (Start Game). Your main gun fires automatically.
+
+| Key | Action |
+| --- | --- |
+| Arrow keys or WASD | Move and aim |
+| Shift | Switch between spread and focused fire |
+| Space | Charge and fire a stored cannon shot |
+| V | Use a stored shield charge for two seconds of protection |
+
+After one run, I’d love to know where you first died and which moment made you want to play again. [Share playtest feedback](https://github.com/Aura417786/StarCraft/issues/new?title=Star%20Breaker%20playtest%20feedback)
+
+## About the project
+
+I began with movement, autofire, and scoring, then built the game through AI-assisted development and playtesting. It uses HTML, CSS, JavaScript, Canvas 2D, and browser-synthesized audio via Web Audio. The ships, bosses, and scenery use AI-generated artwork selected and integrated for the game.
