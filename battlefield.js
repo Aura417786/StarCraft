@@ -3,11 +3,11 @@
 // Original generated cinematic plates, animated as a continuous leftward journey.
 // No backdrop object participates in collision. Preserve open, readable combat lanes.
 const battlefieldSectors = [
-  { id: "orbit", name: "曙光轨道", enName: "Dawn Orbit", subtitle: "DAWN / LOW ORBIT", color: "#78c8f4", dark: "#030610", asset: "assets/scenery/orbit-galaxy.png", anchorY: 0.51, foreground: 0 },
-  { id: "belt", name: "碎星航道", enName: "Shattered Passage", subtitle: "SHATTERED / ASTEROID BELT", color: "#c9a680", dark: "#060710", asset: "assets/scenery/belt-galaxy.png", anchorY: 0.20, foreground: 0.24 },
-  { id: "wreck", name: "余烬墓场", enName: "Ember Graveyard", subtitle: "AFTERMATH / FLEET GRAVEYARD", color: "#ed9d70", dark: "#070610", asset: "assets/scenery/wreck-galaxy.png", anchorY: 0.30, foreground: 0.18 },
-  { id: "citadel", name: "深空壁垒", enName: "Deep-Space Citadel", subtitle: "CITADEL / CAPITAL SHIP", color: "#82bfc8", dark: "#030810", asset: "assets/scenery/citadel-galaxy.png", anchorY: 0.62, foreground: 0.08 },
-  { id: "rift", name: "虚空之眼", enName: "Eye of the Void", subtitle: "BEYOND / EVENT HORIZON", color: "#ad9af4", dark: "#050513", asset: "assets/scenery/rift-galaxy.png", anchorY: 0.16, foreground: 0 },
+  { id: "orbit", name: "曙光轨道", enName: "Dawn Orbit", subtitle: "DAWN / LOW ORBIT", color: "#78c8f4", dark: "#030610", asset: "assets/scenery/orbit-galaxy.webp", anchorY: 0.51, foreground: 0 },
+  { id: "belt", name: "碎星航道", enName: "Shattered Passage", subtitle: "SHATTERED / ASTEROID BELT", color: "#c9a680", dark: "#060710", asset: "assets/scenery/belt-galaxy.webp", anchorY: 0.20, foreground: 0.24 },
+  { id: "wreck", name: "余烬墓场", enName: "Ember Graveyard", subtitle: "AFTERMATH / FLEET GRAVEYARD", color: "#ed9d70", dark: "#070610", asset: "assets/scenery/wreck-galaxy.webp", anchorY: 0.30, foreground: 0.18 },
+  { id: "citadel", name: "深空壁垒", enName: "Deep-Space Citadel", subtitle: "CITADEL / CAPITAL SHIP", color: "#82bfc8", dark: "#030810", asset: "assets/scenery/citadel-galaxy.webp", anchorY: 0.62, foreground: 0.08 },
+  { id: "rift", name: "虚空之眼", enName: "Eye of the Void", subtitle: "BEYOND / EVENT HORIZON", color: "#ad9af4", dark: "#050513", asset: "assets/scenery/rift-galaxy.webp", anchorY: 0.16, foreground: 0 },
 ];
 const sceneryRules = { interval: 75, blend: 10, zoom: 1.28, maxImages: 3 };
 const battlefieldState = { sector: 0, previous: 0, completed: 0, clock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 };
@@ -118,13 +118,16 @@ function sceneryFrame(imageWidth, imageHeight, age, sector) {
 }
 function sceneryDrawSector(sector, alpha, age) {
   if (alpha <= 0) return;
-  const ctx = context, w = viewport.width, h = viewport.height, layer = sceneryLayer(sector, state === "menu");
+  const ctx = context, w = viewport.width, h = viewport.height;
+  const layer = sceneryLayer(sector, state === "menu");
+  // Keep the menu's orbit visible while the first battle panorama downloads.
+  const backdrop = layer?.ready ? layer : alpha === 1 ? sceneryCache.get("menu") : null;
   ctx.save(); ctx.globalAlpha = alpha;
-  if (layer && layer.ready) {
-    const frame = sceneryFrame(layer.width, layer.height, age, sector);
+  if (backdrop?.ready) {
+    const frame = sceneryFrame(backdrop.width, backdrop.height, age, sector);
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(layer.image, frame.x, frame.y, frame.width, frame.height);
-  } else { ctx.fillStyle = battlefieldSectors[sector].dark; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(backdrop.image, frame.x, frame.y, frame.width, frame.height);
+  } else if (alpha === 1) { ctx.fillStyle = battlefieldSectors[sector].dark; ctx.fillRect(0, 0, w, h); }
   ctx.restore();
 }
 function sceneryDrawParticles() {

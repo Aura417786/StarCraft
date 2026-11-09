@@ -461,15 +461,28 @@ function readPng(relative, decompress=false) {
   if(decompress){const raw=zlib.inflateSync(Buffer.concat(idat));assert.equal(raw.length,(width*(color===6?4:3)+1)*height);}
   return {width,height,color};
 }
-check('all five cinematic plates and foreground rock are valid complete PNG assets', () => {
-  for(const asset of snapshot('battlefieldSectors.map(s=>s.asset)'))readPng(asset,true);
+function readSceneryImage(relative) {
+  if (relative.endsWith('.png')) return readPng(relative,true);
+  const bytes=fs.readFileSync(path.join(__dirname,'..',relative));
+  assert.equal(bytes.toString('ascii',0,4),'RIFF');
+  assert.equal(bytes.readUInt32LE(4)+8,bytes.length,'complete WebP container');
+  assert.equal(bytes.toString('ascii',8,16),'WEBPVP8 ');
+  const chunkSize=bytes.readUInt32LE(16);
+  assert.equal(20+chunkSize+chunkSize%2,bytes.length,'complete VP8 chunk');
+  assert.equal(bytes.subarray(23,26).toString('hex'),'9d012a','VP8 image signature');
+  const width=bytes.readUInt16LE(26)&0x3fff,height=bytes.readUInt16LE(28)&0x3fff;
+  assert.ok(width>=1024&&height>=720&&width<=8192&&height<=8192,relative+' full-resolution asset');
+  return {width,height};
+}
+check('all five cinematic plates and transparent foreground are valid image assets', () => {
+  for(const asset of snapshot('battlefieldSectors.map(s=>s.asset)'))readSceneryImage(asset);
   const foreground=readPng('assets/scenery/foreground-rock.png',true);assert.equal(foreground.color,6,'foreground needs a real alpha channel');
 });
 class SceneryImageMock {
   constructor(){this.complete=false;this.naturalWidth=0;this.naturalHeight=0;}
   set src(value){
     this.url=value;
-    try{const info=readPng(value);this.naturalWidth=info.width;this.naturalHeight=info.height;this.complete=true;this.onload?.();}
+    try{const info=readSceneryImage(value);this.naturalWidth=info.width;this.naturalHeight=info.height;this.complete=true;this.onload?.();}
     catch(error){this.complete=true;this.loadError=error;this.onerror?.();}
   }
   get src(){return this.url;}
@@ -496,6 +509,12 @@ check('decoded backgrounds and transparent foreground render through drawImage a
     assert.equal(images.filter(op=>op.args[0].src==='assets/scenery/foreground-rock.png').length,debrisWeight>0?2:0,'near debris only in belt/fleet sectors');
     for(const op of drawOperations)for(const arg of op.args)if(typeof arg==='number')assert.ok(Number.isFinite(arg),op.name+' finite image geometry');
   }
+});
+check('first battle draws the menu orbit while the new panorama is still loading', () => {
+  isolated('sceneryLayer(0,true);sceneryCache.get(0).ready=false;');
+  drawOperations.length=0;captureDraws=true;execute('drawBattlefield();');captureDraws=false;
+  assert.ok(drawOperations.some(op=>op.name==='drawImage'&&op.args[0].src==='assets/scenery/orbit-silent.png'));
+  execute('sceneryCache.get(0).ready=true;');
 });
 check('resize reuses decoded images and failed or absent Image loaders leave a safe fallback', () => {
   isolated();const loaded=execute('sceneryLayer(0).image');
