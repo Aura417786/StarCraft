@@ -47,7 +47,7 @@ if (window.AudioNode && window.AudioContext) {
 const showcaseOriginalActive = isBattleActive;
 isBattleActive = function () {
   if (!showcase.running) return showcaseOriginalActive();
-  return state === "battle" && !pauseView && !evolution.pending && !isBossDeathPlaying() && !document.hidden;
+  return state === "battle" && !pauseView && !evolution.pending && !isBossPresentationPlaying() && !document.hidden;
 };
 const showcaseOriginalPlayerUpdate = updatePlayer;
 updatePlayer = function (seconds) {
@@ -55,7 +55,7 @@ updatePlayer = function (seconds) {
   showcase.elapsed += Math.max(0, seconds);
   const sceneIndex = showcaseScenes.findLastIndex(scene => showcase.elapsed >= scene.start);
   if (sceneIndex !== showcase.scene) enterShowcaseScene(sceneIndex);
-  updateShowcaseMovement(seconds);
+  if (!isBossPresentationPlaying()) updateShowcaseMovement(seconds);
 };
 const showcaseOriginalNotices = drawBattlefieldEventNotice;
 drawBattlefieldEventNotice = function () {

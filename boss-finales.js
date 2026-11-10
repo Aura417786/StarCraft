@@ -19,7 +19,6 @@ let bossFinaleEggImage;
 
 function bossFinaleStageLabel(type) { return tr(...bossFinaleStages[type].name); }
 function bossFinaleHint(type) { return tr(...bossFinaleStages[type].hint); }
-function bossFinaleCollapseDuration() { return 2.05; }
 
 function preloadBossFinaleArt(type) {
   if (typeof preloadStarBreakerModel === "function") {
@@ -34,10 +33,11 @@ function preloadBossFinaleArt(type) {
 
 function beginBossFinale(target) {
   const profile = bossFinaleStages[target.type];
+  const transform = bossPresentationDuration(target, "transform");
   const nodeCount = profile.mode === "bones" || profile.mode === "mirror" ? 2
     : profile.mode === "spores" || profile.mode === "synapse" ? 3 : 0;
   target.finale = {
-    mode: profile.mode, age: 0, transform: 1.16, beat: 0, next: 1.7, openUntil: 0,
+    mode: profile.mode, age: 0, transform, beat: 0, next: transform + .54, openUntil: 0,
     startX: target.x, startY: target.y, hazards: [],
     nodes: Array.from({ length: nodeCount }, (_, index) => ({ index, hp: 1 })), activeNode: 0,
     gate: null, reflectedBeat: -1,
@@ -52,11 +52,10 @@ function beginBossFinale(target) {
   target.alienAttack = null;
   clearBossFinaleAttacks();
   bossHitGrace = Math.max(bossHitGrace, .65);
-  gameAudio.bossAttack("surge");
-  addCombatShake(4.5);
   preloadBossFinaleArt(target.type);
   setBossMessage(bossStageTitle(target), bossFinaleHint(target.type));
   statusMessage.textContent = bossFinaleStageLabel(target.type) + " · " + bossFinaleHint(target.type);
+  playFinaleTransform(target);
 }
 
 function finaleBounds() {
@@ -308,9 +307,11 @@ function resizeBossFinale(target) {
   const f = target.finale;
   f.hazards.length = 0;
   f.gate = null;
-  f.startX = target.x;
-  f.startY = target.y;
-  f.next = f.age + .8;
+  if (f.age >= f.transform) {
+    f.startX = target.x;
+    f.startY = target.y;
+  }
+  f.next = Math.max(f.transform + .54, f.age + .8);
 }
 
 function finaleSegmentDistance(x, y, ax, ay, bx, by) {
@@ -933,7 +934,6 @@ function drawBossFinale(ctx, target, quiet) {
     finaleEllipse(ctx, f.gate.x, f.gate.y, f.gate.radius, f.gate.radius);
     ctx.fill(); ctx.stroke(); ctx.restore();
   }
-  const t = clamp(f.age / f.transform, 0, 1);
   ctx.save();
   const glow = ctx.createRadialGradient(target.x, target.y, 0, target.x, target.y, Math.max(2, target.width * .65));
   glow.addColorStop(0, target.color + "2d"); glow.addColorStop(1, target.color + "00");
@@ -941,19 +941,9 @@ function drawBossFinale(ctx, target, quiet) {
   finaleEllipse(ctx, target.x, target.y, target.width * .65, target.width * .65);
   ctx.fill();
   ctx.translate(target.x, target.y);
-  if (t < 1 && typeof drawBossShip === "function") {
-    ctx.save();
-    ctx.globalAlpha = 1 - t;
-    const scale = 1 - t * .50;
-    ctx.scale(scale, scale);
-    drawBossShip(ctx, { ...target, x: 0, y: 0, age: target.age, phase: "recover" }, quiet);
-    ctx.restore();
-  }
-  ctx.globalAlpha = Math.min(1, t * 1.25);
-  ctx.scale(.62 + .38 * t, .79 + .21 * t);
   drawFinaleShell(ctx, target, g.width, g.height, quiet);
   ctx.restore();
-  if (t > .6) drawFinaleNodes(ctx, target, quiet);
+  drawFinaleNodes(ctx, target, quiet);
   const width = target.width * .82;
   const x = target.x - width / 2;
   const y = target.y - target.height * .60 - 12;
@@ -966,221 +956,5 @@ function drawBossFinale(ctx, target, quiet) {
   ctx.fillRect(x, y, width * clamp(target.displayHp, 0, 1), 8);
   ctx.strokeStyle = "#e8f7ffa9"; ctx.lineWidth = 1;
   ctx.strokeRect(x - 1, y - 1, width + 2, 10);
-  ctx.restore();
-}
-
-function finaleDeathRing(ctx, radius, flatten, alpha, color, angle = 0) {
-  ctx.save();
-  ctx.globalAlpha *= alpha;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.6 + alpha * 4;
-  finaleEllipse(ctx, 0, 0, radius, radius * flatten, angle);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function finaleDeathShards(ctx, size, progress, color, count, lift = 0) {
-  for (let i = 0; i < count; i++) {
-    const angle = i * 2.39996;
-    const radius = size * (.22 + progress * (.48 + i % 4 * .24));
-    const x = Math.cos(angle) * radius;
-    const y = Math.sin(angle) * radius * .57 - size * lift * progress;
-    finaleShard(ctx, x, y, size * (.035 + i % 4 * .013) * (1 - .59 * progress),
-      angle + (i % 2 ? 1 : -1) * progress * 2.8, color);
-  }
-}
-
-function collapseFinaleEgg(ctx, target, size, phase, quiet) {
-  const h = target.height * 1.04;
-  const release = 1 - Math.pow(1 - phase, 2.2);
-  const cut = [[.05, -.53], [.02, -.36], [.065, -.26], [-.015, -.16], [.012, -.09],
-    [-.047, .018], [.028, .115], [-.031, .22], [.017, .34], [-.033, .52]];
-  const vaporRadius = size * (.21 + release * .69);
-  const vapor = ctx.createRadialGradient(0, -size * phase * .11, 0, 0, -size * phase * .11, vaporRadius);
-  vapor.addColorStop(0, "#e5ffffe0"); vapor.addColorStop(.18, "#a5faffb8");
-  vapor.addColorStop(.46, "#368fd85c"); vapor.addColorStop(1, "#163a8200");
-  ctx.save();
-  ctx.globalAlpha *= (1 - phase) ** 2 * (quiet ? .4 : .88);
-  ctx.fillStyle = vapor;
-  finaleEllipse(ctx, 0, -size * phase * .11, vaporRadius, vaporRadius * .84);
-  ctx.fill();
-  ctx.restore();
-  for (const side of [-1, 1]) {
-    ctx.save();
-    ctx.translate(side * size * release * .28, size * (phase * phase * .24 - release * .12));
-    ctx.rotate(side * (release * .19 + phase * .35));
-    ctx.beginPath();
-    for (const [i, [x, y]] of cut.entries()) {
-      if (!i) ctx.moveTo(x * size, y * h);
-      else ctx.lineTo(x * size, y * h);
-    }
-    ctx.lineTo(side * size, h * .52);
-    ctx.lineTo(side * size, -h * .53);
-    ctx.closePath();
-    ctx.clip();
-    drawFinaleEgg(ctx, size * .69, h, 0, 0, true);
-    ctx.beginPath();
-    for (let i = 1; i < cut.length - 2; i++) {
-      const [x, y] = cut[i];
-      if (i === 1) ctx.moveTo(x * size, y * h);
-      else ctx.lineTo(x * size, y * h);
-    }
-    ctx.lineWidth = 2.7 * (1 - phase);
-    ctx.strokeStyle = "#c0ffffe3";
-    ctx.stroke();
-    ctx.restore();
-  }
-  const front = (phase * viewport.width * .66 + size * .1);
-  finaleDeathRing(ctx, front, .49, (1 - phase) * .72, "#a7faff");
-  finaleDeathRing(ctx, front * .89, .56, (1 - phase) * .30, "#56bcf6");
-  if (!quiet) {
-    for (let i = 0; i < 11; i++) {
-      const angle = i * 2.39996;
-      const velocity = .23 + (i % 5) * .12;
-      const x = Math.cos(angle) * release * size * velocity;
-      const y = Math.sin(angle) * release * size * velocity * .61 + phase * phase * size * .24;
-      const droplet = size * (.012 + (i % 4) * .007) * (1 - phase * .70);
-      finaleVolume(ctx, x, y, droplet * 1.6, droplet, "#80e8ff", .71, angle);
-    }
-    ctx.strokeStyle = "#c9faffb0";
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    for (let i = 0; i < 13; i++) {
-      const angle = i * 2.39996, r = front * (.32 + i % 5 * .12);
-      const x = Math.cos(angle) * r, y = Math.sin(angle) * r * .48;
-      ctx.moveTo(x, y); ctx.quadraticCurveTo(x * .77, y * .52, x * .51, y * .46);
-    }
-    ctx.stroke();
-  }
-}
-
-function drawBossFinaleCollapse(ctx, target, progress, quiet) {
-  const size = target.width;
-  const charge = clamp(progress / .22, 0, 1);
-  const phase = clamp((progress - .22) / .78, 0, 1);
-  const fade = 1 - Math.pow(phase, 1.48);
-  const color = target.color;
-  const mode = target.finale.mode;
-  ctx.save();
-  ctx.translate(target.x, target.y);
-  if (progress < .22) {
-    ctx.save();
-    const bend = quiet ? .98 : 1 - .18 * charge * charge;
-    ctx.scale(bend, 1 + (1 - bend) * .68);
-    const g = finaleCoreGeometry(target);
-    drawFinaleShell(ctx, target, g.width, g.height, true);
-    ctx.restore();
-    const light = ctx.createRadialGradient(0, 0, 0, 0, 0, size * .53);
-    light.addColorStop(0, "#fff9dedd"); light.addColorStop(.28, color + "a2"); light.addColorStop(1, color + "00");
-    ctx.globalAlpha = charge * charge * (quiet ? .42 : .77);
-    ctx.fillStyle = light;
-    finaleEllipse(ctx, 0, 0, size * .53, size * .53);
-    ctx.fill();
-    ctx.restore();
-    return;
-  }
-  ctx.globalAlpha = fade * (quiet ? .74 : 1);
-  switch (mode) {
-    case "egg":
-      collapseFinaleEgg(ctx, target, size, phase, quiet);
-      break;
-    case "bones":
-      // Each rib loses support at a different time and drops into the void.
-      for (let i = 0; i < 7; i++) {
-        const fall = Math.max(0, phase - i * .042);
-        const angle = i * .74 - 2.34 + fall * 2;
-        const y = (i - 3) * size * .064 + fall * fall * size * .60;
-        ctx.save();
-        ctx.translate((i - 3) * size * .035 + Math.sin(angle) * size * .22 * fall, y);
-        ctx.rotate(angle);
-        finaleVein(ctx, -size * .093, 0, size * .15, size * .022, size * .045, "#dbc0a9");
-        ctx.restore();
-      }
-      if (!quiet) finaleDeathShards(ctx, size, phase, "#d4b5a7", 8, -.17);
-      break;
-    case "furnace":
-      for (let i = 0; i < 8; i++) {
-        const angle = i * .79 + .17;
-        const motion = Math.sqrt(phase) * (i % 3 * .12 + .38);
-        finaleVolume(ctx, Math.cos(angle) * size * motion, Math.sin(angle) * size * motion * .69,
-          size * (.076 - phase * .049), size * (.043 - phase * .023), "#ffae58", phase < .35 ? 1.25 : .5, angle);
-      }
-      finaleDeathRing(ctx, size * (.14 + phase * 1.25), .43, fade * .75, "#ffaf66");
-      break;
-    case "web":
-      ctx.lineWidth = 1.65;
-      ctx.strokeStyle = "#d5c0ffca";
-      ctx.beginPath();
-      for (let i = 0; i < 11; i++) {
-        const angle = i * 2.39996;
-        const length = size * (.18 + phase * (.24 + i % 4 * .12));
-        const x = Math.cos(angle) * length, y = Math.sin(angle) * length;
-        const slack = phase * (i % 2 ? .37 : -.37);
-        ctx.moveTo(x * phase * .42, y * phase * .27);
-        ctx.bezierCurveTo(x * (.44 + slack), y * .12, x * .78, y * (.56 - slack), x, y);
-      }
-      ctx.stroke();
-      break;
-    case "claws":
-      for (const sign of [-1, 1]) {
-        ctx.save();
-        ctx.translate(size * phase * .28, sign * size * (.08 + phase * .47));
-        ctx.rotate(sign * (phase * 1.4 + .2));
-        finaleVein(ctx, size * .13, 0, -size * .26, sign * size * .11, size * .08, "#c2e19e");
-        finaleShard(ctx, -size * .12, sign * size * .044, size * .12, sign * .67, "#698858");
-        ctx.restore();
-      }
-      finaleDeathRing(ctx, size * (.19 + phase * .50), .71, fade * .64, "#d0f0ad");
-      break;
-    case "mirror":
-      finaleDeathShards(ctx, size, phase * 1.12, "#c6d3ff", quiet ? 8 : 17);
-      finaleDeathRing(ctx, size * (.12 + phase * .82), .23, fade * .65, "#e8edff", phase * .85);
-      break;
-    case "coil":
-      ctx.strokeStyle = "#a6e9ff";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      for (let i = 0; i < 15; i++) {
-        const p = i / 14;
-        const x = (p - .5) * size * (.81 + phase * 1.28);
-        const y = Math.sin(p * 5.9 + phase * 4.2) * size * (.26 - phase * .19) + p * phase * size * .15;
-        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-      }
-      ctx.stroke();
-      finaleDeathRing(ctx, size * (.18 + phase * 1.13), .66, fade * .43, "#7bdbff");
-      break;
-    case "spores":
-      for (let i = 0; i < (quiet ? 6 : 13); i++) {
-        const r = size * (.038 + (i % 4) * .017) * (1 + phase * .62);
-        const x = Math.sin(i * 2.39996) * size * (.22 + phase * .35);
-        const y = Math.cos(i * 2.39996) * size * .22 - Math.pow(phase, .73) * size * (.24 + i % 5 * .10);
-        finaleVolume(ctx, x, y, r, r * (1 + phase * .47), "#bacf60", .6);
-      }
-      break;
-    case "void":
-      for (let i = 0; i < 5; i++) finaleDeathRing(ctx, size * (1.12 - phase) * (.4 + i * .15),
-        .32 + phase * .49, fade * (.28 + i * .08), "#f39b83", -.53 + phase * .68);
-      if (phase > .66) {
-        ctx.strokeStyle = "#fff1d1"; ctx.lineWidth = 1.7;
-        ctx.beginPath(); ctx.moveTo(-size * phase, 0); ctx.lineTo(size * phase, 0); ctx.stroke();
-      }
-      break;
-    case "synapse":
-      for (let i = 0; i < 7; i++) {
-        if (phase > .35 + i * .07) continue;
-        const y = (i - 3) * size * (.069 + phase * .024);
-        const x = size * (.25 + phase * .46);
-        finaleVein(ctx, x, y * .43, -x, y, size * .022, i % 2 ? "#ef92c4" : "#f9d4ef");
-      }
-      break;
-    default:
-      for (const [i, hue] of ["#7fe6ff", "#ffc28d", "#d5b2ff"].entries()) {
-        const spread = Math.abs(.55 - phase) + .13;
-        finaleDeathRing(ctx, size * spread * (1 + i * .28), .46 + i * .19,
-          fade * .85, hue, (i - 1) * (1.12 - phase));
-      }
-      if (phase > .48) finaleDeathShards(ctx, size, phase - .35, "#e2c2fa", quiet ? 4 : 10);
-      break;
-  }
   ctx.restore();
 }

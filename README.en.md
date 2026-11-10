@@ -1,6 +1,6 @@
 # Star Breaker · 星际突围
 
-Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alien bosses and their final fusion. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. The repository's **v19-r1** build is a test candidate for the combat UI and attack warnings.
+Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alien bosses and their final fusion. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. The repository's **v19-r2** build is a test candidate for the combat UI, attack warnings, and boss cinematics.
 
 [Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Watch the previous version's trailer](media/trailer.mp4) · [中文说明](README.md)
 
@@ -11,7 +11,7 @@ Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alie
 - **Choose a fighter before each sortie.** Crimson fires a translucent piercing beam that leaves enemy shots visible. Azure shoots fastest and launches five homing ion shots. Auric spreads three lanes with a three-wave screen-wide barrage.
 - **Pause with Esc.** Resume, change settings, restart, or return to the hangar. Restarting or leaving a run asks for confirmation. The combat HUD recedes during evolution selection and on the results screen.
 - **Break coordinated attacks.** Gunships aim from different heights, while the ace fires, changes flanks and locks on again. The final fusion attacks along both axes.
-- **Fight a fixed alien campaign.** Read each boss’s rupture combo, wait for the exposed core, and face a different finale. Cross into the Broodmother’s relief lane before the pressure wave clears the field. Every boss has a separate playable finale. Break the Marrow Reliquary’s anchors, pick out the real mirror image, or cut the Neural Crown’s nodes in order.
+- **Fight eleven alien bosses.** Each boss has an entrance, a shell rupture, a finale transformation, and a defeat sequence. Read the attack warnings, then break the Marrow Reliquary’s anchors, pick out the real mirror image, or cut the Neural Crown’s nodes in order.
 - **Grow your life capacity.** Green orbs heal a life. When you're already full, they add one to both your current life and your capacity.
 - **Upgrade your main gun.** Shoot power-up orbs to fire faster, add firing lanes, or launch harder-hitting rounds. Later orbs can grant several levels at once. Each boost is smaller and enemies have more endurance as the campaign advances. Green orbs are rarer, and only bosses 3, 6 and 9 restore a missing life.
 - **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. Sustain focused fire against late armored fighters and gunships, or clear a lane with the Crimson Beam.

@@ -191,6 +191,34 @@ const gameAudio = (() => {
     source.stop(start + length);
     return true;
   }
+  // Frequency, descent, interval and material filter for each of the eleven voices.
+  const presentationMotifs = [
+    [47, .64, .16, 560, "sine"], [108, .44, .065, 1900, "triangle"],
+    [56, .56, .10, 920, "sawtooth"], [169, 1.34, .17, 2500, "sine"],
+    [80, .43, .09, 1360, "square"], [236, 1.62, .12, 3100, "sine"],
+    [92, 1.57, .053, 2720, "triangle"], [131, .71, .19, 1050, "sine"],
+    [39, .38, .28, 430, "triangle"], [181, .77, .08, 2260, "square"],
+    [46, .52, .22, 740, "sawtooth"],
+  ];
+  function bossPresentationCue(kind, index) {
+    if (!canPlay() || !presentationMotifs[index]) return;
+    const [tone, slope, gap, texture, shape] = presentationMotifs[index];
+    const time = audio.currentTime;
+    const ending = kind === "death", gathering = kind === "transform";
+    const ratio = ending ? .79 : gathering ? .91 : 1.16;
+    const base = tone * ratio;
+    const duration = (ending ? .63 : .38) + gap;
+    const bus = "boss";
+    note({ bus, time, type: shape, duration, frequency: base, endFrequency: base * slope,
+      volume: shape === "square" || shape === "sawtooth" ? .066 : .18, attack: gathering ? .13 : .007,
+      cutoff: Math.min(texture, 720), endCutoff: ending ? 144 : Math.min(texture, 580), pan: .24 });
+    note({ bus, time: time + gap, type: "sine", duration: duration * .73,
+      frequency: base * (slope > 1 ? 1.47 : .76), endFrequency: base * (ending ? .53 : 1.13),
+      volume: .115, cutoff: 690, pan: .09, attack: .014 });
+    note({ bus, time: time + gap * .4, noise: true, duration: duration * .82, volume: ending ? .105 : .075,
+      cutoff: texture, endCutoff: texture * (ending ? .21 : .48), resonance: 1.2,
+      filterType: "bandpass", pan: .18, attack: gathering ? .10 : .009 });
+  }
   function bossVoice(options) {
     if (!Number.isInteger(bossType)) return false;
     return sample("boss_" + String(bossType + 1).padStart(2, "0"), { bus: "boss", ...options });
@@ -843,5 +871,5 @@ const gameAudio = (() => {
     audio = null;
   }
   return { unlock, setMuted, get muted() { return muted; }, sync, shoot, hit, hurt, overdrive, perfectShield, explode, warning, bossAttack, bossEnrage,
-    chargeUltimate, fireUltimate, stopUltimate, destroy };
+    bossPresentationCue, chargeUltimate, fireUltimate, stopUltimate, destroy };
 })();

@@ -1,6 +1,6 @@
 "use strict";
 
-const bossRules = { firstArrival: 65, interval: 31, warning: 5, entry: 1.65,
+const bossRules = { firstArrival: 65, interval: 31, warning: 5,
   recovery: .78, grace: 1.1, maxProjectiles: 240, fusionSpecialMultiplier: .78 };
 const bossTypes = [
   { name: "渊潮母体", enName: "Abyssal Broodmother", color: "#79e7f3", patterns: ["broodSweep", "broodArc", "broodSpawn"] },
@@ -99,6 +99,10 @@ function resizeBossEncounter(oldWidth, oldHeight, oldBounds) {
     const widthScale = Math.min(scaleX, scaleY);
     boss.x = oldBossX * scaleX;
     boss.y = clamp(resizeY(oldBossY), arena.top, arena.bottom);
+    if (boss.finale && boss.finale.age < boss.finale.transform) {
+      boss.finale.startX *= scaleX;
+      boss.finale.startY = resizeY(boss.finale.startY);
+    }
     boss.lockX *= scaleX;
     boss.lockY = resizeY(boss.lockY);
     boss.gapY = resizeY(boss.gapY);
@@ -164,6 +168,7 @@ function spawnBoss(type = chooseBossType()) {
   preloadBossFinaleArt(type);
   enemies.length = 0;
   resetEnemyCombat(false);
+  if (battlefieldEvents.objects.length || battlefieldEvents.transport) resetBattlefieldEvents(false);
   clearAlienThreats();
   pendingBossType = null;
   bossHitGrace = 1.7;
@@ -172,6 +177,7 @@ function spawnBoss(type = chooseBossType()) {
   movementHint.hidden = true;
   setBossMessage(bossStageTitle(boss), tr("异形正在现身 · 留意攻击预警", "Alien emerging · Watch for attack warnings"));
   statusMessage.textContent = tr(boss.name + "出现，普通敌机暂停生成。", boss.name + " has arrived. Regular enemy spawns are paused.");
+  playEntrance(boss);
 }
 
 function updateAlienBossPose(target, seconds) {
@@ -181,18 +187,6 @@ function updateAlienBossPose(target, seconds) {
   const room = arena.bottom - arena.top;
   let swayX = (Math.sin(wake * 1.44) + Math.sin(wake * 2.28) * .33) * Math.min(14, target.width * .05);
   let swayY = (Math.sin(wake * 1.7) + Math.cos(wake * .87) * .32) * Math.min(38, room * .11);
-  if (target.phase === "enter") {
-    const progress = clamp(target.phaseTime / bossRules.entry, 0, 1);
-    target.x = arena.x + (viewport.width + arena.width / 2 - arena.x) * Math.pow(1 - progress, 3);
-    target.y = clamp(arena.y + swayY * quiet, arena.top, arena.bottom);
-    return;
-  }
-  if (target.phase === "rupture") {
-    const progress = clamp(target.phaseTime / bossRuptureDuration(target), 0, 1);
-    const recoil = Math.sin(progress * Math.PI);
-    swayX += Math.min(44, target.width * .19) * recoil;
-    swayY += Math.sin(progress * Math.PI * 2) * Math.min(24, room * .09);
-  }
   if (target.phase === "telegraph" || target.phase === "attack") {
     const warming = target.phase === "telegraph";
     const progress = target.phaseTime / (warming ? target.telegraphDuration : target.attackDuration);
@@ -222,7 +216,7 @@ function updateAlienBossPose(target, seconds) {
 }
 
 function updateBossEncounter(seconds) {
-  if (!isBattleActive()) return;
+  if (advanceLivingBossPresentation(seconds) || !isBattleActive()) return;
   bossHitGrace = Math.max(0, bossHitGrace - seconds);
   updateBossProjectiles(seconds);
   if (!boss) {
@@ -256,11 +250,7 @@ function updateBossEncounter(seconds) {
     return;
   }
   updateAlienBossPose(boss, seconds);
-  if (boss.phase === "enter" && boss.phaseTime >= bossRules.entry) {
-    beginAlienRecovery(boss);
-  } else if (boss.phase === "rupture") {
-    if (boss.phaseTime >= bossRuptureDuration(boss)) prepareAlienAttack(boss, true);
-  } else if (boss.phase === "recover") {
+  if (boss.phase === "recover") {
     if (boss.phaseTime >= alienRecoveryDuration(boss)) prepareAlienAttack(boss, true);
   } else if (boss.phase === "telegraph" && boss.phaseTime >= boss.telegraphDuration) {
     boss.phase = "attack";
@@ -277,7 +267,7 @@ function alienRuptureGuard(target) {
     || (target.phase === "telegraph" && target.alienAttack === "pressure" && target.pressureCycle === 1);
 }
 function bossCanTakeDamage(target = boss) {
-  return !!target && target === boss && target.phase !== "enter" && !alienRuptureGuard(target);
+  return !!target && target === boss && !isBossPresentationPlaying() && target.phase !== "enter" && !alienRuptureGuard(target);
 }
 
 // Measured in visible sprite fractions. A central body and two appendage regions
@@ -352,7 +342,6 @@ function defeatBoss(target = boss) {
   score += points;
   kills++;
   registerMomentumKill();
-  scoreDisplay.textContent = String(score).padStart(6, "0");
   if (!fallen.finale) createExplosion(fallen, points);
   const recovered = player.lives;
   if (!fallen.alienFinal && bossDefeated % 3 === 0) grantPlayerLife();
@@ -368,16 +357,13 @@ function defeatBoss(target = boss) {
     }
   }
   const healed = player.lives > recovered;
-  powerupNotice.textContent = tr(fallen.name + "已击破 · +" + points + "分" + (healed ? " · 恢复1点生命" : ""),
+  const reward = tr(fallen.name + "已击破 · +" + points + "分" + (healed ? " · 恢复1点生命" : ""),
     fallen.name + " defeated · +" + points + " points" + (healed ? " · +1 life" : ""));
-  powerupNotice.dataset.type = "yellow";
-  powerupNotice.hidden = false;
-  upgradeNoticeTime = 3;
-  statusMessage.textContent = powerupNotice.textContent;
+  powerupNotice.hidden = true;
   nextBossTime = fallen.alienFinal ? Infinity : battleTime + Math.max(18, bossRules.interval - (bossDefeated - 1) * 1.5);
   enemyCooldown = 2;
   setBossMessage("", "", false);
-  startBossDeathPresentation(fallen);
+  startBossDeathPresentation(fallen, reward);
 }
 
 function bossShotHitsPlayer(shot) {
@@ -416,10 +402,11 @@ function updateBossDamage() {
 function drawBossBattle() {
   const quiet = reducedMotion.matches || (typeof visualQuality !== "undefined" && visualQuality.id === "low");
   for (const hazard of bossHazards) drawAlienHazard(context, hazard, quiet);
-  if (boss?.finale) drawBossFinale(context, boss, quiet);
+  const scene = activeBossPresentation();
+  if (scene && scene.kind !== "death") drawBossPresentationBody(context, scene, quiet);
+  else if (boss?.finale) drawBossFinale(context, boss, quiet);
   else if (boss) {
     drawBossShip(context, boss, quiet);
-    if (boss.phase === "rupture") drawAlienRupture(context, boss, quiet);
     const width = boss.width * .85, y = boss.y - boss.height * .58 - 9;
     context.save();
     context.fillStyle = "#111c30";

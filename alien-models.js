@@ -168,7 +168,7 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
   const { time, charge, ruptured, hit, recoil, quiet } = pose;
   model.mixer?.setTime(time % Math.max(.01, model.duration));
   model.turn.rotation.set(.025 + Math.sin(time * 1.3) * .08, -.11 + Math.sin(time * .77) * .18,
-    Math.sin(time * .91) * .031 + recoil * .06);
+    Math.sin(time * .91) * .031 + recoil * .06 + (pose.turn ?? 0));
   model.turn.position.set(recoil * model.size.x * .06, 0, 0);
   for (const { node, attack, unfurl, emissive } of model.animatedMeshes) {
     if (attack !== undefined) node.morphTargetInfluences[attack] = charge;
@@ -190,7 +190,7 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
   camera.updateProjectionMatrix();
   key.color.set(pose.cooling ? "#98f4ff" : "#c7edff");
   key.intensity = 2.35 + hit * .72 + (pose.cooling ? 1.1 : 0);
-  rim.intensity = 2.03 + charge * .80 + ruptured * .40;
+  rim.intensity = 2.03 + charge * .80 + ruptured * .40 + (pose.intensity ?? 0);
   const light = shipReflectionLight();
   const [red, green, blue] = light.channels;
   bounce.color.setRGB(red / 255, green / 255, blue / 255, StarBreaker3D.SRGBColorSpace);
@@ -216,8 +216,10 @@ function drawStarBreakerBoss(ctx, target, quiet) {
   const pressure = target.phase === "rupture";
   const stageStrength = target.enraged ? Math.min(1, (age - (target.enragedAt ?? age)) * 1.7) : 0;
   const recoil = target.phase === "attack" && !quiet ? Math.exp(-(target.phaseTime || 0) * 7) : 0;
+  const cue = target.cinematicPose;
   return drawStarBreakerModel(ctx, target.type, target.x, target.y, target.width, target.height, {
-    time: quiet ? 0 : age, charge: pressure ? .85 : charge, ruptured: pressure ? 1 : stageStrength,
-    hit: target.hitFlash ? 1 : 0, recoil, quiet, color: target.color,
+    time: quiet ? 0 : age, charge: cue?.charge ?? (pressure ? .85 : charge),
+    ruptured: cue?.unfurl ?? (pressure ? 1 : stageStrength),
+    hit: target.hitFlash ? 1 : 0, recoil, quiet, color: target.color, turn: cue?.turn, intensity: cue?.intensity,
   });
 }

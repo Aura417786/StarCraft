@@ -201,7 +201,11 @@ check('layered starfield advances its animation clock while battle is active', (
 });
 const shots = () => JSON.parse(vm.runInContext('JSON.stringify(bullets.map(({x,y}) => ({x,y})))', sandbox));
 function frames(count, seconds = 0.05) { for (let index = 0; index < count; index++) step(seconds); }
-function finishBossPresentation() { frames(45); assert.equal(execute('isBossDeathPlaying()'), false); }
+function finishBossPresentation() {
+  const left = execute('bossPresentation.duration - bossPresentation.age');
+  frames(Math.ceil(left / .05) + 2);
+  assert.equal(execute('isBossDeathPlaying()'), false);
+}
 check('fires immediately, then five shots per second without keyboard input', () => {
   surface = { width: 2400, height: 900 }; emit(window, 'resize'); begin();
   assert.equal(shots().length, 1); frames(20);
@@ -773,7 +777,7 @@ check('each campaign stage arrives and settles in order, increasing durability u
     const arrival = bossState().nextBossTime;
     execute('battleTime=nextBossTime-bossRules.warning;updateBossEncounter(0);');
     assert.equal(bossState().pendingBossType,type);
-    execute('battleTime=nextBossTime;updateBossEncounter(0);updateBossEncounter(bossRules.entry);');
+    execute('battleTime=nextBossTime;updateBossEncounter(0);updateBossEncounter(bossPresentation.duration);');
     const stage = bossState().boss;
     assert.equal(stage.type,type);
     assert.equal(stage.alienFinal,type===10);
@@ -798,7 +802,7 @@ check('entry moves each larger boss to the right-center and blocks premature pla
     isolatedBattle(); execute(`spawnBoss(${type});`);
     const start=bossState().boss; assert.ok(start.width>execute('player.width'));
     assert.ok(start.x>surface.width); execute('applyBossHit({damage:Infinity});'); assert.equal(bossState().boss.hp,1);
-    execute('updateBossEncounter(bossRules.entry);'); const arrived=bossState().boss;
+    execute('updateBossEncounter(bossPresentation.duration);'); const arrived=bossState().boss;
     near(arrived.x,execute('bossArena().x')); assert.ok(Math.abs(arrived.y-surface.height/2)<60);
     assert.equal(arrived.phase,'recover'); assert.ok(arrived.x>surface.width/2);
   }
@@ -806,7 +810,7 @@ check('entry moves each larger boss to the right-center and blocks premature pla
 check('warning and boss fights suspend ordinary spawns while powerup orbs keep arriving', () => {
   isolatedBattle(); execute('resetBossEncounter();battleTime=nextBossTime-bossRules.warning;enemyCooldown=0;powerupCooldown=0;updateEncounter(0);updateBossEncounter(0);updatePowerups(0);');
   assert.equal(scene().enemies.length,0); assert.equal(orbScene().powerups.length,1);
-  execute('battleTime=nextBossTime;updateBossEncounter(0);enemyCooldown=0;powerupCooldown=0;updateEncounter(0);updatePowerups(0);');
+  execute('battleTime=nextBossTime;updateBossEncounter(0);updateBossEncounter(bossPresentation.duration);enemyCooldown=0;powerupCooldown=0;updateEncounter(0);updatePowerups(0);');
   assert.equal(scene().enemies.length,0); assert.equal(orbScene().powerups.length,2);
 });
 check('boss time, projectiles, hazards and immunity all freeze on blur, hidden tabs and control focus', () => {
@@ -1710,6 +1714,8 @@ check('Boss attacks trigger volley cues and warned lasers sound only when they a
 check('Boss enrage impact sounds once when crossing half health and never replays on later damage', () => {
   readyBoss(1,'boss.hp=.51;'); audioCalls.length=0;
   execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});'); assert.equal(bossState().boss.enraged,true);
+  assert.equal(audioCalls.filter(c=>c.name==='bossEnrage').length,0);
+  execute('updateBossEncounter(bossPresentation.duration * .45);');
   assert.equal(audioCalls.filter(c=>c.name==='bossEnrage').length,1);
   execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});'); assert.equal(audioCalls.filter(c=>c.name==='bossEnrage').length,1);
 });
@@ -2181,7 +2187,7 @@ check('Boss warning and both ordinary and fusion Boss combat freeze combo decay 
   for(const kind of ['warning','ordinary','fusion']) {
     isolatedBattle(); comboKills(20); execute('momentum.idle=3.8;momentum.decay=.2;');
     if(kind==='warning') execute('nextBossTime=90;battleTime=85;');
-    else if(kind==='ordinary') execute('spawnBoss(0);'); else execute('spawnBoss(10);');
+    else execute(`spawnBoss(${kind === 'ordinary' ? 0 : 10});updateBossEncounter(bossPresentation.duration);`);
     execute('updateMomentum(8);'); assert.equal(momentumState().count,20); near(momentumState().idle,3.8); near(momentumState().decay,.2);
     assert.equal(momentumState().remaining,0); assert.equal(nodes.get('#momentum-hud').dataset.frozen,'true');
     execute('resetBossEncounter();nextBossTime=Infinity;updateMomentum(.65);'); assert.equal(momentumState().count,19);
@@ -2456,13 +2462,13 @@ check('aegis counter kills score once without spawning support fire or gaining c
     near(ult().energy,0); assert.equal(evolutionState().pulses.length,2);
   }
 });
-const effectsState=()=>JSON.parse(execute('JSON.stringify(combatEffects)'));
-check('final Boss death freezes battle for exactly 1.25 seconds then offers only one evolution', () => {
+const effectsState=()=>JSON.parse(execute('JSON.stringify({ ...combatEffects, deathRemaining: isBossDeathPlaying() ? bossPresentation.duration - bossPresentation.age : 0, choiceTarget: isBossDeathPlaying() ? bossPresentation.target : null })'));
+check('direct Boss death fixture freezes battle for exactly 1.25 seconds then offers only one evolution', () => {
   readyBoss(0,'ultimate.charges=2;requestUltimate();updateUltimate(.2);globalThis.finalFallen=boss;defeatBoss();');
   assert.equal(execute('isBossDeathPlaying()'),true); assert.equal(evolutionState().pending,false);
   assert.equal(ult().charges,2); assert.equal(ult().phase,'idle'); assert.equal(shots().length,0);
   const time=scene().battleTime, score=scene().score, shield=protection();
-  key('KeyD'); key('Space'); key('KeyV'); const location=position(); frames(21);
+  key('KeyD'); key('Space'); key('KeyV'); const location=position(); frames(20);
   near(scene().battleTime,time); samePosition(position(),location); assert.deepEqual(protection(),shield);
   assert.equal(execute('toggleFiringStyle()'),false); near(effectsState().deathRemaining,.25);
   execute('updateCombatEffects(.249);'); assert.equal(evolutionState().pending,false);

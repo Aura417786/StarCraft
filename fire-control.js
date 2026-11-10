@@ -12,7 +12,7 @@ function updateFiringStyleDisplay() {
 }
 function resetFiringStyle() { firingStyle.mode = "spread"; updateFiringStyleDisplay(); }
 function toggleFiringStyle() {
-  if (state !== "battle" || evolution.pending || isBossDeathPlaying() || !windowActive || document.hidden) return false;
+  if (state !== "battle" || pauseView || evolution.pending || isBossPresentationPlaying() || !windowActive || document.hidden) return false;
   firingStyle.mode = firingStyle.mode === "spread" ? "focus" : "spread";
   updateFiringStyleDisplay();
   updateWeaponDisplay();
@@ -22,7 +22,10 @@ function toggleFiringStyle() {
   return true;
 }
 stanceButton.addEventListener("click", () => {
-  if (toggleFiringStyle()) { canvas.focus({ preventScroll: true }); updatePauseHint(); }
+  if (state !== "battle" || pauseView || evolution.pending) return;
+  toggleFiringStyle();
+  canvas.focus({ preventScroll: true });
+  updatePauseHint();
 });
 function firingLanes() {
   const count = weapon.lanes;

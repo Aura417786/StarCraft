@@ -54,7 +54,9 @@ async function play(browser, width, height, steering) {
     fs.mkdirSync(output, { recursive: true });
     await page.screenshot({ path: path.join(output, "commercial-brood-rupture.png") });
   }
-  await page.evaluate(() => stepFlight(29));
+  await page.evaluate(() => {
+    for (let step = 0; step < 100 && boss.phase === "rupture"; step++) stepFlight(1);
+  });
   assert.equal(await page.locator("#game-app").getAttribute("data-boss-phase"), "frenzy");
   const opening = await page.evaluate(() => {
     const tide = bossHazards.find(hazard => hazard.kind === "tide");

@@ -150,10 +150,10 @@ function setBossWarning(name = "") {
 }
 function syncGameAudio() {
   const active = isBattleActive();
-  const cinematic = isBossDeathPlaying();
+  const cinematic = isBossPresentationPlaying();
   gameAudio.sync(active || (cinematic && canAnimateCombatEffects()), !!boss, activeBosses().some(target => target.enraged),
     { paused: !!pauseView && windowActive && !document.hidden, combo: momentum.count, overdrive: isOverdriveActive(), warning: pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning), cinematic,
-      bossType: boss?.type ?? pendingBossType ?? combatEffects.choiceTarget?.type, bossPhase: boss?.phase, lives: player.lives });
+      bossType: boss?.type ?? pendingBossType ?? bossPresentation?.target.type, bossPhase: boss?.phase, lives: player.lives });
   syncUltimateAudio(active);
 }
 function updateSoundButton() {
@@ -436,7 +436,7 @@ function battleHasFocus() {
   return state === "battle" && !pauseView && !evolution.pending && windowActive && !document.hidden && document.activeElement === canvas;
 }
 function isBattleActive() {
-  return battleHasFocus() && !isBossDeathPlaying();
+  return battleHasFocus() && !isBossPresentationPlaying();
 }
 function refreshPauseCopy() {
   if (!pauseScreen || !pauseView) return;
@@ -1195,9 +1195,10 @@ function drawFrame(time) {
   const showCombat = state !== "over" && !evolution.pending;
   context.clearRect(0, 0, viewport.width, viewport.height);
   context.save();
-  applyBossCollapseCamera(context);
+  applyBossPresentationCamera(context);
   drawBattlefield(showCombat);
   drawActiveJourney("front");
+  drawBossPresentationBackdrop(context);
   context.globalAlpha = 1;
   if (showCombat) {
     const cameraOffset = combatShakeOffset();
@@ -1222,7 +1223,10 @@ function drawFrame(time) {
     drawExplosions();
   }
   context.restore();
-  if (showCombat) drawBattlefieldEventNotice();
+  if (showCombat) {
+    drawBattlefieldEventNotice();
+    drawBossPresentationOverlay(context);
+  }
   drawEvolutionChoicePreviews(time);
   window.requestAnimationFrame(drawFrame);
 }

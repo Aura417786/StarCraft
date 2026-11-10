@@ -2,7 +2,7 @@
 
 // 视觉效果有独立容量和时钟，不参与命中、伤害或敌人刷新。
 const combatEffects = { clock: 0, particles: [], impacts: [], wrecks: [], shockwaves: [],
-  shake: 0, shakeTime: 0, deathRemaining: 0, deathTotal: 0, deathImpact: false, choiceTarget: null };
+  shake: 0, shakeTime: 0 };
 let shakePreference = "low";
 const shakeButton = document.querySelector("#shake-button");
 try {
@@ -28,32 +28,19 @@ if (shakeButton) shakeButton.addEventListener("click", () => {
   if (state === "battle" && !pauseView && !evolution.pending) canvas.focus({ preventScroll: true });
 });
 updateShakeButton();
-function isBossDeathPlaying() { return combatEffects.deathRemaining > 0; }
-function applyBossCollapseCamera(ctx) {
-  const target = combatEffects.choiceTarget;
-  if (!target?.finale || !isBossDeathPlaying() || reducedMotion.matches || shakePreference === "off") return;
-  const progress = 1 - combatEffects.deathRemaining / combatEffects.deathTotal;
-  const rise = Math.sin(Math.PI * clamp(progress, 0, 1));
-  const zoom = 1 + rise * (shakePreference === "full" ? .066 : .035);
-  const x = clamp(target.x, viewport.width * .28, viewport.width * .78);
-  const y = clamp(target.y, viewport.height * .22, viewport.height * .78);
-  ctx.translate(x * (1 - zoom), y * (1 - zoom));
-  ctx.scale(zoom, zoom);
-}
 function canAnimateCombatEffects() {
   return battleHasFocus();
 }
 function resetCombatEffects() {
   for (const name of ["particles", "impacts", "wrecks", "shockwaves"]) combatEffects[name].length = 0;
   combatEffects.clock = 0; combatEffects.shake = 0; combatEffects.shakeTime = 0;
-  combatEffects.deathRemaining = 0; combatEffects.choiceTarget = null;
-  combatEffects.deathTotal = 0; combatEffects.deathImpact = false;
+  resetBossPresentation();
 }
 function resizeCombatEffects(oldWidth, oldHeight) {
   for (const name of ["particles", "impacts", "shockwaves"]) combatEffects[name].length = 0;
   combatEffects.shake = 0; combatEffects.shakeTime = 0;
   if (!isBossDeathPlaying()) { combatEffects.wrecks.length = 0; return; }
-  const finale = combatEffects.choiceTarget;
+  const finale = bossPresentation.target;
   if (finale?.finale) {
     const scale = Math.min(viewport.width / oldWidth, viewport.height / oldHeight);
     finale.width *= scale;
@@ -128,13 +115,9 @@ function recordCombatDestruction(target, isBoss = false) {
   } else combatBurst(target.x, target.y, 1, target.kind === "gunner" ? "#d6a6ff" : "#ffb569");
   if (isBoss) addCombatShake(4);
 }
-function startBossDeathPresentation(target) {
+function startBossDeathPresentation(target, reward) {
   if (state !== "battle" || isBossDeathPlaying()) return;
-  combatEffects.deathTotal = target.finale ? bossFinaleCollapseDuration() : 1.25;
-  combatEffects.deathRemaining = combatEffects.deathTotal;
-  combatEffects.deathImpact = false;
-  combatEffects.choiceTarget = target;
-  clearMovement(); cancelUltimate(true); bullets.length = 0;
+  playDeath(target, reward);
   movementHint.hidden = true;
   statusMessage.textContent = target.alienFinal
     ? tr("群渊合生体正在瓦解。", "The Abyssal Confluence is collapsing.")
@@ -174,26 +157,14 @@ function updateCombatEffects(seconds) {
       explosions[i].age += seconds;
       if (explosions[i].age >= explosions[i].duration) explosions.splice(i, 1);
     }
-    combatEffects.deathRemaining = Math.max(0, combatEffects.deathRemaining - seconds);
-    const fallen = combatEffects.choiceTarget;
-    if (fallen?.finale && !combatEffects.deathImpact && combatEffects.deathRemaining <= combatEffects.deathTotal * .64) {
-      combatEffects.deathImpact = true;
-      gameAudio.explode(true);
-      addCombatShake(6);
-    }
-    if (combatEffects.deathRemaining < 1e-9) {
-      const clearedCampaign = combatEffects.choiceTarget?.alienFinal;
-      combatEffects.deathRemaining = 0; combatEffects.choiceTarget = null;
-      if (clearedCampaign) endGame(true);
-      else openEvolutionChoice();
-    }
+    advanceBossDeathPresentation(seconds);
   }
 }
 function drawCombatEffects() {
   if (state !== "battle") return;
-  if (isBossDeathPlaying() && combatEffects.choiceTarget?.finale) {
-    const progress = 1 - combatEffects.deathRemaining / combatEffects.deathTotal;
-    drawBossFinaleCollapse(context, combatEffects.choiceTarget, progress, reducedMotion.matches);
+  if (isBossDeathPlaying()) {
+    const quiet = reducedMotion.matches || (typeof visualQuality !== "undefined" && visualQuality.id === "low");
+    drawBossPresentationBody(context, bossPresentation, quiet);
   }
   for (const wreck of combatEffects.wrecks) {
     const progress = wreck.age / wreck.duration;

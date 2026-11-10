@@ -148,6 +148,7 @@ h1 > span { color: var(--red); }
 .boss-hud { position: absolute; top: 137px; left: 50%; transform: translateX(-50%); max-width: 90%; padding: 9px 24px; text-align: center; border: 1px solid #d37c6455; border-radius: 5px; background: #0b1122dc; }
 .boss-hud strong { display: block; color: #ffbea5; font-size: 15px; letter-spacing: .16em; }
 .boss-hud span { display: block; margin-top: 4px; color: #c4cede; font-size: 11px; white-space: nowrap; }
+.app[data-boss-presentation]:not([data-boss-presentation=""]) .boss-hud { opacity: 0; }
 .app[data-boss-finale="true"] .boss-hud { border-color: #ad91eb9e; background: linear-gradient(120deg, #261631f5, #080f1eec); }
 .app[data-boss-finale="true"] .boss-hud strong { color: #e9d2ff; }
 .app[data-boss-finale="true"] .boss-hud span { white-space: normal; }

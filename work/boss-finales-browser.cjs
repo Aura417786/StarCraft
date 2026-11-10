@@ -23,6 +23,10 @@ const types = { '.js':'text/javascript', '.html':'text/html', '.css':'text/css',
     await page.locator('.flight-guide-actions button').click();
     await page.locator('#start-button').click();
     await page.evaluate(() => {
+      window.waitForFirstFinaleBeat = () => {
+        for (let step = 0; step < 200 && !boss.finale.beat; step++) updateBossEncounter(.02);
+        if (!boss.finale.beat) throw new Error("Finale first beat never arrived");
+      };
       window.finaleFixture = (type) => {
         resetBossEncounter();
         resetCombatEffects();
@@ -49,7 +53,7 @@ const types = { '.js':'text/javascript', '.html':'text/html', '.css':'text/css',
     for (const [index, mode] of expected.entries()) {
       const result = await page.evaluate(type => {
         const intro = finaleFixture(type);
-        for (let step = 0; step < 93; step++) updateBossEncounter(.02);
+        waitForFirstFinaleBeat();
         const firstWave = boss.finale.hazards.map(hazard => hazard.type);
         const target = boss;
         const before = score;
@@ -65,7 +69,7 @@ const types = { '.js':'text/javascript', '.html':'text/html', '.css':'text/css',
         const cleared = !boss && bossDefeated === type + 1 && isBossDeathPlaying();
         defeatBoss(target);
         const once = score === settled && settled - before === (type === 10 ? 6000 : 2000);
-        for (const progress of [.1,.45,.70,.99]) drawBossFinaleCollapse(context, target, progress, false);
+        for (const progress of [.1,.45,.70,.99]) drawBossPresentationBody(context, { ...bossPresentation, age: bossPresentation.duration * progress }, false);
         return { ...intro, firstWave, cleared, once };
       }, index);
       assert.deepEqual([result.mode, result.same, result.phase, result.defeated, result.hp, result.cleared, result.once], [mode,true,'finale',0,1,true,true]);
@@ -79,7 +83,7 @@ const types = { '.js':'text/javascript', '.html':'text/html', '.css':'text/css',
       const egg = await page.evaluate(() => {
         finaleFixture(0);
         const neverMove = player.y;
-        for (let step = 0; step < 100; step++) updateBossEncounter(.02);
+        waitForFirstFinaleBeat();
         const wave = boss.finale.hazards[0];
         const pre = wave.type === 'tide' && wave.age < wave.warning && !bossFinaleHitsPlayer(boss);
         bullets.push({}); enemyProjectiles.push({});
@@ -125,9 +129,9 @@ const types = { '.js':'text/javascript', '.html':'text/html', '.css':'text/css',
       const keyboardSafe = Math.abs(player.y - initial.y) < 12 && player.lives === initial.lives;
       finaleFixture(0);
       const lives = player.lives;
-      while (!boss.finale.hazards.length) updateBossEncounter(.02);
-      const impact = boss.finale.hazards[0];
-      while (impact.age < impact.warning + impact.duration) {
+      waitForFirstFinaleBeat();
+      const stationaryTide = boss.finale.hazards[0];
+      while (stationaryTide.age < stationaryTide.warning + stationaryTide.duration) {
         updatePlayer(.02); updateBossEncounter(.02); updateBossDamage();
       }
       const carelessDamage = lives - player.lives === 1;
@@ -135,7 +139,7 @@ const types = { '.js':'text/javascript', '.html':'text/html', '.css':'text/css',
     }, exit);
     assert.deepEqual(movement, { keyboardSafe:true, carelessDamage:true });
     const tactics = await page.evaluate(() => {
-      const init = type => { finaleFixture(type); updateBossEncounter(1.81); return boss; };
+      const init = type => { finaleFixture(type); waitForFirstFinaleBeat(); return boss; };
       const bones = init(1);
       const node = bones.finale.nodes[0];
       const geometry = finaleNodeGeometry(bones, node);

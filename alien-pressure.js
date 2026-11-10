@@ -117,7 +117,7 @@ function chooseAlienPressure(target) {
 }
 
 function bossRuptureDuration(target) {
-  return 1.16 - target.type * .019;
+  return bossPresentationDuration(target, "rupture");
 }
 
 function beginAlienRupture(target) {
@@ -132,10 +132,9 @@ function beginAlienRupture(target) {
   target.alienAttack = null;
   clearAlienThreats();
   bossHitGrace = Math.max(bossHitGrace, .72);
-  gameAudio.bossEnrage();
-  addCombatShake(4.8);
   setBossMessage(bossStageTitle(target), tr("看清下一次攻击预警", "Watch for the next tell"));
   statusMessage.textContent = tr(target.name + "进入狂暴模式。", target.name + " is enraged.");
+  playRupture(target);
 }
 
 function beginAlienRecovery(target) {
@@ -213,41 +212,4 @@ function drawPressureColumn(ctx, hazard, quiet) {
   }
   ctx.restore();
   return true;
-}
-function drawAlienRupture(ctx, target, quiet) {
-  const phase = clamp(target.phaseTime / bossRuptureDuration(target), 0, 1);
-  const charge = Math.sin(phase * Math.PI);
-  const color = alienSignatureColors[alienPressurePlans[target.type].material];
-  const spread = target.width * (.34 + phase * .62);
-  ctx.save();
-  ctx.translate(target.x - target.width * .12, target.y);
-  if (!quiet && charge > 0) {
-    const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, spread);
-    halo.addColorStop(0, color + "86");
-    halo.addColorStop(.41, color + "36");
-    halo.addColorStop(1, color + "00");
-    ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = charge * .85;
-    ctx.fillStyle = halo;
-    ctx.fillRect(-spread, -spread, spread * 2, spread * 2);
-    ctx.globalAlpha = (1 - phase) * .6;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2 + charge * 3;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, spread, spread * .62, -.12, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = quiet ? .63 : .18 + charge * .60;
-  ctx.strokeStyle = "#e0f8ff";
-  ctx.lineWidth = 1.2;
-  for (let crack = 0; crack < 6; crack++) {
-    const direction = crack * Math.PI / 3 + target.type * .19;
-    const reach = target.width * (.11 + crack % 2 * .06) * (.6 + phase * .8);
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(direction) * reach * .18, Math.sin(direction) * reach * .18);
-    ctx.lineTo(Math.cos(direction + .38) * reach * .64, Math.sin(direction + .38) * reach * .54);
-    ctx.lineTo(Math.cos(direction) * reach, Math.sin(direction) * reach * .89);
-    ctx.stroke();
-  }
-  ctx.restore();
 }
