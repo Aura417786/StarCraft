@@ -3,7 +3,7 @@
 // Fixed copy from index.html. Runtime messages are localized where they are produced.
 const gameStaticEnglish = new Map([
   ["星际突围，一款逐步开发的横向飞机射击小游戏。", "Star Breaker is a side-scrolling space shooter for desktop browsers."],
-  ["星际突围 · 交火战区", "Star Breaker · Crossfire Zone"],
+  ["星际突围 · 深渊临界", "Star Breaker · Abyssal Threshold"],
   ["深空机库 / HANGAR", "DEEP SPACE / HANGAR"],
   ["选择战机，迎战群渊。", "Choose your fighter. Face the Abyss."],
   ["选择出击战机", "Choose your fighter"],
@@ -135,6 +135,8 @@ const gameStaticEnglish = new Map([
   ["击败前十只异形后可进化。", "Evolve after each of the first ten victories. "],
   ["依序击败十只异形与最终合体。", "Defeat ten aliens in order, then face their fusion. "],
   ["看见标记先离开危险区。减速时仍能移动和开盾。群渊合生体会用一招限制路线，再用另一招追击。", "Leave marked danger zones early. You can still move and shield while slowed. The Abyssal Confluence uses one move to limit your route and another to follow up."],
+  ["留意首领终局。", "Watch for the boss finale. "],
+  ["本体血条耗尽后，首领会改变形态和战斗规则。看上方提示，完成终局才能领取奖励。渊潮母体会蜷成蛋并释放压力波。", "When the main health bar runs out, the boss changes form and rules. Read the prompt and finish this stage to earn the reward. The Broodmother curls into an egg and releases pressure waves."],
   ["破阵翼刃加装翼炮，星隼僚机自动攻击，赤金壁垒吸收敌弹再反击。路线可混搭，每条最多 3 级，三条满级后解锁联动。", "Piercing Wings adds wing guns. Falcon Wingman attacks on its own. Crimson Aegis absorbs and returns shots. Mix paths up to level 3. Max all three to unlock synergies."],
   ["明白了", "Got it"],
   ["开始画面已就绪。", "Ready to start."],

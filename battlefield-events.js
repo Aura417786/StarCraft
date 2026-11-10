@@ -162,52 +162,27 @@ function resolveUltimateBattlefieldObjects(shot) {
     shot.hitTargets.add(object); destroyBattlefieldObject(object);
   }
 }
-function eventMetalShape(points, top = "#8c9da8", bottom = "#172537") {
-  const paint = context.createLinearGradient(0, -40, 0, 45);
-  paint.addColorStop(0, top); paint.addColorStop(0.43, "#425366"); paint.addColorStop(0.52, "#263747"); paint.addColorStop(1, bottom);
-  context.fillStyle = paint; context.strokeStyle = "#9dc0d04d"; context.lineWidth = 1;
-  context.beginPath(); points.forEach(([x,y], i) => i ? context.lineTo(x,y) : context.moveTo(x,y));
-  context.closePath(); context.fill(); context.stroke();
-}
 function drawSupplyTransport(enemy) {
-  context.save(); context.translate(enemy.x, enemy.y); context.scale(enemy.width / 150, enemy.height / 92);
-  const glow = context.createRadialGradient(78, 0, 0, 78, 0, 44); glow.addColorStop(0, "#ffcc8580"); glow.addColorStop(1, "#ff9a3d00");
-  context.fillStyle = glow; context.fillRect(60, -46, 65, 92);
-  eventMetalShape([[-72, -19],[-47, -33],[50,-33],[72,-15],[72,25],[40,37],[-47,33],[-72,19]], "#adb9b9", "#242f39");
-  for (const side of [-1,1]) {
-    context.save(); context.translate(5, side * 29);
-    eventMetalShape([[-40,-9],[42,-9],[51,0],[42,12],[-40,12],[-48,3]], "#d1b077", "#4b3829");
-    context.fillStyle = "#08131d"; context.fillRect(-30,-4,57,10);
-    context.fillStyle = "#f2ce7c"; for(let i=0;i<4;i++) context.fillRect(-26+i*14,-2,7,5);
-    context.restore();
-    context.fillStyle = "#ffe0a3"; context.fillRect(68, side*17-4,12,8);
-  }
-  eventMetalShape([[-73,-13],[-51,-21],[-25,-14],[-20,14],[-51,21],[-73,13]], "#667d8d", "#0c1d2b");
-  context.fillStyle = "#7ce0e6"; context.fillRect(-58,-7,13,14);
-  context.strokeStyle = "#d8b978"; context.lineWidth = 2; context.beginPath(); context.moveTo(-10,-15); context.lineTo(20,0); context.lineTo(-10,15); context.stroke();
-  if (enemy.hitFlash > 0) { context.globalAlpha = Math.min(0.4, enemy.hitFlash * 3); context.fillStyle = "#ffe7b6"; context.fillRect(-48,-22,90,44); }
-  context.restore();
+  const age = reducedMotion.matches ? 0 : enemy.age;
+  drawSpaceProp(context, "transport", {
+    x: enemy.x, y: enemy.y, width: enemy.width * 1.24, height: enemy.height * 1.83,
+    pitch: -.19 + Math.sin(age * .38) * .075, yaw: -.24 + Math.sin(age * .29) * .12,
+    roll: Math.sin(age * .65) * .06, flash: Math.min(.8, enemy.hitFlash * 6), alpha: 1,
+  });
 }
 function drawBattlefieldObjects() {
   for (const object of battlefieldEvents.objects) {
-    context.save(); context.translate(object.x, object.y);
-    context.scale(object.width / 100, object.height / 65);
-    if (object.journeyCover) drawJourneyCoverShape(object);
-    else if (object.kind === "wreck") {
-      eventMetalShape([[-49,-9],[-30,-30],[19,-28],[48,-11],[37,21],[12,30],[-33,19]], "#79848d", "#151e2a");
-      context.strokeStyle = "#101c29"; context.lineWidth = 5;
-      context.beginPath(); context.moveTo(-24,-25); context.lineTo(-10,0); context.lineTo(-26,22); context.moveTo(6,-26); context.lineTo(19,4); context.lineTo(40,15); context.stroke();
-      context.strokeStyle = "#d5a565"; context.lineWidth = 2; context.beginPath(); context.moveTo(-39,-9); context.lineTo(-29,-17); context.moveTo(-31,-5); context.lineTo(-21,-13); context.stroke();
-    } else {
-      const paint = context.createLinearGradient(0,-25,0,25);
-      paint.addColorStop(0,"#305a68"); paint.addColorStop(0.35,"#a6eadb"); paint.addColorStop(0.5,"#327879"); paint.addColorStop(1,"#112c3b");
-      context.fillStyle = paint; context.beginPath(); context.roundRect(-37,-22,74,44,6); context.fill();
-      for(const x of [-36,30]) { eventMetalShape([[x-7,-25],[x+7,-25],[x+11,-16],[x+11,16],[x+7,25],[x-7,25],[x-11,16],[x-11,-16]],"#b3b7a7","#364454"); }
-      context.fillStyle = "#0a2730"; context.fillRect(-21,-12,38,24);
-      context.fillStyle = "#95ffe2"; context.shadowColor = "#66ffce"; context.shadowBlur = reducedMotion.matches ? 0 : 10;
-      for(let i=0;i<3;i++) context.fillRect(-17+i*12,-8,6,16);
-    }
-    context.restore();
+    if (object.x + object.width < 0 || object.x - object.width > viewport.width) continue;
+    const age = reducedMotion.matches ? 0 : object.age;
+    const seed = object.phase ?? 0;
+    const kind = object.journeyCover === "asteroid" ? "rock" : object.kind;
+    const side = object.journeySide || 1;
+    drawSpaceProp(context, kind, {
+      x: object.x, y: object.y, width: object.width * 1.25, height: object.height * (kind === "rock" ? 1.56 : 1.88),
+      pitch: side * .26 + Math.sin(age * .62 + seed) * .32, yaw: -.40 + Math.sin(age * .45 + seed) * .24,
+      roll: side * .16 + Math.sin(age * .52 + seed) * .19, flash: Math.min(.8, object.hitFlash * 6),
+      variant: Math.floor(seed * 2 + side + 1), alpha: 1,
+    });
     if (object.hp < 1) {
       context.fillStyle = "#0b1526"; context.fillRect(object.x-24,object.y-object.height*0.5-8,48,3);
       context.fillStyle = "#9caeae"; context.fillRect(object.x-24,object.y-object.height*0.5-8,48*object.hp,3);

@@ -17,6 +17,8 @@
 | 10 | 黑曜骨架撑开红蓝神经束，前端为狭长颅骨 |
 | 11 | 同一生物体中结合骨冠、巨螯、炉心、孢囊、镜鳍和分节脊尾 |
 
+深渊胚卵用独立透明 WebP（433 × 768）作为终局形态。生成时要求母体收起触须、形成层叠半透明的珠母质蓝青壳、隐约透出珊瑚红心脏。左上青色边光与深蓝反射强调壳的厚度。战斗时在素材上叠加波动、内部亮纹及破壳演出。
+
 生成时统一使用略带俯视的三分之四侧视、朝左、完整轮廓、左上主光、暗部有结构、局部发光和透明画布。深度用明暗、前后肢重叠和材质区分。
 
 制作参考涵盖预备与回弹、实机画面对照，以及战斗配乐的动机与分层。实现沿用游戏现有的 Canvas 2D 与 Web Audio。 [Scenario Blender Animation](https://github.com/scenario-labs/skills/blob/main/skills/dcc/blender/scenario-blender-animation/SKILL.md) · [Concept Target Visual Gate](https://github.com/oh-ashen-one/blender-agent-skills/blob/main/concept-target-visual-gate/SKILL.md) · [Battle Music Design](https://github.com/sora16bit/codex-game-music-skill/blob/main/skills/compose-game-music/references/battle-music-design.md) · [Add Audio](https://github.com/playableintelligence/game-creator/blob/main/skills/add-audio/SKILL.md)

@@ -529,7 +529,10 @@ check('sustained automatic fire and all support sources give a Boss time to figh
   assert.equal(execute('activeBosses().includes(sustainedTarget)'),true);
   assert.ok(execute('sustainedTarget.hp>.1&&sustainedTarget.hp<.8'));
   assert.ok(execute('sustainedTarget.age>=7.99'));
-  engage(360);
+  engage(300);
+  assert.equal(execute('sustainedTarget.finale.mode'),'claws');
+  assert.equal(execute('bossDefeated'),0,'the second health pool delays settlement');
+  engage(1000);
   assert.equal(execute('activeBosses().includes(sustainedTarget)'),false,'continuous accurate hits should still defeat the Boss');
 });
 

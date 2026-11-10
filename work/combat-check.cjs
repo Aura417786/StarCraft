@@ -192,7 +192,7 @@ check('layered starfield advances its animation clock while battle is active', (
 });
 const shots = () => JSON.parse(vm.runInContext('JSON.stringify(bullets.map(({x,y}) => ({x,y})))', sandbox));
 function frames(count, seconds = 0.05) { for (let index = 0; index < count; index++) step(seconds); }
-function finishBossPresentation() { frames(30); assert.equal(execute('isBossDeathPlaying()'), false); }
+function finishBossPresentation() { frames(45); assert.equal(execute('isBossDeathPlaying()'), false); }
 check('fires immediately, then five shots per second without keyboard input', () => {
   surface = { width: 2400, height: 900 }; emit(window, 'resize'); begin();
   assert.equal(shots().length, 1); frames(20);
@@ -925,6 +925,9 @@ check('aggregated high-rate bullets preserve boss damage and no infinite arithme
 });
 check('boss defeats schedule the next fight and restore life only at stages three, six and nine', () => {
   readyBoss(0,'battleTime=123;player.maxLives=4;player.lives=3;'); execute(bossProjectile()+'addBossHazard("beam",{y:200,warning:1,duration:2});spawnEnemy("scout");boss.hp=.015;applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
+  assert.equal(bossState().boss.finale.mode,'egg'); assert.equal(bossState().bossDefeated,0); assert.equal(scene().score,0);
+  assert.equal(orbScene().powerups.length,0);
+  execute('boss.finale.age=boss.finale.transform;boss.hp=.015;applyBossHit({damageLog:boss.healthLog+5,y:boss.y});');
   assert.equal(bossState().boss,null); assert.equal(bossState().bossDefeated,1); assert.equal(scene().score,2000);
   assert.equal(health().kills,1); assert.equal(health().lives,3); assert.equal(bossState().nextBossTime,123+execute('bossRules.interval'));
   assert.equal(bossState().bossProjectiles.length,0); assert.equal(bossState().bossHazards.length,0); assert.equal(scene().enemies.length,0);
@@ -1322,7 +1325,7 @@ check('boss hits fill energy by actual health removed including lethal remainder
   execute('for(let hit=0;hit<10;hit++){battleTime+=.3;applyBossHit({damageLog:boss.healthLog+Math.log(.025)});}');
   near(ult().energy,45);
   execute('boss.hp=.015;ultimate.energy=99;battleTime+=.3;applyBossHit({damageLog:boss.healthLog+5});');
-  assert.equal(ult().charges,1); near(ult().energy,1.7); assert.equal(bossState().boss,null);
+  assert.equal(ult().charges,1); near(ult().energy,1.7); assert.equal(bossState().boss.finale.mode,'bones');
 });
 check('misses, energy orbs, collisions and ultimate damage cannot charge another ultimate', () => {
   isolatedBattle(orb('red')+shot()); step(); near(ult().energy,0);
@@ -1405,7 +1408,7 @@ check('a weak cannon respects its own damage below the boss cap instead of alway
   assert.ok(hp>.99&&hp<1); near(ult().energy,0);
 });
 check('a cannon can finish the wounded third boss once, award its milestone heal and never feed back energy', () => {
-  readyBoss(2,'player.y=boss.y;boss.hp=.06;player.lives=2;'); primeUltimate(); castUltimate(); execute('updateUltimate(.5);');
+  readyBoss(2,'beginBossFinale(boss);boss.finale.age=boss.finale.transform;boss.finale.openUntil=8;player.y=boss.y;boss.hp=.06;player.lives=2;'); primeUltimate(); castUltimate(); execute('updateUltimate(.5);');
   assert.equal(bossState().boss,null); assert.equal(scene().score,2000); assert.equal(health().lives,3);
   execute('updateUltimate(.1);resolveUltimateHits();'); assert.equal(scene().score,2000); near(ult().energy,0);
 });
@@ -2633,7 +2636,7 @@ check('perfect counter is capped at three percent against the fusion Boss even w
   assert.equal(protection().perfectUsed,true);
 });
 check('lethal perfect counters safely finish a Boss after collecting contact bullets and never settle it twice', () => {
-  readyBoss(0,'weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
+  readyBoss(0,'beginBossFinale(boss);boss.finale.age=boss.finale.transform;bossHitGrace=0;weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
   execute(bossProjectile().repeat(8)+'updateBossDamage();updateBossDamage();');
   assert.equal(execute('boss'),null); assert.equal(execute('bossDefeated'),1); assert.equal(scene().score,2000);
   assert.equal(execute('bossProjectiles.length'),0); assert.equal(execute('isBossDeathPlaying()'),true); near(ult().energy,0);
@@ -2774,7 +2777,7 @@ check('death, menu, new rounds, evolution and lethal parry Boss transitions disc
   for(const action of ['endGame();','showScreen("menu");','showScreen("battle");','openEvolutionChoice();']) {
     earnCannonLink(); execute(action+'updateCannonLink(0);'); near(cannonLinkState().remaining,0);
   }
-  readyBoss(0,'weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
+  readyBoss(0,'beginBossFinale(boss);boss.finale.age=boss.finale.transform;bossHitGrace=0;weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
   execute(bossProjectile()+'updateBossDamage();'); assert.equal(execute('isBossDeathPlaying()'),true);near(cannonLinkState().remaining,0);
   finishBossPresentation();assert.equal(execute('evolution.pending'),true);near(cannonLinkState().remaining,0);
 });

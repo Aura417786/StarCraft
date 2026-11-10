@@ -542,9 +542,8 @@ function readSceneryImage(relative) {
   assert.ok(width>=1024&&height>=720&&width<=8192&&height<=8192,relative+' full-resolution asset');
   return {width,height};
 }
-check('all five cinematic plates and transparent foreground are valid image assets', () => {
+check('all five cinematic plates are valid image assets', () => {
   for(const asset of snapshot('battlefieldSectors.map(s=>s.asset)'))readSceneryImage(asset);
-  const foreground=readPng('assets/scenery/foreground-rock.png',true);assert.equal(foreground.color,6,'foreground needs a real alpha channel');
 });
 class SceneryImageMock {
   constructor(){this.complete=false;this.naturalWidth=0;this.naturalHeight=0;}
@@ -556,27 +555,40 @@ class SceneryImageMock {
   get src(){return this.url;}
 }
 check('current and next cinematic images preload and only three backgrounds stay cached', () => {
-  sandbox.Image=SceneryImageMock;execute('sceneryCache.clear();sceneryForeground=null;');isolated();
+  sandbox.Image=SceneryImageMock;execute('sceneryCache.clear();');isolated();
   assert.equal(execute('sceneryCache.get(0).ready&&sceneryCache.get(1).ready'),true);
-  assert.equal(execute('sceneryForeground.ready'),true);
   for(let leg=0;leg<16;leg++){
     execute(`battlefieldState.clock=${leg*75};scenerySyncJourney();`);
     assert.equal(execute('sceneryCache.size<=3'),true);
     assert.equal(execute('sceneryCache.get(sceneryJourney().current).ready&&sceneryCache.get(sceneryJourney().next).ready'),true);
   }
 });
-check('decoded backgrounds and transparent foreground render through drawImage at every sector', () => {
+check('decoded backgrounds and sector-specific solid meshes render without sprite cutouts', () => {
   isolated();
   for(let sector=0;sector<5;sector++){
     execute(`battlefieldState.clock=${sector*75+70};scenerySyncJourney();`);
-    drawOperations.length=0;captureDraws=true;execute('drawBattlefield();');captureDraws=false;
+    drawOperations.length=0;captureDraws=true;
+    const props=snapshot(`(()=>{
+      const original=drawSpaceProp, props=[];
+      try { drawSpaceProp=(ctx,kind,pose)=>props.push({kind,...pose}); drawBattlefield(); }
+      finally { drawSpaceProp=original; }
+      return props;
+    })()`);
+    captureDraws=false;
     const images=drawOperations.filter(op=>op.name==='drawImage');
     const expected=snapshot('(()=>{const j=sceneryJourney();return [battlefieldSectors[j.current].asset,battlefieldSectors[j.next].asset];})()');
     for(const asset of expected)assert.ok(images.some(op=>op.args[0].src===asset),'draw '+asset);
-    const debrisWeight=execute('(()=>{const j=sceneryJourney();return battlefieldSectors[j.current].foreground*(1-j.blend)+battlefieldSectors[j.next].foreground*j.blend;})()');
-    assert.equal(images.filter(op=>op.args[0].src==='assets/scenery/foreground-rock.png').length,debrisWeight>0?2:0,'near debris only in belt/fleet sectors');
+    assert.equal(images.some(op=>op.args[0].src==='assets/scenery/foreground-rock.png'),false);
+    for(const prop of props){
+      assert.ok([sector,(sector+1)%5].includes(prop.sector));
+      assert.ok([1,2,3].includes(prop.sector));
+      assert.equal(prop.kind,prop.sector===2?'wreck':'rock');
+      assert.ok([prop.x,prop.y,prop.pitch,prop.yaw,prop.roll].every(Number.isFinite));
+    }
     for(const op of drawOperations)for(const arg of op.args)if(typeof arg==='number')assert.ok(Number.isFinite(arg),op.name+' finite image geometry');
   }
+  assert.ok(snapshot('spacePropMesh("rock",0).data.length/30') > 500);
+  assert.ok(snapshot('spacePropMesh("wreck",0).data.length/30') > 300);
 });
 check('first battle draws the menu orbit while the new panorama is still loading', () => {
   isolated('sceneryLayer(0,true);sceneryCache.get(0).ready=false;');
@@ -591,7 +603,7 @@ check('resize reuses decoded images and failed or absent Image loaders leave a s
   class FailingImage{set src(value){this.onerror?.();}}
   sandbox.Image=FailingImage;execute('sceneryCache.clear();');assert.equal(execute('sceneryLayer(0).failed'),true);
   execute('drawBattlefield();');
-  delete sandbox.Image;execute('sceneryCache.clear();sceneryForeground=null;');assert.equal(execute('sceneryLayer(0)'),null);
+  delete sandbox.Image;execute('sceneryCache.clear();');assert.equal(execute('sceneryLayer(0)'),null);
   execute('drawBattlefield();');
 });
 

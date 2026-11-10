@@ -428,11 +428,12 @@ function updatePlayer(seconds) {
     - Number(pressedKeys.has("ArrowLeft") || pressedKeys.has("KeyA"));
   const vertical = Number(pressedKeys.has("ArrowDown") || pressedKeys.has("KeyS"))
     - Number(pressedKeys.has("ArrowUp") || pressedKeys.has("KeyW"));
-  if (horizontal === 0 && vertical === 0) return;
-  const length = Math.hypot(horizontal, vertical);
+  const current = alienCurrentVector();
+  if (!(horizontal || vertical || current.x || current.y)) return;
+  const length = Math.hypot(horizontal, vertical) || 1;
   const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * alienMovementScale();
-  player.x = clamp(player.x + horizontal / length * speed * seconds, flightBounds.left, bossPlayerRight());
-  player.y = clamp(player.y + vertical / length * speed * seconds, flightBounds.top, flightBounds.bottom);
+  player.x = clamp(player.x + (horizontal / length * speed + current.x) * seconds, flightBounds.left, bossPlayerRight());
+  player.y = clamp(player.y + (vertical / length * speed + current.y) * seconds, flightBounds.top, flightBounds.bottom);
   movementHint.hidden = true;
 }
 function resetWeapons(preserveUpgrades = true) {
@@ -791,7 +792,7 @@ function resolveProjectileHits() {
         if (hit.target.hp === 0) defeatEnemy(enemies.indexOf(hit.target), bullet);
       }
       movementHint.hidden = true;
-      if (!isBattleActive()) return;
+      if (!isBattleActive() || bullets[bulletIndex] !== bullet) return;
       if (hit.kind === "orb" || hit.kind === "object" || !(bullet.piercesLeft > 0)) {
         bullets.splice(bulletIndex, 1); consumed = true;
       } else bullet.piercesLeft--;
@@ -1037,7 +1038,7 @@ function drawFrame(time) {
   drawAceThreats(context);
   drawEnemyThreats();
   drawBossBattle();
-  drawPowerups();
+  if (!isBossDeathPlaying()) drawPowerups();
   drawBullets();
   drawOverdrive();
   drawPlayer();

@@ -2,7 +2,7 @@
 
 // 视觉效果有独立容量和时钟，不参与命中、伤害或敌人刷新。
 const combatEffects = { clock: 0, particles: [], impacts: [], wrecks: [], shockwaves: [],
-  shake: 0, shakeTime: 0, deathRemaining: 0, choiceTarget: null };
+  shake: 0, shakeTime: 0, deathRemaining: 0, deathTotal: 0, deathImpact: false, choiceTarget: null };
 let shakePreference = "low";
 const shakeButton = document.querySelector("#shake-button");
 try {
@@ -33,11 +33,20 @@ function resetCombatEffects() {
   for (const name of ["particles", "impacts", "wrecks", "shockwaves"]) combatEffects[name].length = 0;
   combatEffects.clock = 0; combatEffects.shake = 0; combatEffects.shakeTime = 0;
   combatEffects.deathRemaining = 0; combatEffects.choiceTarget = null;
+  combatEffects.deathTotal = 0; combatEffects.deathImpact = false;
 }
 function resizeCombatEffects(oldWidth, oldHeight) {
   for (const name of ["particles", "impacts", "shockwaves"]) combatEffects[name].length = 0;
   combatEffects.shake = 0; combatEffects.shakeTime = 0;
   if (!isBossDeathPlaying()) { combatEffects.wrecks.length = 0; return; }
+  const finale = combatEffects.choiceTarget;
+  if (finale?.finale) {
+    const scale = Math.min(viewport.width / oldWidth, viewport.height / oldHeight);
+    finale.width *= scale;
+    finale.height *= scale;
+    finale.x = clamp(finale.x / oldWidth * viewport.width, finale.width * .5, viewport.width - finale.width * .5);
+    finale.y = clamp(finale.y / oldHeight * viewport.height, finale.height * .5, viewport.height - finale.height * .5);
+  }
   for (const wreck of combatEffects.wrecks) {
     wreck.x = clamp(wreck.x / oldWidth * viewport.width, wreck.width * 0.5, viewport.width - wreck.width * 0.5);
     wreck.y = clamp(wreck.y / oldHeight * viewport.height, wreck.height * 0.5, viewport.height - wreck.height * 0.5);
@@ -106,7 +115,9 @@ function recordCombatDestruction(target, isBoss = false) {
 }
 function startBossDeathPresentation(target) {
   if (state !== "battle" || isBossDeathPlaying()) return;
-  combatEffects.deathRemaining = 1.25;
+  combatEffects.deathTotal = target.finale ? bossFinaleCollapseDuration() : 1.25;
+  combatEffects.deathRemaining = combatEffects.deathTotal;
+  combatEffects.deathImpact = false;
   combatEffects.choiceTarget = target;
   clearMovement(); cancelUltimate(true); bullets.length = 0;
   movementHint.hidden = true;
@@ -149,6 +160,12 @@ function updateCombatEffects(seconds) {
       if (explosions[i].age >= explosions[i].duration) explosions.splice(i, 1);
     }
     combatEffects.deathRemaining = Math.max(0, combatEffects.deathRemaining - seconds);
+    const fallen = combatEffects.choiceTarget;
+    if (fallen?.finale && !combatEffects.deathImpact && combatEffects.deathRemaining <= combatEffects.deathTotal * .64) {
+      combatEffects.deathImpact = true;
+      gameAudio.explode(true);
+      addCombatShake(6);
+    }
     if (combatEffects.deathRemaining < 1e-9) {
       const clearedCampaign = combatEffects.choiceTarget?.alienFinal;
       combatEffects.deathRemaining = 0; combatEffects.choiceTarget = null;
@@ -159,6 +176,10 @@ function updateCombatEffects(seconds) {
 }
 function drawCombatEffects() {
   if (state !== "battle") return;
+  if (isBossDeathPlaying() && combatEffects.choiceTarget?.finale) {
+    const progress = 1 - combatEffects.deathRemaining / combatEffects.deathTotal;
+    drawBossFinaleCollapse(context, combatEffects.choiceTarget, progress, reducedMotion.matches);
+  }
   for (const wreck of combatEffects.wrecks) {
     const progress = wreck.age / wreck.duration;
     const split = Math.max(0, (wreck.age - (wreck.isBoss ? 0.35 : 0.08)) / wreck.duration);

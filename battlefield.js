@@ -12,7 +12,6 @@ const battlefieldSectors = [
 const sceneryRules = { interval: 75, blend: 10, zoom: 1.28, maxImages: 3 };
 const battlefieldState = { sector: 0, previous: 0, completed: 0, clock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 };
 const sceneryCache = new Map();
-let sceneryForeground = null;
 const sceneryStars = Array.from({ length: 48 }, (_, i) => ({
   x: sceneryHash(i * 13.4 + 1), y: sceneryHash(i * 7.9 + 18), depth: 0.2 + sceneryHash(i * 17.8 + 3) * 0.8,
 }));
@@ -44,18 +43,6 @@ function sceneryLayer(sector, menu = false) {
   }
   return record;
 }
-function sceneryLoadForeground() {
-  if (sceneryForeground) return sceneryForeground;
-  if (typeof Image === "undefined") return null;
-  const image = new Image();
-  sceneryForeground = { image, ready: false, failed: false };
-  const record = sceneryForeground;
-  image.decoding = "async";
-  image.onload = () => { record.ready = !!image.naturalWidth; };
-  image.onerror = () => { record.failed = true; };
-  image.src = "assets/scenery/foreground-rock.png";
-  return record;
-}
 function sceneryJourney(clock = battlefieldState.clock) {
   const duration = sceneryRules.interval, blend = sceneryRules.blend;
   const leg = Math.floor(Math.max(0, clock) / duration), phase = Math.max(0, clock) % duration;
@@ -65,7 +52,7 @@ function sceneryJourney(clock = battlefieldState.clock) {
 }
 function resetBattlefield() {
   Object.assign(battlefieldState, { sector: 0, previous: 0, completed: 0, clock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 });
-  sceneryLayer(0); sceneryLayer(1); sceneryLoadForeground();
+  sceneryLayer(0); sceneryLayer(1);
 }
 function resizeScenery() {
   // Full-resolution images remain usable at every viewport size; no reload/texture stall.
@@ -149,21 +136,23 @@ function sceneryDrawParticles() {
     ctx.beginPath(); ctx.arc(x, y, 0.5 + particle.depth * 0.55, 0, Math.PI * 2); ctx.fill();
   }
   const journey = sceneryJourney();
-  // Near debris belongs to the belt/fleet sectors and fades with the same journey.
-  const foregroundWeight = battlefieldSectors[journey.current].foreground * (1 - journey.blend)
-    + battlefieldSectors[journey.next].foreground * journey.blend;
-  const foreground = sceneryLoadForeground();
-  if (foregroundWeight > 0 && foreground && foreground.ready) {
+  // A light cone and velocity gradient separate mid-distance mesh silhouettes from the distant plate.
+  for (const [index, weight] of [[journey.current, 1 - journey.blend], [journey.next, journey.blend]]) {
+    const strength = battlefieldSectors[index].foreground * weight;
+    if (strength < .018) continue;
+    const kind = index === 2 ? "wreck" : "rock";
     for (let i = 0; i < 2; i++) {
-      const size = (i === 1 ? 156 : 112) * Math.min(1.28, Math.max(0.6, h / 720));
-      const span = w + size * 3, speed = 35 + i * 16;
+      const size = (i ? 188 : 129) * Math.min(1.28, Math.max(.6, h / 720));
+      const span = w + size * 3, speed = (i ? 57 : 39) * Math.min(1.6, Math.max(.6, w / 1280));
       const x = ((sceneryHash(i * 7.4 + 12) * span - clock * speed) % span + span) % span - size * 1.5;
-      const y = i === 1 ? size * 0.16 : h - size * 0.16;
-      ctx.save(); ctx.translate(x - battlefieldState.driftX * 2, y - battlefieldState.driftY * 2);
-      ctx.rotate(i * 1.7 + Math.sin(clock * 0.10 + i) * 0.12);
-      ctx.globalAlpha = foregroundWeight;
-      ctx.drawImage(foreground.image, -size / 2, -size / 3, size, size * 2 / 3);
-      ctx.restore();
+      const y = i ? size * .15 : h - size * .13;
+      if (x + size * .68 < 0 || x - size * .68 > w) continue;
+      drawSpaceProp(ctx, kind, {
+        x: x - battlefieldState.driftX * (1.8 + i * .55), y: y - battlefieldState.driftY * (1.8 + i * .55),
+        width: size, height: size * (kind === "rock" ? .93 : .76), variant: i + index,
+        pitch: -.23 + clock * (.071 + i * .012), yaw: -.52 - clock * .094 + i * .81, roll: i * 1.7 + clock * .068,
+        alpha: strength * 2.4, haze: .28 + i * .07, sector: index,
+      });
     }
   }
 }

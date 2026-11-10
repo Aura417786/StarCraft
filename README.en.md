@@ -1,6 +1,6 @@
 # Star Breaker · 星际突围
 
-Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alien bosses and their final fusion. Star Breaker is a single-player, side-scrolling shooter for desktop browsers.
+Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alien bosses and their final fusion. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. The current release is **v17 Abyssal Threshold**.
 
 [Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Watch the previous version's trailer](media/trailer.mp4) · [中文说明](README.md)
 
@@ -10,7 +10,7 @@ Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alie
 
 - **Choose a fighter before each sortie.** Crimson hits hardest per shot and fires a piercing beam, Azure shoots fastest and launches five homing ion shots, and Auric spreads three lanes with a three-wave screen-wide barrage.
 - **Break coordinated attacks.** Gunships aim from different heights, while the ace fires, changes flanks and locks on again. The final fusion attacks along both axes.
-- **Fight a fixed alien campaign.** Watch the Broodmother coil before it strikes. At half health, its shell opens and one lash becomes a chain of three. The final boss pairs a slowing field with a locked explosion and uses two other chained attacks.
+- **Fight a fixed alien campaign.** Ride out the Broodmother’s tsunami in its marked trough, then face the egg it curls into. Every boss has a separate playable finale. Break the Marrow Reliquary’s anchors, pick out the real mirror image, or cut the Neural Crown’s nodes in order.
 - **Grow your life capacity.** Green orbs heal a life. When you're already full, they add one to both your current life and your capacity.
 - **Upgrade your main gun.** Shoot power-up orbs to fire faster, add firing lanes, or launch harder-hitting rounds. Later orbs can grant several levels at once. Each boost is smaller and enemies have more endurance as the campaign advances. Green orbs are rarer, and only bosses 3, 6 and 9 restore a missing life.
 - **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. Sustain focused fire against late armored fighters and gunships, or clear a lane with the Crimson Beam.
@@ -33,4 +33,4 @@ After one run, I’d love to know where you first died and which moment made you
 
 ## About the project
 
-I began with movement, autofire, and scoring, then built the game through AI-assisted development and playtesting. It uses HTML, CSS, JavaScript, Canvas 2D, and browser-synthesized audio via Web Audio. The ships, bosses, and scenery use AI-generated artwork selected and integrated for the game.
+I began with movement, autofire, and scoring, then built the game through AI-assisted development and playtesting. It uses HTML, CSS, JavaScript, Canvas 2D, and browser-synthesized audio via Web Audio. The ships, bosses, and distant scenery use authored raster assets. Nearby asteroids and wrecks are lit, rotating 3D meshes projected into the same Canvas scene.

@@ -52,11 +52,22 @@ function setBossMessage(title, action, visible = true) {
   document.querySelector("#boss-name").textContent = title;
   document.querySelector("#boss-action").textContent = action;
   app.dataset.bossActive = String(visible);
+  app.dataset.bossFinale = String(visible && !!boss?.finale);
 }
 
 function clearAlienThreats() {
   bossProjectiles.length = 0;
   bossHazards.length = 0;
+}
+
+function clearBossFinaleAttacks() {
+  clearAlienThreats();
+  enemyProjectiles.length = 0;
+  bullets.length = 0;
+  pendingShots = 0;
+  muzzleFlash = 0;
+  clearEvolutionWeaponTransients();
+  if (ultimate.phase !== "idle") cancelUltimate(true);
 }
 
 function resetBossEncounter() {
@@ -98,6 +109,7 @@ function resizeBossEncounter(oldWidth, oldHeight, oldBounds) {
       shot.radius *= widthScale;
     }
     for (const hazard of bossHazards) {
+      if (resizeAlienSignatureHazard(hazard, scaleX, scaleY, resizeY)) continue;
       if (hazard.x !== undefined) hazard.x *= scaleX;
       if (hazard.y !== undefined) hazard.y = resizeY(hazard.y);
       if (hazard.radius !== undefined) hazard.radius *= widthScale;
@@ -108,13 +120,14 @@ function resizeBossEncounter(oldWidth, oldHeight, oldBounds) {
       }
       hazard.right = bossPlayerRight() + (hazard.kind === "guide" ? 0 : player.width * .22);
     }
-  } else {
+  } else if (!boss.finale) {
     clearAlienThreats();
     boss.phase = "recover";
     boss.phaseTime = 0;
   }
   boss.previousX = boss.x;
   boss.previousY = boss.y;
+  if (boss.finale) resizeBossFinale(boss);
   bossHitGrace = Math.max(bossHitGrace, bossRules.grace);
   player.x = Math.min(player.x, bossPlayerRight());
 }
@@ -145,6 +158,7 @@ function spawnBoss(type = chooseBossType()) {
     alienAttack: null, enraged: false, lockX: player.x, lockY: player.y, gapY: player.y, gapSize: 0,
     lashPulse: 0, lashSide: 1, lashIndex: 0 };
   if (typeof preloadAlienBossArt === "function") preloadAlienBossArt(type);
+  preloadBossFinaleArt(type);
   enemies.length = 0;
   resetEnemyCombat(false);
   clearAlienThreats();
@@ -208,6 +222,7 @@ function updateBossEncounter(seconds) {
       pendingBossType = chooseBossType();
       if (pendingBossType === null) return;
       if (typeof preloadAlienBossArt === "function") preloadAlienBossArt(pendingBossType);
+      preloadBossFinaleArt(pendingBossType);
       enemies.length = 0;
       resetEnemyCombat(false);
       gameAudio.warning();
@@ -227,6 +242,10 @@ function updateBossEncounter(seconds) {
   boss.previousY = boss.y;
   boss.hitFlash = Math.max(0, boss.hitFlash - seconds);
   boss.displayHp += (boss.hp - boss.displayHp) * (reducedMotion.matches ? 1 : 1 - Math.exp(-seconds * 12));
+  if (boss.finale) {
+    updateBossFinale(boss, seconds);
+    return;
+  }
   updateAlienBossPose(boss, seconds);
   if (boss.phase === "enter" && boss.phaseTime >= bossRules.entry) {
     boss.phase = "recover";
@@ -267,6 +286,7 @@ const alienBodyRegions = [
 
 function projectileAlienBossHit(bullet, target) {
   if (!bossCanTakeDamage(target)) return null;
+  if (target.finale) return projectileBossFinaleHit(bullet, target);
   let first = Infinity;
   for (const [x, y, width, height] of alienBodyRegions[target.type]) {
     const offsetX = x * target.width, offsetY = y * target.height;
@@ -280,6 +300,8 @@ function projectileAlienBossHit(bullet, target) {
 
 function applyBossHit(shot, target = boss) {
   if (!bossCanTakeDamage(target)) return;
+  const finaleMultiplier = target.finale ? bossFinaleDamageMultiplier(target, shot) : 1;
+  if (!(finaleMultiplier > 0)) return;
   const before = target.hp;
   const damageLog = shot.damageLog ?? Math.log(shot.damage ?? weapon.damage);
   const special = shot.source === "ultimate";
@@ -289,15 +311,20 @@ function applyBossHit(shot, target = boss) {
   // The attacking shell absorbs part of the incoming damage, but no attack is invulnerable.
   const attackingShell = target.phase !== "attack" ? 1 : target.alienFinal && target.enraged ? .62 : .78;
   const specialMultiplier = special && target.alienFinal ? bossRules.fusionSpecialMultiplier : 1;
-  const fraction = rawFraction * attackingShell * specialMultiplier;
+  const fraction = rawFraction * attackingShell * specialMultiplier * finaleMultiplier;
   if (fraction <= 0) return;
   target.hp = Math.max(0, target.hp - fraction);
   target.hitFlash = .08;
   recordCombatImpact(target, shot, true);
   if (!shot.noEnergy && shot.source !== "ultimate" && shot.source !== "blast") gainUltimateEnergy(before - target.hp, "boss");
   if (target.hp <= 1e-12) {
-    defeatBoss(target);
-  } else if (target.hp <= .5 && !target.enraged) {
+    if (target.finale) defeatBoss(target);
+    else {
+      enemies.length = 0;
+      resetEnemyCombat(false);
+      beginBossFinale(target);
+    }
+  } else if (!target.finale && target.hp <= .5 && !target.enraged) {
     target.enraged = true;
     target.enragedAt = target.age;
     gameAudio.bossEnrage();
@@ -326,7 +353,7 @@ function defeatBoss(target = boss) {
   kills++;
   registerMomentumKill();
   scoreDisplay.textContent = String(score).padStart(6, "0");
-  createExplosion(fallen, points);
+  if (!fallen.finale) createExplosion(fallen, points);
   const recovered = player.lives;
   if (!fallen.alienFinal && bossDefeated % 3 === 0) grantPlayerLife();
   clearAlienThreats();
@@ -374,13 +401,15 @@ function updateBossDamage() {
     }
   }
   if (hit) tryPerfectShield();
-  if (hit || bossHazards.some(alienHazardHitsPlayer)) damagePlayer(tr("被异形 Boss 攻击命中", "Hit by an alien boss attack"));
+  if (hit || bossHazards.some(alienHazardHitsPlayer) || (boss?.finale && bossFinaleHitsPlayer(boss)))
+    damagePlayer(tr("被异形 Boss 攻击命中", "Hit by an alien boss attack"));
 }
 
 function drawBossBattle() {
   const quiet = reducedMotion.matches;
   for (const hazard of bossHazards) drawAlienHazard(context, hazard, quiet);
-  if (boss) {
+  if (boss?.finale) drawBossFinale(context, boss, quiet);
+  else if (boss) {
     drawBossShip(context, boss, quiet);
     const width = boss.width * .85, y = boss.y - boss.height * .58 - 9;
     context.save();

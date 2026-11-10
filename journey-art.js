@@ -83,98 +83,65 @@ function drawJourneyOrbit(ctx, scene) {
   ctx.restore();
 }
 
-function drawJourneyRock(ctx, x, y, width, angle, mirror, alpha) {
-  if (x + width * .65 < 0 || x - width * .65 > viewport.width) return;
-  const rock = sceneryLoadForeground();
-  ctx.save();
-  ctx.globalAlpha *= alpha;
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.scale(mirror, 1);
-  if (rock?.ready) ctx.drawImage(rock.image, -width * .5, -width / 3, width, width * 2 / 3);
-  else {
-    const stone = ctx.createLinearGradient(0, -width / 3, 0, width / 3);
-    stone.addColorStop(0, "#7c695a");
-    stone.addColorStop(.37, "#323439");
-    stone.addColorStop(1, "#0b101b");
-    journeyArtPolygon(ctx, [[-width * .49, 0], [-width * .31, -width * .25], [-width * .06, -width * .29],
-      [width * .12, -width / 3], [width * .43, -width * .14], [width * .50, width * .09],
-      [width * .22, width * .27], [-width * .17, width * .31], [-width * .42, width * .17]], stone);
-  }
-  ctx.restore();
+function drawJourneyRock(ctx, x, y, width, age, variant, haze, alpha, foreground = false) {
+  if (x + width * .70 < 0 || x - width * .70 > viewport.width) return;
+  const t = reducedMotion.matches ? 0 : age;
+  drawSpaceProp(ctx, "rock", {
+    x, y, width: width * 1.21, height: width * 1.13, variant, haze, alpha,
+    pitch: .17 + t * (.052 + variant * .012), yaw: -.37 + t * .095 - variant * .53,
+    roll: variant * .76 - t * (.040 + variant * .016), sector: 1,
+    streak: foreground ? Math.min(7, width * .015) : 0,
+  });
 }
 function drawJourneyBelt(ctx, scene, foreground) {
   const w = viewport.width, h = viewport.height, t = scene.elapsed, quiet = reducedMotion.matches;
   const near = Math.min(w, h);
   if (foreground) {
     if (quiet) return;
-    // Near rocks enter at the edges and clear them early, leaving the combat lanes open.
-    drawJourneyRock(ctx, w * (1.52 - t * .102), -h * .11, near * .87, -.28, 1, .71);
-    drawJourneyRock(ctx, w * (1.88 - t * .111), h * 1.10, near * .74, .18, -1, .64);
+    // Near meshes cross faster and grow toward the lens, outside the combat lanes.
+    const approach = journeyArtEase(3, 18, t);
+    drawJourneyRock(ctx, w * (1.52 - t * .102), -h * .15, near * (.73 + .16 * approach), t, 0, .11, .72, true);
+    drawJourneyRock(ctx, w * (1.88 - t * .111), h * 1.14, near * (.65 + .17 * approach), t, 1, .13, .67, true);
     return;
   }
   const pinch = journeyArtEase(2, 11, t) - journeyArtEase(14, 23, t);
-  const roll = quiet ? 0 : Math.sin(t * .12) * .11;
-  drawJourneyRock(ctx, w * (1.28 - t * .067), h * (.09 + pinch * .115), near * .78, -.21 + roll, 1, .72);
-  drawJourneyRock(ctx, w * (1.49 - t * .065), h * (.96 - pinch * .117), near * .92, .26 - roll, -1, .72);
+  const approach = journeyArtEase(5, 22, t);
+  drawJourneyRock(ctx, w * (1.28 - t * .067), h * (.06 + pinch * .073), near * (.61 + .15 * approach), t, 1, .16, 1);
+  drawJourneyRock(ctx, w * (1.49 - t * .065), h * (1.02 - pinch * .084), near * (.69 + .15 * approach), t, 2, .18, 1);
   for (let i = 0; i < 5; i++) {
-    const size = near * (.030 + sceneryHash(i + 11) * .074);
+    const size = near * (.026 + sceneryHash(i + 11) * .060);
     drawJourneyRock(ctx, w * (1.18 + i * .18 - t * (.026 + i * .003)),
-      h * (i % 2 ? .80 + i * .025 : .16 + i * .025), size, roll + i * .8, i % 2 ? -1 : 1, .28);
+      h * (i % 2 ? .80 + i * .025 : .16 + i * .025), size, t, (i + 2) % 4, .38, .48);
   }
 }
 
-const journeyWreckOuter = [[-510, -65], [-423, -111], [-297, -116], [-243, -142], [-110, -139], [-87, -157],
-  [40, -158], [155, -128], [312, -111], [362, -67], [410, -63], [436, -11], [407, 17], [379, 41],
-  [355, 24], [314, 72], [270, 48], [216, 97], [154, 60], [113, 94], [49, 72], [3, 109], [-76, 75],
-  [-127, 77], [-193, 43], [-331, 28], [-421, -12]];
-function drawJourneyWreckHalf(ctx, record, x, y, scale, angle, inverted) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.scale(scale, inverted ? -scale : scale);
-  const metal = ctx.createLinearGradient(0, -151, 0, 111);
-  metal.addColorStop(0, "#595664");
-  metal.addColorStop(.32, "#21242e");
-  metal.addColorStop(.83, "#32323b");
-  metal.addColorStop(1, "#110b14");
-  journeyArtPolygon(ctx, journeyWreckOuter, metal);
-  if (record?.ready) {
-    ctx.save();
-    ctx.clip();
-    ctx.globalAlpha *= .62;
-    ctx.drawImage(record.image, record.width * .46, 0, record.width * .51, record.height * .50, -510, -175, 946, 298);
-    ctx.restore();
-  }
-  ctx.strokeStyle = "#9b766561";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(-410, -6);
-  ctx.lineTo(-191, 30);
-  ctx.lineTo(27, 63);
-  ctx.lineTo(205, 38);
-  ctx.lineTo(369, 13);
-  ctx.stroke();
-  // Exposed ribs on the broken side make the gap recognizable as a ripped hull.
-  for (let i = 0; i < 10; i++) {
-    const x0 = 61 + i * 32, y0 = 44 - i * 2.2;
-    ctx.strokeStyle = i % 3 ? "#312923" : "#bb916968";
-    ctx.lineWidth = i % 3 ? 3.6 : 1.3;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x0 + 21, y0 + 31 + sceneryHash(i * 7) * 12);
-    ctx.stroke();
-  }
-  ctx.restore();
+function drawJourneyWreckHalf(ctx, x, y, width, age, variant, haze, alpha, height = width * .87, streak = 0) {
+  if (x + width * .72 < 0 || x - width * .72 > viewport.width) return;
+  const t = reducedMotion.matches ? 0 : age;
+  drawSpaceProp(ctx, "wreck", {
+    x, y, width, height, variant, haze, alpha, streak, sector: 2,
+    pitch: (variant === 1 ? -.44 : .56) + t * .037,
+    yaw: -.84 + variant * .10 + Math.sin(t * .15 + variant * .58) * .23,
+    roll: (variant === 1 ? -.33 : .24) + t * (variant === 1 ? .010 : -.011),
+  });
 }
-function drawJourneyWreck(ctx, scene) {
+function drawJourneyWreck(ctx, scene, foreground) {
   const w = viewport.width, h = viewport.height, t = scene.elapsed;
-  const narrow = journeyArtEase(3, 11, t) - journeyArtEase(14, 20, t);
-  const scale = Math.min(w / 1160, h / 670);
-  const rotation = reducedMotion.matches ? 0 : Math.sin(t * .12) * .14;
-  const record = sceneryLayer(2);
-  drawJourneyWreckHalf(ctx, record, w * (1.22 - .060 * t), h * (.12 + narrow * .16), scale, -.16 + rotation, false);
-  drawJourneyWreckHalf(ctx, record, w * (1.37 - .065 * t), h * (.97 - narrow * .14), scale * 1.06, .24 - rotation, true);
+  const near = Math.min(w, h), narrow = journeyArtEase(3, 11, t) - journeyArtEase(14, 20, t);
+  const approach = journeyArtEase(4, 21, t);
+  if (foreground) {
+    if (!reducedMotion.matches) drawJourneyWreckHalf(ctx, w * (1.55 - .109 * t), h * 1.13,
+      near * (.68 + .16 * approach), t, 3, .15, .64, near * .68, 5);
+    return;
+  }
+  const span = Math.min(w * .59, h * 1.10) * (.83 + .18 * approach);
+  drawJourneyWreckHalf(ctx, w * (1.19 - .060 * t), h * (.09 + narrow * .077), span, t, 1, .18, 1);
+  drawJourneyWreckHalf(ctx, w * (1.42 - .065 * t), h * (1.025 - narrow * .078), span * .91, t, 0, .21, 1);
+  for (let i = 0; i < 4; i++) {
+    const size = near * (.033 + sceneryHash(i + 32) * .065);
+    drawJourneyWreckHalf(ctx, w * (1.17 + i * .16 - (.033 + i * .004) * t),
+      h * (i % 2 ? .84 + i * .026 : .11 + i * .034), size, t * (1 + i * .16), i, .39, .52);
+  }
 }
 
 const journeyCitadelHull = [[-652, -43], [-551, -77], [-401, -108], [-328, -123], [-291, -149], [-111, -159],
@@ -363,22 +330,15 @@ function drawJourneyRift(ctx, scene) {
 function drawJourneyScene(scene, layer) {
   if (!scene || !(viewport.width > 0 && viewport.height > 0)) return;
   const foreground = layer === "front";
-  if (foreground && scene.id !== "belt") return;
+  if (foreground && scene.id !== "belt" && scene.id !== "wreck") return;
   const envelope = journeyArtEnvelope(scene);
   if (envelope <= 0) return;
   const ctx = context;
   ctx.save();
   ctx.globalAlpha *= envelope;
-  // Foreground is clipped to the outside of the flying lanes. It cannot hide an actor or warning.
-  if (foreground) {
-    const edge = Math.min(viewport.height * .065, 44);
-    ctx.beginPath();
-    ctx.rect(0, 0, viewport.width, edge);
-    ctx.rect(0, viewport.height - edge, viewport.width, edge);
-    ctx.clip();
-  }
+  // The near layer runs behind every combat actor and its meshes pass beyond the frame edges.
   if (scene.id === "belt") drawJourneyBelt(ctx, scene, foreground);
-  else if (scene.id === "wreck") drawJourneyWreck(ctx, scene);
+  else if (scene.id === "wreck") drawJourneyWreck(ctx, scene, foreground);
   else if (scene.id === "orbit") drawJourneyOrbit(ctx, scene);
   else if (scene.id === "citadel") drawJourneyCitadel(ctx, scene);
   else if (scene.id === "rift") drawJourneyRift(ctx, scene);

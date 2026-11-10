@@ -209,7 +209,7 @@ function ultimateHitsTarget(shot, target) {
 }
 function hitUltimateBoss(target, shot, cap) {
   const damageLog = cap ? Math.min(shot.damageLog, target.healthLog + Math.log(cap)) : shot.damageLog;
-  applyBossHit({ source: "ultimate", damageLog, y: shot.y }, target);
+  applyBossHit({ source: "ultimate", damageLog, y: shot.y, finaleNode: shot.finaleNode }, target);
 }
 function resolveUltimateHits(shot = ultimate.shot, bossCap) {
   if (!shot) return;
@@ -297,7 +297,7 @@ function updateIonSwarm(shot, before, after) {
       if (missile.trail.length > 8) missile.trail.shift();
     }
     resolveIonHit(missile, shot.bursts, after);
-    if (!isBattleActive()) return false;
+    if (!isBattleActive() || ultimate.shot !== shot) return false;
     if (missile.x >= viewport.width + 20 || after >= missile.delay + ionSwarmRules.maxFlight) missile.done = true;
   }
   return shot.missiles.every(missile => missile.done);
@@ -309,7 +309,7 @@ function updateCoronaBarrage(shot, before, after) {
     wave.previousX = wave.x;
     wave.x = Math.min(viewport.width + wave.length, wave.x + wave.speed * seconds);
     resolveUltimateHits(wave, coronaRules.bossHitCap);
-    if (!isBattleActive()) return false;
+    if (!isBattleActive() || ultimate.shot !== shot) return false;
   }
   return shot.waves.every(wave => wave.x - wave.length >= viewport.width);
 }
@@ -350,7 +350,7 @@ function updateUltimate(seconds) {
     shot.x += shot.speed * used;
     ultimate.elapsed += used;
     if (used > 0) resolveUltimateHits();
-    if (used + 1e-9 < untilExit) return;
+    if (ultimate.shot !== shot || used + 1e-9 < untilExit) return;
     finishUltimate();
   }
 }
