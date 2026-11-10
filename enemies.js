@@ -7,7 +7,17 @@ const enemyTypes = {
   gunner: { name: "炮击机", health: 1.5, speed: 0.8, width: 1.03, height: 0.62, points: 150 },
 };
 const enemyCombatRules = { armorArrival: 18, gunnerArrival: 40, maxGunners: 2, minSpawnInterval: 0.42, spawnRampSeconds: 170,
-  armorReinforcementTime: 120, armorHitLimit: 0.85, warning: 0.9, recovery: 0.65, shotsPerGunner: 2, maxProjectiles: 20, projectileLife: 8 };
+  fireProtectionTime: 85, warning: 0.9, recovery: 0.65, shotsPerGunner: 2, maxProjectiles: 20, projectileLife: 8 };
+const enemyFireProtection = {
+  scout: { hit: 0.72, burst: 0.80, refill: 1.30 },
+  gunner: { hit: 0.58, burst: 0.70, refill: 1.25 },
+  armored: { hit: 0.44, burst: 0.62, refill: 0.83 },
+  ace: { hit: 0.36, burst: 0.52, refill: 0.54 },
+  transport: { hit: 0.36, burst: 0.52, refill: 0.54 },
+};
+function enemyProtectionAtBirth(kind) {
+  return battleTime >= enemyCombatRules.fireProtectionTime ? enemyFireProtection[kind] : undefined;
+}
 const enemyProjectiles = [];
 const enemyIntroduced = new Set();
 

@@ -881,14 +881,14 @@ check('aggregated high-rate bullets preserve boss damage and no infinite arithme
   assert.ok(Number.isFinite(bossState().boss.hp));
 });
 check('a boss defeat gives one reward, heals only to three and schedules the next arrival seventy-five seconds later', () => {
-  readyBoss(0,'battleTime=123;player.lives=2;'); execute(bossProjectile()+'addBossHazard("beam",{y:200,warning:1,duration:2});summonBossEnemy(0);applyBossHit({damageLog:boss.healthLog+1});');
+  readyBoss(0,'battleTime=123;player.lives=2;'); execute(bossProjectile()+'addBossHazard("beam",{y:200,warning:1,duration:2});summonBossEnemy(0);boss.hp=.015;applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
   assert.equal(bossState().boss,null); assert.equal(bossState().bossDefeated,1); assert.equal(scene().score,2000);
   assert.equal(health().kills,1); assert.equal(health().lives,3); assert.equal(bossState().nextBossTime,198);
   assert.equal(bossState().bossProjectiles.length,0); assert.equal(bossState().bossHazards.length,0); assert.equal(scene().enemies.length,0);
   assert.deepEqual(orbScene().powerups.map(p=>p.type),['blue','yellow','red']);
   execute('defeatBoss();applyBossHit({damage:Infinity});'); assert.equal(scene().score,2000); assert.equal(health().kills,1);
   assert.equal(orbScene().powerups.length,3); assert.equal(nodes.get('#boss-hud').hidden,true);
-  finishBossPresentation(); execute('chooseEvolution("pierce");spawnBoss(2);boss.phase="recover";applyBossHit({damageLog:boss.healthLog+1});'); assert.equal(health().lives,3);
+  finishBossPresentation(); execute('chooseEvolution("pierce");spawnBoss(2);boss.phase="recover";boss.hp=.015;applyBossHit({damageLog:boss.healthLog+Math.log(.02)});'); assert.equal(health().lives,3);
 });
 check('the second boss countdown is based on defeat time with another five-second warning', () => {
   readyBoss(2,'battleTime=140;defeatBoss();updateCombatEffects(1.25);chooseEvolution("pierce");battleTime=209.999;updateBossEncounter(0);');
@@ -946,16 +946,16 @@ check('blue increases fire rate moderately and late blue/red gains do not change
   for(const [time,gain] of [[0,1],[180,2],[360,3],[3600,21]]) {
     execute('battleTime='+time); const before=weaponState(); execute('applyPowerup("blue");applyPowerup("red");');
     const after=weaponState(); assert.equal(after.speedLevel-before.speedLevel,gain);
-    near(after.damage,Math.max(before.damage+gain,before.damage*1.16**gain));
-    near(1/after.interval,Math.max(1/before.interval+1.25*gain,1/before.interval*1.10**gain));
+    near(after.damage,Math.max(before.damage+gain,before.damage*1.09**gain));
+    near(1/after.interval,Math.max(1/before.interval+1.25*gain,1/before.interval*1.065**gain));
     assert.equal(after.tier,4); assert.equal(after.lanes,3);
   }
 });
 check('collecting every scheduled orb for five minutes no longer jumps through many projectile tiers', () => {
   isolatedBattle();
   execute('for(let time=3,index=0;time<=300;time+=7,index++){battleTime=time;applyPowerup(["blue","yellow","red","blue","yellow","red","blue","yellow","red","heal"][index%10]);}');
-  const result=weaponState(); assert.ok(result.tier>=3&&result.tier<=4); assert.ok(result.damage>36&&result.damage<46);
-  assert.ok(1/result.interval>34&&1/result.interval<45); assert.ok(result.lanes>=1&&result.lanes<=4);
+  const result=weaponState(); assert.ok(result.tier>=3&&result.tier<=4); assert.ok(result.damage>20&&result.damage<23);
+  assert.ok(1/result.interval>28&&1/result.interval<30); assert.ok(result.lanes>=1&&result.lanes<=4);
 });
 check('opening enemies die in one hit while later enemies keep a frozen growing health snapshot', () => {
   isolatedBattle('battleTime=19.9;spawnEnemy("scout");'); assert.equal(scene().enemies[0].healthLog,0);
@@ -984,13 +984,17 @@ check('upgrades during a fight still improve damage against an already spawned e
   execute('applyEnemyHit(enemies[0],{damageLog:weaponDamageLog()});'); const firstLoss=1-scene().enemies[0].hp;
   const before=scene().enemies[0].hp; execute('applyPowerup("red");applyEnemyHit(enemies[0],{damageLog:weaponDamageLog()});');
   const nextLoss=before-scene().enemies[0].hp;
-  assert.ok(nextLoss>firstLoss); near(nextLoss/firstLoss,1.16**3,1e-7); assert.equal(scene().enemies[0].healthLog,birth);
+  assert.ok(nextLoss>firstLoss); near(nextLoss/firstLoss,1.3,1e-7); assert.equal(scene().enemies[0].healthLog,birth);
 });
 check('huge-tier actual projectiles damage normalized enemies without Infinity-minus-Infinity or lost kills', () => {
   isolatedBattle('battleTime=3600;weapon.tier=500;weapon.damage=1000;spawnEnemy("scout");enemies[0].x=500;enemies[0].previousX=500;enemies[0].y=player.y;enemies[0].healthLog=weaponDamageLog()+Math.log(4);resetWeapons();updateShooting(0);bullets[0].previousX=400;bullets[0].x=500;resolveProjectileHits();');
   assert.equal(scene().enemies.length,1); near(scene().enemies[0].hp,.75);
   assert.ok(Number.isFinite(scene().enemies[0].hp)); assert.equal(shots().length,0);
-  execute('bullets.push({x:500,previousX:400,y:player.y,damage:Infinity,damageLog:enemies[0].healthLog+1});resolveProjectileHits();');
+  const finishingRound = 'bullets.push({x:500,previousX:400,y:player.y,damage:Infinity,damageLog:enemies[0].healthLog+1});resolveProjectileHits();';
+  execute(finishingRound);
+  near(scene().enemies[0].hp,.2);
+  assert.equal(health().kills,0);
+  execute('battleTime+=.6;'+finishingRound);
   assert.equal(scene().enemies.length,0); assert.equal(scene().score,100); assert.equal(health().kills,1);
   execute('resolveProjectileHits();'); assert.equal(scene().score,100);
 });
@@ -1091,11 +1095,11 @@ check('Boss durability uses a growing time reference and stays finite at extreme
     isolatedBattle(`battleTime=${time};spawnBoss(0);boss.phase="recover";`);
     const birth=bossState().boss.healthLog;
     assert.ok(Number.isFinite(birth)&&birth>previous);
-    near(execute('Math.exp(boss.healthLog-progressionReferenceDpsLog(battleTime))'),55,1e-7);
+    assert.ok(execute('boss.healthLog>=progressionReferenceDpsLog(battleTime)+Math.log(55)-1e-9'));
     execute('weapon.tier=10000;weapon.lanes=4;weapon.damage=999;weapon.interval=.025;spawnBoss(0);boss.phase="recover";');
     assert.equal(bossState().boss.healthLog,birth);
-    execute('applyBossHit({damageLog:boss.healthLog+Math.log(.2)});');
-    near(bossState().boss.hp,.8,1e-8);
+    execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
+    near(bossState().boss.hp,.98,1e-8);
     previous=birth;
   }
 });
@@ -1162,9 +1166,11 @@ check('energy counts actual enemy damage and clamps lethal overkill', () => {
   assert.equal(scene().enemies[0].hp,0);
 });
 check('boss hits fill energy by actual health removed including lethal remainder', () => {
-  readyBoss(1); execute('applyBossHit({damageLog:boss.healthLog+Math.log(.25)});'); near(ult().energy,45);
-  execute('applyBossHit({damageLog:boss.healthLog+5});');
-  assert.equal(ult().charges,1); near(ult().energy,80); assert.equal(bossState().boss,null);
+  readyBoss(1);
+  execute('for(let hit=0;hit<10;hit++){battleTime+=.3;applyBossHit({damageLog:boss.healthLog+Math.log(.025)});}');
+  near(ult().energy,45);
+  execute('boss.hp=.015;ultimate.energy=99;battleTime+=.3;applyBossHit({damageLog:boss.healthLog+5});');
+  assert.equal(ult().charges,1); near(ult().energy,1.7); assert.equal(bossState().boss,null);
 });
 check('misses, energy orbs, collisions and ultimate damage cannot charge another ultimate', () => {
   isolatedBattle(orb('red')+shot()); step(); near(ult().energy,0);
@@ -1891,11 +1897,11 @@ check('defeating the entire pair opens one evolution and starts the next countdo
 });
 check('ordinary bullets can damage either member while a piercing projectile cannot strike one hull twice', () => {
   for(const member of ['boss','wingBoss']) {
-    readyDuo(`bullets.push({x:${member}.x,previousX:${member}.x-${member}.width,y:${member}.y,damageLog:${member}.healthLog+Math.log(.1)});resolveProjectileHits();`);
-    near(duoState()[member].hp,.9); near(duoState()[member==='boss'?'wingBoss':'boss'].hp,1);
+    readyDuo(`bullets.push({x:${member}.x,previousX:${member}.x-${member}.width,y:${member}.y,damageLog:${member}.healthLog+Math.log(.02)});resolveProjectileHits();`);
+    near(duoState()[member].hp,.98); near(duoState()[member==='boss'?'wingBoss':'boss'].hp,1);
   }
-  readyDuo('evolution.pierce=3;resetWeapons();player.y=wingBoss.y;updateShooting(0);bullets[0].x=wingBoss.x;bullets[0].previousX=wingBoss.x-wingBoss.width;bullets[0].damageLog=wingBoss.healthLog+Math.log(.1);resolveProjectileHits();');
-  near(duoState().wingBoss.hp,.9); execute('resolveProjectileHits();'); near(duoState().wingBoss.hp,.9);
+  readyDuo('evolution.pierce=3;resetWeapons();player.y=wingBoss.y;updateShooting(0);bullets[0].x=wingBoss.x;bullets[0].previousX=wingBoss.x-wingBoss.width;bullets[0].damageLog=wingBoss.healthLog+Math.log(.02);resolveProjectileHits();');
+  near(duoState().wingBoss.hp,.98); execute('resolveProjectileHits();'); near(duoState().wingBoss.hp,.98);
 });
 check('one cannon can hit two aligned Boss hulls once each with a separate eighteen-percent ceiling', () => {
   readyDuo('wingBoss.y=boss.y;wingBoss.previousY=boss.y;player.y=boss.y;weapon.tier=500;'); primeUltimate(); castUltimate();
@@ -2402,7 +2408,9 @@ check('aegis counter kills score once without spawning support fire or gaining c
   assert.equal(momentumState().count,1); near(ult().energy,0); assert.equal(shots().length,0);
   for(let level=1;level<=3;level++) {
     readyDuo(`evolution.aegis=${level};player.y=boss.y;wingBoss.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();`);
-    const cap=[0,.03,.04,.05][level]; near(duoState().boss.hp,1-cap); near(duoState().wingBoss.hp,1-cap);
+    const cap=[0,.03,.04,.05][level], pair=duoState();
+    assert.ok(pair.boss.hp>=1-cap&&pair.boss.hp<1);
+    near(pair.wingBoss.hp,pair.boss.hp);
     near(ult().energy,0); assert.equal(evolutionState().pulses.length,2);
   }
 });
@@ -2610,7 +2618,9 @@ check('counter kills use normal one-time score and combo settlement without char
 check('perfect counter is capped at three percent for each simultaneous Boss even with unbounded weapon tiers', () => {
   readyDuo('player.y=boss.y;wingBoss.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();');
   execute(bossProjectile().repeat(5)+'updateBossDamage();');
-  near(duoState().boss.hp,.97); near(duoState().wingBoss.hp,.97); near(ult().energy,0);
+  const pair=duoState();
+  assert.ok(pair.boss.hp>=.97&&pair.boss.hp<1);
+  near(pair.wingBoss.hp,pair.boss.hp); near(ult().energy,0);
   assert.equal(protection().perfectUsed,true); assert.equal(execute('activeBosses().every(target=>target.components.every(part=>!part.destroyed))'),true);
 });
 check('lethal perfect counters safely finish a Boss after collecting contact bullets and never settle it twice', () => {

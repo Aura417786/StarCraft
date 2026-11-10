@@ -8,9 +8,9 @@ Shoot the guns off a boss, upgrade your fighter, and survive five sectors of dee
 
 ![Star Breaker gameplay](media/gameplay.gif)
 
-- **Disarm bosses.** Destroy their upper or lower gun mounts to shut down the attacks they control. Later battles pit you against two bosses at once.
+- **Disarm bosses under fire.** Find openings to focus fire on their upper or lower gun mounts and shut down the attacks those mounts control. Later battles pit you against two bosses at once.
 - **Upgrade your main gun.** Shoot power-up orbs to fire faster, add firing lanes, or launch harder-hitting rounds. Later orbs can grant several levels at once.
-- **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. After two minutes, newly spawned armored fighters can survive a single heavy hit from your main gun.
+- **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. Sustain focused fire against late armored fighters and gunships, or clear a lane with the Crimson Beam.
 - **Evolve after boss victories.** Choose wing guns, an AI wingman, or a shield that absorbs enemy shots and fires them back.
 - **Time your shield.** A perfect block gives you three seconds to trigger a faster charge for a cannon shot you already have stored.
 - **Fly through five distinct encounters.** Follow the sunrise along a planet’s rim, shoot a yellow orb through an asteroid gap, and time your fire through a drifting wreck. A capital ship eclipses the stars as fighters leave its hangar. At the black hole, distorted starlight signals a tide that bends ordinary shots.

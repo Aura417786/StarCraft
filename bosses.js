@@ -212,6 +212,7 @@ function summonBossEnemy(index, armored = false) {
   const x = boss.x - boss.width * 0.61;
   enemies.push({ x, previousX: x, y, width, height: width * 0.64,
     hp: 1, maxHp: 1, displayHp: 1, healthLog, hitFlash: 0,
+    fireProtection: enemyProtectionAtBirth(armored ? "armored" : "scout"),
     speed: enemySpeedForTime() * (armored ? 1 : 0.9), summoned: true });
 }
 function runBossAttack(seconds) {
@@ -408,11 +409,16 @@ function updateBossEncounter(seconds) {
   }
 }
 function bossCanTakeDamage(target = boss) { return !!target && activeBosses().includes(target) && target.phase !== "enter"; }
+const bossFireProtection = { hit: 0.05, burst: 0.06, refill: 0.10 };
+
 function applyBossHit(shot, target = boss, component = null) {
   if (!bossCanTakeDamage(target)) return;
   const before = target.hp;
   const damageLog = shot.damageLog ?? Math.log(shot.damage ?? weapon.damage);
-  const fraction = Math.exp(Math.min(0, damageLog - target.healthLog));
+  const fraction = shot.source === "ultimate"
+    ? Math.exp(Math.min(Math.log(ultimateRules.bossDamageCap), damageLog - target.healthLog))
+    : progressionHitFraction(target, damageLog, bossFireProtection);
+  if (fraction <= 0) return;
   const hitsComponent = component && !component.destroyed && target.components?.includes(component)
     && shot.source !== "ultimate" && shot.source !== "blast";
   target.hp = Math.max(0, target.hp - fraction * (hitsComponent ? bossComponentRules.hullTransfer : 1));

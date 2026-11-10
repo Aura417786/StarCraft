@@ -47,6 +47,7 @@ function spawnSupplyTransport() {
   const y = flightBounds.top + (flightBounds.bottom - flightBounds.top) * (battlefieldEvents.objectCount % 2 ? 0.35 : 0.65);
   const target = { kind: "transport", x, previousX: x, y, previousY: y, baseY: y, width, height: width * 0.61,
     hp: 1, maxHp: 1, displayHp: 1, healthLog: progressionReferenceDpsLog(battleTime) + Math.log(2.6),
+    fireProtection: enemyProtectionAtBirth("transport"),
     speed: Math.min(145, 82 + battleTime * 0.045), hitFlash: 0, age: 0, points: 600 };
   enemies.push(target); battlefieldEvents.transport = target;
   for (const side of [-1, 1]) {

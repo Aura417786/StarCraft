@@ -563,13 +563,8 @@ function applyEnemyHit(enemy, bullet) {
   const before = enemy.hp;
   if (enemy.healthLog !== undefined) {
     const damageLog = bullet.damageLog ?? Math.log(bullet.damage ?? weapon.damage);
-    let damage = Math.exp(Math.min(0, damageLog - enemy.healthLog));
-    // Fresh late heavy fighters absorb the excess from the first oversized projectile.
-    if (enemy.reinforced && before === enemy.maxHp && !bullet.source && damage > enemyCombatRules.armorHitLimit) {
-      damage = enemyCombatRules.armorHitLimit;
-      combatBurst(enemy.x - enemy.width * .3, enemy.y, .7, "#d0e9ff", true);
-    }
-    enemy.hp = Math.max(0, enemy.hp - damage);
+    const protection = bullet.source === "ultimate" ? undefined : enemy.fireProtection;
+    enemy.hp = Math.max(0, enemy.hp - progressionHitFraction(enemy, damageLog, protection));
     if (enemy.hp < 1e-12) enemy.hp = 0;
   } else {
     const damage = bullet.damage ?? (bullet.damageLog !== undefined
@@ -618,7 +613,7 @@ function spawnEnemy(kind = chooseEnemyKind()) {
   // 第一架突击机居中直飞，方便新手体验命中；后续同类开始波浪飞行。
   enemies.push({ kind, x, previousX: x, y, previousY: y, baseY: y, waveAmplitude, age: 0,
     width, height: width * type.height, hp: 1, maxHp: 1, displayHp: 1, healthLog, hitFlash: 0,
-    reinforced: kind === "armored" && battleTime >= enemyCombatRules.armorReinforcementTime,
+    fireProtection: enemyProtectionAtBirth(kind),
     points: type.points, speed: enemySpeedForTime() * type.speed * (0.9 + Math.random() * 0.2),
     gunPhase: "entry", gunTime: 0, gunShots: 0, holdX: viewport.width * (0.72 + lane * 0.1) });
   enemyIntroduced.add(kind);

@@ -325,8 +325,8 @@ check('swept shot at visible upper pod selects component while center shot selec
     execute('shot.previousY=shot.y=boss.y;');assert.equal(execute('projectileBossHit(shot,boss)?.component'),null);}
 });
 check('pod damage transfers once to hull and charges only actual hull damage', () => {
-  activeBoss();execute('applyBossHit({damageLog:boss.healthLog+Math.log(.04),source:"bullet"},boss,boss.components[0]);');
-  near(execute('boss.hp'),.968);near(execute('boss.components[0].hp'),.09);near(execute('ultimate.energy'),.032*180);
+  activeBoss();execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02),source:"bullet"},boss,boss.components[0]);');
+  near(execute('boss.hp'),.984);near(execute('boss.components[0].hp'),.11);near(execute('ultimate.energy'),.016*180);
 });
 check('breaking pod does not add score, kill count or duplicate destruction', () => {
   activeBoss();execute('damageBossComponent(boss,boss.components[0],1);damageBossComponent(boss,boss.components[0],1);');

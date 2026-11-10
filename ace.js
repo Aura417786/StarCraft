@@ -63,6 +63,7 @@ function spawnAceEnemy() {
     hp: 1, maxHp: 1, displayHp: 1, hitFlash: 0, points: 800,
     healthLog: Math.max(enemyHealthLogForTime() + Math.log(3),
       progressionReferenceDpsLog(battleTime) + Math.log(4.5)),
+    fireProtection: enemyProtectionAtBirth("ace"),
     age: 0, speed: aceRules.moveSpeed, acePhase: "entry", acePhaseTime: 0,
     aceCycle: 0, aceDodgeCooldown: 0.85, aceDodgeTime: 0, aceSettled: false,
     aceRoute: null, aceAim: null };

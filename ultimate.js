@@ -172,7 +172,7 @@ function resolveUltimateHits() {
   for (const target of activeBosses()) {
     if (!bossCanTakeDamage(target) || shot.hitTargets.has(target) || !ultimateHitsTarget(shot, target)) continue;
     shot.hitTargets.add(target);
-    applyBossHit({ source: "ultimate", damageLog: Math.min(shot.damageLog, target.healthLog + Math.log(ultimateRules.bossDamageCap)) }, target);
+    applyBossHit({ source: "ultimate", damageLog: shot.damageLog }, target);
     if (!isBattleActive()) return;
   }
 }

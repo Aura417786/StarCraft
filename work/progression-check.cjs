@@ -113,8 +113,8 @@ function isolated(extra = '') {
     battleTime=0;score=0;kills=0;bossHitGrace=0;resetUltimate();` + extra);
   execute('previousTime='+now+';');
 }
-function activeBoss(type = 0, duo = false) {
-  isolated(`battleTime=95;spawnBoss(${type}${duo ? ',( '+type+' + 1)%5' : ''});
+function activeBoss(type = 0, duo = false, time = 95) {
+  isolated(`battleTime=${time};spawnBoss(${type}${duo ? ',( '+type+' + 1)%5' : ''});
     for(const t of activeBosses()){Object.assign(t,${duo ? 'duoArena(t.slot)' : 'bossArena()'});t.previousX=t.x;t.previousY=t.y;t.phase='recover';ensureBossComponents(t);}
     if(duoEncounter){duoEncounter.phase='recover';duoEncounter.time=0;}`);
 }
@@ -199,13 +199,16 @@ check('the 2:19 tier-three screenshot loadout damages but does not one-shot ordi
     assert.ok(execute('enemies[0].hp>0&&enemies[0].hp<1'), kind + ' took no damage');
   }
 });
-check('reinforced armor absorbs an oversized normal shot, then a follow-up can finish it', () => {
+check('reinforced armor absorbs oversized normal shots and can still be finished with follow-up fire', () => {
   isolated('battleTime=180;weapon.damage=1e10;');
   placeWaveTarget('armored');
   const first = fireSinglePacket();
   assert.ok(Math.log(first.damage) > execute('enemies[0].healthLog') + Math.log(100));
-  assert.equal(execute('enemies[0].reinforced'), true);
-  near(execute('enemies[0].hp'), 1 - execute('enemyCombatRules.armorHitLimit'));
+  assert.equal(execute('enemies[0].fireProtection===enemyFireProtection.armored'), true);
+  near(execute('enemies[0].hp'), .56);
+  fireSinglePacket();
+  near(execute('enemies[0].hp'), .38);
+  execute('battleTime+=.6;');
   fireSinglePacket();
   assert.equal(execute('enemies.length'), 0);
   assert.equal(execute('kills'), 1);
@@ -393,6 +396,110 @@ check('changing tier emits a stronger differently shaped packet without mutating
   assert.notEqual(fresh.color,old.color);
   assert.deepEqual(beforeSound.args,[false,1]);
   assert.deepEqual(audioCalls.filter(call=>call.name==='shoot').at(-1).args,[false,2]);
+});
+
+
+const extremeLoadout = 'weapon.damage=1e40;weapon.tier=50;weapon.lanes=4;weapon.speedLevel=80;weapon.interval=.005;weapon.rateOverflow=20;'
+  + 'firingStyle.mode="focus";momentum.remaining=10;evolution.pierce=evolution.blast=evolution.aegis=3;';
+
+function fireExtremePacketAt(target) {
+  execute(`{ const hit = ${target}; player.x=player.previousX=hit.x-300; player.y=player.previousY=hit.y;
+    shotCooldown=renderShotCooldown=0; updateShooting(.05); shotCooldown=999; }`);
+  const packet = snapshot('bullets.at(-1)');
+  execute('updateShooting(.45);resolveProjectileHits();');
+  return packet;
+}
+
+check('a maximum-rate focused burst cannot erase a fresh ordinary fighter at mid or late game', () => {
+  for (const time of [139, 300, 600, 1200]) {
+    for (const kind of ['scout', 'gunner', 'armored']) {
+      isolated(`battleTime=${time};${extremeLoadout}`);
+      placeWaveTarget(kind);
+      const healthLog = execute('enemies[0].healthLog');
+      const packet = fireExtremePacketAt('enemies[0]');
+      assert.ok(packet.overdrive && packet.mode === 'focus' && packet.damageLog > healthLog + Math.log(100));
+      assert.equal(execute('enemies.length'), 1, `${kind} was erased at ${time}s`);
+      assert.ok(execute('enemies[0].hp>0&&enemies[0].hp<1'), kind + ' took no damage');
+    }
+  }
+});
+
+check('each of the five Boss hulls survives an overpowered focus packet at late game', () => {
+  for (const [type, time] of [[0,139], [1,300], [2,600], [3,1200], [4,1200]]) {
+    activeBoss(type,false,time);
+    execute(extremeLoadout + 'var bossTarget=boss;');
+    const packet = fireExtremePacketAt('bossTarget');
+    assert.ok(packet.overdrive && packet.mode === 'focus');
+    assert.ok(packet.damageLog > execute('bossTarget.healthLog') + Math.log(100));
+    assert.equal(execute('activeBosses().includes(bossTarget)'),true,`Boss ${type} was erased at ${time}s`);
+    assert.ok(execute('bossTarget.hp>0&&bossTarget.hp<1'));
+    assert.ok(execute('bossTarget.components.every(part=>!part.destroyed)'), 'a center-line hit should land on the hull');
+  }
+});
+
+check('a high-power auxiliary round, main packet and beam damage both dual Bosses without erasing either', () => {
+  activeBoss(2,true,1200);
+  execute(extremeLoadout + 'var originalDuo=activeBosses().slice();shotCooldown=999;');
+  for (const index of [0,1]) {
+    const target = 'originalDuo[' + index + ']';
+    execute(`{ const hit=${target}; const muzzle={x:hit.x-260,y:hit.y};
+      spawnEvolutionRound(muzzle,"lance",.8,{pierces:3});updateShooting(.45);resolveProjectileHits(); }`);
+    assert.equal(execute('activeBosses().length'),2,'auxiliary round erased a Boss');
+    assert.ok(execute(target+'.hp>0&&'+target+'.hp<1'), 'lance must deal real damage');
+    const afterLance=execute(target+'.hp');
+    fireExtremePacketAt(target);
+    assert.equal(execute('activeBosses().length'),2,'main round erased a Boss');
+    assert.ok(execute(target+'.hp')<afterLance,'main packet must deal real damage');
+  }
+  const beforeBeam=snapshot('originalDuo.map(target=>target.hp)');
+  execute(`{
+    const first=originalDuo[0], second=originalDuo[1];
+    second.y=second.previousY=first.y;
+    player.y=player.previousY=first.y; player.x=player.previousX=first.x-500;
+    ultimate.charges=1;requestUltimate();updateUltimate(.85);updateUltimate(.45);
+  }`);
+  assert.equal(execute('activeBosses().length'),2,'beam erased a Boss');
+  for (const [index, hp] of snapshot('originalDuo.map(target=>target.hp)').entries()) near(beforeBeam[index]-hp,.18);
+});
+
+
+check('the recorded 2:48 piercing build cannot erase fresh fighters or a Boss with one packet', () => {
+  const recordedGear = `weapon.tier=6;weapon.lanes=1;weapon.speedLevel=18;weapon.interval=1/26.79;
+    evolution.pierce=1;firingStyle.mode="focus";
+    weapon.damage=24647.46/((maxWeaponLanes*progressionRules.tierBonus)**5*evolutionMainDamageMultiplier());`;
+  for (const kind of ['scout','gunner','armored']) {
+    isolated('battleTime=168;' + recordedGear);
+    placeWaveTarget(kind);
+    near(execute('Math.exp(weaponDamageLog())*evolutionMainDamageMultiplier()'),24647.46);
+    near(execute('1/effectiveShotInterval()'),26.79);
+    fireExtremePacketAt('enemies[0]');
+    assert.equal(execute('enemies.length'),1,kind + ' was erased');
+    assert.ok(execute('enemies[0].hp>0&&enemies[0].hp<1'));
+  }
+  activeBoss(3,false,168);
+  execute(recordedGear);
+  fireExtremePacketAt('boss');
+  assert.equal(execute('activeBosses().length'),1);
+  assert.ok(execute('boss.hp>.9&&boss.hp<1'));
+});
+
+check('sustained automatic fire and all support sources give a Boss time to fight back yet still win', () => {
+  activeBoss(4,false,600);
+  execute(extremeLoadout + 'var sustainedTarget=boss;shotCooldown=renderShotCooldown=0;');
+  function engage(frames) {
+    execute(`for(let frame=0;frame<${frames}&&activeBosses().includes(sustainedTarget);frame++){
+      const dt=.05;
+      battleTime+=dt;updateBossEncounter(dt);
+      player.x=player.previousX=sustainedTarget.x-300;player.y=player.previousY=sustainedTarget.y;
+      updateShooting(dt);updateEvolutionWeapons(dt);resolveProjectileHits();
+    }`);
+  }
+  engage(160);
+  assert.equal(execute('activeBosses().includes(sustainedTarget)'),true);
+  assert.ok(execute('sustainedTarget.hp>.1&&sustainedTarget.hp<.8'));
+  assert.ok(execute('sustainedTarget.age>=7.99'));
+  engage(360);
+  assert.equal(execute('activeBosses().includes(sustainedTarget)'),false,'continuous accurate hits should still defeat the Boss');
 });
 
 process.stdout.write('\n'+checks+' progression integration checks passed, '+failedChecks+' failed.\n');
