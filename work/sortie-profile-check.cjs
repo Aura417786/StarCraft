@@ -5,8 +5,8 @@ const test = require("node:test");
 const profile = require("../profile.js");
 
 function memoryStorage(initial) {
-  let value = initial;
-  return { getItem() { return value; }, setItem(key, next) { value = next; } };
+  const values = new Map([[profile.key, initial]]);
+  return { getItem(key = profile.key) { return values.get(key); }, setItem(key, next) { values.set(key, next); } };
 }
 
 const campaign = { mode: "campaign", difficulty: "veteran", score: 6000, seconds: 100, kills: 13, won: true,
@@ -77,4 +77,74 @@ test("inaccessible storage falls back to session state and a future schema is pr
   assert.equal(earlier.status, "future");
   earlier.awardBoss(0, "veteran");
   assert.equal(storage.getItem(), future);
+});
+
+const rushClear = {
+  mode: "rush", fighter: "blue", difficulty: "veteran", score: 31_000,
+  seconds: 600, hits: 0, won: true, seed: 32533,
+  bossRecords: Array.from({ length: 11 }, (_, type) => ({ type, seconds: 41, hitCount: 0 }))
+};
+
+test("weekly Rush awards badges separately and never alters normal rankings", () => {
+  const save = profile.createStore(memoryStorage());
+  const weekly = { ...rushClear, week: "2026-11-09" };
+  const result = save.finish(weekly);
+  assert.equal(result.cleanBadge, true);
+  assert.equal(result.fastBadge, true);
+  assert.equal(save.data.weekly["2026-11-09"].bestTime, 600);
+  assert.equal(save.data.rush.attempts, 0);
+  save.finish({ ...weekly, assisted: true, score: 40_000, seconds: 200 });
+  assert.equal(save.data.weekly["2026-11-09"].bestScore, 31_000);
+  assert.equal(save.data.weekly["2026-11-09"].attempts, 1);
+});
+
+test("Rush resume survives reopen and finishing it does not affect any ranked record", () => {
+  const storage = memoryStorage();
+  const save = profile.createStore(storage);
+  save.finish({ ...rushClear, bossRecords: rushClear.bossRecords.slice(0, 4),
+    currentBoss: 4, score: 7000, died: true, won: false });
+  const reopened = profile.createStore(storage);
+  assert.deepEqual(reopened.data.rushResume, { boss: 4, seed: 32533, difficulty: "veteran", fighter: "blue" });
+  const before = reopened.data;
+  reopened.finish({ ...rushClear, resumed: true, score: 99_000, seconds: 10 });
+  assert.deepEqual(reopened.data, before);
+  reopened.finish(rushClear);
+  assert.equal(reopened.data.rushResume, null);
+  assert.equal(reopened.data.rushByDifficulty.veteran.clean, 1);
+  assert.equal(reopened.data.rushByDifficulty.veteran.fast, 1);
+});
+
+test("38 badges grant cosmetics only for earned conditions and survive save recovery", () => {
+  const awards = require("../achievements.js");
+  const storage = memoryStorage();
+  const save = profile.createStore(storage);
+  assert.equal(awards.ids.length, 38);
+  assert.equal(new Set(awards.ids).size, awards.ids.length);
+  assert.equal(save.equipAward("skin", "frost"), false);
+  const result = save.finish({ ...rushClear, mode: "campaign", fighter: "red", difficulty: "abyss",
+    bossRecords: rushClear.bossRecords.map(record => ({ ...record, builds: ["build-wing", "build-crossfire"] })) });
+  assert.ok(result.newAwards.includes("fly-red"));
+  assert.ok(result.newAwards.includes("build-crossfire"));
+  assert.ok(result.newAwards.includes("clean-10"));
+  assert.equal(save.equipAward("skin", "frost"), true);
+  assert.equal(save.equipAward("theme", "archive"), true);
+  assert.equal(save.equipAward("effect", "trail"), false);
+  assert.equal(save.data.points, 0);
+  storage.setItem(profile.key, "{broken");
+  const recovered = profile.createStore(storage);
+  assert.equal(recovered.status, "backup");
+  assert.deepEqual(recovered.data, save.data);
+  assert.equal(recovered.equipAward("skin", ""), true);
+  assert.equal(profile.createStore(storage).status, "ok");
+});
+
+test("daily streak counts distinct consecutive UTC dates and assisted days stay separate", () => {
+  const save = profile.createStore(memoryStorage());
+  const daily = { ...rushClear, mode: "daily", bossRecords: rushClear.bossRecords.slice(0, 1) };
+  for (const day of ["2026-10-30", "2026-10-31", "2026-10-31"]) save.finish({ ...daily, day });
+  save.finish({ ...daily, day: "2026-11-01", assisted: true });
+  assert.equal(save.data.awards.badges.includes("daily-streak"), false);
+  const result = save.finish({ ...daily, day: "2026-11-01" });
+  assert.deepEqual(result.newAwards, ["daily-streak"]);
+  assert.equal(save.equipAward("effect", "trail"), true);
 });

@@ -270,7 +270,8 @@ check("Boss difficulty changes health and warning duration without changing the 
   }
   assert.ok(difficulties.every(values => values[0] === 2));
   assert.ok(difficulties[0][1] < difficulties[1][1] && difficulties[1][1] < difficulties[2][1]);
-  assert.ok(difficulties[0][2] > difficulties[1][2] && difficulties[1][2] > difficulties[2][2]);
+  near(difficulties[0][2] - difficulties[1][2], .3);
+  assert.equal(difficulties[1][2], difficulties[2][2], "Abyss should intensify attacks without shortening the tell");
 });
 
 check("enemy durability grows through the campaign while early scouts remain easy to kill", () => {
@@ -311,12 +312,16 @@ check("Boss burst protection allows damage and prevents one-hit wipes with endga
 
 check("a Broodmother finale keeps its own life pool and cannot be skipped by leftover hits", () => {
   activeBoss();
-  execute('var shell=boss;var bodyHealth=Math.exp(boss.healthLog);boss.hp=.0001;applyBossHit({damage:10});');
+  execute('var shell=boss;var bodyHealth=Math.exp(boss.healthLog);boss.enraged=true;boss.enragedAt=0;boss.age=bossRules.coreMinimum;boss.hp=.0001;applyBossHit({damage:10});');
   assert.equal(execute('boss===shell&&boss.finale.mode==="egg"'), true);
   near(execute('Math.exp(boss.healthLog)/bodyHealth'), .72);
   assert.equal(execute('boss.hp'), 1);
   execute('applyBossHit({damage:999})');
   assert.equal(execute('boss.hp'), 1);
+  execute('resetBossPresentation();boss.finale.age=boss.finale.transform;boss.hp=.04;applyBossHit({source:"ultimate",damage:999});');
+  near(execute('boss.hp'), .035);
+  execute('boss.finale.age+=bossRules.finaleMinimum;applyBossHit({source:"ultimate",damage:999});');
+  assert.equal(execute('boss'), null);
 });
 
 check("support rounds keep a bounded budget while leaving ordinary fire and clearing on restart", () => {

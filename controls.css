@@ -1,0 +1,48 @@
+.flight-controls-dialog {
+  width: min(700px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  color: #e9f3ff;
+  background: #0d1624;
+  border: 1px solid #7091aa;
+  border-radius: 12px;
+}
+.flight-controls-dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
+.flight-controls-dialog::backdrop { background: #040a12c7; }
+.flight-controls-content { overflow-y: auto; min-height: 0; padding: 15px clamp(12px, 3vw, 24px) 18px; }
+.flight-controls-note { color: #c2d3e3; line-height: 1.5; font-size: .84rem; }
+.flight-bindings-grid, .flight-controls-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+.flight-binding-row, .flight-controls-settings > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  padding: 3px 7px;
+  border: 1px solid #8fb8d329;
+  border-radius: 6px;
+  font-size: .85rem;
+}
+.flight-binding-row button { min-width: 66px; padding: 6px 9px; }
+.flight-binding-row button[aria-pressed="true"] { border-color: #f9b97e; color: #fff1ca; }
+.flight-bindings-status { min-height: 1.4em; color: #ffd2a3; }
+.flight-controls-settings { margin-top: 16px; }
+.flight-controls-settings select { color: #eff7ff; background: #142333; border: 1px solid #65819b; border-radius: 4px; padding: 5px; }
+.flight-controls-dialog :is(button, select, input):focus-visible { outline: 2px solid #f8ca91; outline-offset: 2px; }
+
+body[data-ui-scale="90"] :is(.start-actions, .fighter-picker, .ultimate-hud, .shield-hud, .momentum-hud, .boss-hud,
+    .pause-card, .result-card, .campaign-report-card, .sortie-console-body, .flight-controls-content) { zoom: .90; }
+body[data-ui-scale="115"] :is(.start-actions, .fighter-picker, .ultimate-hud, .shield-hud, .momentum-hud, .boss-hud,
+    .pause-card, .result-card, .campaign-report-card, .sortie-console-body, .flight-controls-content) { zoom: 1.15; }
+body[data-subtitle-scale="85"] .radio-line { font-size: clamp(9px, 1.45vw, 11px); }
+body[data-subtitle-scale="130"] .radio-line { font-size: clamp(12px, 1.9vw, 17px); -webkit-line-clamp: unset; }
+body[data-subtitle-scale="130"] #campaign-epilogue-line { font-size: 1.2em; }
+body[data-color-assist="true"] .boss-warning .warning-band { border: 2px dashed #ffedbd; }
+body[data-color-assist="true"] .warning-band strong::before { content: "△ "; }
+@media (max-width: 560px) {
+  .flight-bindings-grid, .flight-controls-settings { grid-template-columns: 1fr; }
+}

@@ -209,8 +209,9 @@ check('pincer leaves a player-sized opening or declines an arena that is too cra
   for (const dimensions of [{width:1280,height:720},{width:800,height:450},{width:560,height:420}]) {
     isolated(); surface=dimensions; execute('resizeBattlefield();battleTime=60;trySpawnFormation("pincer");updateFormations(1.351);');
     if(execute('enemies.length')===0){assert.equal(execute('formationState.active'),null);continue;}
-    assert.equal(execute('enemies.length'),4);
-    assert.equal(execute('enemies.every(e=>Math.abs(e.y-formationState.active.centerY)>player.height*.5+e.height*.25)'),true, JSON.stringify(dimensions));
+    assert.equal(execute('enemies.length'),5);
+    assert.equal(execute('enemies.filter(e=>e.formationRole==="spotter"&&e.formationLeader).length'),1);
+    assert.equal(execute('enemies.filter(e=>e.formationRole==="flank").every(e=>Math.abs(e.y-formationState.active.centerY)>player.height*.5+e.height*.25)'),true, JSON.stringify(dimensions));
   }
 });
 function primeFormationTactic(kind, dimensions = { width: 1280, height: 720 }) {
@@ -258,7 +259,8 @@ check('command wall leaves a keyboard-reachable passage on compact and wide batt
     const distance = Math.abs(safeY-open.target.y);
     const key = safeY < open.target.y ? 'ArrowUp' : 'ArrowDown';
     assert.ok(distance>0 && distance < open.warning*195);
-    assert.ok(open.shots.some(shot => shot.y===open.target.y));
+    assert.ok(new Set(open.shots.map(shot => shot.member.formationSlotY)).size>=3);
+    assert.ok(open.shots.every(shot => shot.member.formationRole==='jammer' && shot.vy===0));
     const clearance=execute('player.height*.16+7');
     assert.ok(open.shots.every(shot => shot.y<open.gap.top-clearance || shot.y>open.gap.bottom+clearance));
     execute(`pressedKeys.add(${JSON.stringify(key)});`);
@@ -584,13 +586,15 @@ check('decoded backgrounds and sector-specific solid meshes render without sprit
     for(const prop of props){
       assert.ok([sector,(sector+1)%5].includes(prop.sector));
       assert.ok([1,2,3].includes(prop.sector));
-      assert.equal(prop.kind,prop.sector===2?'wreck':'rock');
+      if (prop.kind === 'moon') assert.equal(prop.sector, 1);
+      else assert.equal(prop.kind,prop.sector===2?'wreck':'rock');
       assert.ok([prop.x,prop.y,prop.pitch,prop.yaw,prop.roll].every(Number.isFinite));
     }
     for(const op of drawOperations)for(const arg of op.args)if(typeof arg==='number')assert.ok(Number.isFinite(arg),op.name+' finite image geometry');
   }
   assert.ok(snapshot('spacePropMesh("rock",0).data.length/30') > 500);
   assert.ok(snapshot('spacePropMesh("wreck",0).data.length/30') > 300);
+  assert.ok(snapshot('spacePropMesh("moon",0).data.length/30') > 500);
 });
 check('first battle draws the menu orbit while the new panorama is still loading', () => {
   isolated('sceneryLayer(0,true);sceneryCache.get(0).ready=false;');
@@ -705,7 +709,8 @@ check('pincer wings retain a complete player-sized corridor through narrow-windo
     formationState.active.x=700;
     enemies.forEach((enemy,index)=>{enemy.hp=.2+index*.1;formationControlsEnemy(enemy,0);});
     var pincerResizeGroup=formationState.active,pincerResizeMembers=enemies.slice();`);
-  assert.equal(execute('enemies.length'),4);
+  assert.equal(execute('enemies.length'),5);
+  assert.equal(execute('enemies.filter(e=>e.formationRole==="spotter"&&e.formationLeader).length'),1);
   const health=snapshot('enemies.map(e=>e.hp)');
   for(const size of [{width:640,height:360},{width:390,height:260},{width:1280,height:720}]) {
     surface=size;emit(window,'resize');
@@ -719,7 +724,7 @@ check('pincer wings retain a complete player-sized corridor through narrow-windo
         -Math.max(...enemies.filter(e=>e.formationSlotY<0).map(e=>e.y+e.height/2))`);
       assert.ok(gap+1e-8>=execute('player.height+24'),JSON.stringify({size,advance,gap}));
       execute('player.x=player.previousX=pincerResizeGroup.x;player.y=player.previousY=pincerResizeGroup.centerY;');
-      assert.equal(execute('enemies.every(enemy=>!enemyTouchesPlayer(enemy))'),true);
+      assert.equal(execute('enemies.filter(enemy=>enemy.formationRole==="flank").every(enemy=>!enemyTouchesPlayer(enemy))'),true);
       assert.equal(execute('enemies.every(e=>e.y-e.height/2>=-1e-8&&e.y+e.height/2<=viewport.height+1e-8)'),true);
     }
   }

@@ -260,7 +260,7 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0, 
   else ctx.transform(1, 0, bank * 0.09, 1 - Math.abs(bank) * 0.10, 0, 0);
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
   if (!ship.disabled) {
-    const boost = playerShip && (pressedKeys.has("ArrowRight") || pressedKeys.has("KeyD"));
+    const boost = playerShip && (typeof flightMovementVector === "function" ? flightMovementVector().x > .2 : (pressedKeys.has("ArrowRight") || pressedKeys.has("KeyD")));
     const throttle = boost ? 1.45 : playerShip ? 1.16 : .89;
     for (const engine of (atlas?.engines ?? asset.engines)) {
       const nozzle = geometry.point(engine);

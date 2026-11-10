@@ -1,0 +1,43 @@
+.flight-training {
+  position: absolute;
+  z-index: 12;
+  top: clamp(105px, 21vh, 165px);
+  left: 50%;
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  width: min(570px, calc(100% - 34px));
+  transform: translateX(-50%);
+  padding: 12px 15px;
+  border: 1px solid #5a7890;
+  border-left: 3px solid #9de8f8;
+  border-radius: 7px;
+  background: #0c1827f2;
+  box-shadow: 0 10px 24px #02050ba6;
+}
+.flight-training[hidden], .flight-training-evolution-skip[hidden],
+.app[data-overlay="pause"] .flight-training { display: none; }
+.app[data-flight-training] :is(.hud, .weapon-readout, .difficulty-readout, .momentum-hud),
+.app[data-flight-training="1"] #ultimate-hud,
+.app[data-flight-training="2"] #shield-hud { visibility: hidden; }
+.flight-training-copy { flex: 1; min-width: 0; }
+.flight-training .eyebrow { color: #a6e8fb; font-size: 10px; }
+.flight-training h2 { margin: 3px 0 4px; font-size: clamp(15px, 2.2vw, 21px); }
+.flight-training p { margin: 0; color: #c6d7e8; font-size: 13px; line-height: 1.42; }
+.flight-training .secondary-button { min-height: 32px; flex-shrink: 0; padding: 5px 9px; }
+.flight-training-evolution-skip { display: block; margin: 10px auto 0; }
+.sortie-difficulty-scroll { overflow: auto; border: 1px solid #3a516d; border-radius: 5px; }
+.sortie-difficulty-table { width: 100%; min-width: 430px; border-collapse: collapse; text-align: left; font-size: 12px; }
+.sortie-difficulty-table caption { padding: 8px 10px; text-align: left; color: #caecfa; background: #16253a; font-weight: 600; }
+.sortie-difficulty-table :is(th, td) { padding: 7px 10px; border-top: 1px solid #2d3e55; white-space: nowrap; }
+.sortie-difficulty-table thead th { color: #a8bdd5; }
+@media (max-height: 520px) {
+  .flight-training { top: 77px; padding: 7px 9px; width: min(540px, calc(100% - 24px)); }
+  .flight-training h2 { margin: 2px 0; }
+  .flight-training p { font-size: 12px; }
+  .app[data-flight-training] :is(#ultimate-hud, #shield-hud) { left: 50%; right: auto; transform: translateX(-50%); }
+}
+@media (max-width: 500px) {
+  .flight-training { top: 156px; gap: 7px; }
+  .flight-training .secondary-button { font-size: 11px; }
+}

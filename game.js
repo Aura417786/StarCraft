@@ -51,6 +51,8 @@ reducedMotion.addEventListener?.("change", () => syncSortieEligibility());
 
 let state = "menu";
 let previousTime = 0;
+const combatStepSeconds = 1 / 120;
+let combatStepRemainder = 0;
 let windowActive = true;
 let pauseView = "";
 let pauseConfirmFromMenu = false;
@@ -141,13 +143,14 @@ function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 function setBossWarning(name = "") {
-  bossWarning.hidden = !name;
-  bossWarningName.textContent = name ? tr(name + "即将出现", name + " incoming") : "";
+  const hidden = !name, label = name ? tr(name + "即将出现", name + " incoming") : "";
+  if (bossWarning.hidden !== hidden) bossWarning.hidden = hidden;
+  if (bossWarningName.textContent !== label) bossWarningName.textContent = label;
 }
 function syncGameAudio() {
   const active = isBattleActive();
   const cinematic = isBossPresentationPlaying();
-  gameAudio.sync(active || (cinematic && canAnimateCombatEffects()), !!boss, activeBosses().some(target => target.enraged),
+  gameAudio.sync(active || (cinematic && canAnimateCombatEffects()), !!boss, !!boss?.enraged,
     { paused: !!pauseView && windowActive && !document.hidden, combo: momentum.count, overdrive: isOverdriveActive(), warning: pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning), cinematic,
       bossType: boss?.type ?? pendingBossType ?? bossPresentation?.target.type,
       bossPhase: boss?.finale ? "finale" : boss?.phase, bossHealth: boss?.hp, lives: player.lives,
@@ -269,6 +272,7 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
   resizeGravityTide(scaleX, resizeY);
   resizeFieldFragments(scaleX, scaleY, resizeY);
   resizeEliteMines(scaleX, scaleY, resizeY);
+  if (typeof resizeFlightTutorial === "function") resizeFlightTutorial(scaleX, resizeY);
   resizeEvolutionWeapons(scaleX, scaleY, resizeY);
   enemyProjectiles.length = 0;
   explosions.length = 0;
@@ -297,6 +301,7 @@ function updateFighterSelection() {
   document.querySelector("#fighter-damage").textContent = String(fighter.damage);
   document.querySelector("#fighter-ultimate").textContent = ultimateName(fighter.id);
   document.querySelector("#fighter-ultimate-detail").textContent = fighterWeaponCopy(fighter.id) + " · " + tr(...fighter.special);
+  if (typeof applyHangarAwardSkin === "function") applyHangarAwardSkin(fighter.id);
   readyFighter();
 }
 for (const option of fighterOptions) option.addEventListener("change", () => {
@@ -313,6 +318,7 @@ if (fighterImage.complete) readyFighter();
 updateFighterSelection();
 
 function showScreen(nextState, options = {}) {
+  if (typeof clearFlightTutorial === "function" && clearFlightTutorial()) sortieStats = null;
   if (state === "battle") completeSortie({ abandoned: true });
   if (typeof resetCampaignVictory === "function") resetCampaignVictory();
   clearPause();
@@ -352,7 +358,11 @@ function showScreen(nextState, options = {}) {
   if (typeof refreshSortieHud === "function") refreshSortieHud();
   updatePauseHint();
 }
-function startBattleWithSound(options = {}) { gameAudio.unlock(); showScreen("battle", options); }
+function startBattleWithSound(options = {}) {
+  gameAudio.unlock();
+  showScreen("battle", options);
+  if (typeof beginFlightTutorial === "function") beginFlightTutorial(options);
+}
 startButton.addEventListener("click", () => startBattleWithSound());
 for (const control of [pauseButton, menuButton, hangarLink]) {
   control?.addEventListener("mousedown", (event) => {
@@ -396,55 +406,57 @@ document.addEventListener("fullscreenchange", () => {
   else if (state === "battle" && !pauseView) canvas.focus({ preventScroll: true });
 });
 window.addEventListener("resize", resizeBattlefield);
+function togglePauseFromInput() {
+  if (state !== "battle" || evolution.pending || !windowActive || document.hidden
+    || document.querySelector("dialog[open]")) return false;
+  if (pauseView === "settings" || (pauseConfirmFromMenu && pauseView)) pauseGame("menu");
+  else if (pauseView) resumeGame();
+  else pauseGame();
+  return true;
+}
+function dispatchFlightAction(action, down) {
+  if (action === "pause") return down && togglePauseFromInput();
+  if (!isBattleActive()) return false;
+  if (!down) {
+    if (action === "charge") releaseFighterCharge();
+    if (action === "stance") releaseEvolutionLance();
+    return true;
+  }
+  if (action === "charge") beginFighterCharge();
+  else if (action === "stance" && !beginEvolutionLance()) toggleFiringStyle();
+  else if (action === "focus") evolutionTryIntercept();
+  else if (action === "shield") requestShield();
+  else if (action === "special") { gameAudio.unlock(); requestUltimate(); }
+  else if (action === "attack" || ["up", "down", "left", "right"].includes(action)) gameAudio.unlock();
+  return true;
+}
 window.addEventListener("keydown", (event) => {
-  if (event.altKey || event.ctrlKey || event.metaKey) return;
-  if (event.code === "Escape" && state === "battle" && !evolution.pending && windowActive && !document.hidden) {
-    event.preventDefault();
-    if (event.repeat) return;
-    if (pauseView === "settings" || (pauseConfirmFromMenu && pauseView)) pauseGame("menu");
-    else if (pauseView) resumeGame();
-    else pauseGame();
+  if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+  const action = flightActionForKey(event.code);
+  if (!action) return;
+  if (action === "pause") {
+    if ((!event.repeat && dispatchFlightAction(action, true))
+      || (event.repeat && state === "battle" && !document.querySelector("dialog[open]"))) event.preventDefault();
     return;
   }
   if (!isBattleActive()) return;
-  if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
-    event.preventDefault();
-    if (!event.repeat && !pressedKeys.has("ShiftLeft") && !pressedKeys.has("ShiftRight") && !beginEvolutionLance()) toggleFiringStyle();
-    pressedKeys.add(event.code);
-    return;
-  }
-  if (event.code === "KeyF") {
-    event.preventDefault();
-    if (!event.repeat && !pressedKeys.has("KeyF")) evolutionTryIntercept();
-    pressedKeys.add("KeyF");
-    return;
-  }
-  if (event.code === "KeyV") {
-    event.preventDefault();
-    if (!event.repeat && !pressedKeys.has("KeyV")) requestShield();
-    pressedKeys.add("KeyV");
-    return;
-  }
-  if (event.code === "Space") {
-    event.preventDefault();
-    if (!event.repeat && !pressedKeys.has("Space")) { gameAudio.unlock(); requestUltimate(); }
-    pressedKeys.add("Space");
-    return;
-  }
-  if (!movementKeys.has(event.code)) return;
-  if (!event.repeat) gameAudio.unlock();
   event.preventDefault();
+  const alreadyHeld = flightKeyHeld(action) || flightPad.actions.has(action);
   pressedKeys.add(event.code);
+  if (!alreadyHeld && !event.repeat) dispatchFlightAction(action, true);
 });
 window.addEventListener("keyup", (event) => {
-  pressedKeys.delete(event.code);
-  if ((event.code === "ShiftLeft" || event.code === "ShiftRight")
-    && !pressedKeys.has("ShiftLeft") && !pressedKeys.has("ShiftRight")) releaseEvolutionLance();
-  if (state === "battle" && document.activeElement === canvas && (movementKeys.has(event.code) || event.code === "Space" || event.code === "KeyV" || event.code === "ShiftLeft" || event.code === "ShiftRight")) event.preventDefault();
+  const action = flightActionForKey(event.code);
+  if (!action) return;
+  const wasPressed = pressedKeys.delete(event.code);
+  if (wasPressed && !flightKeyHeld(action) && !flightPad.actions.has(action)) dispatchFlightAction(action, false);
+  if (state === "battle" && document.activeElement === canvas) event.preventDefault();
 });
 function clearMovement() {
   pressedKeys.clear();
   cancelEvolutionLance();
+  cancelFighterCharge();
+  resetFlightGamepad();
   previousTime = 0;
 }
 // 主动暂停由菜单控制。切走窗口时也会冻结，只有焦点回到战场才恢复。
@@ -466,6 +478,8 @@ function refreshPauseCopy() {
   document.querySelector("#pause-title").textContent = title;
   document.querySelector("#pause-description").textContent = description;
   pauseConfirmButton.textContent = pauseView === "restart" ? tr("确认重开", "Confirm restart") : tr("确认退出", "Confirm exit");
+  const controlsButton = document.querySelector("#pause-controls");
+  if (controlsButton) controlsButton.textContent = tr("键位与显示辅助", "Controls and display");
   pauseSoundButton.textContent = soundButton.textContent;
   pauseSoundButton.setAttribute("aria-pressed", String(!gameAudio.muted));
   pauseShakeButton.textContent = shakeButton?.textContent ?? "";
@@ -576,19 +590,17 @@ canvas.addEventListener("pointerdown", () => {
 function updatePlayer(seconds) {
   player.previousX = player.x; player.previousY = player.y;
   if (!isBattleActive()) return;
-  const horizontal = Number(pressedKeys.has("ArrowRight") || pressedKeys.has("KeyD"))
-    - Number(pressedKeys.has("ArrowLeft") || pressedKeys.has("KeyA"));
-  const vertical = Number(pressedKeys.has("ArrowDown") || pressedKeys.has("KeyS"))
-    - Number(pressedKeys.has("ArrowUp") || pressedKeys.has("KeyW"));
+  const { x: horizontal, y: vertical } = flightMovementVector();
   const current = alienCurrentVector();
   const gravity = gravityPlayerVector();
   current.x += gravity.x + journeyCatapultVector();
   current.y += gravity.y + sortieDrift();
   if (!(horizontal || vertical || current.x || current.y)) return;
-  const length = Math.hypot(horizontal, vertical) || 1;
+  const length = Math.max(1, Math.hypot(horizontal, vertical));
   const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * alienMovementScale() * sortiePlayerSpeed() * fighterMovementScale();
   player.x = clamp(player.x + (horizontal / length * speed + current.x) * seconds, flightBounds.left, bossPlayerRight());
   player.y = clamp(player.y + (vertical / length * speed + current.y) * seconds, flightBounds.top, flightBounds.bottom);
+  if (typeof constrainAlienPlayer === "function") constrainAlienPlayer(player, player.previousX, player.previousY);
   movementHint.hidden = true;
 }
 function resetWeapons(preserveUpgrades = true) {
@@ -686,10 +698,12 @@ function updateShooting(seconds) {
     applyGravityTide(bullet, seconds, "player");
     bullet.x += (bullet.vx ?? weapon.speed) * seconds;
     bullet.y += (bullet.vy ?? 0) * seconds;
+    if (typeof interceptAlienRound === "function" && interceptAlienRound(bullet)) bullets.splice(index, 1);
   }
   const interval = reconcileShotCadence();
   muzzleFlash = Math.max(0, muzzleFlash - seconds);
-  if (ultimateSuppressesFire() || evolutionLanceActive()) { shotCooldown = interval; return; }
+  if (!flightWantsFire()) { shotCooldown = 0; return; }
+  if (ultimateSuppressesFire() || fighterCombat.redHeld || evolutionLanceActive()) { shotCooldown = Math.min(shotCooldown, interval); return; }
   shotCooldown -= seconds;
   if (shotCooldown > 1e-8) return;
   shotCooldown += interval;
@@ -711,8 +725,8 @@ function updateShooting(seconds) {
       color: palette.color, core: palette.core };
     bullets.push(spawnFighterRound(bullet, volley, index === Math.floor((lanes.length - 1) / 2)));
   }
-  muzzleFlash = volley === "crimson-heavy" ? .065 : .055;
-  gameAudio.shoot(overdrive || volley === "crimson-heavy", weapon.tier, sortieFighter);
+  muzzleFlash = .055;
+  gameAudio.shoot(overdrive, weapon.tier, sortieFighter);
 }
 function resetEncounter(resetScore = true) {
   if (resetScore) resetAceEncounter();
@@ -743,7 +757,7 @@ function resetEncounter(resetScore = true) {
 }
 function enemyStage(time = battleTime) { return Math.floor((time + 0.00000001) / enemyRules.healthStep); }
 function enemyHealthForTime(time = battleTime) {
-  const t = Math.max(0, time);
+  const t = Math.max(0, time + 1e-8);
   if (t < 12) return 1;
   const tier = Math.max(0, Math.min(11, typeof bossDefeated === "number" ? bossDefeated : 0));
   return Math.round(3 + tier * 14 + Math.min(80, (t - 12) * .07));
@@ -755,6 +769,7 @@ function enemySpeedForTime() {
   return enemyRules.speed + 235 * (1 - Math.exp(-battleTime / 300)) + Math.sqrt(battleTime) * 1.8;
 }
 function applyEnemyHit(enemy, bullet) {
+  if (typeof flightTutorialAllowsHit === "function" && !flightTutorialAllowsHit(enemy, bullet)) return;
   bullet = absorbEliteEscortShield(enemy, bullet);
   if (!bullet) return;
   const before = enemy.hp;
@@ -946,12 +961,12 @@ function resolveProjectileHits() {
       } else if (hit.kind === "mine") {
         defuseEliteMine(hit.target, bullet);
       } else if (hit.kind === "boss") {
-        applyBossHit(bullet, hit.target);
+        applyBossHit(fighterProjectileDamage(bullet, hit.target), hit.target);
         onFighterProjectileImpact(bullet, hit.target);
       }
       else if (hit.kind === "object") hitBattlefieldObject(hit.target, bullet);
       else {
-        applyEnemyHit(hit.target, bullet);
+        applyEnemyHit(hit.target, fighterProjectileDamage(bullet, hit.target));
         if (hit.target.hp === 0) defeatEnemy(enemies.indexOf(hit.target), bullet);
         onFighterProjectileImpact(bullet, hit.target);
       }
@@ -988,7 +1003,7 @@ function drawPowerups() {
   }
 }
 function enemyTouchesPlayer(enemy) {
-  if (enemy.journeyLaunchUntil > battleTime) return false;
+  if (enemy.journeyLaunchUntil > battleTime || (enemy.kind === "splitling" && enemy.age < eliteRules.splitGrace)) return false;
   // 主机身的椭圆碰撞区不包含图片透明边缘；用双方相对移动路径检测高速交错。
   const rx = player.width * 0.37 + enemy.width * 0.42;
   const ry = player.height * 0.30 + enemy.height * 0.35;
@@ -1000,6 +1015,10 @@ function enemyTouchesPlayer(enemy) {
   return Math.hypot(x0 + dx * along, y0 + dy * along) <= 1;
 }
 function damagePlayer(message, origin = null) {
+  if (origin?.source === "flight-training") {
+    if (typeof noteFlightTutorialContact === "function") noteFlightTutorialContact(origin, false);
+    return false;
+  }
   // 小怪碰撞与 Boss 弹幕共享受伤保护，避免同帧连续扣命。
   if (!isBattleActive() || bossHitGrace > 0 || shieldIsActive()) return false;
   lastDamageMessage = message;
@@ -1217,20 +1236,16 @@ function drawPlayer() {
     context.stroke();
   }
   context.globalAlpha = 1;
+  if (typeof drawAwardWake === "function") drawAwardWake(context, player);
+  const awardFilter = typeof activeAwardFilter === "function" ? activeAwardFilter(fighterProfile().id) : "";
+  if (awardFilter) context.filter = awardFilter;
   if (!drawEvolvedPlayer(context, player, evolution, reducedMotion.matches, battleTime)
     && !drawFighterVariant(context, player, fighterProfile().id, null, reducedMotion.matches, shipVisuals.clock)
     && fighterImage.complete && fighterImage.naturalWidth)
     context.drawImage(fighterImage, player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
   context.restore();
 }
-function drawFrame(time) {
-  const realSeconds = previousTime ? Math.min((time - previousTime) / 1000, 0.05) : 0;
-  previousTime = time;
-  syncGameAudio();
-  if (typeof drawCampaignVictoryFrame === "function" && drawCampaignVictoryFrame(realSeconds)) {
-    window.requestAnimationFrame(drawFrame);
-    return;
-  }
+function advanceCombatStep(realSeconds) {
   const cinematic = activeBossPresentation();
   if (cinematic) {
     const seconds = bossPresentationFrameSeconds(cinematic, realSeconds);
@@ -1242,6 +1257,7 @@ function drawFrame(time) {
     }
   } else if (!pauseView) {
     const seconds = shieldFrameSeconds(realSeconds);
+    if (typeof updateFlightTutorial === "function" && updateFlightTutorial(seconds)) return;
     updateCombatEffects(seconds);
     updateMomentum(seconds);
     updateEvolution(seconds);
@@ -1264,11 +1280,36 @@ function drawFrame(time) {
     updateEnemyProjectileDamage();
     updateBossDamage();
   }
+}
+
+function drawFrame(time) {
+  const resuming = previousTime === 0;
+  const realSeconds = resuming ? 0 : clamp((time - previousTime) / 1000, 0, .05);
+  if (resuming) combatStepRemainder = 0;
+  previousTime = time;
+  if (typeof pollFlightGamepad === "function") pollFlightGamepad();
+  syncGameAudio();
+  if (typeof drawCampaignVictoryFrame === "function" && drawCampaignVictoryFrame(realSeconds)) {
+    combatStepRemainder = 0;
+    window.requestAnimationFrame(drawFrame);
+    return;
+  }
+  if (battleHasFocus()) {
+    // Process immediate actions on the first frame without advancing time.
+    if (resuming) advanceCombatStep(0);
+    combatStepRemainder += realSeconds;
+    while (combatStepRemainder + 1e-9 >= combatStepSeconds && battleHasFocus()) {
+      combatStepRemainder = Math.max(0, combatStepRemainder - combatStepSeconds);
+      advanceCombatStep(combatStepSeconds);
+    }
+  }
+  if (!battleHasFocus()) combatStepRemainder = 0;
   const showCombat = state !== "over" && !evolution.pending;
   context.clearRect(0, 0, viewport.width, viewport.height);
   context.save();
   applyBossPresentationCamera(context);
   drawBattlefield(showCombat);
+  if (typeof warmHadalDestination === "function") warmHadalDestination(context, state === "battle");
   drawActiveJourney("front");
   drawBossPresentationBackdrop(context);
   if (showCombat) drawCombatPostProcessing(context);
@@ -1279,6 +1320,7 @@ function drawFrame(time) {
     const presentation = activeBossPresentation();
     drawGravityTide();
     drawFormationSignals();
+    if (typeof drawFlightTutorial === "function") drawFlightTutorial(context);
     drawBattlefieldObjects();
     drawEliteMines();
     if (presentation?.motion) drawBossPresentationMotion(context, presentation);
@@ -1313,7 +1355,10 @@ function updateGameCanvasLabel() {
   const label = state === "over"
     ? tr("本局已结束，战场已停止。选择重新开始可再玩一局。", "The run is over. Select Restart to play again.")
     : state === "battle"
-    ? tr("可操作的横向星空战场。战机自动向右射击，方向键或 WASD 移动，空格蓄力大招，V 开启护盾，Shift 切换射击姿态，Esc 暂停。", "Playable space battlefield. The fighter fires automatically. Move with arrows or WASD, use Space for your charged special, V to shield, Shift to switch firing modes, and Esc to pause.")
+    ? tr("可操作的横向星空战场。移动 " + ["left", "up", "down", "right"].map(key => controlBindingLabel(key)).join(" ") +
+        "，大招 " + controlBindingLabel("special") + "，护盾 " + controlBindingLabel("shield") + "，暂停 " + controlBindingLabel("pause") + "。",
+      "Playable space battlefield. Move with " + ["left", "up", "down", "right"].map(key => controlBindingLabel(key)).join(" ") +
+        ". Special " + controlBindingLabel("special") + ", shield " + controlBindingLabel("shield") + ", pause " + controlBindingLabel("pause") + ".")
     : tr("横向星空战场。先在机库选择战机，再开始游戏。", "Side-scrolling space battlefield. Choose a fighter in the hangar and start the game.");
   canvas.setAttribute("aria-label", label);
 }
@@ -1332,7 +1377,9 @@ function refreshGameLanguage() {
   updateUltimateDisplay();
   updateEvolutionDisplay();
   refreshEvolutionChoice();
+  if (typeof refreshFlightTutorial === "function") refreshFlightTutorial();
   refreshPauseCopy();
+  refreshFlightControlHints();
   if (typeof refreshFlightGuideNavigation === "function") refreshFlightGuideNavigation();
   if (typeof refreshSortieUI === "function") refreshSortieUI();
   if (typeof refreshCampaignVictory === "function") refreshCampaignVictory();
@@ -1340,4 +1387,6 @@ function refreshGameLanguage() {
 }
 updateLifeDisplay();
 resizeBattlefield();
+if (typeof preloadHadalSurface === "function") preloadHadalSurface();
+if (typeof preloadStarBreakerModel === "function") preloadStarBreakerModel(0);
 window.requestAnimationFrame(drawFrame);

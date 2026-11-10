@@ -67,13 +67,6 @@ function alienArtTexture(asset) {
   return asset.texture;
 }
 
-function alienArtCharge(target) {
-  if (target.disabled) return 0;
-  const elapsed = target.phaseTime || 0;
-  if (target.phase === "telegraph") return Math.min(1, elapsed / (target.telegraphDuration || 0.85));
-  if (target.phase === "attack") return 0.22 + 0.78 * Math.exp(-elapsed * 4.2);
-  return 0;
-}
 
 function alienArtTint(color, alpha) {
   return color + Math.round(alpha * 255).toString(16).padStart(2, "0");
@@ -392,7 +385,8 @@ function drawBossShip(ctx, target, reduceMotion = false) {
   if (enragedTexture && transition > 0) layers.push([enragedTexture, transition]);
   const color = /^#[0-9a-f]{6}$/i.test(target.color) ? target.color : "#79d9ed";
   const time = reduceMotion || target.disabled ? 0 : target.age || 0;
-  const charge = alienArtCharge(target);
+  const action = bossActionPose(target, reduceMotion);
+  const charge = target.cinematicPose?.charge ?? action.charge;
   const reference = texture || enragedTexture;
   const aspect = reference ? reference.width / reference.height : target.width / target.height;
   const width = Math.min(target.width * 1.04, target.height * 1.04 * aspect);
@@ -404,15 +398,16 @@ function drawBossShip(ctx, target, reduceMotion = false) {
   const postureY = pose ? pose.dip * 0.05 + pose.side * pose.lash * 0.025 : 0;
 
   ctx.save();
-  ctx.translate(target.x + (target.disabled ? 0 : width * (recoil + postureX)), target.y + height * postureY);
-  if (!reduceMotion && !target.disabled) {
-    ctx.rotate(Math.sin(time * 1.12) * 0.026 * profile.flex + (pose?.turn || 0));
-    ctx.scale(1 + breath * (pose ? 0.64 : -0.45) - charge * 0.018 + (pose ? pose.thrust * 0.035 - pose.coil * 0.04 : 0),
-      1 + breath + charge * 0.025 + (pose ? pose.coil * 0.04 - pose.thrust * 0.03 : 0));
+  ctx.translate(target.x + (target.disabled ? 0 : width * (recoil + postureX + action.x)),
+    target.y + height * (postureY + (target.disabled ? 0 : action.y)));
+  if (!target.disabled) {
+    ctx.rotate(Math.sin(time * 1.12) * 0.026 * profile.flex + (pose?.turn || 0) + action.bank);
+    ctx.scale(action.scaleX * (1 + breath * (pose ? 0.64 : -0.45) - charge * 0.018 + (pose ? pose.thrust * 0.035 - pose.coil * 0.04 : 0)),
+      action.scaleY * (1 + breath + charge * 0.025 + (pose ? pose.coil * 0.04 - pose.thrust * 0.03 : 0)));
   }
   if (!target.disabled) {
     alienArtGlow(ctx, width * 0.07, 0, Math.max(width, height) * 0.67, pose?.enraged ? "#d755a6" : color,
-      0.06 + 0.07 * charge + (target.enraged ? 0.035 : 0));
+      (0.06 + 0.09 * action.core + (target.enraged ? 0.035 : 0)) * (1 - action.slack * .72));
   }
   if (pose && (pose.enraged || pose.lash > 0.06 || pose.thrust > 0.2)) {
     drawBroodmotherTendrils(ctx, width, height, target, pose, time);

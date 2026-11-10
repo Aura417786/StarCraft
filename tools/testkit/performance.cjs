@@ -31,6 +31,42 @@ async function sample(page, size) {
   }), size);
 }
 
+async function sampleFirstWater(page) {
+  return page.evaluate(() => new Promise(resolve => {
+    const original = drawHadalSurface;
+    const draws = [], frames = [];
+    let frameStart = performance.now(), first = null, firstActive = null;
+    drawHadalSurface = function (ctx, ...args) {
+      const start = performance.now();
+      const ready = !!hadalWaterDevice;
+      const composited = hadalWaterDevice?.composited ?? null;
+      original(ctx, ...args);
+      if (!ready) return;
+      if (first === null) first = start;
+      if (firstActive === null && boss?.phase === "attack") firstActive = start;
+      draws.push({ at: start - first, cpuMs: performance.now() - start, composited, phase: boss?.phase });
+    };
+    const collect = () => {
+      const now = performance.now();
+      if (first !== null) frames.push({ at: now - first, ms: now - frameStart });
+      frameStart = now;
+      if ((firstActive === null || now - firstActive < .65 * 1000) && now - start < 8000) return requestAnimationFrame(collect);
+      drawHadalSurface = original;
+      const interval = frames.filter(frame => frame.at < 250);
+      const active = frames.filter(frame => firstActive !== null && frame.at >= firstActive - first && frame.at < firstActive - first + 250);
+      resolve({ firstDraw: draws[0] ?? null, firstRafMs: frames[0]?.ms ?? null,
+        first250msMax: interval.length ? Math.max(...interval.map(frame => frame.ms)) : null,
+        firstActive250msMax: active.length ? Math.max(...active.map(frame => frame.ms)) : null,
+        drawCpuMax: draws.length ? Math.max(...draws.map(draw => draw.cpuMs)) : null,
+        totalWaterDraws: draws.length, frames: frames.length });
+    };
+    const start = performance.now();
+    requestAnimationFrame(collect);
+    boss.attackIndex = bossTypes[0].patterns.indexOf("broodArc") - 1;
+    prepareAlienAttack(boss);
+  }));
+}
+
 async function main() {
   fs.mkdirSync(output, { recursive: true });
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true });
@@ -48,8 +84,19 @@ async function main() {
         ? route.fulfill({ path: file, contentType: mime[path.extname(file)] }) : route.fulfill({ status: 404 });
     });
     await page.goto(origin);
-    await page.locator(".flight-guide-actions button").first().click();
+    const guide = page.locator(".flight-guide-actions button").first();
+    if (await guide.isVisible()) await guide.click();
     await page.locator("#start-button").click();
+    await page.evaluate(() => {
+      if (typeof skipFlightTutorial === "function") skipFlightTutorial();
+      nextBossTime = enemyCooldown = powerupCooldown = shotCooldown = Infinity;
+      spawnBoss(0); resetBossPresentation();
+      Object.assign(boss, bossArena(0), { phase: "recover", phaseTime: -200, age: 3 });
+      player.lives = 99; player.invulnerable = 40;
+    });
+    await page.waitForFunction(() => starBreakerModelCache.get(0)?.model && hadalWaterDevice, null, { timeout: 20000 });
+    await page.waitForTimeout(750);
+    const water = await sampleFirstWater(page);
     await page.evaluate(() => {
       nextBossTime = enemyCooldown = powerupCooldown = Infinity;
       battlefieldState.clock = 330;
@@ -84,7 +131,7 @@ async function main() {
     }
     const result = { browser: browser.version(), gpu, viewport: [1280, 720], dpr: 1.5,
       fixture: "Confluence animated body, void scenery, 120 starting projectiles (real time, warm cache)",
-      tiers, errors, missing };
+      water, tiers, errors, missing };
     fs.writeFileSync(path.join(output, "performance.json"), JSON.stringify(result, null, 2));
     assert.deepEqual(errors, []);
     assert.deepEqual(missing, []);

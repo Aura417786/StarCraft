@@ -25,6 +25,77 @@ const bossEmitterLights = [
   ["#ee669e", -.08, .03, .46], ["#f16ab6", -.05, .05, .81],
 ];
 
+// Wind-ups drive the authored Attack and Unfurl anatomy, with independent body
+// weight transfer and focal light. Durations are in seconds, angles in radians.
+const bossActionProfiles = [
+  // time, retreat, lift, squash X, spread Y, pitch, yaw, bank, unfold, core
+  [.48, .052, -.028, -.045, .112, -.12, .10, .035, .26, 1.05], // canopy balloons, trailing tentacles coil
+  [.39, .072, -.017, -.081, .065, .13, -.08, -.051, .15, .53], // barbed jaw opens before ribs lock
+  [.46, .089, .018, -.054, .038, -.07, .22, -.029, .07, 1.34], // vents brace, warm fissures open
+  [.43, -.030, -.042, .028, -.118, .08, -.23, .063, .20, .73], // limbs gather inward before threads stretch
+  [.38, .031, .036, -.037, .139, -.02, .08, .047, .38, .60], // paired pincers lift and flare
+  [.36, .012, -.020, .045, -.082, .09, -.35, .119, .12, .78], // ray banks until its plates catch the key
+  [.41, .064, .033, -.109, .078, .17, -.11, -.075, .11, .93], // tail curls ahead of the moving current
+  [.47, -.017, -.011, .047, .129, .10, .12, .027, .30, 1.22], // sacs swell then release
+  [.45, .058, .009, -.103, -.097, -.14, .14, -.056, .24, .86], // throat contracts around the fold
+  [.34, .022, -.046, .013, .057, -.17, -.19, .087, .22, 1.00], // crown tilts forward as neurons light
+  [.50, .091, .016, -.068, .097, -.11, .25, -.077, .35, 1.20], // body lobes gather for independent attacks
+];
+const bossActionTechniques = [
+  ["sweep", "coil", "recoil"], ["lunge", "coil", "lunge"], ["recoil", "lunge", "coil"],
+  ["sweep", "coil", "recoil"], ["lunge", "coil", "sweep"], ["sweep", "lunge", "coil"],
+  ["sweep", "coil", "lunge"], ["lunge", "recoil", "sweep"], ["coil", "sweep", "recoil"],
+  ["recoil", "sweep", "coil"], ["coil", "sweep", "lunge"],
+];
+
+function bossActionPose(target, quiet = false) {
+  const type = target.type % bossActionProfiles.length;
+  const [lead, retreat, lift, scaleX, scaleY, pitch, yaw, bank, unfold, core] = bossActionProfiles[type];
+  const phaseTime = target.phaseTime || 0;
+  const warming = target.phase === "telegraph";
+  let remaining = warming ? target.telegraphDuration - phaseTime : Infinity;
+  // Secondary cues use their own real warning clocks so an aftershock can
+  // visibly tense the body while the original attack is still in flight.
+  if (target === boss && target.phase === "attack") {
+    for (const hazard of bossHazards) {
+      const wait = hazard.warning - hazard.age;
+      if (wait >= 0 && hazard.attackLabel === target.attackLabel) remaining = Math.min(remaining, wait);
+    }
+  }
+  const start = clamp(1 - remaining / lead, 0, 1);
+  const ready = start * start * (3 - 2 * start);
+  const release = target.phase === "attack" ? Math.exp(-phaseTime * 10) * (1 - ready) : 0;
+  const loss = clamp(target.cinematicPose?.loss ?? 0, 0, 1);
+  const slack = loss * loss * (3 - 2 * loss);
+  const tremor = quiet ? 0 : Math.sin(loss * 25) * (1 - loss) * Math.sin(Math.PI * loss) * .12;
+  const side = target.side || 1;
+  const motion = quiet ? .26 : 1;
+  // Change silhouette for a sweep, a closed coil, a forward strike, and a
+  // pressure recoil independently of the species' base body mechanics.
+  const technique = target.attackMotion ?? bossActionTechniques[type][target.attackIndex];
+  const sweep = technique === "sweep" ? side * .07 : 0;
+  const lunge = technique === "lunge" ? .048 : 0;
+  const coil = technique === "coil" ? .033 : 0;
+  const vent = technique === "recoil" ? .026 : 0;
+  const rhythmic = type === 0 && !quiet ? 1 + .18 * Math.sin(phaseTime * 14) ** 2
+    : type === 7 && !quiet ? 1 + .12 * Math.sin(phaseTime * 11) : 1;
+  const weight = (ready - release * .39) * motion * (1 - slack);
+  const lowCharge = warming ? clamp(1 - remaining / Math.max(.01, target.telegraphDuration), 0, 1) * .19 : 0;
+  return {
+    readiness: ready, release, loss, slack,
+    charge: clamp((lowCharge + ready * .81 + release * .84) * rhythmic * (1 - slack), 0, 1),
+    spread: unfold * (ready + release * .36) * (1 - slack),
+    core: core * (lowCharge + ready * .88 + release * .55) * (1 - slack),
+    x: weight * (retreat + lunge - vent) + slack * .05,
+    y: weight * (lift + sweep * .20) + slack * .10 * motion,
+    pitch: weight * pitch - slack * .21 * motion + tremor,
+    yaw: weight * (yaw + sweep * side),
+    bank: weight * (bank + sweep) - slack * side * .13 * motion + tremor,
+    scaleX: 1 + weight * (scaleX - coil) - slack * .09 * motion,
+    scaleY: 1 + weight * (scaleY + coil) - slack * .16 * motion,
+  };
+}
+
 function canUseStarBreakerModels() {
   return !starBreakerModelsUnavailable && typeof StarBreaker3D !== "undefined"
     && typeof visualQuality !== "undefined" && visualQuality.modelScale > 0
@@ -268,7 +339,8 @@ function lightBossModel(stage, model, type, pose, x, y, width) {
   rim.position.set(key.position.x * .64, key.position.y * .58 + 1.6, -4);
   if (pose.cooling) key.color.set("#a0eafa");
   key.intensity = 2.17 + pose.hit * .43 + (pose.cooling ? .52 : 0);
-  rim.intensity = 1.38 + pose.charge * .56 + pose.ruptured * .22 + (pose.intensity ?? 0) * .37;
+  rim.intensity = (1.38 + pose.charge * .45 + pose.ruptured * .22 + (pose.intensity ?? 0) * .34)
+    * (1 - (pose.action?.slack ?? 0) * .24);
   const light = shipReflectionLight();
   bounce.color.setRGB(...light.channels.map(channel => channel / 255), StarBreaker3D.SRGBColorSpace);
   bounce.position.set(-key.position.x * .54, -light.side * 4, 3);
@@ -279,9 +351,12 @@ function lightBossModel(stage, model, type, pose, x, y, width) {
   const furnace = type % 11 === 2;
   emitter.color.set(color);
   emitter.position.set(px * unit, py * unit, model.size.z * .48 + unit * (furnace ? .21 : .12));
-  emitter.distance = unit * (furnace ? .93 : .68);
-  emitter.intensity = strength * unit * unit * (.11 + pose.charge * .074 + pose.ruptured * .042
-    + (type >= 11 ? .028 : 0)) * (pose.cooling ? .45 : 1);
+  // The furnace spills over adjacent armor edges without changing the core's
+  // brightness, which can otherwise wash out the fine fissures at close range.
+  emitter.distance = unit * (furnace ? .99 : .68);
+  const localCharge = Math.min(1.18, pose.action?.core ?? pose.charge);
+  emitter.intensity = strength * unit * unit * (.11 + localCharge * .074 + pose.ruptured * .042
+    + (type >= 11 ? .028 : 0)) * (pose.cooling ? .45 : 1) * (1 - (pose.action?.slack ?? 0) * .67);
 
   const pulse = typeof activeCombatLight === "function" ? activeCombatLight() : null;
   const subject = typeof bossPresentation !== "undefined" && bossPresentation?.target?.type === type % 11
@@ -292,7 +367,7 @@ function lightBossModel(stage, model, type, pose, x, y, width) {
   const worldY = x === 0 && y === 0 ? subject?.y ?? y : y;
   const dx = pulse ? pulse.x - worldX : 0, dy = pulse ? pulse.y - worldY : 0;
   const falloff = pulse ? Math.max(0, 1 - Math.hypot(dx, dy) / Math.max(1, pulse.radius + width * .4)) : 0;
-  spill.intensity = falloff * falloff * (pulse?.strength ?? 0) * unit * unit * .28;
+  spill.intensity = falloff * falloff * Math.min(1.2, pulse?.strength ?? 0) * unit * unit * .31;
   if (falloff > 0) {
     spill.color.set(pulse.color);
     spill.position.set(clamp(dx / width, -.78, .78) * unit, clamp(-dy / width, -.68, .68) * unit, unit * .44);
@@ -318,6 +393,7 @@ function drawBossContactShadow(ctx, x, y, width, height) {
   };
   layer(width * .08, width * .69, .75);
   layer(-width * .075, width * .43, .78);
+  layer(-width * .13, width * .28, .48);
   ctx.restore();
 }
 
@@ -332,17 +408,20 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
     scene.add(model.turn);
     stage.current = model;
   }
-  const { time, charge, ruptured, recoil, quiet } = pose;
+  const { time, charge, ruptured, recoil, quiet, action } = pose;
   model.mixer?.setTime(time % Math.max(.01, model.duration));
-  model.turn.rotation.set(.025 + Math.sin(time * 1.3) * .08, -.11 + Math.sin(time * .77) * .18,
-    Math.sin(time * .91) * .031 + recoil * .06 + (pose.turn ?? 0));
-  model.turn.position.set(recoil * model.size.x * .06, 0, 0);
+  const idleMotion = 1 - (action?.slack ?? 0) * .93;
+  model.turn.rotation.set(.025 + Math.sin(time * 1.3) * .08 * idleMotion + (action?.pitch ?? 0),
+    -.11 + Math.sin(time * .77) * .18 * idleMotion + (action?.yaw ?? 0),
+    Math.sin(time * .91) * .031 * idleMotion + recoil * .06 + (pose.turn ?? 0) + (action?.bank ?? 0));
+  model.turn.position.set((recoil * .06 + (action?.x ?? 0)) * model.size.x, -(action?.y ?? 0) * model.size.y, 0);
+  model.turn.scale.set(action?.scaleX ?? 1, action?.scaleY ?? 1, 1);
   for (const { node, attack, unfurl, emissive } of model.animatedMeshes) {
     if (attack !== undefined) node.morphTargetInfluences[attack] = charge;
-    if (unfurl !== undefined) node.morphTargetInfluences[unfurl] = ruptured;
+    if (unfurl !== undefined) node.morphTargetInfluences[unfurl] = clamp(ruptured + (action?.spread ?? 0), 0, 1);
     if (node.material.emissive && emissive > 0) {
-      node.material.emissiveIntensity = emissive * (.67 + charge * 1.0 + ruptured * .44
-        + Math.sin(time * 3.2) * .08);
+      node.material.emissiveIntensity = emissive * (.67 + Math.min(1.18, action?.core ?? charge) * .92 + ruptured * .38
+        + Math.sin(time * 3.2) * .08 * idleMotion) * (1 - (action?.slack ?? 0) * .72);
     }
   }
   const paddedWidth = width * 1.14, paddedHeight = height * 1.14;
@@ -374,13 +453,13 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
 function drawStarBreakerBoss(ctx, target, quiet) {
   if (target.disabled) return false;
   const age = target.age || 0;
-  const charge = alienArtCharge(target);
+  const action = bossActionPose(target, quiet);
   const pressure = target.phase === "rupture";
   const stageStrength = target.enraged ? Math.min(1, (age - (target.enragedAt ?? age)) * 1.7) : 0;
   const recoil = target.phase === "attack" && !quiet ? Math.exp(-(target.phaseTime || 0) * 7) : 0;
   const cue = target.cinematicPose;
   return drawStarBreakerModel(ctx, target.type, target.x, target.y, target.width, target.height, {
-    time: quiet ? 0 : age, charge: cue?.charge ?? (pressure ? .85 : charge),
+    time: quiet ? 0 : age, charge: cue?.charge ?? (pressure ? .85 : action.charge), action,
     ruptured: cue?.unfurl ?? (pressure ? 1 : stageStrength),
     hit: target.hitFlash ? 1 : 0, recoil, quiet, color: target.color, turn: cue?.turn, intensity: cue?.intensity,
   });

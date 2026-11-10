@@ -35,6 +35,7 @@ function arena() {
     const isBattleActive = () => state === "battle" && !paused;
     const isBossDeathPlaying = () => false;
     const pulseCombatLight = () => {};
+    const recordCombatDetonation = () => {};
     const fighterProfile = () => ({ id: fighter });
     const muzzlePosition = () => ({ x: player.x + 80, y: player.y });
     const weaponDamageLog = () => Math.log(12);

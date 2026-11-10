@@ -12,7 +12,9 @@
 
 机械主题用于灼核吞星兽、锁脉巨螯、星尘镜魟。生物主题用于渊潮母体、骨冠猎兽、沉渊震鳗、裂梦孢皇。虚空主题用于裂隙织母、维度噬口、无昼神经王、群渊合生体。
 
-各阵营的和声、压迫与终局声部在同一时间起播。Boss 生命降至 66% 或 33% 时，只平滑改变各轨的音量，终局形态直接使用第三层。大型技能加上独立低频冲击，暂时压低音乐。技能按发射位置左右移动，命中与非 Boss 爆炸还根据战机到声音的距离衰减。Esc 暂停降低音乐和音效，静音保留当前播放位置。主音量独立保存在浏览器中。
+每套 32 小节沿 A / B / A′ / B′ 排列，每段 8 小节。机械在 B 段加入钢片音和反拍鼓，生物用长笛倒序回答并放松低音，虚空把原动机交给偏左的合成唱腔和钟片。B 段更换配器、节奏和和弦顺序，以原曲的回归和弦衔接下一段。三个分轨共享小节、采样长度和起播点，较长 Boss 战不会增加并行播放的轨道数。
+
+Boss 生命降至 66% 或 33% 时，下一半拍开始交叉淡化，终局形态直接切到第三档。技能的低频冲击仍保留，主预警和招式音触发 0.15 秒音乐压低，较强的入场或死亡提示保有优先级。警告及解体期间压低仍在运行的音乐，进入新阵营或返航时交叠淡入淡出。技能按世界横坐标在 ±0.6 之间定位，爆炸根据战机到声源距离衰减，Boss 解体保留最低可听响度。暂停降低音乐和音效，静音保留播放位置。主音量独立保存在浏览器中。
 
 ## 重建
 
@@ -23,7 +25,7 @@ python tools/audio/render_bank.py --synth "C:/tools/fluidsynth/bin/fluidsynth.ex
 python tools/audio/render_factions.py --synth "C:/tools/fluidsynth/bin/fluidsynth.exe" --soundfont "C:/tools/MuseScore_General.sf3" --ffmpeg "C:/tools/ffmpeg/bin/ffmpeg.exe" --work "C:/tools/star-breaker-audio/factions"
 ```
 
-两套脚本输出可编辑的 MIDI。循环轨连续渲染三次，保留中间一轮和边界处的混响，用短窗衔接后交给 FFmpeg 做均衡、限幅和 Opus 编码。资源内嵌在 JavaScript 中，双击 `index.html` 和在线版均可解码。浏览器一次保留一套已解码的阵营音乐，切换时逐层解码，合成音频在解码不可用时接替战斗配乐。
+两套脚本输出可编辑的 MIDI。循环轨连续渲染三次，保留中间一轮和边界处的混响，用短窗衔接后交给 FFmpeg 做均衡、限幅和 Opus 编码。资源内嵌在 JavaScript 中，双击 `index.html` 和在线版均可解码。浏览器在首次解锁声音和预警时提前逐层解码，缓存只常驻一套阵营音乐。切换期间旧声源只存活至淡出结束，合成音频在解码不可用时接替战斗配乐。
 
 分轨创作使用 [Compose Game Music](https://github.com/sora16bit/codex-game-music-skill/blob/13e5236615871573f50effd75a24a7c5b5d19271/skills/compose-game-music/SKILL.md) 的动机变形、分句与打击优先级。混音和验证按 [Audio Design](https://github.com/gamedev-skills/awesome-gamedev-agent-skills/blob/dcf3bbbb83f365632402c086bf595048aa24aaa8/skills/disciplines/audio-design/SKILL.md) 的同一时间轴、分组增益、短时压低音乐与真实输出采样做了调整。
 

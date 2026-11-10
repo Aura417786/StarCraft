@@ -46,15 +46,20 @@ void main() {
 let hadalWaterImage;
 let hadalWaterDevice;
 let hadalWaterUnavailable = false;
+let hadalWaterPreparing = false;
 
 function canUseHadalWater() {
   return typeof visualQuality !== "undefined" && visualQuality.waterDetail > 0
     && typeof location !== "undefined" && /^https?:$/.test(location.protocol);
 }
 
+function scheduleHadalWarm(task) {
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(task, { timeout: 1400 });
+  else window.setTimeout(task, 0);
+}
+
 function hadalWaterSetup() {
-  if (!canUseHadalWater() || hadalWaterUnavailable) return null;
-  if (hadalWaterDevice) return hadalWaterDevice;
+  if (hadalWaterDevice || hadalWaterUnavailable) return;
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 512;
@@ -71,62 +76,83 @@ function hadalWaterSetup() {
     return null;
   }
   const program = gl.createProgram();
+  const parallel = gl.getExtension("KHR_parallel_shader_compile");
+  const shaders = [];
   for (const [kind, source] of [[gl.VERTEX_SHADER, hadalWaterVertex], [gl.FRAGMENT_SHADER, hadalWaterFragment]]) {
     const shader = gl.createShader(kind);
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
     gl.attachShader(program, shader);
-    gl.deleteShader(shader);
+    shaders.push(shader);
   }
   gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    gl.deleteProgram(program);
-    hadalWaterUnavailable = true;
-    return null;
-  }
-  gl.useProgram(program);
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, hadalWaterImage);
   canvas.addEventListener("webglcontextlost", event => {
     event.preventDefault();
     hadalWaterUnavailable = true;
     hadalWaterDevice = null;
   });
-  hadalWaterDevice = { canvas, gl, age: gl.getUniformLocation(program, "age"),
-    detail: gl.getUniformLocation(program, "detail"), sample: NaN, quality: 0 };
-  return hadalWaterDevice;
+  const finish = () => {
+    if (hadalWaterUnavailable) return;
+    if (parallel && !gl.getProgramParameter(program, parallel.COMPLETION_STATUS_KHR)) {
+      window.setTimeout(() => scheduleHadalWarm(finish), 35);
+      return;
+    }
+    for (const shader of shaders) gl.deleteShader(shader);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      gl.deleteProgram(program);
+      hadalWaterUnavailable = true;
+      return;
+    }
+    gl.useProgram(program);
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, hadalWaterImage);
+    const age = gl.getUniformLocation(program, "age"), detail = gl.getUniformLocation(program, "detail");
+    gl.uniform1f(age, 0);
+    gl.uniform1f(detail, 1);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.flush();
+    hadalWaterDevice = { canvas, gl, age, detail, sample: 0, quality: 1, composited: false, battleComposite: false };
+  };
+  scheduleHadalWarm(finish);
 }
 
 function preloadHadalSurface() {
-  if (!canUseHadalWater() || hadalWaterImage || typeof Image !== "function") return;
+  if (!canUseHadalWater() || hadalWaterPreparing || hadalWaterUnavailable || typeof Image !== "function") return;
+  hadalWaterPreparing = true;
   hadalWaterImage = new Image();
-  hadalWaterImage.onload = () => {
-    const warm = () => {
-      const device = hadalWaterSetup();
-      if (!device) return;
-      // Upload, link and execute a throwaway frame while the encounter is still being announced.
-      device.gl.uniform1f(device.detail, visualQuality.waterDetail);
-      device.gl.drawArrays(device.gl.TRIANGLES, 0, 3);
-      device.gl.flush();
-    };
-    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(warm, { timeout: 1500 });
-    else window.setTimeout(warm, 0);
-  };
+  hadalWaterImage.onload = () => scheduleHadalWarm(hadalWaterSetup);
+  hadalWaterImage.onerror = () => { hadalWaterUnavailable = true; };
   hadalWaterImage.src = "assets/models/hadal-surface.png";
+}
+
+// Import and blend on the actual battle canvas; drawing on a scratch canvas
+// or clearing the warm draw before presentation lets Chrome discard the work.
+// A one-code-value sample in the corner is visually indistinguishable.
+function warmHadalDestination(ctx, inBattle) {
+  const device = hadalWaterDevice;
+  if (!device || !canUseHadalWater() || (inBattle ? device.battleComposite : device.composited)) return;
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 1 / 255;
+  ctx.beginPath();
+  ctx.moveTo(0, 0); ctx.lineTo(250, 0); ctx.quadraticCurveTo(185, 228, 5, 320); ctx.closePath(); ctx.clip();
+  ctx.drawImage(device.canvas, 0, 0, 256, 360);
+  ctx.restore();
+  device.composited = true;
+  if (inBattle) device.battleComposite = true;
 }
 
 function drawHadalSurface(ctx, x, y, width, height, age, reverse = false) {
   if (!canUseHadalWater()) return;
   preloadHadalSurface();
-  if (!hadalWaterImage?.complete || !hadalWaterImage.naturalWidth || height <= 0 || width <= 0) return;
-  const device = hadalWaterSetup();
-  if (!device) return;
+  const device = hadalWaterDevice;
+  if (!device?.composited || height <= 0 || width <= 0) return;
   if (device.sample !== age || device.quality !== visualQuality.waterDetail) {
     const { gl } = device;
     gl.uniform1f(device.age, age);

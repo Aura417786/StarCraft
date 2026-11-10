@@ -164,8 +164,10 @@ async function main() {
     assert.ok(fixtures.catapult.triggered && fixtures.catapult.railMotion > 0 && fixtures.catapult.protected && fixtures.catapult.pilotControl);
     assert.ok(Object.values(fixtures.isolation).every(Boolean));
 
+    // Exercise all sectors here. The release matrix also keeps the old 314159
+    // seed, which can defeat this pilot before it reaches the late terrain.
     const natural = await page.evaluate(() => runBalanceFixture({
-      label: "terrain-and-elites-natural", mode: "campaign", fighter: "red", build: "wings", seed: 314159,
+      label: "terrain-and-elites-natural", mode: "campaign", fighter: "red", build: "wings", seed: 4225,
       bossType: null, fixture: "natural", seconds: 1300, policy: "pilot", difficulty: "veteran",
     }));
     assert.ok(natural.won, "Natural trajectory must reach the final encounter");

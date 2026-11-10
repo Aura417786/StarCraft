@@ -27,7 +27,7 @@ async function run() {
   page.setDefaultTimeout(16000);
   page.on("pageerror", error => errors.push(error.message));
   await page.addInitScript(() => {
-    const proof = { sources: [], decoded: [], pending: null, meter: null };
+    const proof = { sources: [], decoded: [], pending: null, meter: null, gains: [] };
     window.audioProof = proof;
     window.requestAnimationFrame = () => 0;
     const originalDecode = AudioContext.prototype.decodeAudioData;
@@ -38,6 +38,13 @@ async function run() {
       });
     };
     const sourceGain = new WeakMap(), gainTraces = new WeakMap();
+    const originalCreateGain = AudioContext.prototype.createGain;
+    AudioContext.prototype.createGain = function () {
+      const node = originalCreateGain.call(this), trace = [];
+      proof.gains.push(trace);
+      gainTraces.set(node.gain, trace);
+      return node;
+    };
     const gainRamp = AudioParam.prototype.linearRampToValueAtTime;
     AudioParam.prototype.linearRampToValueAtTime = function (value, time) {
       gainTraces.get(this)?.push({ value, time });
@@ -122,7 +129,10 @@ async function run() {
     const closeGuide = page.locator(".flight-guide-actions button").first();
     if (await closeGuide.isVisible()) await closeGuide.click();
     await page.locator("#start-button").click();
-    await page.evaluate(() => syncGameAudio());
+    await page.evaluate(() => {
+      if (typeof skipFlightTutorial === "function") skipFlightTutorial();
+      syncGameAudio();
+    });
     await waitFor(() => audioProof.sources.filter(voice => voice.loop && voice.duration > 30).length >= 2);
     const flight = await page.evaluate(() => audioProof.sources.filter(voice => voice.loop && voice.duration > 30));
     assert.equal(flight.length, 2);
@@ -147,7 +157,7 @@ async function run() {
       const stages = [];
       for (const [stage, hp] of [["harmony", 1], ["pressure", .65], ["finale", .32]]) {
         await page.evaluate(hp => { boss.hp = hp; syncGameAudio(); }, hp);
-        await page.waitForTimeout(740);
+        await page.waitForTimeout(925);
         const mix = (await layers()).map(layer => layer.trace.at(-1)?.value ?? 0);
         const expected = { harmony: [.93, .08, 0], pressure: [.81, .67, .06], finale: [.70, .75, .89] };
         assert.deepEqual(mix, expected[stage]);
@@ -158,10 +168,24 @@ async function run() {
       assert.equal((await layers()).length, 3, "HP thresholds change gains on the same sources");
       await page.evaluate(() => { boss.hp = 1; syncGameAudio(); });
       await page.waitForTimeout(720);
-      const transition = await capture(name + "-continuous-transition", 6, { thresholds: true });
+      const transition = await capture(name + "-continuous-transition", 21, { thresholds: true });
+      const section = await page.evaluate(theme => {
+        const score = starBreakerFactionAudio.factions[theme];
+        return { bars: score.sectionBars, sequence: score.sequence, answerAt: score.sectionBars * 240 / score.bpm };
+      }, name);
+      assert.deepEqual(section.sequence, ["A", "B", "A'", "B'"]);
+      assert.ok(section.answerAt < 20);
       assert.equal((await layers()).length, 3, "a recorded transition also keeps every source in place");
-      report.factions[name] = { duration: stems[0].loopEnd, startSpread: 0, maximumSeam: Math.max(...stems.map(voice => voice.seam)), stages, transition };
+      report.factions[name] = { duration: stems[0].loopEnd, startSpread: 0, maximumSeam: Math.max(...stems.map(voice => voice.seam)), section, stages, transition };
     }
+    const duck = await page.evaluate(() => {
+      gameAudio.bossAttack("whip", 1080, 345);
+      return audioProof.gains[3].slice(-2);
+    });
+    assert.equal(duck[0].value, .73);
+    assert.equal(duck[1].value, 1);
+    assert.ok(Math.abs(duck[1].time - duck[0].time - .128) < .001);
+    report.skillDuck = { minimum: duck[0].value, fullCycleSeconds: duck[1].time - duck[0].time + .022 };
     await page.keyboard.press("Escape");
     assert.equal(await page.evaluate(() => pauseView), "menu");
     await page.evaluate(() => syncGameAudio());

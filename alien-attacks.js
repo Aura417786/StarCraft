@@ -42,9 +42,8 @@ const alienPatterns = {
     t => [aimTell(t, 0), fan(0, 3, .13, 560, "shard", { lock: true }),
       beat(.38, x => edgeFilament(x, "bone", .86, { flip: x.side < 0, tilt: .22, duration: .40, thickness: .31 })),
       fan(1.32, 4, .28, 520, "shard", { aim: true })]],
-  boneRibs: ["活骨肋笼", "Living Ribcage", 3.74, "留在骨笼的开口内", "Stay inside the opening",
-    t => [tideTell(t, { material: "bone", gapY: t.gapY, bend: .31, thick: .57 }),
-      fan(2.62, 4, .29, 490, "shard", { aim: true })]],
+  boneRibs: ["活骨肋笼", "Living Ribcage", 3.34, "进骨笼中缝，或从两端离开", "Enter the rib gap or exit at either end",
+    t => { t.attackMotion = "coil"; ribCageTell(t); return []; }],
   bonePounce: ["折颚扑击", "Jaw Pounce", 3.24, "移出即将闭合的弧线", "Move outside the closing arc",
     t => {
       t.attackMotion = "lunge";
@@ -52,9 +51,8 @@ const alienPatterns = {
         beat(.69, x => ringTell(x, { material: "bone", at: .85, x: player.x, y: player.y, close: true, duration: .71 }))];
     }],
 
-  cinderLava: ["熔脉喷发", "Magma Vein", 3.38, "绕开热流和扩散火环", "Dodge the stream and ring",
-    t => [edgeFilament(t, "magma", 0, { y: t.lockY, tilt: .34, duration: 1.16, thickness: .39 }),
-      beat(.48, x => ringTell(x, { material: "magma", at: .95, x: player.x, y: player.y, duration: .91 }))]],
+  cinderLava: ["熔脉喷发", "Magma Vein", 3.38, "躲到地壳左侧阴影，或飞出熔流", "Use the rock shadow or leave the magma lane",
+    t => { t.attackMotion = "recoil"; magmaCoverTell(t); return []; }],
   cinderHeart: ["炉心熔雨", "Furnace Meteorfall", 3.52, "避开标出的坠落区域", "Leave the impact markers",
     t => [zoneTell(t, 0, t.lockX, t.lockY, .46, "magma"),
       fan(.39, 3, .44, 275, "ember", { burstAt: .72, burstCount: 7, radius: 12 }),
@@ -68,20 +66,15 @@ const alienPatterns = {
     t => [edgeFilament(t, "silk", 0, { y: t.lockY, tilt: .62, duration: .58, thickness: .25 }),
       beat(.62, x => edgeFilament(x, "silk", .84, { y: player.y, flip: true, tilt: -.61, duration: .75, thickness: .29 })),
       fan(1.87, 4, .35, 485, "thread", { aim: true, wave: 34 })]],
-  weaverWeb: ["折叠蛛网", "Folded Web", 3.88, "移进网墙留下的缺口", "Enter the web opening",
-    t => [tideTell(t, { material: "silk", gapY: t.gapY, bend: .34, thick: .28, direction: 1 }),
-      beat(2.28, x => edgeFilament(x, "silk", .78, { y: player.y, tilt: -.28, duration: .49, thickness: .30 }))]],
+  weaverWeb: ["折叠蛛网", "Folded Web", 3.88, "打断发光丝结，丝线会拖慢战机", "Shoot glowing knots to cut the slowing webs",
+    t => { t.attackMotion = "coil"; loomTell(t, 0, t.enraged); return [beat(.46, x => zoneTell(x, .92, player.x, player.y, .38, "silk"))]; }],
   weaverSnare: ["结丝伏击", "Silk Ambush", 3.46, "退出丝网标出的圆圈", "Leave the marked circle",
     t => [bindTell(t, 0, t.lockX, t.lockY, 1.70, .73),
       ringTell(t, { material: "silk", at: .79, x: t.lockX, y: t.lockY, close: true, duration: 1.22 }),
       fan(2.13, 4, .32, 460, "thread", { aim: true })]],
 
-  binderClaw: ["双螯合围", "Vice-Grip Pincer", 3.60, "留在双螯之间的缺口", "Stay between the jaws",
-    t => {
-      t.attackMotion = "lunge";
-      return [tideTell(t, { material: "chitin", gapY: t.gapY, gapSize: t.gapSize * 1.21, bend: .39, thick: .62 }),
-        fan(2.52, 4, .43, 480, "shard", { aim: true })];
-    }],
+  binderClaw: ["双螯合围", "Vice-Grip Pincer", 3.60, "只从双螯开口穿越，也可留在任一侧", "Cross only through the jaw opening, or stay on one side",
+    t => { t.attackMotion = "lunge"; pincerTell(t, 0, t.enraged); return []; }],
   binderPin: ["棘链绞索", "Spine Winch", 3.52, "飞离牵引区域的中心", "Thrust out of the pull",
     t => [vortexTell(t, { material: "chitin", x: t.lockX, y: t.lockY, at: .15, strength: 122, duration: 2.1, core: .30, spin: 0 }),
       beat(.80, x => edgeFilament(x, "chitin", .94, { y: player.y, tilt: .36, thickness: .27, duration: .68 }))]],
@@ -89,25 +82,16 @@ const alienPatterns = {
     t => [seamTell(t, t.telegraphDuration), ringTell(t, { material: "chitin", at: .91, x: t.lockX, y: t.lockY,
       close: true, radius: 1.08, duration: 1.11 }), fan(2.32, 3, .25, 545, "shard", { aim: true })]],
 
-  mirrorPrism: ["三棱反照", "Prismatic Reflection", 3.38, "变换高度躲开反弹轨迹", "Change altitude as shots bounce",
-    t => [fan(0, 6, .78, 510, "prism", { reflect: true }),
-      edgeFilament(t, "glass", .60, { y: t.lockY, tilt: .46, thickness: .26, duration: .41, flip: true }),
-      fan(1.31, 5, .65, 545, "prism", { reflect: true, aim: true })]],
+  mirrorPrism: ["三棱反照", "Prismatic Reflection", 3.38, "镜面反弹主炮，换高度或穿甲", "Change altitude or pierce the reflecting shield",
+    t => { t.attackMotion = "sweep"; mirrorShieldTell(t); return [fan(1.8, 4, .43, 475, "prism", { aim: true })]; }],
   mirrorBlades: ["折镜夹击", "Mirror Pincer", 3.0, "离开左右交替的射线", "Leave each reflected line",
     t => [beamTell(t, 0, alienOffsetLane(t.lockY, -.11), .21), beamTell(t, .22, alienOffsetLane(t.lockY, .11), .21),
       beat(.47, x => portalTell(x, .81, -1)), beat(1.26, x => portalTell(x, .83, 1))]],
-  mirrorDecoy: ["双面坠镜", "Falling Looking Glass", 3.53, "穿过两次扫射的间隙", "Move between the two sweeps",
-    t => [edgeFilament(t, "glass", 0, { y: t.lockY, tilt: .31, thickness: .27, duration: .48 }),
-      edgeFilament(t, "glass", .62, { y: alienLane(1) + alienLane(0) - t.lockY, tilt: -.32, thickness: .27, duration: .48, flip: true }),
-      beat(1.33, x => portalTell(x, .86, t.side))]],
+  mirrorDecoy: ["双面坠镜", "Falling Looking Glass", 3.53, "空心假影能打碎，离开汇聚线", "Break the hollow decoys or leave their converging rays",
+    t => { t.attackMotion = "sweep"; mirrorDecoyTell(t, 0, t.enraged); return []; }],
 
-  wyrmPulse: ["长脊雷鞭", "Spinal Thunder", 3.56, "绕开将要扫过的雷鞭", "Move outside the sweep",
-    t => {
-      t.attackMotion = "sweep";
-      return [edgeFilament(t, "plasma", 0, { y: t.lockY, tilt: .22, swing: .18, thickness: .30, duration: .94 }),
-        fan(.52, 5, .52, 510, "thread", { wave: -39 }),
-        beat(1.26, x => edgeFilament(x, "plasma", .83, { y: player.y, tilt: -.39, swing: -.17, thickness: .28, duration: .84 }))];
-    }],
+  wyrmPulse: ["长脊雷鞭", "Spinal Thunder", 3.56, "打断尾端电极，或等亮段过去再穿过", "Sever the tail electrode or cross after the live segment",
+    t => { t.attackMotion = "sweep"; tailConduitTell(t); return t.enraged ? [beat(.62, x => tailConduitTell(x, .42, true))] : []; }],
   wyrmCurrent: ["断潮走廊", "Broken Current", 3.93, "跟住移动中的安全缺口", "Follow the moving opening",
     t => [tideTell(t, { material: "plasma", gapY: t.gapY, gapSize: t.gapSize * 1.15, shift: t.side * .19, thick: .36, bend: .33 }),
       fan(2.53, 5, .49, 550, "thread", { wave: 39, aim: true })]],
@@ -123,19 +107,14 @@ const alienPatterns = {
     t => [fan(0, 5, .72, 395, "spore", { homingUntil: 1, radius: 11 }),
       beat(.54, x => vortexTell(x, { x: player.x, y: player.y, at: .90, duration: 1.49, material: "spore", strength: 0, core: .78, grow: true })),
       fan(1.18, 4, .57, 430, "spore", { homingUntil: .84, radius: 10 })]],
-  sporeField: ["菌毯侵袭", "Mycelium Bloom", 3.78, "飞出两块扩张的区域", "Leave the growing fields",
-    t => [vortexTell(t, { x: t.lockX, y: t.lockY, duration: 2.08, material: "spore", strength: 0, core: .81, grow: true }),
-      beat(.77, x => vortexTell(x, { x: player.x + player.width * .58, y: player.y, at: .95, duration: 1.63,
-        material: "spore", strength: 0, core: .79, grow: true })),
-      fan(1.89, 3, .5, 355, "spore", { burstAt: .91, burstCount: 7, radius: 12 })]],
+  sporeField: ["菌毯侵袭", "Mycelium Bloom", 3.78, "打碎孢囊，别在菌毯内停留", "Break the sacs and avoid lingering in the bloom",
+    t => { t.attackMotion = "recoil"; sporeNestsTell(t, 0, t.enraged); return [fan(1.45, 3, .34, 355, "spore", { aim: true })]; }],
   sporePollen: ["孢浪换气", "Pollen Front", 3.84, "留在移动墙面的缺口", "Hold inside the moving gap",
     t => [tideTell(t, { material: "spore", gapY: t.gapY, gapSize: t.gapSize * 1.17, bend: .18, thick: .78, direction: 1 }),
       beat(2.17, x => zoneTell(x, .92, player.x, player.y, .39, "spore"))]],
 
-  mawEclipse: ["重力蚀口", "Gravitic Eclipse", 3.82, "向外飞离引力中心区", "Thrust away from the pull",
-    t => [vortexTell(t, { x: t.lockX, y: t.lockY, duration: 2.17, material: "void", strength: 173, core: .38, spin: 0, radius: 1.17 }),
-      ringTell(t, { material: "void", at: 1.07, x: t.lockX, y: t.lockY, close: true, duration: 1.13, radius: 1.30 }),
-      fan(2.38, 4, .45, 535, "ember", { aim: true })]],
+  mawEclipse: ["重力蚀口", "Gravitic Eclipse", 3.82, "绕开会偏折火力的引力场，远离裂口", "Flank the shot-bending gravity field and clear its seams",
+    t => { t.attackMotion = "coil"; riftFoldTell(t, 0, t.enraged); return []; }],
   mawScars: ["坍缩裂痕", "Collapse Scars", 3.60, "躲开斜线再左右移动", "Dodge the diagonal, then strafe",
     t => [edgeFilament(t, "void", 0, { y: t.lockY, tilt: .54, duration: .61, thickness: .35 }),
       beat(.77, x => seamTell(x, 1.02)),
@@ -145,10 +124,8 @@ const alienPatterns = {
       fan(1.86, 3, .44, 340, "ember", { burstAt: .81, burstCount: 8, radius: 12 }),
       fan(2.53, 5, .6, 565, "shard", { aim: true })]],
 
-  neuralSynapse: ["零光突触", "Zero-Light Synapse", 3.62, "穿过还未点亮的空档", "Cross through the unlit gap",
-    t => [edgeFilament(t, "nerve", 0, { y: t.lockY, tilt: .35, thickness: .29, duration: .52 }),
-      edgeFilament(t, "nerve", .61, { y: t.lockY, tilt: -.32, thickness: .31, duration: .61, flip: true }),
-      beat(1.42, x => edgeFilament(x, "nerve", .86, { y: player.y, tilt: x.side * .25, thickness: .35, duration: .58 }))]],
+  neuralSynapse: ["零光突触", "Zero-Light Synapse", 3.62, "按亮起顺序拆节点，或停止移动躲过扫描", "Break lit nodes in order or hold still through the scan",
+    t => { t.attackMotion = "recoil"; neuralRelayTell(t); return []; }],
   neuralPulse: ["神经风暴", "Neural Storm", 4.27, "跟住尚未通电的缺口", "Track the unpowered opening",
     t => [tideTell(t, { material: "nerve", direction: 1, gapY: t.gapY, shift: t.side * .26, bend: .40, thick: .44 }),
       beat(2.45, x => edgeFilament(x, "nerve", .86, { y: player.y, tilt: x.side * .36, thickness: .29, duration: .59 }))]],
@@ -157,14 +134,8 @@ const alienPatterns = {
       beat(.56, x => ringTell(x, { material: "nerve", at: .89, x: player.x, y: player.y, duration: .77 })),
       beat(1.65, x => seamTell(x, 1.02))]],
 
-  fusionBind: ["群渊处刑", "Confluence Execution", 3.62, "离开锁定区并左右移动", "Leave the lock, then strafe",
-    t => [bindTell(t, 0, t.lockX, t.lockY, 2.0, t.enraged ? .58 : .62),
-      zoneTell(t, 1.12, t.lockX, t.lockY, .49, "fusion"), beat(1.08, x => zoneTell(x, .96, player.x, player.y, .39, "fusion")),
-      fan(1.74, 4, .47, 600, "shard", { aim: true }),
-      beat(2.08, x => {
-        seamTell(x, .96);
-        if (x.enraged) zoneTell(x, .96, player.x, player.y, .39, "fusion");
-      })]],
+  fusionBind: ["群渊处刑", "Confluence Execution", 3.62, "先拆牵引肢或尖刺肢，绕开两者的交点", "Cut the siphon or lance limb and leave their intersection",
+    t => { t.attackMotion = "coil"; fusionLimbsTell(t); return []; }],
   fusionCorridor: ["神经潮汐", "Synaptic Tide", 3.58, "留在缺口内左右移动", "Strafe inside the corridor",
     t => [laneTell(t, 0, t.enraged ? 2.72 : 2.35), bandTell(t, 0, .66),
       wall(.29, 550, "shard"), wall(.75, 575, "thread"), wall(1.24, 605, "prism"),
@@ -357,6 +328,8 @@ function alienCurrentVector() {
   let vx = 0;
   let vy = 0;
   for (const hazard of bossHazards) {
+    const arenaForce = alienMechanicVector(hazard, player);
+    if (arenaForce) { vx += arenaForce.x; vy += arenaForce.y; }
     if (hazard.kind !== "vortex" || !hazard.strength || hazard.age < hazard.warning) continue;
     const dx = hazard.x - player.x;
     const dy = hazard.y - player.y;
@@ -485,6 +458,7 @@ function bindTell(target, at, x, y, duration, slow) {
 function alienMovementScale() {
   let scale = 1;
   for (const hazard of bossHazards) {
+    scale = Math.min(scale, alienMechanicSlow(hazard, player));
     if (hazard.kind === "bind" && hazard.age >= hazard.warning
       && Math.hypot(player.x - hazard.x, player.y - hazard.y) < hazard.radius) scale = Math.min(scale, hazard.slow);
   }
@@ -492,6 +466,7 @@ function alienMovementScale() {
 }
 
 function prepareAlienAttack(target, allowPressure = false) {
+  target.ruptureWindow = false;
   const pressure = allowPressure ? chooseAlienPressure(target) : null;
   const patterns = bossTypes[target.type].patterns;
   const key = pressure ? "pressure" : patterns[target.attackIndex = (target.attackIndex + 1) % patterns.length];
@@ -598,16 +573,18 @@ function updateBossProjectiles(seconds) {
         if (hazard.kind === "tide" || hazard.kind === "ring") addCombatShake(hazard.kind === "tide" ? 3.8 : 2);
       } else if (hazard.kind === "portal" && boss) {
         firePortal(hazard);
-      } else if (hazard.kind === "beam" || hazard.kind === "band" || hazard.kind === "zone" || hazard.kind === "seam") {
+      } else if (alienMechanicKinds.has(hazard.kind) || hazard.kind === "beam" || hazard.kind === "band" || hazard.kind === "zone" || hazard.kind === "seam") {
         gameAudio.bossAttack(hazard.sound || (hazard.kind === "zone" ? "burst" : "beam"), boss?.x, boss?.y);
       }
     }
+    updateAlienMechanic(hazard, seconds);
     if (hazard.age >= hazard.warning + hazard.duration) bossHazards.splice(i, 1);
   }
 }
 
 function alienHazardHitsPlayer(hazard) {
   if (hazard.age < hazard.warning) return false;
+  if (alienMechanicKinds.has(hazard.kind)) return alienMechanicHits(hazard, player);
   const radius = player.height * .16;
   if (alienSignatureKinds.has(hazard.kind)) {
     const progress = signatureProgress(hazard);
@@ -642,6 +619,7 @@ function alienHazardHitsPlayer(hazard) {
 }
 
 function drawAlienHazard(ctx, hazard, quiet) {
+  if (alienMechanicKinds.has(hazard.kind)) { drawAlienMechanic(ctx, hazard, quiet); return; }
   if (typeof drawPressureColumn === "function" && drawPressureColumn(ctx, hazard, quiet)) return;
   if (typeof drawAlienSignatureHazard === "function" && drawAlienSignatureHazard(ctx, hazard, quiet)) return;
   if (alienSignatureKinds.has(hazard.kind)) return;

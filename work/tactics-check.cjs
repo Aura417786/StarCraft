@@ -319,7 +319,10 @@ check('a real production frame curves both projectile streams before movement an
   assert.equal(execute('bullets.length'),1); assert.equal(execute('enemyProjectiles.length'),1);
   assert.ok(execute('bullets[0].y>250&&enemyProjectiles[0].y>250'));
   near(execute('bullets[0].angle'),execute('Math.atan2(bullets[0].vy,bullets[0].vx)'));
-  near(execute('bullets[0].previousY'),250); near(execute('enemyProjectiles[0].previousY'),250);
+  for (const list of ['bullets','enemyProjectiles']) {
+    assert.ok(execute(`${list}[0].previousY>250`), 'The final collision sweep starts from the last fixed substep');
+    near(execute(`${list}[0].y-${list}[0].previousY`), execute(`${list}[0].vy*combatStepSeconds`));
+  }
 });
 check('sustained gravity never reverses a round or traps it near a viewport edge', () => {
   gravityScene(); execute(`gravityTide.centerY=400;

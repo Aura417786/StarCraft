@@ -19,11 +19,11 @@ const browserCode = ["balance-policy.js", "balance-scenarios.js"]
 
 function options() {
   const [game, report, ...flags] = process.argv.slice(2);
-  if (!game || !report) throw new Error("Usage: node balance.cjs <Game folder> <report.json> [--quick | --cases prefix[,prefix]] [--trace] [--strict] [--no-live]");
+  if (!game || !report) throw new Error("Usage: node balance.cjs <Game folder> <report.json> [--quick | --cases prefix[,prefix] | --release-matrix] [--trace] [--strict] [--no-live]");
   const selection = flags.indexOf("--cases");
   return { game: path.resolve(game), report: path.resolve(report),
     quick: flags.includes("--quick"), trace: flags.includes("--trace"),
-    strict: flags.includes("--strict"), live: !flags.includes("--no-live"),
+    strict: flags.includes("--strict"), live: !flags.includes("--no-live"), release: flags.includes("--release-matrix"),
     cases: selection >= 0 ? flags[selection + 1]?.split(",") : null };
 }
 
@@ -46,17 +46,30 @@ function fixtures(config) {
     matrix.push(make("pressure-" + build, 7, fighter,
       { build, difficulty: "abyss", policy: "stationary" }));
   }
+  for (const [build, fighter] of [["hunter", "blue"], ["guardbreaker", "red"], ["intercept", "yellow"]]) {
+    matrix.push(make("build-" + build, 5, fighter, { build }));
+  }
   for (const difficulty of ["recruit", "abyss"]) matrix.push(make("difficulty-" + difficulty, 2, "red", { difficulty }));
   matrix.push(make("stress", 10, "red", { build: "wings", fixture: "stress" }));
   for (const [fighter, build] of [["red", "wings"], ["blue", "falcon"], ["yellow", "aegis"]]) {
     matrix.push(make("campaign-" + fighter, null, fighter, { seconds: 1300, build, fixture: "natural" }));
   }
   matrix.push(make("rush", null, "red", { seconds: 1100, build: "wings", mode: "rush", fixture: "natural" }));
+  if (config.release) {
+    for (const difficulty of ["recruit", "veteran", "abyss"]) {
+      for (const fighter of ["red", "blue", "yellow"]) {
+        for (let type = 0; type < 11; type++) {
+          matrix.push(make(`release-${difficulty}-${fighter}-${type + 1}`, type, fighter,
+            { difficulty, fixture: "timing", seeds: [referenceSeeds[0]] }));
+        }
+      }
+    }
+  }
   const selected = config.cases ? matrix.filter(scenario => config.cases.some(prefix => scenario.label.startsWith(prefix)))
     : config.quick ? matrix.filter(scenario => ["boss-1", "boss-3", "azure-3", "auric-3"].includes(scenario.label))
       : matrix;
   assert.ok(selected.length, "No fixtures match --cases");
-  return selected.flatMap(scenario => referenceSeeds.map(seed => ({ ...scenario, seed })));
+  return selected.flatMap(scenario => (scenario.seeds ?? referenceSeeds).map(seed => ({ ...scenario, seed })));
 }
 
 function installFixedClock() {
@@ -85,7 +98,7 @@ function installFixedClock() {
   };
 }
 
-async function createPage(browser, game, deterministic) {
+async function createPage(browser, game, deterministic, { flightTraining = false } = {}) {
   const page = await browser.newPage({ viewport: windowSize, deviceScaleFactor: 1, reducedMotion: "no-preference" });
   const errors = [];
   page.on("pageerror", error => errors.push(error.stack ?? error.message));
@@ -113,6 +126,7 @@ async function createPage(browser, game, deterministic) {
     return route.fulfill({ contentType, path: file });
   });
   if (deterministic) await page.addInitScript(installFixedClock);
+  if (!flightTraining) await page.addInitScript(() => localStorage.setItem("star-breaker-flight-training", "1"));
   await page.goto(origin + "/", { waitUntil: "load" });
   await page.bringToFront();
   const guide = page.locator(".flight-guide-actions button").first();

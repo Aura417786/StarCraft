@@ -118,3 +118,12 @@
   .start-copy .render-quality-control { margin-top: 4px; }
   .boss-hud { padding: 4px 10px 5px; }
 }
+
+.fighter-systems-readout {
+  padding: .12em .55em;
+  border-inline-start: 1px solid currentColor;
+  color: #f4ad99;
+  font-weight: 650;
+}
+.fighter-systems-readout[data-fighter="blue"] { color: #94dcf6; }
+.fighter-systems-readout[data-fighter="yellow"] { color: #f4cc7e; }

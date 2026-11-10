@@ -15,6 +15,7 @@ function setVisualQuality(id, persist = true) {
   visualQuality = visualQualityProfiles[id];
   if (visualQualityControl) visualQualityControl.value = id;
   if (visualQualityRoot) visualQualityRoot.dataset.quality = id;
+  if (visualQuality.waterDetail > 0 && typeof preloadHadalSurface === "function") preloadHadalSurface();
   if (persist) try { window.localStorage.setItem(visualQualityStorageKey, id); } catch { /* Current-tab choice remains active. */ }
 }
 

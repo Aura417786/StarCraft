@@ -9,13 +9,13 @@ const formationTactics = {
     tint: "#ffb789",
   },
   command: {
-    opening: ["指挥阵列压制 · 进入青色通道", "Command barrage · Enter the cyan lane"],
-    follow: ["侧翼追瞄 · 离开第二次锁点", "Wing follow-up · Leave the second target"],
+    opening: ["横向封锁 · 击破封锁机可打开本列", "Lane blockade · Destroy a jammer to open its lane"],
+    follow: ["剩余封锁机交叉射击 · 离开通道中线", "Surviving jammers cross-fire · Leave the lane center"],
     tint: "#ff92c5",
   },
   pincer: {
-    opening: ["两翼先扫外侧 · 暂走中间", "Flanks sweep the edges · Take the center"],
-    follow: ["两翼回收 · 中线已被锁定", "Flanks converge · Leave the marked lane"],
+    opening: ["V 字包夹 · 从中间击破领航机", "V pincer · Strike the spotter from the center"],
+    follow: ["领航机标记中线 · 两翼即将夹击", "Spotter locked the center · Both flanks are converging"],
     tint: "#b6a9ff",
   },
 };
@@ -56,22 +56,21 @@ function resizePincerFormation(plan) {
   const halfBody = Math.max(scoutHeight, ...members.map(enemy => enemy.height)) / 2;
   const halfGap = player.height / 2 + 12;
   const minimumOffset = halfGap + halfBody;
-  const currentOffset = Math.max(...plan.slots.map(slot => Math.abs(slot.y)));
+  const currentOffset = Math.min(...plan.slots.filter(slot => slot.role === "flank").map(slot => Math.abs(slot.y)));
   const maximumOffset = Math.max(minimumOffset, Math.abs(formationPlan("pincer").slots[0].y));
-  const offset = clamp(currentOffset, minimumOffset, maximumOffset);
-  const minimumCenter = offset + halfBody;
+  const closing = 1 - (plan.coordination?.flankClose ?? 0) * .28;
+  const offset = clamp(currentOffset * closing, minimumOffset, maximumOffset);
+  const minimumCenter = offset * 1.18 + halfBody;
   const maximumCenter = viewport.height - minimumCenter;
   plan.centerY = minimumCenter <= maximumCenter
     ? clamp(plan.centerY, minimumCenter, maximumCenter) : viewport.height / 2;
   plan.safeTop = plan.centerY - (offset - halfBody);
   plan.safeBottom = plan.centerY + (offset - halfBody);
-  plan.slots.forEach((slot, index) => {
-    slot.y = (index < plan.slots.length / 2 ? -1 : 1) * offset;
-  });
+  for (const slot of plan.slots) if (slot.role === "flank") slot.y = Math.sign(slot.y) * offset / closing * (slot.x > 0 ? 1.18 : 1);
   members.forEach((enemy, index) => {
     if (!enemies.includes(enemy)) return;
     enemy.formationSlotY = plan.slots[index].y;
-    enemy.y = plan.centerY + enemy.formationSlotY;
+    enemy.y = plan.centerY + enemy.formationSlotY * closing;
     enemy.previousY = enemy.y;
     enemy.baseY = enemy.y;
   });
@@ -94,27 +93,35 @@ function formationPlan(kind) {
       ] };
   }
   if (kind === "command") {
-    const centerY = clamp(player.y, top + spacing * 1.75, bottom - spacing * 1.75);
-    return { kind, title: tr("指挥楔队", "Command Wedge"), hint: tr("阵列压制后接追瞄，可优先打指挥机", "Barrage then pursuit · Break the leader first"), color: "#92dffc", centerY,
+    const top = flightBounds.top + 2, bottom = flightBounds.bottom - 2;
+    const span = Math.max(1, bottom - top);
+    const halfGap = Math.min(span * .17, Math.max(20, player.height * .28));
+    const clearance = player.height * .16 + 10;
+    const bias = Math.min(span * .21, player.speed * .48, Math.max(0, span / 2 - halfGap - clearance - 2));
+    const safeY = middle + (player.y < middle ? 1 : -1) * bias;
+    const safeTop = safeY - halfGap, safeBottom = safeY + halfGap;
+    const laneYs = [top, safeTop - clearance, safeBottom + clearance, bottom];
+    return { kind, title: tr("横向封锁阵", "Lane Blockade"), hint: tr("每架封锁机只负责一条航线", "Each jammer owns a single lane"), color: "#92dffc", centerY: middle,
+      safeTop, safeBottom,
       speed: enemySpeedForTime() * 0.82,
       slots: [
-        { kind: "armored", x: 0, y: 0, leader: true },
-        { kind: "scout", x: unit * 0.78, y: -spacing * 0.8 },
-        { kind: "scout", x: unit * 0.78, y: spacing * 0.8 },
-        { kind: "scout", x: unit * 1.56, y: -spacing * 1.6 },
-        { kind: "scout", x: unit * 1.56, y: spacing * 1.6 },
+        { kind: "armored", x: unit * .86, y: safeY - middle, leader: true, role: "command" },
+        ...laneYs.map(y => ({ kind: "scout", x: 0, y: y - middle, role: "jammer" })),
       ] };
   }
   // 上下两条航线始终留在中心走廊外。低矮窗口减少编队规模，不挤占出口。
   const halfGap = Math.min(span * 0.32, Math.max(player.height * 0.72, 74));
   const offset = Math.min(span * 0.42, halfGap + unit * 0.23);
-  return { kind: "pincer", title: tr("双翼包抄", "Pincer Attack"), hint: tr("先走中间，留意两翼回头封路", "Take the center, then watch the flanks"), color: "#a3b9ff", centerY: middle,
+  return { kind: "pincer", title: tr("V 字包夹", "V Pincer"), hint: tr("击破中间领航机可打断夹击", "Break the center spotter to interrupt the pincer"), color: "#a3b9ff", centerY: middle,
     safeTop: middle - Math.max(20, offset - unit * 0.32),
     safeBottom: middle + Math.max(20, offset - unit * 0.32),
     speed: enemySpeedForTime() * 0.96,
     slots: [
-      { kind: "scout", x: 0, y: -offset }, { kind: "scout", x: unit * 1.35, y: -offset },
-      { kind: "scout", x: 0, y: offset }, { kind: "scout", x: unit * 1.35, y: offset },
+      { kind: "scout", x: 0, y: -offset, role: "flank" },
+      { kind: "scout", x: unit * .93, y: -offset * 1.18, role: "flank" },
+      { kind: "scout", x: 0, y: offset, role: "flank" },
+      { kind: "scout", x: unit * .93, y: offset * 1.18, role: "flank" },
+      { kind: "armored", x: -unit * .82, y: 0, leader: true, role: "spotter" },
     ] };
 }
 
@@ -125,8 +132,9 @@ function trySpawnFormation(kind) {
   if (typeof battlefieldEventBlocksWaves === "function" && battlefieldEventBlocksWaves()) return false;
   const kinds = ["escort", "command", "pincer"];
   const plan = formationPlan(kind || kinds[formationState.sequence % kinds.length]);
+  if (plan.kind === "command" && flightBounds.bottom - flightBounds.top < player.height * .90) return false;
   // 窄矮窗口放不下上下侧翼和完整机身时，延后包抄，不挤压安全通道。
-  if (plan.kind === "pincer" && plan.safeBottom - plan.safeTop < player.height + 24) return false;
+  if (plan.kind === "pincer" && plan.safeBottom - plan.safeTop < player.height * .60 + 24) return false;
   if (enemies.length + plan.slots.length > enemyRules.maxOnScreen) return false;
   formationState.warning = { ...plan, remaining: formationRules.warning };
   formationState.notice = plan.title + " · " + plan.hint;
@@ -138,7 +146,8 @@ function trySpawnFormation(kind) {
 function launchFormation(plan) {
   if (aceBlocksWaves() || gravityTideBusy()) return false;
   if (bossBlocksWaves() || enemies.length + plan.slots.length > enemyRules.maxOnScreen) return false;
-  if (plan.kind === "pincer" && plan.safeBottom - plan.safeTop < player.height + 24) return false;
+  if (plan.kind === "command" && flightBounds.bottom - flightBounds.top < player.height * .90) return false;
+  if (plan.kind === "pincer" && plan.safeBottom - plan.safeTop < player.height * .60 + 24) return false;
   const group = { ...plan, id: formationState.nextId++, x: viewport.width + 84, age: 0,
     broken: false, disruption: 0, members: [], coordination: null };
   for (const slot of plan.slots) {
@@ -148,6 +157,7 @@ function launchFormation(plan) {
     const enemy = enemies[enemies.length - 1];
     enemy.formationId = group.id;
     enemy.formationLeader = !!slot.leader;
+    enemy.formationRole = slot.role;
     enemy.formationSlotX = slot.x;
     enemy.formationSlotY = slot.y;
     enemy.x = group.x + slot.x;
@@ -194,6 +204,24 @@ function formationEmitterVisible(member) {
   return muzzle.x >= 60 && muzzle.x <= viewport.width - 18;
 }
 
+function blockadePassage(rails, preferred, targetY, clearance, maxTravel) {
+  const center = (preferred.top + preferred.bottom) / 2;
+  if (Math.abs(center - targetY) <= maxTravel) return preferred;
+  // A fast pilot can change altitude between approach and firing. Advertise the nearest real
+  // passage if the planned one is no longer reachable, keeping all rails tied to their emitters.
+  let bottom = flightBounds.top;
+  let best = preferred, distance = Math.abs(center - targetY);
+  for (const y of [...rails.map(shot => shot.y).sort((a, b) => a - b), flightBounds.bottom + clearance]) {
+    const edge = y - clearance;
+    if (edge - bottom >= 10) {
+      const delta = Math.abs((edge + bottom) / 2 - targetY);
+      if (delta < distance) { best = { top: bottom, bottom: edge }; distance = delta; }
+    }
+    bottom = Math.max(bottom, y + clearance);
+  }
+  return best;
+}
+
 function makeFormationCue(group, beat, members) {
   const rule = formationTactics[group.kind];
   const leftmostMuzzle = Math.min(...members.map(member => enemyGunMuzzle(member).x));
@@ -202,12 +230,13 @@ function makeFormationCue(group, beat, members) {
   const radius = 7;
   const clearance = player.height * .16 + radius + 1;
   const speed = clamp(viewport.width * .64, 440, 1180);
-  const warning = beat ? .90 : 1.10;
+  const warning = (beat ? .90 : 1.10) + (typeof sortieWarningBonus === "function" ? sortieWarningBonus() * .55 : 0);
   const cue = { target, gap: null, shots: [], remaining: warning, warning, tint: rule.tint, poseAge: group.age,
     text: tr(...(beat ? rule.follow : rule.opening)) };
   const front = members[0];
   const rear = members.at(-1);
-  const wings = members.filter(member => Math.abs(member.formationSlotY) > 1);
+  const wings = members.filter(member => (group.kind === "command" ? member.formationRole === "jammer"
+    : Math.abs(member.formationSlotY) > 1));
   const upper = wings.reduce((best, member) => member.y < best.y ? member : best, wings[0] || front);
   const lower = wings.reduce((best, member) => member.y > best.y ? member : best, wings[0] || rear);
   const aim = (member, x, y) => {
@@ -230,28 +259,22 @@ function makeFormationCue(group, beat, members) {
     aim(upper, target.x, target.y);
     if (lower !== upper) aim(lower, target.x, target.y);
   } else if (group.kind === "pincer") {
-    cue.gap = { top: group.safeTop + clearance, bottom: group.safeBottom - clearance };
-    rail(upper, upper.y);
-    rail(upper, upper.y + Math.sign(upper.formationSlotY) * spread * .65);
-    if (lower !== upper) {
-      rail(lower, lower.y);
-      rail(lower, lower.y + spread * .65);
-    }
+    const topWing = wings.filter(member => member.formationSlotY < 0);
+    const bottomWing = wings.filter(member => member.formationSlotY > 0);
+    cue.gap = { top: topWing.length ? Math.max(...topWing.map(member => member.y)) + clearance : flightBounds.top,
+      bottom: bottomWing.length ? Math.min(...bottomWing.map(member => member.y)) - clearance : flightBounds.bottom };
+    for (const member of wings) rail(member, member.y);
   } else {
-    // 指挥机标出偏离玩家当前位置的通道。水平弹道不可能跨入这段区域。
-    const top = flightBounds.top, bottom = flightBounds.bottom, span = bottom - top;
-    const half = clamp((span / 2 - clearance - 5) / 2, 6, 54);
-    const side = target.y < (top + bottom) / 2 ? 1 : -1;
-    const distance = Math.max(76, half * 2 + clearance + 6);
-    const safeY = clamp(target.y + side * distance, top + half, bottom - half);
-    cue.gap = { top: safeY - half, bottom: safeY + half };
-    const count = clamp(Math.ceil(span / Math.max(20, player.height * .22)), 6, 14);
-    const outsideGap = y => y <= cue.gap.top - clearance || y >= cue.gap.bottom + clearance;
-    if (outsideGap(target.y)) rail(front, target.y);
-    for (let index = 0; index <= count; index++) {
-      const y = top + span * index / count;
-      if (outsideGap(y) && Math.abs(y - target.y) > radius) rail(front, y);
+    cue.gap = { top: group.safeTop, bottom: group.safeBottom };
+    // Every hazard belongs to a visible ship. Destroying the emitter opens its lane immediately.
+    const outsideGap = y => y <= group.safeTop - clearance || y >= group.safeBottom + clearance;
+    for (const member of wings) {
+      if (!outsideGap(member.y)) continue;
+      rail(member, member.y);
+      const extra = member.y + Math.sign(member.y - (group.safeTop + group.safeBottom) / 2) * spread * .45;
+      if (extra > flightBounds.top && extra < flightBounds.bottom) rail(member, extra);
     }
+    cue.gap = blockadePassage(cue.shots, cue.gap, target.y, clearance, player.speed * warning * .60);
   }
   return cue;
 }
@@ -263,9 +286,9 @@ function updateFormationTactics(group, members, seconds) {
   if (!rhythm) {
     // 发射点必须可见。侧翼协同时等两个角度都进入画面。
     if (flightBounds.bottom - flightBounds.top < player.height * .67
-        || !ready.length || (group.kind !== "command" && ready.length < Math.min(3, members.length))
+        || ready.length < Math.min(3, members.length)
         || group.x < viewport.width * .42) return;
-    group.coordination = rhythm = { beat: 0, wait: 0, cue: null, passage: null };
+    group.coordination = rhythm = { beat: 0, wait: 0, cue: null, passage: null, flankClose: 0 };
   }
   if (rhythm.beat >= 2) return;
   if (rhythm.cue) {
@@ -288,6 +311,7 @@ function updateFormationTactics(group, members, seconds) {
     rhythm.cue = null;
   } else {
     rhythm.wait -= seconds;
+    if (group.kind === "pincer" && rhythm.beat === 1) rhythm.flankClose = Math.min(1, rhythm.flankClose + seconds * 1.3);
     if (rhythm.wait > 0) return;
     if (!ready.length) { rhythm.beat = 2; rhythm.passage = null; return; }
     rhythm.passage = null;
@@ -365,9 +389,10 @@ function formationControlsEnemy(enemy, seconds) {
   const poseAge = group.coordination?.cue?.poseAge ?? group.age;
   const bob = group.kind === "pincer" ? 0 : Math.sin(poseAge * 1.25) * Math.min(12, player.height * 0.08);
   // 已在场的包抄队在窄窗借用上下边缘，不让旧玩家飞行边界把两翼挤回中央。
-  enemy.y = group.kind === "pincer" ? group.centerY + enemy.formationSlotY
-    : clamp(group.centerY + enemy.formationSlotY + bob,
-      flightBounds.top + enemy.height * 0.2, flightBounds.bottom - enemy.height * 0.2);
+  if (group.kind === "pincer") enemy.y = group.centerY + enemy.formationSlotY * (1 - (group.coordination?.flankClose ?? 0) * .28);
+  else if (group.kind === "command") enemy.y = clamp(group.centerY + enemy.formationSlotY, enemy.height * .5, viewport.height - enemy.height * .5);
+  else enemy.y = clamp(group.centerY + enemy.formationSlotY + bob,
+    flightBounds.top + enemy.height * .2, flightBounds.bottom - enemy.height * .2);
   if (enemy.kind === "gunner" && !Object.hasOwn(formationTactics, group.kind)) {
     // 不从屏幕外开火，不因编队移动缩短原有的锁定预警。
     if (enemy.x > viewport.width - enemy.width * 0.6) return true;
@@ -435,7 +460,7 @@ function drawFormationSignals() {
     context.globalAlpha = .45 + flash * .38;
     context.strokeStyle = cue.tint;
     context.lineWidth = 1.5;
-    context.setLineDash([7, 9]);
+    context.setLineDash(formationState.active?.kind === "command" ? [13, 4, 3, 4] : [7, 9]);
     context.beginPath();
     for (const shot of cue.shots) {
       if (!enemies.includes(shot.member)) continue;
@@ -447,6 +472,29 @@ function drawFormationSignals() {
     if (!cue.gap) {
       const { x, y } = cue.target;
       context.beginPath(); context.arc(x, y, 14 + 8 * (1 - flash), 0, Math.PI * 2); context.stroke();
+    }
+  }
+  const group = formationState.active;
+  if (group && !group.broken && (group.kind === "pincer" || group.kind === "command")) {
+    const leader = group.members.find(member => member.formationLeader);
+    if (leader && enemies.includes(leader) && leader.x < viewport.width - 15 && leader.x > 10) {
+      const size = 7, y = leader.y - leader.height * .5 - 24;
+      context.globalAlpha = .82;
+      context.strokeStyle = group.color;
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(leader.x, y - size); context.lineTo(leader.x + size, y);
+      context.lineTo(leader.x, y + size); context.lineTo(leader.x - size, y); context.closePath();
+      context.stroke();
+      context.globalAlpha = cue ? .25 : .16;
+      context.lineWidth = 1;
+      context.setLineDash(group.kind === "pincer" ? [4, 8] : [2, 7]);
+      context.beginPath();
+      for (const member of group.members) {
+        if (member === leader || !enemies.includes(member)) continue;
+        context.moveTo(leader.x, leader.y); context.lineTo(member.x, member.y);
+      }
+      context.stroke(); context.setLineDash([]);
     }
   }
   if (formationState.noticeTime > 0 && viewport.width >= 540 && viewport.height >= 340) {

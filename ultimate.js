@@ -34,6 +34,7 @@ function updateUltimateDisplay() {
   const kind = ultimate.kind ?? currentUltimateId();
   const profile = ultimateProfiles[kind];
   const name = ultimateName(kind);
+  const key = typeof controlBindingLabel === "function" ? controlBindingLabel("special") : tr("空格", "Space");
   if (ultimateHeading && ultimateHeading.textContent !== name) ultimateHeading.textContent = name;
   ultimatePanel.setAttribute("aria-label", tr(name + "状态", name + " status"));
   ultimatePanel.dataset.fighter = kind;
@@ -54,10 +55,10 @@ function updateUltimateDisplay() {
       : opportunity ? tr("蓄力中 · 连携保留 " + countdown + " 秒", "Charging · Link " + countdown + "s") : tr("蓄力中 · 保持瞄准", "Charging · Keep aiming"))
     : ultimate.phase === "firing" ? (cannonLink.chargingLinked ? tr("完美连携 · " + profile.fire, "Perfect Link · Firing")
       : opportunity ? tr(profile.fire + " · 连携 " + countdown + " 秒", "Firing · Link " + countdown + "s") : tr(profile.fire, profile.enFire))
-    : opportunity ? tr("完美连携 " + countdown + " 秒 · " + (ultimate.charges ? "空格速蓄" : "需已存炮弹"),
-      "Perfect Link " + countdown + "s · " + (ultimate.charges ? "Space" : "Needs ammo"))
-    : full ? tr("储能已满 · 空格释放", "Fully stocked · Space")
-    : ultimate.charges ? tr("空格释放 · 命中继续积能", "Space to fire · Hit to charge") : tr("命中敌军积能", "Hit enemies to charge");
+    : opportunity ? tr("完美连携 " + countdown + " 秒 · " + (ultimate.charges ? key + " 速蓄" : "需已存炮弹"),
+      "Perfect Link " + countdown + "s · " + (ultimate.charges ? key : "Needs ammo"))
+    : full ? tr("储能已满 · " + key + " 释放", "Fully stocked · " + key)
+    : ultimate.charges ? tr(key + " 释放 · 命中继续积能", key + " to fire · Hit to charge") : tr("命中敌军积能", "Hit enemies to charge");
 }
 function armCannonLink() {
   if (!isBattleActive()) return false;
@@ -193,6 +194,7 @@ function fireUltimate() {
   gameAudio.fireUltimate(ultimate.kind);
   const launchColor = ultimate.kind === "blue" ? "#84d3ff" : ultimate.kind === "yellow" ? "#ffdf7c" : "#ff6858";
   pulseCombatLight(muzzle.x, muzzle.y, Math.max(118, player.width * 1.85), launchColor, "ultimate");
+  recordCombatDetonation(muzzle, { kind: "ultimate", type: ultimate.kind, size: player.width * .68 });
   updateUltimateDisplay();
 }
 function ultimateHitsTarget(shot, target) {

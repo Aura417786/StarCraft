@@ -4,14 +4,15 @@ const firingStyle = { mode: "spread", lastInterval: 0.2 };
 const stanceButton = document.querySelector("#stance-button");
 function updateFiringStyleDisplay() {
   const focus = firingStyle.mode === "focus";
+  const key = typeof controlBindingLabel === "function" ? controlBindingLabel("stance") : "Shift";
   const lance = typeof evolution !== "undefined" && evolution.pierce >= 3;
-  stanceButton.textContent = (focus ? tr("聚焦 · 集中火力", "Focused fire") : tr("扩散 · 覆盖射击", "Spread fire")) + "  ⇧ Shift";
-  if (lance) stanceButton.title = tr("轻按 Shift 切换，长按并松开 Shift 发射翼刃", "Tap Shift to switch. Hold and release for a lance.");
+  stanceButton.textContent = (focus ? tr("聚焦 · 集中火力", "Focused fire") : tr("扩散 · 覆盖射击", "Spread fire")) + "  " + key;
+  if (lance) stanceButton.title = tr("轻按 " + key + " 切换，长按并松开发射翼刃", "Tap " + key + " to switch. Hold and release for a lance.");
   else stanceButton.removeAttribute("title");
   stanceButton.dataset.mode = firingStyle.mode;
   stanceButton.setAttribute("aria-pressed", String(focus));
-  stanceButton.setAttribute("aria-label", focus ? tr("当前聚焦射击，切换为扩散，快捷键 Shift", "Focused fire active. Press Shift to switch to spread fire.")
-    : tr("当前扩散射击，切换为聚焦，快捷键 Shift", "Spread fire active. Press Shift to switch to focused fire."));
+  stanceButton.setAttribute("aria-label", focus ? tr("当前聚焦射击，快捷键 " + key, "Focused fire active. Switch modes with " + key + ".")
+    : tr("当前扩散射击，快捷键 " + key, "Spread fire active. Switch modes with " + key + "."));
 }
 function resetFiringStyle() { firingStyle.mode = "spread"; updateFiringStyleDisplay(); }
 function toggleFiringStyle() {

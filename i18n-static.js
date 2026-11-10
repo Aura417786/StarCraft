@@ -120,7 +120,7 @@ const gameStaticEnglish = new Map([
   ["战斗与升级", "Combat and Upgrades"],
   ["选一架战机出击。", "Choose your fighter. "],
   ["赤焰集中打击，苍电速射并追踪敌人，曜金用全屏弹幕清理敌群。", "Crimson delivers heavy focused hits, Azure fires rapidly and homes in, and Auric clears swarms with a screen-wide barrage."],
-  ["赤焰稳住高度打穿甲重炮；苍电在中远处用追踪弹标记、连锁；曜金在近中距离铺开压制区，留意电容余量。", "Hold altitude for Crimson’s armor-piercing cannon. Azure marks and chains from a distance. Auric controls space up close, so watch your capacitor."],
+  ["赤焰按住 C 蓄穿透重炮，松手开火；苍电用追踪弹标记、连锁；曜金近距扩散布置压制区，切聚焦回充电容。", "Hold C on Crimson, then release a piercing shell. Azure marks and chains from range. Auric plants fields with close spread fire and recharges faster in focus."],
   ["武器等级有上限。", "Weapon upgrades have limits. "],
   ["攻速最多每秒 12 次，弹道最多 5 条。伤害成长有上限，进化会改变战斗方式。", "Fire up to 12 times per second across 5 lanes. Damage caps as you progress, while evolutions change how you fight."],
   ["完美护盾与地形", "Perfect Guard and Terrain"],

@@ -2,12 +2,39 @@
 
 // 视觉效果有独立容量和时钟，不参与命中、伤害或敌人刷新。
 const combatEffects = { clock: 0, particles: [], impacts: [], wrecks: [], shockwaves: [],
-  shake: 0, shakeTime: 0, light: null };
+  detonations: [], shake: 0, shakeTime: 0, light: null };
+const spareDetonations = Array.from({ length: 8 }, () => ({}));
+const spareCombatParticles = Array.from({ length: 180 }, () => ({}));
+const detonationMaterials = {
+  metal: { core: "#fff0c4", glow: "#ff9e62", haze: "#643933", axis: 1, life: .54 },
+  water: { core: "#e0ffff", glow: "#73cff9", haze: "#236e96", axis: .67, life: 1.02 },
+  bone: { core: "#fff9dd", glow: "#c5a67b", haze: "#594657", axis: 1.1, life: .94 },
+  thermal: { core: "#fff3b8", glow: "#ff7b45", haze: "#63322a", axis: .77, life: 1.12 },
+  silk: { core: "#faeeff", glow: "#c39bff", haze: "#514778", axis: .79, life: .91 },
+  keratin: { core: "#fff5cd", glow: "#a6d882", haze: "#4c603a", axis: 1.18, life: .93 },
+  glass: { core: "#effbff", glow: "#88dae8", haze: "#3e5683", axis: .87, life: .86 },
+  charge: { core: "#e3fcff", glow: "#5d9cff", haze: "#274a7b", axis: .67, life: .87 },
+  spores: { core: "#f6ffd7", glow: "#b9ee76", haze: "#4a5630", axis: 1.14, life: 1.04 },
+  void: { core: "#392448", glow: "#f395bb", haze: "#211232", axis: .70, life: 1.21 },
+  neural: { core: "#fff2f7", glow: "#ff83ce", haze: "#693450", axis: .87, life: .94 },
+  fusion: { core: "#fff3fc", glow: "#ba9efd", haze: "#342659", axis: .93, life: 1.20 },
+};
+const bossDetonationMaterials = ["water", "bone", "thermal", "silk", "keratin", "glass", "charge", "spores", "void", "neural", "fusion"];
+const ultimateDetonationMaterials = { red: "thermal", blue: "charge", yellow: "keratin" };
 const combatLightProfiles = {
   hit: { life: .24, strength: .31, rank: 1 },
   impact: { life: .29, strength: .48, rank: 2 },
   ultimate: { life: .42, strength: .69, rank: 3 },
   collapse: { life: .46, strength: .85, rank: 4 },
+};
+const impactProfiles = {
+  hit: { color: "#ffddb0", size: 8, duration: .13, sparks: 3 },
+  critical: { color: "#ffbb73", size: 15, duration: .22, sparks: 5, hold: .034, cue: "impact-critical" },
+  weak: { color: "#a1f2ff", size: 17, duration: .23, sparks: 4, hold: .038, cue: "impact-weak" },
+  ultimate: { color: "#ff9c89", size: 24, duration: .3, sparks: 7, hold: .04 },
+  shell: { color: "#ffe4b6", size: 42, duration: .45, sparks: 7, hold: .045, shake: 3.4 },
+  guard: { color: "#b9fff4", size: 39, duration: .36, sparks: 5, hold: .034, shake: 2.5 },
+  finale: { color: "#f2ccff", size: 48, duration: .53, sparks: 6, hold: .044, shake: 3.8, cue: "impact-finale" },
 };
 let reduceCombatMotion = false;
 try { reduceCombatMotion = window.localStorage.getItem("star-breaker-reduce-combat-motion") === "true"; }
@@ -64,6 +91,7 @@ function combatBackdropSample(ctx, x, y, radius, tint) {
   return combatBlurSurface;
 }
 function drawCombatPostProcessing(ctx) {
+  drawCombatDetonations(ctx);
   const light = activeCombatLight();
   if (!light || light.strength < .017) return;
   const { x, y, color, strength, kind } = light;
@@ -74,10 +102,13 @@ function drawCombatPostProcessing(ctx) {
   if (!quiet && detail === "high" && (kind === "ultimate" || kind === "collapse")) {
     const sample = combatBackdropSample(ctx, x, y, radius);
     if (sample) {
-      ctx.globalAlpha = strength * .21;
-      for (const step of [1.025, 1.075, 1.13]) {
-        const span = radius * step;
-        ctx.drawImage(sample, x - span, y - span, span * 2, span * 2);
+      const material = combatEffects.detonations.find(effect => effect.rank > 1)?.material;
+      ctx.globalAlpha = strength * .17;
+      for (let i = 1; i <= 3; i++) {
+        const warm = material === "thermal";
+        const span = radius * (1 + i * (material === "void" ? -.043 : .035));
+        const lift = warm ? Math.sin(light.age * 28 + i * 1.4) * i * 2 : 0;
+        ctx.drawImage(sample, x - span + lift, y - span - (warm ? i * 2 : 0), span * 2, span * 2);
       }
     }
   }
@@ -109,6 +140,155 @@ function drawCombatPostProcessing(ctx) {
   }
   ctx.restore();
 }
+
+function releaseCombatDetonation(index) {
+  const list = combatEffects.detonations;
+  spareDetonations.push(list[index]);
+  list.splice(index, 1);
+}
+
+function recordCombatDetonation(target, { kind = "ordinary", type, size } = {}) {
+  if (!target || !Number.isFinite(target.x + target.y)) return;
+  const list = combatEffects.detonations;
+  const rank = kind === "boss" ? 3 : kind === "ultimate" ? 2 : 1;
+  if (!spareDetonations.length) {
+    let weakest = 0;
+    for (let i = 1; i < list.length; i++) if (list[i].rank < list[weakest].rank) weakest = i;
+    if (list[weakest].rank > rank) return;
+    releaseCombatDetonation(weakest);
+  }
+  const material = kind === "boss" ? bossDetonationMaterials[type] : kind === "ultimate" ? ultimateDetonationMaterials[type] : "metal";
+  const profile = detonationMaterials[material] ?? detonationMaterials.metal;
+  const radius = Math.min(Math.min(viewport.width, viewport.height) * .31, Math.max(24, size ?? (target.width || 64) * .49));
+  const effect = spareDetonations.pop();
+  Object.assign(effect, { x: target.x, y: target.y, radius, age: 0, life: profile.life, rank, profile,
+    material: material || "metal", seed: (target.x * .069 + target.y * .137) % Math.PI });
+  list.push(effect);
+}
+
+function detonationGlow(ctx, x, y, radius, core, rim, alpha) {
+  if (radius <= 1 || alpha <= .006) return;
+  const fog = ctx.createRadialGradient(x - radius * .15, y - radius * .20, radius * .025, x, y, radius);
+  fog.addColorStop(0, core); fog.addColorStop(.42, rim); fog.addColorStop(1, rim.slice(0, 7) + "00");
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = fog;
+  ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawDetonationMaterial(ctx, effect, p, quiet, quality) {
+  const { material, profile, rank, radius, seed } = effect;
+  const ionized = material === "charge" || material === "neural";
+  const inward = material === "void";
+  const opacity = (1 - p) ** (material === "spores" ? 1.22 : 1.65);
+  const travel = quiet ? .48 : 1 - (1 - p) ** 2;
+  const span = radius * (inward ? 1 - travel * .82 : .13 + travel);
+  ctx.strokeStyle = profile.glow;
+  ctx.lineWidth = rank === 3 ? 2.3 : 1.6;
+  ctx.globalAlpha = opacity * .65;
+  ctx.beginPath();
+  if (material === "water") {
+    // A pressure sheet has a foamed leading lip and a shaded trailing body, with no flame silhouette.
+    for (let i = 0; i < 2; i++) {
+      const w = span * (1 - i * .25), h = w * (.47 - i * .08), shift = i * -span * .30;
+      const veil = ctx.createLinearGradient(-w, -h, w * .58, h * .8);
+      veil.addColorStop(0, "#e5ffff90"); veil.addColorStop(.31, "#71d3f580"); veil.addColorStop(1, "#17508a00");
+      ctx.fillStyle = veil;
+      ctx.beginPath(); ctx.moveTo(-w + shift, -h * .42);
+      ctx.bezierCurveTo(-w * .52 + shift, -h * 1.31, w * .42 + shift, -h * 1.20, w + shift, -h * .10);
+      ctx.bezierCurveTo(w * .42 + shift, -h * .64, -w * .36 + shift, -h * .72, -w * .78 + shift, h * .47);
+      ctx.bezierCurveTo(-w * .94 + shift, h * .14, -w + shift, -h * .06, -w + shift, -h * .42);
+      ctx.fill(); ctx.stroke();
+    }
+  } else if (inward) {
+    const edge = span * .66;
+    detonationGlow(ctx, 0, 0, edge, "#03040d", "#1a092eae", opacity * .78);
+    ctx.globalAlpha = opacity * .71;
+    for (let i = 0; i < 2; i++) {
+      const scale = 1 - i * .29;
+      ctx.beginPath(); ctx.ellipse(span * i * .16, span * i * .12, span * scale, span * profile.axis * scale,
+        seed + p * 2.4 + i * Math.PI, i * 2.5, 4.4 + i * 2.5);
+      ctx.stroke();
+    }
+  } else if (ionized) {
+    // Uneven branch lengths and alternating angles read as an electrical release.
+    for (let i = 0; i < 5; i++) {
+      const angle = seed + i * 1.26;
+      const x = Math.cos(angle) * span * (i % 2 ? .69 : 1), y = Math.sin(angle) * span * .68;
+      ctx.moveTo(x * .2, y * .2); ctx.lineTo(x * .46 - y * .12, y * .46 + x * .09);
+      ctx.lineTo(x * .62 + y * .15, y * .59 - x * .09); ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  } else if (material === "thermal") {
+    const edge = span * .87;
+    const haze = ctx.createRadialGradient(-edge * .22, edge * .22, edge * .03, 0, 0, edge);
+    haze.addColorStop(0, "#ffe1a0e8"); haze.addColorStop(.29, "#ff934be3");
+    haze.addColorStop(.64, "#742832b4"); haze.addColorStop(1, "#34252a00");
+    ctx.fillStyle = haze;
+    ctx.lineJoin = "round";
+    for (let i = 0; i <= 16; i++) {
+      const a = i * Math.PI / 8;
+      const r = edge * (.79 + .14 * Math.sin(a * 5 + seed + p * 3) + .08 * Math.sin(a * 7 + .1));
+      const x = Math.cos(a) * r, y = Math.sin(a) * r * .83 - p * edge * .15;
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha *= .60;
+    ctx.stroke();
+  } else if (material === "metal") {
+    ctx.ellipse(0, 0, span, span * profile.axis, -.14, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // Embers carry momentum after the core and volume have dimmed. The material sets drag, fall and silhouettes.
+  const ash = Math.max(0, (p - .16) / .84);
+  if (ash <= 0 || quiet || quality === "low") return;
+  const count = rank === 1 ? 3 : quality === "high" ? 8 : 5;
+  ctx.globalAlpha = Math.sin(Math.PI * ash) * (rank === 1 ? .49 : .76);
+  ctx.fillStyle = profile.core;
+  const hard = material === "bone" || material === "glass" || material === "keratin";
+  for (let i = 0; i < count; i++) {
+    const angle = seed + i * 2.39996, speed = .44 + (i % 5) * .137;
+    const out = span * speed * (1 + ash * .43);
+    const x = Math.cos(angle) * out;
+    const fall = material === "water" ? .34 : material === "bone" ? .52 : material === "spores" ? -.35 : .17;
+    const y = Math.sin(angle) * out * profile.axis + radius * ash * ash * fall;
+    const grain = Math.max(1.4, (1 - ash * .74) * (hard ? 5 : 3));
+    ctx.beginPath();
+    if (inward) {
+      ctx.moveTo(x + grain * Math.cos(angle) * 4, y + grain * Math.sin(angle) * 4);
+      ctx.lineTo(x, y); ctx.stroke(); continue;
+    } else if (hard) {
+      ctx.moveTo(x - grain, y + grain * .56); ctx.lineTo(x + grain, y); ctx.lineTo(x + grain * .40, y - grain); ctx.closePath();
+    } else if (material === "silk") {
+      ctx.moveTo(x, y); ctx.quadraticCurveTo(x - grain * 4, y + grain * 3, x - grain * 7, y + grain);
+      ctx.stroke(); continue;
+    } else ctx.ellipse(x, y, grain * (material === "water" ? 1.62 : 1), grain, angle, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawCombatDetonations(ctx) {
+  const quiet = quietCombatMotion(), quality = visualQuality.id;
+  for (const effect of combatEffects.detonations) {
+    const { x, y, radius, age, life, profile, material, rank } = effect;
+    const p = age / life;
+    ctx.save();
+    ctx.translate(x, y);
+    // A short core flash, a slower expanding volume, then fading directional debris.
+    const flash = Math.max(0, 1 - age / (rank > 1 ? .14 : .085));
+    detonationGlow(ctx, 0, 0, radius * .46, profile.core, profile.glow + "83", flash * (quiet ? .20 : .66));
+    const volume = Math.min(1, p * 6) * (1 - p) ** 2.45;
+    const cloud = radius * (.21 + p * .83);
+    detonationGlow(ctx, 0, 0, cloud, profile.glow, profile.haze + "8a", volume * (quiet ? .19 : rank > 1 ? .69 : .43));
+    if (!quiet && quality === "high" && rank > 1) {
+      detonationGlow(ctx, -cloud * .34, cloud * .19, cloud * .69, profile.haze, "#11102255", volume * .51);
+      if (material === "thermal" || material === "metal" || material === "spores") {
+        detonationGlow(ctx, cloud * .43, -cloud * .31, cloud * .61, profile.glow, profile.haze + "88", volume * .48);
+      }
+    }
+    drawDetonationMaterial(ctx, effect, p, quiet, quality);
+    ctx.restore();
+  }
+}
 let shakePreference = "low";
 const shakeButton = document.querySelector("#shake-button");
 try {
@@ -139,12 +319,16 @@ function canAnimateCombatEffects() {
   return battleHasFocus();
 }
 function resetCombatEffects() {
+  for (const particle of combatEffects.particles) spareCombatParticles.push(particle);
   for (const name of ["particles", "impacts", "wrecks", "shockwaves"]) combatEffects[name].length = 0;
+  while (combatEffects.detonations.length) releaseCombatDetonation(combatEffects.detonations.length - 1);
   combatEffects.clock = 0; combatEffects.shake = 0; combatEffects.shakeTime = 0; combatEffects.light = null;
   resetBossPresentation();
 }
 function resizeCombatEffects(oldWidth, oldHeight) {
+  for (const particle of combatEffects.particles) spareCombatParticles.push(particle);
   for (const name of ["particles", "impacts", "shockwaves"]) combatEffects[name].length = 0;
+  while (combatEffects.detonations.length) releaseCombatDetonation(combatEffects.detonations.length - 1);
   combatEffects.shake = 0; combatEffects.shakeTime = 0;
   combatEffects.light = null;
   if (!isBossDeathPlaying()) { combatEffects.wrecks.length = 0; return; }
@@ -164,6 +348,16 @@ function resizeCombatEffects(oldWidth, oldHeight) {
 function pushCombatEffect(list, item, limit) {
   if (list.length >= limit) list.shift();
   list.push(item);
+}
+function spawnCombatParticle(x, y, angle, speed, duration, size, spin, color, armor, smoke) {
+  const particles = combatEffects.particles;
+  const particle = spareCombatParticles.pop() ?? particles.shift();
+  particle.x = x; particle.y = y;
+  particle.vx = Math.cos(angle) * speed; particle.vy = Math.sin(angle) * speed;
+  particle.age = 0; particle.duration = duration; particle.size = size;
+  particle.angle = angle; particle.spin = spin; particle.color = color;
+  particle.armor = armor; particle.smoke = smoke;
+  particles.push(particle);
 }
 function addCombatShake(strength) {
   if (quietCombatMotion() || shakePreference === "off") return;
@@ -185,39 +379,103 @@ function combatBurst(x, y, size = 1, color = "#ffb569", armor = false) {
   for (let i = 0; i < count; i++) {
     const angle = Math.PI * 2 * i / count + Math.random() * 0.28;
     const speed = quiet ? 0 : (55 + Math.random() * 135) * Math.sqrt(size);
-    pushCombatEffect(combatEffects.particles, { x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-      age: 0, duration: quiet ? 0.25 : 0.35 + Math.random() * 0.48, size: (armor ? 3 : 1.5) + Math.random() * 3,
-      angle, spin: quiet ? 0 : (Math.random() - 0.5) * 8, color: armor && i % 3 === 0 ? "#77889d" : color,
-      armor: armor && i % 3 === 0, smoke: i % 4 === 0 }, 180);
+    const fragment = armor && i % 3 === 0;
+    spawnCombatParticle(x, y, angle, speed, quiet ? .25 : .35 + Math.random() * .48,
+      (armor ? 3 : 1.5) + Math.random() * 3, quiet ? 0 : (Math.random() - .5) * 8,
+      fragment ? "#77889d" : color, fragment, i % 4 === 0);
   }
 }
-function recordCombatImpact(target, bullet, bossHit = false) {
+function recordCombatFeedback(kind, target, bullet = null) {
   if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
-  const ultimateHit = bullet.source === "ultimate";
-  if (!ultimateHit && (target.fxNextImpact ?? -1) > combatEffects.clock) return;
-  target.fxNextImpact = combatEffects.clock + 0.07;
-  gameAudio.hit?.(bossHit, bullet.source, target.x, target.y);
-  const x = target.x - (target.width || 80) * 0.31;
-  const y = Number.isFinite(bullet.y) ? clamp(bullet.y, target.y - target.height * 0.3, target.y + target.height * 0.3) : target.y;
-  pushCombatEffect(combatEffects.impacts, { x, y, age: 0, duration: ultimateHit ? 0.3 : 0.13,
-    color: ultimateHit ? "#ff9c89" : "#ffddb0", size: ultimateHit ? 24 : 8 }, 32);
-  if (!reducedMotion.matches) {
-    for (let i = 0; i < (ultimateHit ? 9 : 3); i++) {
-      const angle = Math.PI * (0.7 + Math.random() * 0.6), speed = 65 + Math.random() * 150;
-      pushCombatEffect(combatEffects.particles, { x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        age: 0, duration: 0.15 + Math.random() * 0.15, size: 1.6, angle, spin: 0,
-        color: "#ffd6a5", armor: false, smoke: false }, 180);
+  const profile = impactProfiles[kind];
+  if (!profile) return;
+  const w = target.width || 80, h = target.height || 60;
+  const x = bullet ? target.x - w * .31 : target.x;
+  const y = Number.isFinite(bullet?.y) ? clamp(bullet.y, target.y - h * .3, target.y + h * .3) : target.y;
+  const quiet = quietCombatMotion();
+  const hold = quiet ? 0 : profile.hold ?? 0;
+  pushCombatEffect(combatEffects.impacts, { x, y, age: 0, duration: profile.duration + hold, hold,
+    color: profile.color, size: bullet ? profile.size : Math.min(profile.size, h * .59), kind }, 32);
+  if (!quiet) {
+    for (let i = 0; i < profile.sparks; i++) {
+      const angle = bullet ? Math.PI * (.7 + Math.random() * .6) : i * Math.PI * 2 / profile.sparks + .1;
+      const speed = 65 + Math.random() * 150;
+      spawnCombatParticle(x, y, angle, speed, .15 + Math.random() * .15, 1.6, 0,
+        profile.color, kind === "shell" && i % 2 === 0, false);
     }
   }
+  if (profile.cue) gameAudio.fieldCue?.(profile.cue, x, y);
+  if (profile.shake) addCombatShake(profile.shake);
+  if (kind === "shell" || kind === "finale") pulseCombatLight(x, y, Math.max(85, w * .61), profile.color, "impact");
+}
+
+function recordCombatImpact(target, bullet, bossHit = false, category) {
+  if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
+  const ultimateHit = bullet.source === "ultimate";
+  const kind = ultimateHit ? "ultimate" : category ?? (bullet.critical ? "critical" : "hit");
+  const next = kind === "hit" ? "fxNextImpact" : "fxNextSpecialImpact";
+  if ((target[next] ?? -1) > combatEffects.clock) return;
+  target[next] = combatEffects.clock + (kind === "hit" ? .07 : .19);
+  gameAudio.hit?.(bossHit, bullet.source, target.x, target.y);
+  recordCombatFeedback(kind, target, bullet);
   if (ultimateHit && bossHit) {
+    const x = target.x - (target.width || 80) * .31;
+    const y = Number.isFinite(bullet.y) ? clamp(bullet.y, target.y - target.height * .3, target.y + target.height * .3) : target.y;
     pushCombatEffect(combatEffects.shockwaves, { x, y, age: 0, duration: 0.48,
       radius: Math.min(155, target.width * 0.7), color: "#ff867a" }, 16);
     addCombatShake(5);
     pulseCombatLight(x, y, Math.max(80, target.width * .68), "#ff867a", "impact");
   }
 }
+
+function drawCombatImpact(impact) {
+  // Hold only the marker's shape for two to three 60 Hz frames. Collision and input keep updating.
+  const progress = Math.max(0, impact.age - impact.hold) / (impact.duration - impact.hold);
+  const quiet = quietCombatMotion();
+  const size = impact.size * (quiet ? 1 : 1 + progress * .33);
+  context.save();
+  context.globalAlpha = (1 - progress) * (quiet ? .60 : .86);
+  context.fillStyle = context.strokeStyle = impact.color;
+  context.translate(impact.x, impact.y);
+  context.lineWidth = 2;
+  context.beginPath();
+  if (impact.kind === "hit" || impact.kind === "critical" || impact.kind === "ultimate") {
+    const tall = size * (impact.kind === "critical" ? .83 : .38);
+    context.moveTo(-size, 0); context.lineTo(0, -tall); context.lineTo(size * .64, 0);
+    context.lineTo(0, tall); context.closePath();
+    if (impact.kind === "critical") context.stroke(); else context.fill();
+  } else if (impact.kind === "weak") {
+    const inner = size * .40;
+    for (let i = 0; i < 4; i++) {
+      context.moveTo(inner, 0); context.lineTo(size, 0); context.rotate(Math.PI / 2);
+    }
+    context.stroke();
+  } else if (impact.kind === "guard") {
+    for (let i = 0; i < 6; i++) {
+      const angle = (i + .5) * Math.PI / 3;
+      const x = Math.cos(angle) * size, y = Math.sin(angle) * size;
+      if (i) context.lineTo(x, y); else context.moveTo(x, y);
+    }
+    context.closePath(); context.stroke();
+  } else {
+    const count = impact.kind === "shell" ? 3 : 4;
+    for (let i = 0; i < count; i++) {
+      if (impact.kind === "shell") {
+        context.moveTo(size * .62, -size * .48); context.lineTo(size * .91, -size * .20);
+        context.lineTo(size * .82, size * .03); context.lineTo(size, size * .32);
+      } else {
+        context.moveTo(size * .82, -size * .26); context.lineTo(size, 0); context.lineTo(size * .82, size * .26);
+        context.moveTo(size * .66, -size * .15); context.lineTo(size * .77, 0); context.lineTo(size * .66, size * .15);
+      }
+      context.rotate(Math.PI * 2 / count);
+    }
+    context.stroke();
+  }
+  context.restore();
+}
 function recordCombatDestruction(target, isBoss = false) {
   if (!Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
+  recordCombatDetonation(target, isBoss ? { kind: "boss", type: target.type, size: target.width * .75 } : undefined);
   if (isBoss || target.kind === "armored") {
     pushCombatEffect(combatEffects.wrecks, { ...target, hp: 0, hitFlash: 0, disabled: true,
       age: 0, stage: 0, duration: isBoss ? 1.25 : 0.65, isBoss }, 12);
@@ -246,12 +504,20 @@ function updateCombatEffects(seconds) {
   }
   combatEffects.shakeTime = Math.max(0, combatEffects.shakeTime - seconds);
   if (!combatEffects.shakeTime) combatEffects.shake = 0;
+  for (let i = combatEffects.detonations.length - 1; i >= 0; i--) {
+    const detonation = combatEffects.detonations[i];
+    detonation.age += seconds;
+    if (detonation.age >= detonation.life) releaseCombatDetonation(i);
+  }
   for (const name of ["particles", "impacts", "shockwaves"]) {
     const list = combatEffects[name];
     for (let i = list.length - 1; i >= 0; i--) {
       const effect = list[i]; effect.age += seconds;
       if (effect.vx !== undefined) { effect.x += effect.vx * seconds; effect.y += effect.vy * seconds; }
-      if (effect.age >= effect.duration) list.splice(i, 1);
+      if (effect.age >= effect.duration) {
+        if (name === "particles") spareCombatParticles.push(effect);
+        list.splice(i, 1);
+      }
     }
   }
   for (let i = combatEffects.wrecks.length - 1; i >= 0; i--) {
@@ -315,13 +581,7 @@ function drawCombatEffects() {
     }
     context.restore();
   }
-  for (const impact of combatEffects.impacts) {
-    const progress = impact.age / impact.duration;
-    context.save(); context.globalAlpha = (1 - progress) * (reducedMotion.matches ? 0.35 : 0.85);
-    context.fillStyle = impact.color; context.translate(impact.x, impact.y);
-    context.beginPath(); context.moveTo(-impact.size, 0); context.lineTo(0, -impact.size * 0.45);
-    context.lineTo(impact.size * 0.5, 0); context.lineTo(0, impact.size * 0.45); context.closePath(); context.fill(); context.restore();
-  }
+  for (const impact of combatEffects.impacts) drawCombatImpact(impact);
   for (const particle of combatEffects.particles) {
     const progress = particle.age / particle.duration;
     context.save(); context.translate(particle.x, particle.y); context.rotate(particle.angle + particle.spin * particle.age);

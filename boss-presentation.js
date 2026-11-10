@@ -19,6 +19,12 @@ const bossPresentationTiming = { entry: 0, rupture: 1, transform: 2, death: 3 };
 const presentationImpactAt = { entry: .63, rupture: .44, transform: .44, death: .39 };
 const presentationSlowScale = .30;
 const presentationSlowDuration = .35;
+const bossCameraProfiles = {
+  entry: { zoom: .046, panX: -16, panY: 7, delay: .16, push: .99, release: .62 },
+  rupture: { zoom: .034, panX: -11, panY: 3, delay: .00, push: .36, release: .38 },
+  transform: { zoom: .037, panX: -13, panY: 4, delay: .10, push: .88, release: .62 },
+  death: { zoom: .063, panX: -22, panY: 8, delay: .11, push: 1.46, release: .93 },
+};
 let bossPresentation = null;
 
 function bossPresentationDuration(target, kind) {
@@ -163,7 +169,9 @@ function advanceLivingBossPresentation(seconds) {
       beginAlienRecovery(target);
       setBossMessage(bossStageTitle(target), tr("敌体进入战区", "Hostile in sector"));
     } else if (kind === "rupture") {
-      prepareAlienAttack(target, true);
+      target.ruptureWindow = true;
+      beginAlienRecovery(target);
+      setBossMessage(bossStageTitle(target), tr("护壳破裂 · 核心外露 6.5 秒", "Shell ruptured · Core exposed for 6.5 s"));
     }
   }
   return true;
@@ -179,6 +187,7 @@ function advanceBossDeathPresentation(seconds) {
     gameAudio.bossPresentationCue?.("death", scene.target.type, scene.target.x, scene.target.y);
     addCombatShake(scene.target.alienFinal ? 7 : 5.5);
     pulseCombatLight(scene.target.x, scene.target.y, scene.target.width * 2.4, scene.profile.ink, "collapse");
+    recordCombatDetonation(scene.target, { kind: "boss", type: scene.target.type, size: scene.target.width * .82 });
   }
   if (scene.age >= scene.duration - 1e-9) {
     resetBossPresentation();
@@ -199,20 +208,40 @@ function advanceBossDeathPresentation(seconds) {
 
 function applyBossPresentationCamera(ctx) {
   const scene = activeBossPresentation();
-  if (!scene || quietCombatMotion() || shakePreference === "off") return;
-  const p = scene.age / scene.duration;
-  const entry = scene.kind === "entry", rupture = scene.kind === "rupture";
-  const death = scene.kind === "death";
-  const envelope = entry ? presentationEase(p, .12, .65) * (1 - presentationEase(p, .67, 1))
-    : rupture ? presentationEase(scene.age, 0, .4) * (1 - presentationEase(scene.age, scene.duration - .50, scene.duration))
-    : presentationEase(p, .13, .44) * (1 - presentationEase(p, .56, .96));
-  const scale = entry ? .034 : rupture ? .031 : death ? .052 : .041;
-  const withdrawal = death && scene.target.alienFinal ? presentationEase(p, .65, .91) * (1 - presentationEase(p, .94, 1)) * .028 : 0;
-  const zoom = 1 + envelope * scale * (shakePreference === "full" ? 1.55 : 1) - withdrawal;
+  const factor = cinemaMotionFactor();
+  if (!factor) return;
+  if (!scene) {
+    const detonation = combatEffects.detonations.find(effect => effect.rank === 2 && effect.age < .17);
+    if (detonation) {
+      const punch = factor * (1 - presentationEase(detonation.age, .022, .17));
+      frameCinematicCamera(ctx, viewport.width * .52, viewport.height * .48, punch * .009, -punch * 4, 0);
+    }
+    return;
+  }
+  const { delay, push, release, zoom, panX, panY } = bossCameraProfiles[scene.kind];
+  const pushEnd = Math.min(delay + push, scene.duration * .58);
+  const releaseFrom = Math.max(pushEnd, scene.duration - release);
+  const envelope = presentationEase(scene.age, delay, pushEnd) * (1 - presentationEase(scene.age, releaseFrom, scene.duration));
   const x = clamp(scene.target.x, viewport.width * .30, viewport.width * .79);
   const y = clamp(scene.target.y, viewport.height * .25, viewport.height * .75);
-  ctx.translate(x * (1 - zoom), y * (1 - zoom));
-  ctx.scale(zoom, zoom);
+  frameCinematicCamera(ctx, x, y, factor * envelope * zoom, factor * envelope * panX, factor * envelope * panY);
+}
+
+function cinemaMotionFactor() {
+  if (shakePreference === "off") return 0;
+  return quietCombatMotion() ? .14 : 1;
+}
+function frameCinematicCamera(ctx, x, y, extra, panX, panY) {
+  // Limit panning to the overscan created by the zoom, including ultrawide/portrait resize.
+  const dx = clamp(panX, -(viewport.width - x) * extra, x * extra);
+  const dy = clamp(panY, -(viewport.height - y) * extra, y * extra);
+  ctx.translate(dx - x * extra, dy - y * extra);
+  ctx.scale(1 + extra, 1 + extra);
+}
+function applyCampaignReturnCamera(ctx, age) {
+  const factor = cinemaMotionFactor() * (1 - presentationEase(age, 10.4, 13.4));
+  if (!factor) return;
+  frameCinematicCamera(ctx, viewport.width * .56, viewport.height * .47, factor * .056, -factor * 12, factor * 5);
 }
 
 function drawBossPresentationBackdrop(ctx) {
@@ -645,7 +674,7 @@ function drawBossPresentationBody(ctx, scene, quiet) {
       ctx.rotate(bank * squeeze);
       ctx.scale(1 - squeeze * (profile.order === "inward" ? .36 : .18),
         1 - squeeze * (profile.order === "inward" ? .30 : .12));
-      drawFinaleShell(ctx, { ...target, x: 0, y: 0, finale: { ...target.finale, age: target.finale.age + age } },
+      drawFinaleShell(ctx, { ...target, x: 0, y: 0, cinematicPose: { loss: squeeze }, finale: { ...target.finale, age: target.finale.age + age } },
         g.width, g.height, quiet);
       ctx.restore();
     }
@@ -680,6 +709,15 @@ function drawBossPresentationOverlay(ctx) {
   if (!scene) return;
   const { kind, target, profile } = scene;
   const p = scene.age / scene.duration;
+  if (kind === "death") {
+    const { width, height } = viewport;
+    const cx = width * .61, cy = height * .50;
+    const strength = presentationEase(p, .13, .61) * (1 - presentationEase(p, .84, 1));
+    const edge = ctx.createRadialGradient(cx, cy, Math.min(width, height) * .23, cx, cy, Math.hypot(width, height) * .62);
+    edge.addColorStop(0, "#01041000"); edge.addColorStop(.54, "#0104101e"); edge.addColorStop(1, "#010410ce");
+    ctx.save(); ctx.globalAlpha = strength * (quietCombatMotion() ? .30 : .77);
+    ctx.fillStyle = edge; ctx.fillRect(0, 0, width, height); ctx.restore();
+  }
   const titleTime = Math.max(p, (scene.realAge || 0) / scene.duration);
   const opacity = presentationEase(titleTime, .08, .25) * (1 - presentationEase(titleTime, .73, .99));
   const head = {

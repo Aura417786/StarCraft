@@ -38,7 +38,7 @@ async function main() {
       Object.assign(boss, bossArena(2), { phase: "recover", phaseTime: -900, age: 1 });
     });
     await page.waitForFunction(() => starBreakerModelCache.get(2)?.model && bossModelStage()?.sectorMaps.size);
-    const { on, off, contact, ...light } = await page.evaluate(() => {
+    const { on, off, contact, flash, ...light } = await page.evaluate(() => {
       const surface = document.createElement("canvas");
       surface.width = 640; surface.height = 400;
       const ctx = surface.getContext("2d", { willReadFrequently: true });
@@ -51,19 +51,29 @@ async function main() {
       const lit = paint(), emitter = bossEmitterLights[2];
       const strength = emitter[3]; emitter[3] = 0;
       const unlit = paint(); emitter[3] = strength;
-      let delta = 0, bright = 0, saturated = 0, n = 0;
+      const previous = combatEffects.light;
+      combatEffects.light = null;
+      pulseCombatLight(166, 174, 480, "#ff7850", "ultimate");
+      const litByFlash = paint();
+      combatEffects.light = previous;
+      let delta = 0, bright = 0, saturated = 0, flashDelta = 0, flashClipping = 0, n = 0;
       for (let y = 55; y < 344; y++) for (let x = 42; x < 600; x++) {
         const i = (y * 640 + x) * 4;
         const d = (Math.abs(lit.data[i] - unlit.data[i]) + Math.abs(lit.data[i + 1] - unlit.data[i + 1])
           + Math.abs(lit.data[i + 2] - unlit.data[i + 2])) / 3;
         delta += d; n++; if (d >= 8) bright++; if (lit.data[i] >= 250 && lit.data[i + 1] >= 250 && lit.data[i + 2] >= 250) saturated++;
+        flashDelta += (Math.abs(lit.data[i] - litByFlash.data[i]) + Math.abs(lit.data[i + 1] - litByFlash.data[i + 1])
+          + Math.abs(lit.data[i + 2] - litByFlash.data[i + 2])) / 3;
+        if (litByFlash.data[i] >= 250 && litByFlash.data[i + 1] >= 250 && litByFlash.data[i + 2] >= 250) flashClipping++;
       }
       ctx.fillStyle = "#8791a6"; ctx.fillRect(0, 0, 640, 400);
       drawBossContactShadow(ctx, 320, 140, 320, 180);
       return { meanDelta: delta / n, brightenedShare: bright / n, clippingShare: saturated / n, strength,
+        flashDelta: flashDelta / n, flashClippingShare: flashClipping / n, flash: litByFlash.uri,
         shadowRed: ctx.getImageData(335, 206, 1, 1).data[0], on: lit.uri, off: unlit.uri, contact: surface.toDataURL() };
     });
     save("cinder-emitter-on.png", on); save("cinder-emitter-off.png", off); save("contact-shadow-isolated.png", contact);
+    save("cinder-special-spill.png", flash);
     assert.ok(baseline || (light.meanDelta >= 8 && light.clippingShare < .03), JSON.stringify(light));
     const { frames, tracks } = await page.evaluate(() => {
       spawnBoss(0); resetBossPresentation(); beginBossFinale(boss);

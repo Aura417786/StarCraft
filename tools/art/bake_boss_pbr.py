@@ -429,7 +429,7 @@ def main():
     opts.output.mkdir(parents=True, exist_ok=True)
     for item in opts.only:
         priority = (item - 1) % 11 in PRIORITY
-        size = opts.size or (2048 if priority and item <= 11 else 1024 if priority else 768)
+        size = opts.size or (2048 if priority and item <= 11 else 1024 if priority or item <= 11 else 768)
         build(item - 1, opts.output, size, opts.threads, opts.round_trip)
 
 

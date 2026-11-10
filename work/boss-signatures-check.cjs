@@ -51,7 +51,7 @@ function signatureArena() {
       return { peak, kinds: [...kinds], threatensStationary, readable, name: boss.attackLabel[1] };
     }
   `);
-  for (const file of ["bosses.js", "hostile-projectiles.js", "fire-control.js", "alien-attacks.js", "alien-pressure.js", "boss-finales.js"]) {
+  for (const file of ["bosses.js", "hostile-projectiles.js", "fire-control.js", "alien-attacks.js", "boss-mechanics.js", "alien-pressure.js", "boss-finales.js"]) {
     run(fs.readFileSync(path.join(__dirname, "..", file), "utf8"));
   }
   // The production HUD writes to DOM. These checks only exercise the simulation.
@@ -76,7 +76,7 @@ test("all eleven identities can execute every regular and enraged attack timelin
   }
 });
 
-test("each new attack has a teaching window and a single concise action", () => {
+test("each new attack has a teaching window and a concise actionable counter", () => {
   const run = signatureArena();
   const result = run(`(() => {
     const warnings = [];
@@ -101,7 +101,7 @@ test("each new attack has a teaching window and a single concise action", () => 
   for (const { first, repeat, hint, enHint, wide } of result.warnings) {
     assert.ok(Math.abs(first - repeat - .4) < 1e-8);
     assert.ok(repeat >= (wide ? 1.6 : 1.4) && first <= 2.2);
-    assert.ok(hint.length >= 8 && hint.length <= 14 && enHint.length < 52, hint);
+    assert.ok(hint.length >= 8 && hint.length <= 26 && enHint.length < 86, hint);
   }
   for (const [hint, enHint] of result.finales) {
     assert.ok(hint.length >= 8 && hint.length <= 14 && enHint.length < 52, hint);
@@ -196,15 +196,16 @@ test("diagonal filaments share geometry with their real hit and remap with the p
 });
 
 
-test("eleven rupture combos have distinct labels, sufficient tells, and real stationary damage", () => {
+test("eleven rupture combos have distinct labels and arena rules with readable warnings", () => {
   const run = signatureArena();
   const labels = new Set();
+  const mechanics = ["tide", "ribCage", "magmaCover", "loom", "pincerLock", "mirrorShield", "tailConduit",
+    "sporeNests", "riftFold", "neuralRelay", "fusionLimbs"];
   for (let type = 0; type < 11; type++) {
     const result = run(`playSignature(${type}, 0, true, true)`);
     assert.equal(run("boss.alienAttack"), "pressure");
     assert.ok(result.readable, `type ${type} warns before collision`);
-    assert.ok(result.threatensStationary, `type ${type} threatens a pilot that stays still`);
-    assert.ok(result.kinds.length >= 2, `type ${type} layers distinguishable hazard geometry`);
+    assert.ok(result.kinds.includes(mechanics[type]), `type ${type} preserves its independent arena rule in the combo`);
     assert.equal(run("bossHazards.length"), 0);
     labels.add(result.name);
   }

@@ -219,20 +219,20 @@ h1 > span { color: var(--red); }
 .sound-button[aria-pressed="false"] { color: #8c95a6; }
 .boss-warning { position: absolute; inset: 0; display: grid; place-items: center; z-index: 5; pointer-events: none; background: linear-gradient(transparent 20%, #24020835 50%, transparent 80%); }
 .flight-radio {
-  position: absolute; z-index: 6; left: 50%; top: clamp(118px, 16.5vh, 182px); transform: translateX(-50%);
-  width: min(410px, 49vw); min-height: 47px; padding: 7px 13px 8px; pointer-events: none;
+  position: absolute; z-index: 6; right: 3.4vw; bottom: 65px;
+  width: min(360px, 36vw); min-height: 47px; padding: 7px 13px 8px; pointer-events: none;
   border-left: 2px solid #78d2e3; color: #e6edf4; background: linear-gradient(90deg, #081820f5, #0b151dce 78%, #0a131991);
   box-shadow: 0 5px 16px #040a12a3; text-align: left;
 }
 .radio-speaker { display: block; color: #9adce8; font: 700 10px/1.2 Consolas, monospace; letter-spacing: .12em; }
 .radio-speaker::before { content: '▂▅▃ '; color: #79d5ec; letter-spacing: .04em; }
-.radio-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 3px; font-size: 13px; line-height: 1.35; }
+.radio-line { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin-top: 3px; font-size: 13px; line-height: 1.35; }
 .app[data-overlay="pause"] .flight-radio { visibility: hidden; }
 @media (max-height: 450px) {
-  .flight-radio { top: 68px; width: min(285px, 43vw); min-height: 39px; padding: 5px 9px 6px; }
+  .flight-radio { bottom: 47px; width: min(280px, 43vw); min-height: 39px; padding: 5px 9px 6px; }
   .radio-line { font-size: 11px; }
 }
-@media (max-width: 520px) { .flight-radio { top: 174px; width: min(290px, 64vw); } }
+@media (max-width: 520px) { .flight-radio { bottom: 69px; width: min(252px, 65vw); } }
 .warning-band { position: relative; width: 100%; padding: 24px 22px 27px; text-align: center; color: #fff5f2; background: linear-gradient(90deg, #720d1af0, #c42032f5 24%, #df3542fa 50%, #c42032f5 76%, #720d1af0); border-top: 1px solid #ffa29b; border-bottom: 1px solid #ffa29b; box-shadow: 0 0 65px #f5203645, inset 0 0 34px #5c031c66; }
 .warning-band::before, .warning-band::after { content: ""; position: absolute; left: 0; right: 0; height: 6px; background: repeating-linear-gradient(125deg, #ffac944f 0 12px, transparent 12px 24px); }
 .warning-band::before { top: 0; }

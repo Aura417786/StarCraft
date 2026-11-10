@@ -2,9 +2,9 @@
 
 const eliteKinds = ["minelayer", "shield-guard", "splitter"];
 const eliteCopy = {
-  minelayer: ["布雷舰", "Minelayer", "六枚感应雷 · 可射击解除", "Six mines · Shoot to disarm", "#ffac65"],
-  "shield-guard": ["护盾卫", "Shield Guard", "优先摧毁护盾发生器", "Destroy the shield emitter first", "#67efd5"],
-  splitter: ["分裂体", "Splitter", "击破后分裂成两个小体", "Splits into two offspring on death", "#d8a4ff"],
+  minelayer: ["布雷舰", "Minelayer", "前方航线即将布雷 · 换道或射毁感应雷", "Mines incoming on your route · Change lanes or shoot them", "#ffac65"],
+  "shield-guard": ["护盾卫", "Shield Guard", "优先为正在瞄准的炮击机撑盾", "Protects charging gunners first · Break the guard", "#67efd5"],
+  splitter: ["分裂体", "Splitter", "贴身击破会受到双路夹击 · 保持距离", "Offspring fan out on defeat · Kill it from a distance", "#d8a4ff"],
 };
 Object.assign(enemyTypes, {
   minelayer: { health: 1.92, speed: .76, width: 1.22, height: .64, points: 240 },
@@ -12,7 +12,8 @@ Object.assign(enemyTypes, {
   splitter: { health: 1.64, speed: 1.02, width: 1.04, height: .67, points: 240 },
   splitling: { health: .656, speed: 1.20, width: .58, height: .55, points: 45 },
 });
-const eliteRules = { first: 27, interval: 19, capacity: 6, mineWarning: 1.2, mineDrop: .235, guardRange: 210 };
+const eliteRules = { first: 27, interval: 19, capacity: 6, mineWarning: 1.2, mineWindup: .34, mineDrop: .166,
+  guardRange: 210, guardRetarget: .43, splitGrace: .23 };
 const eliteDirector = { next: eliteRules.first, order: 0, mines: [],
   spawned: { minelayer: 0, "shield-guard": 0, splitter: 0 } };
 
@@ -48,31 +49,77 @@ function beginEliteEnemy(enemy) {
 
 function dropEliteMine(enemy) {
   const i = enemy.minesDropped++;
-  const offset = (i % 2 === 0 ? -1 : 1) * Math.min(51, player.height * .44);
-  const y = clamp(enemy.y + offset, flightBounds.top, flightBounds.bottom);
+  // Three pairs fence the locked route from alternating sides. A route stays committed for the full drop.
+  const lane = enemy.mineRouteY ?? enemy.y;
+  const reach = Math.min(44, player.height * .37);
+  const offset = (i % 2 === 0 ? -1 : 1) * reach * (1 - Math.floor(i / 2) * .19);
+  const y = clamp(lane + offset, flightBounds.top, flightBounds.bottom);
   const x = enemy.x + enemy.width * .32;
   const radius = clamp(player.height * .56, 36, 72);
   const hp = Math.min(87, 4 + enemyHealthForTime() * .37);
   eliteDirector.mines.push({ x, y, previousX: x, previousY: y,
     radius: 12, blastRadius: radius, age: 0, hp, maxHp: hp, hitFlash: 0 });
-  if (i === 0) gameAudio.fieldCue?.("mine-arm", x, y);
+}
+
+const escortableKinds = new Set(["scout", "armored", "gunner"]);
+function eliteEscortPriority(enemy, guard) {
+  const committed = enemy.kind === "gunner" && (enemy.gunPhase === "warning" || enemy.gunPhase === "relay");
+  const category = committed ? 0 : enemy.kind === "gunner" || enemy.formationLeader ? 1 : 2;
+  return category * 320 + Math.hypot(enemy.x - guard.x, enemy.y - guard.y);
+}
+function keepEliteEscortPosition(guard, seconds) {
+  guard.escortTimer = (guard.escortTimer ?? 0) - seconds;
+  let ally = guard.escortAnchor;
+  if (!ally || !enemies.includes(ally) || guard.escortTimer <= 0) {
+    let priority = Infinity;
+    ally = null;
+    for (const enemy of enemies) {
+      if (!escortableKinds.has(enemy.kind) || enemy.hp <= 0 || enemy.x < player.x + player.width * .75
+        || Math.hypot(enemy.x - guard.x, enemy.y - guard.y) > eliteRules.guardRange * 1.5) continue;
+      const rank = eliteEscortPriority(enemy, guard);
+      if (rank < priority) { ally = enemy; priority = rank; }
+    }
+    guard.escortAnchor = ally;
+    guard.escortTimer = eliteRules.guardRetarget;
+  }
+  if (!ally) {
+    guard.x -= guard.speed * seconds;
+    guard.y = clamp(guard.y + clamp(guard.baseY - guard.y, -90 * seconds, 90 * seconds),
+      flightBounds.top, flightBounds.bottom);
+    return;
+  }
+  const x = ally.x + guard.width * .76;
+  const side = ally.y > (flightBounds.top + flightBounds.bottom) / 2 ? -1 : 1;
+  const y = clamp(ally.y + side * guard.height * .9, flightBounds.top, flightBounds.bottom);
+  // Escort behind the defended target and match speed without teleporting or running backwards.
+  const advance = clamp(-((x - guard.x) * 2) + ally.speed * .76, 0, guard.speed * 1.42);
+  guard.x -= advance * seconds;
+  guard.y += clamp(y - guard.y, -130 * seconds, 130 * seconds);
 }
 
 function updateEliteEnemy(enemy, seconds) {
   if (!eliteKinds.includes(enemy.kind) && enemy.kind !== "splitling") return false;
   enemy.age += seconds;
+  if (enemy.kind === "shield-guard") { keepEliteEscortPosition(enemy, seconds); return true; }
   enemy.x -= enemy.speed * seconds;
   if (enemy.kind === "minelayer") {
-    enemy.y = clamp(enemy.baseY + Math.sin(enemy.age * 2) * 14, flightBounds.top, flightBounds.bottom);
-    if (enemy.minesDropped < eliteRules.capacity && enemy.x < viewport.width * .86) {
+    if (enemy.mineRouteY === undefined && enemy.x < viewport.width * .86) {
+      const drift = (player.y - (player.previousY ?? player.y)) / Math.max(seconds, 1 / 120);
+      const reach = Math.min(95, (flightBounds.bottom - flightBounds.top) * .27);
+      const lead = clamp(player.y + drift * .24, enemy.y - reach, enemy.y + reach);
+      enemy.mineRouteY = clamp(lead, flightBounds.top, flightBounds.bottom);
+      enemy.mineClock = eliteRules.mineWindup;
+      gameAudio.fieldCue?.("mine-arm", enemy.x, enemy.mineRouteY);
+    }
+    const y = (enemy.mineRouteY ?? enemy.baseY) + Math.sin(enemy.age * 2) * 10;
+    enemy.y = clamp(enemy.y + clamp(y - enemy.y, -110 * seconds, 110 * seconds), flightBounds.top, flightBounds.bottom);
+    if (enemy.minesDropped < eliteRules.capacity && enemy.mineRouteY !== undefined) {
       enemy.mineClock -= seconds;
       if (enemy.mineClock <= 0 && eliteDirector.mines.length < eliteRules.capacity) {
         enemy.mineClock += eliteRules.mineDrop;
         dropEliteMine(enemy);
       }
     }
-  } else if (enemy.kind === "shield-guard") {
-    enemy.y = clamp(enemy.baseY + Math.sin(enemy.age * 1.6) * 21, flightBounds.top, flightBounds.bottom);
   } else if (enemy.kind === "splitter") {
     enemy.y = clamp(enemy.baseY + Math.sin(enemy.age * 2.6) * 19, flightBounds.top, flightBounds.bottom);
   } else {
@@ -88,15 +135,26 @@ function refreshEliteEscortShields(seconds) {
   for (const enemy of enemies) {
     const shield = enemy.escortShield;
     if (!shield) continue;
-    if (shield.guard !== guard || Math.hypot(enemy.x - guard.x, enemy.y - guard.y) > eliteRules.guardRange + 28)
+    if (shield.guard !== guard || Math.hypot(enemy.x - guard.x, enemy.y - guard.y) > eliteRules.guardRange + 28) {
+      if (shield.hp < shield.maxHp) (shield.guard.exhaustedLinks ??= new WeakSet()).add(enemy);
       delete enemy.escortShield;
-    else shield.flash = Math.max(0, shield.flash - seconds);
+    } else shield.flash = Math.max(0, shield.flash - seconds);
   }
   if (!guard) return;
-  const allies = enemies.filter(enemy => !enemy.escortShield && ["scout", "armored", "gunner"].includes(enemy.kind)
+  const allies = enemies.filter(enemy => !enemy.escortShield && !guard.exhaustedLinks?.has(enemy) && escortableKinds.has(enemy.kind)
     && Math.hypot(enemy.x - guard.x, enemy.y - guard.y) <= eliteRules.guardRange);
-  allies.sort((a, b) => Math.abs(a.x - guard.x) - Math.abs(b.x - guard.x));
-  const slots = 3 - enemies.filter(enemy => enemy.escortShield?.guard === guard).length;
+  allies.sort((a, b) => eliteEscortPriority(a, guard) - eliteEscortPriority(b, guard));
+  const connected = enemies.filter(enemy => enemy.escortShield?.guard === guard);
+  let slots = 3 - connected.length;
+  if (!slots && allies.length && eliteEscortPriority(allies[0], guard) < eliteRules.guardRange) {
+    const substitute = connected.find(enemy => eliteEscortPriority(enemy, guard) >= 320);
+    if (substitute) {
+      const shield = substitute.escortShield;
+      if (shield.hp < shield.maxHp) (guard.exhaustedLinks ??= new WeakSet()).add(substitute);
+      delete substitute.escortShield;
+      slots = 1;
+    }
+  }
   for (const ally of allies.slice(0, Math.max(0, slots))) {
     const maxHp = Math.min(140, Math.max(7, Math.exp(Math.min(6, ally.healthLog)) * .32));
     ally.escortShield = { hp: maxHp, maxHp, guard, flash: 0 };
@@ -109,7 +167,7 @@ function refreshEliteEscortShields(seconds) {
 
 function absorbEliteEscortShield(enemy, shot) {
   const shield = enemy.escortShield;
-  if (!shield || shield.hp <= 0 || !enemies.includes(shield.guard)) return shot;
+  if (shot.piercesShield || !shield || shield.hp <= 0 || !enemies.includes(shield.guard)) return shot;
   const amount = shot.damageLog === undefined ? shot.damage ?? weapon.damage : Math.exp(Math.min(15, shot.damageLog));
   const absorbed = Math.min(shield.hp, amount * (shot.armorPiercing ? .62 : 1));
   shield.hp -= absorbed;
@@ -130,13 +188,16 @@ function onEliteEnemyDefeated(enemy) {
     return;
   }
   if (enemy.kind !== "splitter") return;
+  const nearSide = player.y < enemy.y ? -1 : 1;
   for (const direction of [-1, 1]) {
-    const x = enemy.x - enemy.width * .05;
+    const pursuit = direction === nearSide;
+    const x = enemy.x + enemy.width * (pursuit ? -.14 : .20);
     const y = clamp(enemy.y + direction * enemy.height * .18, flightBounds.top, flightBounds.bottom);
     enemies.push({ kind: "splitling", x, previousX: x, y, previousY: y, baseY: y, age: 0,
       width: enemy.width * .57, height: enemy.height * .55, hitFlash: .18,
       hp: 1, maxHp: 1, displayHp: 1, healthLog: enemy.healthLog + Math.log(.4),
-      speed: enemy.speed * 1.14, splitDrift: direction * enemy.height * .88, points: enemyTypes.splitling.points });
+      speed: enemy.speed * (pursuit ? 1.28 : .89), splitDrift: direction * enemy.height * (pursuit ? .68 : 1.14),
+      points: enemyTypes.splitling.points });
   }
   gameAudio.fieldCue?.("splitter", enemy.x, enemy.y);
   addEvolutionPulse(enemy.x, enemy.y, enemy.width * .62, "#d8a4ff", .33);
@@ -200,6 +261,7 @@ function updateEliteMines(seconds) {
 }
 
 function resizeEliteMines(scaleX, scaleY, mapY) {
+  for (const enemy of enemies) if (enemy.mineRouteY !== undefined) enemy.mineRouteY = mapY(enemy.mineRouteY);
   for (const mine of eliteDirector.mines) {
     mine.x *= scaleX;
     mine.previousX = mine.x;
@@ -210,6 +272,25 @@ function resizeEliteMines(scaleX, scaleY, mapY) {
 }
 
 function drawEliteMines() {
+  for (const enemy of enemies) {
+    if (enemy.kind !== "minelayer" || enemy.minesDropped >= eliteRules.capacity || enemy.mineRouteY === undefined) continue;
+    const y = enemy.mineRouteY;
+    const x = enemy.x + enemy.width * .28;
+    const length = Math.min(viewport.width * .22, enemy.speed * (eliteRules.mineWindup + eliteRules.capacity * eliteRules.mineDrop));
+    context.save();
+    context.lineWidth = 1.5;
+    context.strokeStyle = "#ffc18a";
+    context.globalAlpha = enemy.minesDropped ? .35 : .66;
+    context.setLineDash([4, 7]);
+    context.beginPath(); context.moveTo(x, y); context.lineTo(x - length, y); context.stroke();
+    context.setLineDash([]);
+    for (let n = 1; n <= 3; n++) {
+      const mark = x - length * n / 3;
+      context.beginPath(); context.moveTo(mark + 5, y - 5); context.lineTo(mark, y);
+      context.lineTo(mark + 5, y + 5); context.stroke();
+    }
+    context.restore();
+  }
   for (const mine of eliteDirector.mines) {
     const p = clamp(mine.age / eliteRules.mineWarning, 0, 1);
     const radius = mine.blastRadius;
@@ -288,6 +369,15 @@ function drawEliteHull(enemy) {
     for (const side of [-1, 1]) {
       context.beginPath(); context.moveTo(-width * .06, side * height * scale);
       context.lineTo(width * .18, side * height * scale); context.stroke();
+    }
+    if (kind === "splitter" && enemy.hp < .50) {
+      // Two arrows preview the two escape angles while the membrane is still intact.
+      context.globalAlpha = .66;
+      for (const side of [-1, 1]) {
+        context.beginPath(); context.moveTo(-width * .43, side * height * .22);
+        context.lineTo(-width * .62, side * height * .60);
+        context.lineTo(-width * .59, side * height * .33); context.stroke();
+      }
     }
   }
   context.restore();

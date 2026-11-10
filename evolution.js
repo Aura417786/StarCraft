@@ -16,17 +16,17 @@ const evolutionRankCopy = {
   pierce: [
     ["主武器多穿透一架敌机，并削弱护甲对高速齐射的吸收。", "Your main shots pierce one extra enemy and cut through rapid-fire armor."],
     ["每 0.65 秒，命中时向附近两个敌人各分出一枚翼刃。", "Once per 0.65s, a hit launches up to two shards at nearby targets."],
-    ["按住 Shift 蓄力，松开释放贯穿重炮。蓄力时主炮停火，战机变慢。", "Hold Shift, then release to fire a lance. Main fire pauses and your ship slows while charging."],
+    ["按住 Shift 蓄翼刃，松手贯穿护盾和敌群。蓄力时主炮停火，战机变慢。", "Hold Shift and release a lance that passes through shields and enemy ranks. Charging pauses main fire and slows the ship."],
   ],
   blast: [
     ["一架星隼跟随战机，主动追打前方敌人。", "A Falcon escorts you and seeks enemies ahead."],
     ["双星隼出动。按 F 锁定瞄准线附近的目标，再按解除。", "Two Falcons escort you. Press F to focus a target near your sights, and again to release it."],
-    ["锁定后再按 F 拦截迎面实体敌弹。僚机拦截后需离队重整。", "Press F again while locked to intercept approaching projectiles. Falcons leave formation to recover."],
+    ["锁定后再按 F 牺牲僚机，清除迎面一轮实体弹幕。僚机重整 4 秒。", "Press F again while locked to sacrifice the escorts and clear one incoming volley. Falcons regroup for 4s."],
   ],
   aegis: [
     ["护盾充能加快；选卡时获得一次护盾。", "The shield recharges faster. Gain a charge when you select this rank."],
     ["护盾吸收实体敌弹，结束时将其反射。受伤时也会向来袭方向还击。", "The shield absorbs projectiles and returns them when it expires. Taking damage also triggers a countershot."],
-    ["完美格挡返还 30% 大招充能，并把无敌延长 0.6 秒。", "A Perfect Guard restores 30% special energy and extends protection by 0.6s."],
+    ["完美格挡返还 50% 大招充能，并额外获得 1 秒无敌。", "A Perfect Guard restores 50% of a special charge and grants 1 extra second of protection."],
   ],
 };
 const evolutionRefits = {
@@ -62,7 +62,7 @@ function canRespecEvolution() {
 }
 function refreshEvolutionLinks() {
   evolution.links.falcon = evolution.pierce >= 2 && evolution.blast >= 2;
-  evolution.links.phalanx = evolution.blast >= 2 && evolution.aegis >= 2;
+  evolution.links.phalanx = evolution.blast >= 3 && evolution.aegis >= 2;
   evolution.links.lance = evolution.pierce >= 2 && evolution.aegis >= 2;
 }
 function updateEvolutionDisplay() {
@@ -70,8 +70,13 @@ function updateEvolutionDisplay() {
     const suffix = kind === evolution.capstone ? " ◆" : "";
     return evolutionName(kind) + tr(" " + evolution[kind] + "级", " Lv. " + evolution[kind]) + suffix;
   });
-  if (evolution.blast >= 2) selected.push(tr("F 星隼", "F Falcon"));
-  if (evolution.pierce >= 3) selected.push(tr("长按 Shift 蓄翼刃", "Hold Shift for lance"));
+  const focusKey = typeof controlBindingLabel === "function" ? controlBindingLabel("focus") : "F";
+  const stanceKey = typeof controlBindingLabel === "function" ? controlBindingLabel("stance") : "Shift";
+  if (evolution.blast >= 2) selected.push(tr(focusKey + " 星隼", focusKey + " Falcon"));
+  if (evolution.pierce >= 3) selected.push(tr("长按 " + stanceKey + " 蓄翼刃", "Hold " + stanceKey + " for lance"));
+  if (evolution.links.falcon) selected.push(tr("猎隼穿甲", "Falcon Breach"));
+  if (evolution.links.phalanx) selected.push(tr("截击回能", "Intercept Recharge"));
+  if (evolution.links.lance) selected.push(tr("护盾反穿", "Guardbreaker"));
   evolutionReadout.hidden = !selected.length;
   evolutionReadout.textContent = selected.join("  ·  ");
 }
@@ -92,12 +97,15 @@ function evolutionCardDetails(kind) {
   const level = complete ? tr("已达最高 · 3级", "Max level · Lv. 3")
     : tr(current + "级 → " + next + "级", "Lv. " + current + " → " + next);
   const links = {
-    pierce: tr("与星隼 2 级联动：僚机射击可穿透。", "Falcon II link: escort rounds gain penetration."),
-    blast: tr("与壁垒 2 级联动：开盾后短暂加速齐射。", "Aegis II link: shielding briefly speeds up escort volleys."),
-    aegis: tr("与翼刃 2 级联动：反射弹可穿透。", "Wings II link: reflected shots gain penetration."),
+    pierce: tr("联动：翼刃 II + 星隼 II，僚机对集火目标打出穿甲弹。", "Wings II + Falcon II: escorts fire armor-piercing rounds at focused targets."),
+    blast: tr("联动：星隼 III + 壁垒 II，成功拦截返还 32% 护盾充能。", "Falcon III + Aegis II: intercepting a volley restores 32% shield energy."),
+    aegis: tr("联动：翼刃 II + 壁垒 II，完美格挡后下一发主炮穿盾。", "Wings II + Aegis II: a Perfect Guard makes your next main round pierce shields."),
   };
+  const focusKey = typeof controlBindingLabel === "function" ? controlBindingLabel("focus") : "F";
+  const stanceKey = typeof controlBindingLabel === "function" ? controlBindingLabel("stance") : "Shift";
+  const effect = tr(...evolutionRankCopy[kind][next - 1]);
   return { name: evolutionName(kind), level, tone: kind, disabled,
-    effect: tr(...evolutionRankCopy[kind][next - 1]),
+    effect: effect.replace(/\b(?:Shift|F)\b/g, key => key === "F" ? focusKey : stanceKey),
     art: next === 3 ? tr("本局只可选一个 3 级专精。", "One rank III specialization per sortie.") : links[kind],
     unavailable: complete ? tr("本路线已完成", "Path complete") : tr("已选择其他专精", "Another specialization is active") };
 }
@@ -243,6 +251,7 @@ function chooseEvolution(kind) {
   statusMessage.textContent = message + tr("。战斗继续。", " Combat resumes.");
   canvas.focus({ preventScroll: true });
   updatePauseHint();
+  if (typeof completeFlightTutorialEvolution === "function") completeFlightTutorialEvolution();
   return true;
 }
 function resetEvolution() {
@@ -263,10 +272,6 @@ function addEvolutionPulse(x, y, radius, color, duration) {
 }
 function onEvolutionShield() {
   if (!evolution.aegis) return;
-  if (evolution.links.phalanx) {
-    evolutionWeapons.shieldLinkRemaining = 2.4;
-    evolutionWeapons.droneCooldown = Math.min(evolutionWeapons.droneCooldown, .08);
-  }
   addEvolutionPulse(player.x, player.y, player.width * .74, "#ffd09c", .38);
 }
 function onEvolutionDamaged(origin) {
@@ -278,7 +283,7 @@ function onEvolutionDamaged(origin) {
   } else if (origin?.x > muzzle.x && Number.isFinite(origin.y)) {
     angle = targetAim(origin, muzzle, .9);
   }
-  if (spawnEvolutionRound(muzzle, "counter", .75, { angle, noEnergy: true, pierces: evolution.links.lance ? 1 : 0 })) {
+  if (spawnEvolutionRound(muzzle, "counter", .75, { angle, noEnergy: true })) {
     addEvolutionPulse(player.x, player.y, player.width * .62, "#ffc987", .27);
     gameAudio.shoot?.(true);
   }
@@ -323,6 +328,8 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     const enabled = evolutionCards.filter(card => !card.disabled);
     if (!evolutionResetButton.hidden) enabled.push(evolutionResetButton);
+    const trainingSkip = document.querySelector("#flight-training-evolution-skip");
+    if (trainingSkip && !trainingSkip.hidden) enabled.push(trainingSkip);
     const current = enabled.indexOf(document.activeElement);
     const next = current < 0 ? 0 : (current + (event.shiftKey ? -1 : 1) + enabled.length) % enabled.length;
     enabled[next]?.focus({ preventScroll: true });

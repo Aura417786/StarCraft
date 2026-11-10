@@ -12,8 +12,6 @@ const battlefieldSectors = [
 const sceneryRules = { interval: 75, blend: 10, zoom: 1.28, maxImages: 3 };
 const battlefieldState = { sector: 0, previous: 0, completed: 0, clock: 0, ambientClock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 };
 const sceneryCache = new Map();
-let orbitSurfaceMask;
-let orbitSurfaceLayer;
 const sceneryStars = Array.from({ length: 48 }, (_, i) => ({
   x: sceneryHash(i * 13.4 + 1), y: sceneryHash(i * 7.9 + 18), depth: 0.2 + sceneryHash(i * 17.8 + 3) * 0.8,
 }));
@@ -40,11 +38,6 @@ function sceneryLayer(sector, menu = false) {
   };
   image.onerror = () => { record.failed = true; record.ready = false; };
   image.src = record.asset;
-  if (index === 0 && !menu && !orbitSurfaceMask) {
-    orbitSurfaceMask = new Image();
-    orbitSurfaceMask.decoding = "async";
-    orbitSurfaceMask.src = "assets/scenery/orbit-surface-mask.png";
-  }
   while (sceneryCache.size > sceneryRules.maxImages) {
     const oldKey = sceneryCache.keys().next().value;
     sceneryCache.delete(oldKey);
@@ -127,28 +120,6 @@ function drawOrbitSurface(ctx, plate, frame, age) {
   const { width, height } = viewport;
   if (reducedMotion.matches || state === "menu") return;
   const time = age + battlefieldState.ambientClock;
-  if (orbitSurfaceMask?.complete && orbitSurfaceMask.naturalWidth) {
-    const resolution = [576, 768, 1024][visualQuality.meshDetail];
-    if (!orbitSurfaceLayer || orbitSurfaceLayer.canvas.width !== resolution) {
-      const canvas = orbitSurfaceLayer?.canvas ?? document.createElement("canvas");
-      canvas.width = resolution;
-      canvas.height = Math.round(canvas.width * plate.height / plate.width);
-      orbitSurfaceLayer = {canvas, ctx:canvas.getContext("2d"), tick: NaN};
-    }
-    const layer = orbitSurfaceLayer;
-    const tick = Math.floor(time * 18);
-    if (layer.ctx && layer.tick !== tick) {
-      const {width: w, height: h} = layer.canvas;
-      const shift = w * (.025 + .022 * Math.sin(tick / 18 * .061));
-      layer.ctx.clearRect(0, 0, w, h);
-      layer.ctx.globalCompositeOperation = "source-over";
-      layer.ctx.drawImage(plate.image, -shift, shift * .20, w + shift * 1.36, h + shift * .21);
-      layer.ctx.globalCompositeOperation = "destination-in";
-      layer.ctx.drawImage(orbitSurfaceMask, 0, 0, w, h);
-      layer.tick = tick;
-    }
-    if (layer.ctx) ctx.drawImage(layer.canvas, frame.x, frame.y, frame.width, frame.height);
-  }
   if (visualQuality.meshDetail === 0) return;
   ctx.save();
   ctx.beginPath();
@@ -202,7 +173,9 @@ function sceneryDrawParticles() {
     ctx.beginPath(); ctx.arc(x, star.y * h - battlefieldState.driftY * star.depth, 0.28 + star.depth * 0.35, 0, Math.PI * 2); ctx.fill();
   }
   if (quiet) return;
-  for (const particle of sceneryDust.slice(0, visualQuality.meshDetail === 0 ? 5 : visualQuality.meshDetail === 1 ? 8 : 12)) {
+  const dustBudget = [5, 8, 12][visualQuality.meshDetail];
+  for (let index = 0; index < dustBudget; index++) {
+    const particle = sceneryDust[index];
     const span = w + 60, speed = 15 + particle.depth * 29;
     const x = ((particle.x * span - clock * speed) % span + span) % span - 30;
     const y = particle.y * h - battlefieldState.driftY * (1 + particle.depth * 1.3);
@@ -230,6 +203,44 @@ function sceneryDrawParticles() {
     }
   }
 }
+function drawSceneryMoon(ctx, journey) {
+  if (state === "menu") return;
+  const strength = (journey.current === 1 ? 1 - journey.blend : 0) + (journey.next === 1 ? journey.blend : 0);
+  if (strength < .015) return;
+  const time = battlefieldState.clock + battlefieldState.ambientClock;
+  const motion = typeof quietCombatMotion === "function" ? !quietCombatMotion() : !reducedMotion.matches;
+  const size = Math.min(viewport.width * .16, viewport.height * .245);
+  const age = journey.current === 1 ? journey.currentAge : journey.nextAge;
+  const x = viewport.width * (.91 - sceneryClamp(age / 85, 0, 1) * .26) - battlefieldState.driftX * .35;
+  const y = viewport.height * .22 - battlefieldState.driftY * .35;
+  drawSpaceProp(ctx, "moon", { x, y, width: size, height: size, pitch: -.14, yaw: motion ? time * .055 : .5,
+    roll: .15, alpha: strength * .74, haze: .16, sector: 1 });
+}
+
+function drawSceneryOcclusion(ctx, target) {
+  if (!target || state !== "battle" || target.phase === "enter" || visualQuality.meshDetail === 0
+    || (typeof quietCombatMotion === "function" ? quietCombatMotion() : reducedMotion.matches)) return;
+  const sector = battlefieldState.sector;
+  if (sector !== 1 && sector !== 2) return;
+  const time = battlefieldState.clock + battlefieldState.ambientClock;
+  const pass = (time * .061) % 1;
+  const radius = Math.min(96, target.width * .39);
+  const alpha = Math.sin(pass * Math.PI) ** 2 * .82;
+  const x = viewport.width + radius - pass * (viewport.width - target.x + radius * 2);
+  const y = target.y + target.height * .29 - pass * target.height * .77;
+  // Let a near silhouette pass only behind the combat bounds. Projectiles and
+  // warnings render over this layer so a rim crossing cannot hide a tell.
+  ctx.save();
+  const clipLeft = Math.max(bossPlayerRight() + player.width * .57, target.x + target.width * .11);
+  ctx.beginPath();
+  ctx.rect(clipLeft, 0, Math.max(0, viewport.width - clipLeft), viewport.height);
+  ctx.clip();
+  if (x + radius > clipLeft && x - radius < viewport.width)
+    drawSpaceProp(ctx, sector === 2 ? "wreck" : "rock", { x, y, width: radius, height: radius * .86,
+      variant: sector, pitch: time * .33, yaw: time * .55, roll: -time * .27, alpha, haze: .08, sector });
+  ctx.restore();
+}
+
 function drawBattlefield(showHud = true) {
   const ctx = context, w = viewport.width, h = viewport.height, journey = sceneryJourney();
   ctx.save(); ctx.fillStyle = "#03060c"; ctx.fillRect(0, 0, w, h);
@@ -240,6 +251,7 @@ function drawBattlefield(showHud = true) {
     ctx.fillStyle = "#03060c66";
     ctx.fillRect(0, 0, w, h);
   }
+  drawSceneryMoon(ctx, journey);
   sceneryDrawParticles();
   drawActiveJourney("back");
   const vignette = ctx.createLinearGradient(0, 0, 0, h);

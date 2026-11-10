@@ -70,6 +70,19 @@ function drawCampaignGate(ctx, x, y, radius, age, alpha, calm) {
   aura.addColorStop(1, "#2a426e00");
   ctx.fillStyle = aura;
   ctx.fillRect(-radius * 1.65, -radius * 1.65, radius * 3.3, radius * 3.3);
+  const open = campaignSmooth(age, 3, 6.3);
+  if (open > 0) {
+    const iris = ctx.createLinearGradient(-radius * .42, 0, radius * .42, 0);
+    iris.addColorStop(0, "#2d63a015");
+    iris.addColorStop(.32, "#78d3fd66");
+    iris.addColorStop(.49, "#d4fbf9d9");
+    iris.addColorStop(.64, "#467cb870");
+    iris.addColorStop(1, "#1c324a19");
+    ctx.fillStyle = iris;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radius * (.018 + open * .38), radius * (.13 + open * .79), 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
   const metal = ctx.createLinearGradient(-radius * .48, -radius, radius * .48, radius);
   metal.addColorStop(0, "#b9dcf1");
   metal.addColorStop(.21, "#546f8a");
@@ -104,19 +117,82 @@ function drawCampaignGate(ctx, x, y, radius, age, alpha, calm) {
   ctx.restore();
 }
 
+const epilogueRoute = [
+  [.07, .71], [.16, .67], [.24, .76], [.32, .58], [.40, .48], [.50, .58],
+  [.58, .40], [.65, .45], [.73, .30], [.82, .36], [.92, .17],
+];
+
+function drawEpilogueStarMap(ctx, scene, width, height) {
+  const reveal = campaignSmooth(scene.age, 9.7, 11.1);
+  if (reveal <= 0) return;
+  const wide = Math.min(width * .79, height * 1.69);
+  const tall = height * .50;
+  const left = (width - wide) / 2;
+  const top = height * .12;
+  ctx.save();
+  ctx.translate(left, top);
+  ctx.globalAlpha = reveal;
+  ctx.fillStyle = "#0b1629e8";
+  ctx.fillRect(0, 0, wide, tall);
+  ctx.strokeStyle = "#a9d7ee44";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(.5, .5, wide - 1, tall - 1);
+  ctx.beginPath();
+  for (let column = 1; column < 13; column++) {
+    const x = column * wide / 13;
+    ctx.moveTo(x, 0); ctx.lineTo(x, tall);
+  }
+  for (let row = 1; row < 7; row++) {
+    const y = row * tall / 7;
+    ctx.moveTo(0, y); ctx.lineTo(wide, y);
+  }
+  ctx.strokeStyle = "#7795c51f";
+  ctx.stroke();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.font = `${Math.max(9, Math.min(14, wide * .020))}px Consolas, "Microsoft YaHei", sans-serif`;
+  ctx.fillStyle = "#b0d8f3";
+  ctx.fillText(tr("返航星图 · 航道恢复", "RETURN VECTOR / ROUTE RESTORED"), wide * .035, tall * .077);
+  let previous;
+  for (const [index, [fx, fy]] of epilogueRoute.entries()) {
+    const x = fx * wide, y = fy * tall;
+    const lit = campaignSmooth(scene.age, 10.18 + index * .31, 10.62 + index * .31);
+    if (previous) {
+      ctx.beginPath();
+      ctx.moveTo(previous.x, previous.y);
+      ctx.lineTo(previous.x + (x - previous.x) * lit, previous.y + (y - previous.y) * lit);
+      ctx.strokeStyle = "#b6e7f7";
+      ctx.stroke();
+    }
+    previous = { x, y };
+    const radius = Math.max(3, Math.min(7, wide * .009));
+    ctx.globalAlpha = reveal * (.28 + .72 * lit);
+    ctx.beginPath();
+    ctx.moveTo(x, y - radius); ctx.lineTo(x + radius, y);
+    ctx.lineTo(x, y + radius); ctx.lineTo(x - radius, y); ctx.closePath();
+    ctx.fillStyle = lit > 0 ? (index === 10 ? "#ffe2a3" : "#b7eaf2") : "#5e7293";
+    ctx.fill();
+    ctx.fillStyle = "#d9eaf9";
+    ctx.fillText(String(index + 1).padStart(2, "0"), x - radius, y + radius + 3);
+    ctx.globalAlpha = reveal;
+  }
+  ctx.restore();
+}
+
 function paintCampaignVictory(scene) {
   const { width, height } = viewport;
   const { age } = scene;
   const ctx = context;
   const calm = quietCombatMotion();
   const departure = campaignSmooth(age, 0, 6);
-  const crossing = campaignSmooth(age, 6.2, 10.9);
-  const rest = campaignSmooth(age, 10.15, 13.85);
+  const crossing = campaignSmooth(age, 6.2, 9.8);
+  const rest = campaignSmooth(age, 9.55, 13.65);
   const lens = campaignSmooth(age, 2.1, 9.2);
   const travel = calm ? .55 : departure;
   ctx.clearRect(0, 0, width, height);
-  drawBattlefield(false);
   ctx.save();
+  if (typeof applyCampaignReturnCamera === "function") applyCampaignReturnCamera(ctx, age);
+  drawBattlefield(false);
   const atmos = ctx.createLinearGradient(0, height, width, 0);
   atmos.addColorStop(0, `rgba(12,20,42,${.36 + rest * .29})`);
   atmos.addColorStop(.56, `rgba(27,34,64,${.27 + rest * .18})`);
@@ -143,15 +219,19 @@ function paintCampaignVictory(scene) {
   ctx.globalAlpha = 1;
   drawCampaignGate(ctx, gateX, centerY, height * (.16 + lens * .28), age, campaignSmooth(age, 2.4, 6) * (1 - rest), calm);
 
-  const widthScale = (calm ? .11 : .148 - crossing * .119) * Math.min(width, height * 1.78);
-  const ship = { x: width * (.20 + travel * .22 + crossing * .35),
+  const widthScale = (calm ? .11 : .148 - crossing * .11) * Math.min(width, height * 1.78);
+  const ship = { x: width * (.20 + travel * .19 + crossing * .275),
     y: centerY + (calm ? 0 : Math.sin(age * .51) * height * .012) * (1 - crossing),
     width: widthScale, height: widthScale * .64, visualBank: calm ? 0 : -.13 * lens, hitFlash: 0 };
-  ctx.globalAlpha = (1 - rest) * (1 - crossing * .32);
+  ctx.save();
+  ctx.globalAlpha = (1 - rest) * (1 - campaignSmooth(crossing, .61, .92));
+  const awardFilter = typeof activeAwardFilter === "function" ? activeAwardFilter(scene.plane) : "";
+  if (awardFilter) ctx.filter = awardFilter;
   if (!drawFighterVariant(ctx, ship, scene.plane, evolution, calm, age)
     && fighterImage.complete && fighterImage.naturalWidth) {
     ctx.drawImage(fighterImage, ship.x - ship.width / 2, ship.y - ship.height / 2, ship.width, ship.height);
   }
+  ctx.restore();
   ctx.globalAlpha = 1;
   if (!calm && crossing > .08 && crossing < .76) {
     ctx.save();
@@ -166,7 +246,7 @@ function paintCampaignVictory(scene) {
     ctx.stroke();
     ctx.restore();
   }
-  const arrival = Math.max(0, 1 - Math.abs(age - 10.7) / 1.14);
+  const arrival = Math.max(0, 1 - Math.abs(age - 8.95) / .90);
   if (!calm && arrival > 0) {
     ctx.fillStyle = `rgba(177,219,255,${arrival * .23})`;
     ctx.fillRect(0, 0, width, height);
@@ -177,6 +257,7 @@ function paintCampaignVictory(scene) {
   ctx.fillStyle = rail;
   ctx.fillRect(0, height * .6, width, height * .4);
   ctx.restore();
+  drawEpilogueStarMap(ctx, scene, width, height);
 }
 
 function drawCampaignVictoryFrame(seconds) {
@@ -187,20 +268,21 @@ function drawCampaignVictoryFrame(seconds) {
     updateBattlefield(seconds, true);
   }
   paintCampaignVictory(scene);
-  campaignEpilogueProgress.value = scene.age;
+  const progress = Math.floor(scene.age * 20) / 20;
+  if (campaignEpilogueProgress.value !== progress) campaignEpilogueProgress.value = progress;
   updateCampaignCaption(scene);
   if (scene.age >= campaignEpilogueDuration - 1e-6) finishCampaignVictory();
   return true;
 }
 
 function updateCampaignCaption(scene, force = false) {
-  const line = scene.age < 4 ? 0 : scene.age < 9.7 ? 1 : 2;
+  const line = scene.age < 4.3 ? 0 : scene.age < 9.7 ? 1 : 2;
   if (scene.caption === line && !force) return;
   scene.caption = line;
   campaignEpilogueLine.textContent = [
-    tr("母巢信号消失，返航通道已打开。", "The hive has fallen silent. A way home is open."),
-    tr("星门稳定。把最后一束光带回家。", "Gate stable. Bring the last light home."),
-    tr("跃迁完成。边境重见星光。", "Jump complete. Starlight returns to the frontier.")
+    tr("引航：母巢信号消失，星门开始解锁。", "Pilgrim: Hive signal lost. The gate is unlocking."),
+    tr("渡鸦：我们已经到家。星门为你留着。", "Raven: We're home. The gate is open for you."),
+    tr("引航：十一处航道全部恢复。欢迎返航。", "Pilgrim: All eleven waypoints restored. Welcome home.")
   ][line];
 }
 
@@ -245,6 +327,7 @@ function renderCampaignReport(result) {
   const unlock = result.unlocks.map(type => bossTypeName(type)).join(tr("、", ", "));
   campaignReportContent.replaceChildren(metrics, sortieElement("p", records, "campaign-record-line"), grid,
     sortieElement("p", thresholds, "sortie-explainer"));
+  if (typeof appendNewAwards === "function") appendNewAwards(campaignReportContent, result);
   if (unlock) campaignReportContent.append(sortieElement("p", tr(`新练习解锁 ${unlock}`, `Practice unlocked ${unlock}`), "campaign-record-line"));
 }
 

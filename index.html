@@ -10,7 +10,9 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="combat-hud.css">
   <link rel="stylesheet" href="guide.css">
+  <link rel="stylesheet" href="tutorial.css">
   <link rel="stylesheet" href="sortie-ui.css">
+  <link rel="stylesheet" href="controls.css">
   <link rel="stylesheet" href="campaign-victory.css">
   <link rel="preload" as="image" href="assets/scenery/orbit-galaxy.webp" fetchpriority="high">
   <script src="i18n.js" defer></script>
@@ -31,6 +33,7 @@
   <script src="boss-presentation.js" defer></script>
   <script src="hostile-projectiles.js" defer></script>
   <script src="alien-attacks.js" defer></script>
+  <script src="boss-mechanics.js" defer></script>
   <script src="alien-pressure.js" defer></script>
   <script src="boss-finales.js" defer></script>
   <script src="bosses.js" defer></script>
@@ -59,10 +62,14 @@
   <script src="i18n-static.js" defer></script>
   <script src="guide.js" defer></script>
   <script src="alien-lives.js" defer></script>
+  <script src="achievements.js" defer></script>
   <script src="profile.js" defer></script>
   <script src="sortie-modes.js" defer></script>
   <script src="flight-radio.js" defer></script>
+  <script src="tutorial.js" defer></script>
+  <script src="controls.js" defer></script>
   <script src="game.js" defer></script>
+  <script src="awards-ui.js" defer></script>
   <script src="sortie-ui.js" defer></script>
   <script src="campaign-victory.js" defer></script>
 </head>
@@ -105,6 +112,7 @@
             <button class="secondary-button" data-sortie-console="challenges" type="button" aria-haspopup="dialog">挑战</button>
             <button class="secondary-button" data-sortie-console="upgrades" type="button" aria-haspopup="dialog">改装</button>
             <button class="secondary-button" data-sortie-console="archive" type="button" aria-haspopup="dialog">战役档案</button>
+            <button class="secondary-button" data-sortie-console="awards" type="button" aria-haspopup="dialog">徽章墙</button>
             <button class="secondary-button" data-sortie-console="settings" type="button" aria-haspopup="dialog">设置</button>
           </nav>
           <label class="render-quality-control"><span id="render-quality-label">画质</span><select id="render-quality" aria-labelledby="render-quality-label"><option value="low">低</option><option value="medium">中</option><option value="high" selected>高</option></select></label>
@@ -172,6 +180,14 @@
           <button id="menu-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="pause-screen">返回机库</button>
         </div>
       </div>
+      <aside id="flight-training" class="flight-training" aria-labelledby="flight-training-title" hidden>
+        <div class="flight-training-copy" aria-live="polite" aria-atomic="true">
+          <span class="eyebrow" id="flight-training-step"></span>
+          <h2 id="flight-training-title"></h2>
+          <p id="flight-training-copy"></p>
+        </div>
+        <button type="button" class="secondary-button" id="flight-training-skip">跳过训练</button>
+      </aside>
       <section id="pause-screen" class="pause-screen" role="dialog" aria-modal="true" aria-labelledby="pause-title" aria-describedby="pause-description" hidden>
         <div class="pause-card">
           <header class="pause-heading">
@@ -235,6 +251,7 @@
             </button>
           </div>
           <p class="evolution-controls">点击选择 · 按 1 / 2 / 3 快选 · Tab 切换，Enter 确认</p>
+          <button class="secondary-button flight-training-evolution-skip" type="button" id="flight-training-evolution-skip" hidden>跳过训练</button>
         </div>
       </section>
       <section id="game-over-screen" class="game-over-screen" aria-labelledby="game-over-title" hidden>
@@ -305,7 +322,7 @@
           <section class="flight-guide-section" data-guide-page aria-labelledby="flight-guide-tips-title" hidden>
             <h3 id="flight-guide-tips-title">战斗与升级</h3>
             <ul class="flight-guide-tips">
-              <li><strong>选一架战机出击。</strong>赤焰稳住高度打穿甲重炮；苍电在中远处用追踪弹标记、连锁；曜金在近中距离铺开压制区，留意电容余量。</li>
+              <li><strong>选一架战机出击。</strong>赤焰按住 C 蓄穿透重炮，松手开火；苍电用追踪弹标记、连锁；曜金近距扩散布置压制区，切聚焦回充电容。</li>
               <li><strong>躲开敌机和敌弹。</strong>撞机或中弹会扣生命，打不到的敌机可以放过去。</li>
               <li><strong>留意第二次锁定。</strong>虚线和圆圈标出锁定的路线或位置。躲过第一击后，等追击锁定再换位。</li>
               <li><strong>射中能量球升级。</strong><span class="guide-orb-blue">蓝球提攻速</span>、<span class="guide-orb-yellow">黄球加弹道</span>、<span class="guide-orb-red">红球加伤害</span>、<span class="guide-orb-green">绿球回生命，满血时加生命上限</span>。</li>

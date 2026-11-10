@@ -37,6 +37,7 @@ function shieldInterceptsProjectile(shot, swept = true) {
 }
 function consumeEvolutionShieldProjectile(shot, swept = true) {
   if (!shieldInterceptsProjectile(shot, swept)) return false;
+  if (shot.source === "flight-training" && typeof noteFlightTutorialContact === "function") noteFlightTutorialContact(shot, true);
   captureEvolutionProjectile(shot);
   return true;
 }
@@ -56,11 +57,12 @@ function tryPerfectShield() {
   shield.perfectUsed = true;
   shield.perfectRemaining = 0;
   armCannonLink();
+  armEvolutionGuardPierce();
   const aegisMastery = evolution.aegis >= 3;
   if (aegisMastery) {
-    restoreUltimateEnergy(ultimateRules.energyPerCharge * .3);
-    shield.remaining += .6;
-    shield.duration += .6;
+    restoreUltimateEnergy(ultimateRules.energyPerCharge * .50);
+    shield.remaining += 1;
+    shield.duration += 1;
   }
   shield.flash = 0.65;
   shield.slowRemaining = reducedMotion.matches ? 0 : shieldRules.slowDuration;
@@ -68,6 +70,7 @@ function tryPerfectShield() {
   const halfHeight = Math.max(95, player.height * 1.1);
   shield.effect = { x: player.x, y: player.y, halfHeight, length: Math.max(0, viewport.width - player.x) };
   gameAudio.perfectShield();
+  if (typeof recordCombatFeedback === "function") recordCombatFeedback("guard", player);
   addCombatShake(2.5);
   const counterLog = weaponDamageLog() + Math.log((1 + .16 * (weapon.lanes - 1)) / weapon.interval) + Math.log(shieldRules.counterSeconds);
   const counter = { source: "blast", damageLog: counterLog, x: player.x, y: player.y };
@@ -85,7 +88,7 @@ function tryPerfectShield() {
   }
   updateShieldDisplay();
   if (isBattleActive()) statusMessage.textContent = aegisMastery
-    ? tr("壁垒完美格挡 · 大招回能 30% · 无敌延长 0.6 秒", "Aegis Perfect Guard · 30% special energy · 0.6s extended protection")
+    ? tr("壁垒完美格挡 · 大招回能 50% · 无敌延长 1 秒", "Aegis Perfect Guard · 50% special energy · 1s extended protection")
     : tr("完美格挡！返还 25% 护盾充能，3 秒内释放已储存的大招可加快蓄力。",
       "Perfect Guard! Restored 25% shield charge. Use a stored special within 3 seconds to charge it faster.");
   else { shield.slowRemaining = 0; resetCannonLink(); }
@@ -101,6 +104,7 @@ function shieldFrameSeconds(realSeconds) {
 }
 function updateShieldDisplay() {
   const disabled = shieldDisabledForSortie();
+  const keyLabel = typeof controlBindingLabel === "function" ? controlBindingLabel("shield") : "V";
   const full = shield.charges === shieldRules.maxCharges;
   const chargeTime = evolutionShieldChargeTime();
   const percent = full ? 100 : clamp(shield.energy / chargeTime * 100, 0, 100);
@@ -109,7 +113,7 @@ function updateShieldDisplay() {
   const ready = shield.perfectRemaining > 1e-9 && !shield.perfectUsed;
   const absorbLimit = evolutionWeaponRules.absorbLimit[evolution.aegis];
   const absorbed = evolutionWeapons.absorbed.length;
-  const key = [gameLanguage, shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed, disabled, evolution.aegis].join("/");
+  const key = [gameLanguage, shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed, disabled, evolution.aegis, keyLabel].join("/");
   if (key === shieldDisplayKey) return;
   shieldDisplayKey = key;
   shieldCount.textContent = shield.charges + " / " + shieldRules.maxCharges;
@@ -129,11 +133,11 @@ function updateShieldDisplay() {
     : shieldIsActive() && absorbLimit ? tr("吸收弹药 " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + " 秒",
       "Absorbed " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + "s")
     : shieldIsActive() ? tr("无敌保护 · " + remaining.toFixed(1) + " 秒", "Protected · " + remaining.toFixed(1) + "s")
-    : full ? tr("储能已满 · V 迎弹反击", "Fully charged · V to guard")
-    : shield.charges ? tr("V 迎弹格挡 · 2 秒无敌", "V to guard · 2s protection")
+    : full ? tr("储能已满 · " + keyLabel + " 迎弹反击", "Fully charged · " + keyLabel + " to guard")
+    : shield.charges ? tr(keyLabel + " 迎弹格挡 · 2 秒无敌", keyLabel + " to guard · 2s protection")
     : tr("自动充能 · " + Math.ceil(chargeTime - shield.energy) + " 秒", "Recharging · " + Math.ceil(chargeTime - shield.energy) + "s");
-  shieldPanel.title = tr("敌弹触盾前按 V，最初 0.25 秒可完美格挡，触发反击并返还 25% 充能。",
-    "Press V just before a shot reaches you. Block within 0.25 seconds to counter and restore 25% shield charge.")
+  shieldPanel.title = tr("敌弹触盾前按 " + keyLabel + "，最初 0.25 秒可完美格挡，触发反击并返还 25% 充能。",
+    "Press " + keyLabel + " just before a shot reaches you. Block within 0.25 seconds to counter and restore 25% shield charge.")
     + (absorbLimit ? tr(" 当前壁垒可吸收 " + absorbLimit + " 发接触护盾的敌弹，并在护盾结束时释放。",
       " Your Aegis absorbs up to " + absorbLimit + " shots it blocks and releases them when the shield ends.") : "");
 }
@@ -166,8 +170,11 @@ function updateShield(seconds) {
   if (!shield.flash) shield.effect = null;
   if (shield.charges < shieldRules.maxCharges) {
     const gained = gainShieldEnergy(seconds);
-    if (gained) statusMessage.textContent = tr("护盾充能完成，已储存 " + shield.charges + " 次。按 V 开启 2 秒无敌。",
-      "Shield ready. Charges stored: " + shield.charges + ". Press V for 2 seconds of protection.");
+    if (gained) {
+      const key = typeof controlBindingLabel === "function" ? controlBindingLabel("shield") : "V";
+      statusMessage.textContent = tr("护盾充能完成，已储存 " + shield.charges + " 次。按 " + key + " 开启 2 秒无敌。",
+        "Shield ready. Charges stored: " + shield.charges + ". Press " + key + " for 2 seconds of protection.");
+    }
   }
   updateShieldDisplay();
 }

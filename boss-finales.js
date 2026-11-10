@@ -50,6 +50,7 @@ function beginBossFinale(target) {
   target.damageBudgetAt = undefined;
   target.lashPulse = 0;
   target.alienAttack = null;
+  if (typeof recordCombatFeedback === "function") recordCombatFeedback("finale", target);
   clearBossFinaleAttacks();
   bossHitGrace = Math.max(bossHitGrace, .65);
   preloadBossFinaleArt(target.type);
@@ -620,6 +621,19 @@ function finaleShard(ctx, x, y, size, angle, color) {
 }
 
 function drawFinaleShell(ctx, target, w, h, quiet) {
+  const action = bossActionPose(target, quiet);
+  ctx.save();
+  if (action.loss > 0) {
+    ctx.translate(action.x * w, action.y * h);
+    ctx.rotate(action.bank);
+    ctx.scale(action.scaleX, action.scaleY);
+    ctx.globalAlpha *= 1 - action.slack * .35;
+  }
+  drawFinaleShellBody(ctx, target, w, h, quiet, action);
+  ctx.restore();
+}
+
+function drawFinaleShellBody(ctx, target, w, h, quiet, action) {
   const f = target.finale;
   const mode = f.mode;
   const age = quiet ? 0 : f.age;
@@ -632,9 +646,10 @@ function drawFinaleShell(ctx, target, w, h, quiet) {
   }
   if (typeof drawStarBreakerModel === "function"
     && drawStarBreakerModel(ctx, starBreakerFinaleModelIndex(target.type), 0, 0, w, h, {
-      time: age, charge: lit ? .14 : .37 + .23 * Math.sin(age * 2.7),
+      time: age, charge: (lit ? .14 : .37 + .23 * Math.sin(age * 2.7)) * (1 - action.slack),
       ruptured: lit ? 1 : .16 + .4 * (1 - clamp(target.hp, 0, 1)),
       hit: target.hitFlash ? 1 : 0, recoil: 0, quiet, color, cooling: lit,
+      action: { slack: action.slack },
     })) {
     if (lit) {
       ctx.strokeStyle = "#b8f4ffab";
@@ -780,7 +795,10 @@ function drawFinaleNodes(ctx, target, quiet) {
 function drawBossFinale(ctx, target, quiet) {
   const f = target.finale;
   const g = finaleCoreGeometry(target);
-  for (const hazard of f.hazards) drawFinaleHazard(ctx, hazard, quiet);
+  for (const hazard of f.hazards) {
+    drawFinaleHazard(ctx, hazard, quiet);
+    if (typeof drawFlightDangerPattern === "function") drawFlightDangerPattern(ctx, hazard);
+  }
   if (f.gate && !f.gate.cut) {
     ctx.save();
     ctx.lineWidth = 1.7; ctx.strokeStyle = "#aaffec"; ctx.fillStyle = "#46efc82a"; ctx.setLineDash([5, 6]);

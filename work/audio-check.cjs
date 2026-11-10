@@ -237,8 +237,10 @@ async function run() {
     const musicBus = cueAudio.gains[2], duck = cueAudio.gains[3];
     assert.equal(musicBus.connections[0], duck);
     assert.notEqual(cueAudio.gains[1].connections[0], duck);
-    assert.ok(duck.gain.events.some(event => event.value < 0.5));
+    assert.ok(duck.gain.events.some(event => event.value === .63));
+    assert.ok(duck.gain.events.some(event => event.value === .73));
     assert.equal(duck.gain.events.at(-1).value, 1);
+    assert.ok(Math.abs(duck.gain.events.at(-1).time - (3 * .55 + .15)) < 1e-8);
   });
   cues.api.destroy();
 

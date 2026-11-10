@@ -17,7 +17,7 @@
 .campaign-victory-report {
   overflow: auto; overscroll-behavior: contain; scrollbar-color: #627b96 #111c2b;
   padding: clamp(11px, 3.6vw, 48px);
-  background: radial-gradient(ellipse at 60% 0%, #18364dcd, transparent 68%), #060d18dc;
+  background: radial-gradient(ellipse at 60% 0%, #18364dcd, transparent 68%), #060d18;
 }
 .campaign-report-card {
   width: min(100%, 990px); margin: auto;

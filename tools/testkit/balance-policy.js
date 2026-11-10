@@ -2,7 +2,7 @@
 
 // Loaded in the benchmark browser only. Movement goes through the regular
 // pressed-key input set and attacks go through the game's input handlers.
-const balancePolicyVersion = "telegraph-pilot/4";
+const balancePolicyVersion = "telegraph-pilot/5";
 const balancePolicyDirections = [
   [0, 0], [1, 0], [-1, 0], [0, -1], [0, 1],
   [1, -1], [1, 1], [-1, -1], [-1, 1],
@@ -176,7 +176,17 @@ function balanceChooseAction(controls, mode) {
   });
   balanceMove(best.horizontal, best.vertical);
   const aligned = Math.abs((target?.y ?? middleY) - player.y) < Math.max(24, player.height * .35);
-  const wantsLance = evolution.pierce >= 3 && evolutionWeapons.lanceCooldown <= 0 && (boss?.phase === "recover" || boss?.finale)
+  const canAimHeavy = sortieFighter === "red" && boss && !target?.cross && aligned && best.cost < 22;
+  if (controls.chargeHeld && (!fighterCombat.redHeld || !canAimHeavy || fighterCombat.stability >= .99)) {
+    balancePress("KeyC", "keyup");
+    controls.chargeHeld = false;
+    controls.nextHeavy = battleTime + 2.2;
+  } else if (canAimHeavy && !controls.shiftHeld && !controls.chargeHeld && battleTime >= (controls.nextHeavy ?? 0)
+    && !evolutionWeapons.lanceCharging && fighterCombat.redCooldown <= 0 && ultimate.phase === "idle") {
+    balancePress("KeyC");
+    controls.chargeHeld = fighterCombat.redHeld;
+  }
+  const wantsLance = !controls.chargeHeld && evolution.pierce >= 3 && evolutionWeapons.lanceCooldown <= 0 && (boss?.phase === "recover" || boss?.finale)
     && aligned && best.cost < 24;
   if (controls.shiftHeld && (!wantsLance || battleTime - controls.shiftSince > .74)) {
     balancePress("ShiftLeft", "keyup");
@@ -197,7 +207,7 @@ function balanceChooseAction(controls, mode) {
     balanceTap("KeyV");
     controls.shields++;
   }
-  if (ultimate.charges > 0 && ultimate.phase === "idle" && boss && !target?.cross
+  if (!controls.chargeHeld && ultimate.charges > 0 && ultimate.phase === "idle" && boss && !target?.cross
     && aligned && best.cost < 26) {
     balanceTap("Space");
     controls.specials++;

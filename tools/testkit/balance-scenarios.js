@@ -6,6 +6,9 @@ const balanceBuilds = {
   wings: [3, 1, 1],
   falcon: [1, 3, 1],
   aegis: [1, 1, 3],
+  hunter: [2, 3, 0],
+  guardbreaker: [3, 0, 2],
+  intercept: [0, 3, 2],
 };
 function balanceRound(number) { return Math.round(number * 1000) / 1000; }
 
@@ -38,10 +41,9 @@ function balanceStart(fixture) {
     evolution[route] = ranks[index];
     if (ranks[index]) onEvolutionUpgrade(route);
   }
-  if (Object.hasOwn(evolution, "capstone")) {
-    evolution.capstone = fixture.build === "wings" ? "pierce"
-      : fixture.build === "falcon" ? "blast" : fixture.build === "aegis" ? "aegis" : "";
-  }
+  const capstone = ranks.indexOf(3);
+  if (capstone >= 0) evolution.capstone = ["pierce", "blast", "aegis"][capstone];
+  refreshEvolutionLinks();
   if (fixture.fixture === "stress") {
     for (let index = 0; index < 64; index++) {
       applyPowerup("red");

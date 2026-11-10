@@ -121,6 +121,27 @@ function buildSpaceAsteroid(builder, seed, low) {
   }
 }
 
+function buildSpaceMoon(builder, low) {
+  const rings = low ? 10 : 24, segments = low ? 18 : 44;
+  const globe = Array.from({ length: rings + 1 }, (_, latitude) => Array.from({ length: segments }, (_, longitude) => {
+    const theta = longitude / segments * Math.PI * 2;
+    const phi = latitude / rings * Math.PI;
+    return [.54 * Math.cos(theta) * Math.sin(phi), .54 * Math.cos(phi), .54 * Math.sin(theta) * Math.sin(phi)];
+  }));
+  const normals = new Map(globe.flat().map(point => [point, point.map(value => value / .54)]));
+  const pigment = ([x, y, z]) => {
+    const band = Math.sin(y * 40 + 2 * Math.sin(x * 8 + z * 10));
+    return [.27 + band * .08, .33 + band * .08, .44 + band * .06];
+  };
+  for (let row = 0; row < rings; row++) {
+    for (let column = 0; column < segments; column++) {
+      const next = (column + 1) % segments;
+      if (row) builder.triangle(globe[row][column], globe[row + 1][column], globe[row][next], pigment, 3, undefined, false, normals);
+      if (row + 1 < rings) builder.triangle(globe[row][next], globe[row + 1][column], globe[row + 1][next], pigment, 3, undefined, false, normals);
+    }
+  }
+}
+
 function buildSpaceWreck(builder, seed, low) {
   const armor = [[.24, .29, .32], [.17, .22, .27], [.32, .35, .36], [.24, .27, .30]];
   const interior = [[.088, .10, .11], [.24, .16, .13], [.13, .15, .17]];
@@ -228,6 +249,7 @@ function spacePropMesh(kind, variant, low = false) {
   if (cache.has(key)) return cache.get(key);
   const builder = spacePropBuilder(), seed = variant + 2;
   if (kind === "rock") buildSpaceAsteroid(builder, seed, low);
+  else if (kind === "moon") buildSpaceMoon(builder, low);
   else if (kind === "wreck") buildSpaceWreck(builder, seed, low);
   else if (kind === "cell") buildSpaceCanister(builder, low);
   else buildSpaceTransport(builder, low);
@@ -294,6 +316,19 @@ float materialDetail(vec3 p, float rock) {
 }
 void main() {
   vec3 p = surface;
+  if (finish.a > 2.5) {
+    vec3 n = normalize(facing);
+    float day = smoothstep(-.22, .9, dot(n, normalize(vec3(-.77, .32, .54))));
+    float weather = noise(vec3(p.x * 7.0, p.y * 22.0, p.z * 7.0));
+    float bands = .5 + .5 * sin(p.y * 44.0 + weather * 3.4 + sin(p.x * 7.0 + p.z * 5.0));
+    float wisps = noise(p * vec3(21.0, 51.0, 21.0) + weather * .6);
+    float haze = smoothstep(.28, .82, bands * .40 + weather * .44 + wisps * .19);
+    vec3 tint = mix(vec3(.16,.25,.38), vec3(.60,.64,.69), haze);
+    float atmosphere = pow(1.0 - max(0.0, n.z), 4.0);
+    vec3 globe = tint * (.065 + day * .62) + vec3(.16,.30,.45) * atmosphere * (.14 + day * .45);
+    gl_FragColor = vec4(globe, 1.0);
+    return;
+  }
   float rock = 1.0 - step(.5, finish.a);
   float emit = step(1.5, finish.a);
   float large = noise(p * 9.0), grain = noise(p * 53.0), fine = hash(floor(p * 241.0));

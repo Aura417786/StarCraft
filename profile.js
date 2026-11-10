@@ -2,7 +2,10 @@
 
 const StarBreakerProfile = (() => {
   const key = "star-breaker-profile";
-  const version = 1;
+  const backupKey = key + "-backup";
+  const version = 2;
+  const awards = typeof StarBreakerAwards !== "undefined" ? StarBreakerAwards
+    : typeof require === "function" ? require("./achievements.js") : null;
   const bossCount = 11;
   const difficulties = ["recruit", "veteran", "abyss"];
   const upgradeCosts = [1, 2, 3, 4, 5];
@@ -16,7 +19,12 @@ const StarBreakerProfile = (() => {
   function sanitizeBoss(raw) {
     const value = object(raw);
     const clears = count(value.clears);
-    return { clears, clean: count(value.clean, clears), best: number(value.best, 86_400) };
+    return { clears, clean: count(value.clean, clears), best: number(value.best, 86_400),
+      ...(value.lastAssists ? { lastAssists: recordedAssists(value.lastAssists) } : {}) };
+  }
+
+  function recordedAssists(raw) {
+    return Object.fromEntries(["extendedWarning", "noScreenShake", "reducedMotion"].map(key => [key, raw?.[key] === true]));
   }
 
   function sanitizeRecord(raw) {
@@ -28,7 +36,10 @@ const StarBreakerProfile = (() => {
       attempts,
       clears: count(value.clears, attempts),
       deaths: count(value.deaths, attempts),
-      furthest: count(value.furthest, bossCount)
+      furthest: count(value.furthest, bossCount),
+      clean: count(value.clean, attempts),
+      fast: count(value.fast, attempts),
+      ...(value.lastAssists ? { lastAssists: recordedAssists(value.lastAssists) } : {})
     };
   }
 
@@ -58,22 +69,37 @@ const StarBreakerProfile = (() => {
   function normalize(source) {
     const value = object(source);
     const practice = Array.isArray(value.practice) ? value.practice : [];
-    const daily = Object.entries(object(value.daily)).filter(([day]) => /^\d{4}-\d{2}-\d{2}$/.test(day))
-      .sort(([a], [b]) => b.localeCompare(a)).slice(0, 366);
+    function datedRecords(raw, limit) {
+      return Object.fromEntries(Object.entries(object(raw)).filter(([day]) => /^\d{4}-\d{2}-\d{2}$/.test(day))
+        .sort(([a], [b]) => b.localeCompare(a)).slice(0, limit).map(([day, record]) => [day, sanitizeRecord(record)]));
+    }
+    const resume = object(value.rushResume);
+    const rushResume = Number.isInteger(resume.boss) && resume.boss >= 0 && resume.boss < bossCount
+      && Number.isInteger(resume.seed) && difficulties.includes(resume.difficulty)
+      && ["red", "blue", "yellow"].includes(resume.fighter)
+      ? { boss: resume.boss, seed: resume.seed >>> 0, difficulty: resume.difficulty, fighter: resume.fighter } : null;
+    const unlocked = [...new Set((Array.isArray(value.unlocked) ? value.unlocked
+      : Array.from({ length: count(object(value.campaign).furthest, bossCount) }, (_, id) => id))
+      .filter(id => Number.isInteger(id) && id >= 0 && id < bossCount))].sort((a, b) => a - b);
+    const campaign = sanitizeCampaign(value.campaign);
+    const rush = sanitizeRecord(value.rush);
     return {
       version,
       points: count(value.points),
       upgrades: Object.fromEntries(upgradeKeys.map(id => [id, count(object(value.upgrades)[id], upgradeCosts.length)])),
-      unlocked: [...new Set((Array.isArray(value.unlocked) ? value.unlocked
-        : Array.from({ length: count(object(value.campaign).furthest, bossCount) }, (_, id) => id))
-        .filter(id => Number.isInteger(id) && id >= 0 && id < bossCount))].sort((a, b) => a - b),
-      campaign: sanitizeCampaign(value.campaign),
+      unlocked, campaign,
+      awards: awards?.normalize(value.awards, unlocked, campaign, rush) ?? { badges: [], active: {} },
       assisted: sanitizeCampaign(value.assisted),
-      rush: sanitizeRecord(value.rush),
+      rush,
       rushByDifficulty: Object.fromEntries(difficulties.map(id => [id, sanitizeRecord(object(value.rushByDifficulty)[id])])),
       rushAssisted: sanitizeRecord(value.rushAssisted),
+      weekly: datedRecords(value.weekly, 52),
+      weeklyAssisted: datedRecords(value.weeklyAssisted, 52),
+      rushResume,
       practice: Array.from({ length: bossCount }, (_, i) => sanitizeBoss(practice[i])),
-      daily: Object.fromEntries(daily.map(([day, record]) => [day, sanitizeRecord(record)]))
+      practiceAssisted: Array.from({ length: bossCount }, (_, i) => sanitizeBoss(value.practiceAssisted?.[i])),
+      daily: datedRecords(value.daily, 366),
+      dailyAssisted: datedRecords(value.dailyAssisted, 366)
     };
   }
 
@@ -96,7 +122,13 @@ const StarBreakerProfile = (() => {
     let writable = false;
     function read() {
       try {
-        const saved = decode(storage.getItem(key));
+        let saved = decode(storage.getItem(key));
+        if (saved.status === "recovered" || saved.status === "empty") {
+          try {
+            const backup = decode(storage.getItem(backupKey));
+            if (backup.status === "ok" || backup.status === "migrated") saved = { ...backup, status: "backup" };
+          } catch { /* A readable primary save remains sufficient. */ }
+        }
         profile = saved.profile;
         status = saved.status;
         writable = status !== "future";
@@ -113,8 +145,12 @@ const StarBreakerProfile = (() => {
       if (result === false) return result;
       profile = normalize(profile);
       if (writable) {
-        try { storage.setItem(key, JSON.stringify(profile)); }
-        catch { status = "session"; writable = false; }
+        const serialized = JSON.stringify(profile);
+        try {
+          storage.setItem(key, serialized);
+          status = "ok";
+          try { storage.setItem(backupKey, serialized); } catch { /* The primary write still succeeded. */ }
+        } catch { status = "session"; writable = false; }
       }
       return result;
     }
@@ -157,45 +193,94 @@ const StarBreakerProfile = (() => {
       record.attempts++;
       if (run.won) record.clears++;
       if (run.died) record.deaths++;
+      if (run.assisted && run.assists) record.lastAssists = recordedAssists(run.assists);
       record.furthest = Math.max(record.furthest, run.bossRecords.reduce((max, item) => Math.max(max, item.type + 1), 0));
       return { newScore, newTime, bestScore: record.bestScore };
     }
 
+    function addRush(record, run, formal) {
+      const result = addRun(record, run, formal);
+      if (!formal || !run.won || run.bossRecords.length !== bossCount) return result;
+      if (run.hits === 0) { record.clean++; result.cleanBadge = true; }
+      if (run.seconds <= 620) { record.fast++; result.fastBadge = true; }
+      return result;
+    }
+
+    function recordRun(current, run) {
+      const formal = !run.assisted && !run.abandoned;
+      if (run.mode === "practice") {
+        const records = run.assisted ? current.practiceAssisted : current.practice;
+        for (const item of run.bossRecords) {
+          const record = records[item.type];
+          addBoss(record, item);
+          if (record && run.assisted && run.assists) record.lastAssists = recordedAssists(run.assists);
+        }
+        return {};
+      }
+      if (run.mode === "daily") {
+        if (run.abandoned || !run.day) return {};
+        const records = run.assisted ? current.dailyAssisted : current.daily;
+        return addRun(records[run.day] ??= sanitizeRecord(), run, true);
+      }
+      const difficulty = difficulties.includes(run.difficulty) ? run.difficulty : "veteran";
+      if (run.mode === "rush") {
+        if (run.resumed) return {};
+        if (run.won) current.rushResume = null;
+        else if (Number.isInteger(run.currentBoss)) {
+          current.rushResume = { boss: run.currentBoss, seed: run.seed, difficulty, fighter: run.fighter };
+        }
+        if (run.week) {
+          if (run.abandoned) return {};
+          if (run.assisted) return addRun(current.weeklyAssisted[run.week] ??= sanitizeRecord(), run, true);
+          return addRush(current.weekly[run.week] ??= sanitizeRecord(), run, true);
+        }
+        if (run.assisted) return addRun(current.rushAssisted, run, !run.abandoned);
+        addRush(current.rush, run, formal);
+        return addRush(current.rushByDifficulty[difficulty], run, formal);
+      }
+      const campaign = run.assisted ? current.assisted : current.campaign;
+      campaign.totalKills += count(run.kills);
+      for (const item of run.bossRecords) addBoss(campaign.bosses[item.type], item);
+      addRun(campaign, run, !run.abandoned);
+      return addRun(campaign.byDifficulty[difficulty], run, !run.abandoned);
+    }
+
     function finish(run) {
+      if (run.resumed) return {};
       return transaction(current => {
-        const formal = !run.assisted && !run.abandoned;
-        if (run.mode === "practice") {
-          for (const item of run.bossRecords) addBoss(current.practice[item.type], item);
-          return {};
-        }
-        if (run.mode === "daily") {
-          if (!formal || !run.day) return {};
-          const record = current.daily[run.day] ??= sanitizeRecord();
-          return addRun(record, run, true);
-        }
-        const difficulty = difficulties.includes(run.difficulty) ? run.difficulty : "veteran";
-        if (run.mode === "rush") {
-          const record = run.assisted ? current.rushAssisted : current.rush;
-          const best = addRun(record, run, !run.abandoned);
-          return run.assisted ? best : addRun(current.rushByDifficulty[difficulty], run, formal);
-        }
-        const campaign = run.assisted ? current.assisted : current.campaign;
-        campaign.totalKills += count(run.kills);
-        for (const item of run.bossRecords) addBoss(campaign.bosses[item.type], item);
-        addRun(campaign, run, !run.abandoned);
-        return addRun(campaign.byDifficulty[difficulty], run, !run.abandoned);
+        const result = recordRun(current, run);
+        const newAwards = awards?.award(current, run, result) ?? [];
+        return newAwards.length ? { ...result, newAwards } : result;
+      });
+    }
+
+    function equipAward(slot, cosmetic) {
+      return transaction(current => {
+        if (!["skin", "theme", "effect"].includes(slot)) return false;
+        if (!cosmetic) { delete current.awards.active[slot]; return true; }
+        const item = awards?.cosmetics[cosmetic];
+        if (!item || item.slot !== slot || !current.awards.badges.includes(item.badge)) return false;
+        current.awards.active[slot] = cosmetic;
+        return true;
+      });
+    }
+
+    function rememberRush(resume) {
+      return transaction(current => {
+        current.rushResume = resume;
+        return true;
       });
     }
 
     return {
       get data() { return normalize(profile); },
       get status() { return status; },
-      spendUpgrade, awardBoss, finish,
+      spendUpgrade, awardBoss, finish, equipAward, rememberRush,
       refresh() { if (writable) read(); }
     };
   }
 
-  return { key, version, bossCount, difficulties, upgradeCosts, upgradeKeys, decode, createStore };
+  return { key, backupKey, version, bossCount, difficulties, upgradeCosts, upgradeKeys, decode, createStore };
 })();
 
 if (typeof module !== "undefined") module.exports = StarBreakerProfile;
