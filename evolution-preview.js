@@ -157,7 +157,7 @@ function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
   ctx.stroke();
 
   const ship = { x: 49, y: 55, width: 70, height: 46, visualBank: 0 };
-  if (!drawEvolvedPlayer(ctx, ship, ranks, true, 0)) drawShipPBR(ctx, ship, "crimson", null, true, 0);
+  if (!drawEvolvedPlayer(ctx, ship, ranks, true, 0)) drawFighterVariant(ctx, ship, fighterProfile().id, null, true, 0);
   if (route === "pierce") previewWingFire(ctx, ship, level, time, quiet);
   if (route === "blast") previewDroneFire(ctx, ship, level, time, quiet, links, choice === "phalanx");
   if (route === "aegis" || choice === "phalanx") previewShieldFire(ctx, ship, ranks.aegis, time, quiet, links.lance);

@@ -16,7 +16,7 @@ const shipRenderSources = {
   rail: { src: "assets/ships/rail-sleek.png", crop: [40, 361, 1457, 314], tip: [1488, 523],
     engines: [], direction: 1, color: "#b1e7f2" },
 };
-const shipRenderAssets = Object.fromEntries(Object.entries(shipRenderSources).map(([kind, source]) => {
+function createShipRenderAsset(source) {
   const asset = { ...source, image: null, ready: false, cache: new Map() };
   if (typeof Image === "function") {
     asset.image = new Image(); asset.image.decoding = "async";
@@ -24,8 +24,10 @@ const shipRenderAssets = Object.fromEntries(Object.entries(shipRenderSources).ma
     asset.image.onerror = () => { asset.ready = false; asset.cache.clear(); };
     asset.image.src = source.src;
   }
-  return [kind, asset];
-}));
+  return asset;
+}
+const shipRenderAssets = Object.fromEntries(Object.entries(shipRenderSources).map(([kind, source]) =>
+  [kind, createShipRenderAsset(source)]));
 const shipVisuals = { clock: 0, bank: 0 };
 // Rim and canopy glints follow existing highlights on the original crimson texture.
 const crimsonReflectionSurfaces = [
@@ -57,13 +59,13 @@ function shipReflectionLight() {
     side: side + (cinematic.side - side) * weight, intensity: 1 + (cinematic.intensity - 1) * weight };
 }
 
-function drawCrimsonReflection(ctx, geometry, bank) {
+function drawPlayerReflection(ctx, geometry, bank, surfaces) {
   const light = shipReflectionLight(), color = light.channels.join(",");
   const alpha = ctx.globalAlpha * (light.intensity ?? 1);
   ctx.save();
   ctx.globalCompositeOperation = "screen";
   ctx.lineCap = "round"; ctx.lineJoin = "round";
-  for (const surface of crimsonReflectionSurfaces) {
+  for (const surface of surfaces) {
     const points = surface.points.map(geometry.point);
     const first = points[0], last = points.at(-1);
     const gradient = ctx.createLinearGradient(first.x, first.y, last.x, last.y);
@@ -147,15 +149,20 @@ function shipModulePlate(ctx, x, y, width, height, color) {
   ctx.strokeStyle = "#c98f76"; ctx.lineWidth = 0.6;
   ctx.beginPath(); ctx.moveTo(x - width * 0.4, y - height * 0.36); ctx.lineTo(x + width * 0.35, y - height * 0.36); ctx.stroke();
 }
+function drawShipModule(ctx, part, x, y, width, height, tint) {
+  if (tint) { ctx.save(); ctx.filter = tint; }
+  ctx.drawImage(part.image, ...part.crop, x, y, width, height);
+  if (tint) ctx.restore();
+}
 function drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, foreground) {
   const rank = key => clamp(Number(upgrades?.[key]) || 0, 0, 3);
   const pierce = rank("pierce"), blast = rank("blast"), aegis = rank("aegis");
   if (!(pierce || blast || aegis)) return;
-  const fairing = shipRenderAssets.fairing, rail = shipRenderAssets.rail;
+  const fairing = shipRenderAssets.fairing;
   const module = (part, x, y, width) => {
     if (!part.ready) return false;
     const height = width * part.crop[3] / part.crop[2];
-    ctx.drawImage(part.image, ...part.crop, x, y - height / 2, width, height);
+    drawShipModule(ctx, part, x, y - height / 2, width, height, asset.moduleTint);
     return true;
   };
   ctx.save(); ctx.scale(ship.width / 200, ship.height / 136);
@@ -186,8 +193,7 @@ function drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, foreground)
   }
   ctx.restore();
 }
-function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0) {
-  const asset = shipRenderAssets[kind];
+function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0, asset = shipRenderAssets[kind]) {
   if (!asset?.ready || !asset.image || !(ship.width > 0 && ship.height > 0)) return false;
   const playerShip = kind === "crimson", geometry = shipRenderGeometry(asset, ship, playerShip);
   const clock = quiet ? 0 : time;
@@ -212,7 +218,8 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0) 
   if (cached) ctx.drawImage(cached.body, geometry.x, geometry.y, geometry.width, geometry.height);
   else ctx.drawImage(asset.image, ...asset.crop, geometry.x, geometry.y, geometry.width, geometry.height);
   ctx.restore();
-  if (playerShip && ship === player && !ship.disabled && !(ship.hitFlash > 0)) drawCrimsonReflection(ctx, geometry, bank);
+  if (playerShip && ship === player && !ship.disabled && !(ship.hitFlash > 0))
+    drawPlayerReflection(ctx, geometry, bank, asset.reflections ?? crimsonReflectionSurfaces);
   if (playerShip) drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, true);
   if (!playerShip && ship.formationLeader && !ship.disabled) {
     for (const side of [-1, 1]) {
@@ -236,11 +243,11 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0) 
     ctx.beginPath(); ctx.arc(geometry.width * 0.65, 0, ship.height * 0.3, 2.2, 3.8); ctx.stroke(); ctx.restore();
   }
   ctx.restore();
-  if (playerShip && upgrades?.pierce) drawEvolutionWingCannons(ctx, ship, upgrades.pierce, quiet, time);
+  if (playerShip && upgrades?.pierce) drawEvolutionWingCannons(ctx, ship, upgrades.pierce, quiet, time, asset.moduleTint);
   return true;
 }
 
-function drawEvolutionWingCannons(ctx, ship, level, quiet = false, time = 0) {
+function drawEvolutionWingCannons(ctx, ship, level, quiet = false, time = 0, tint) {
   const rank = Math.max(0, Math.min(3, Number(level) || 0));
   if (!rank || !(ship.width > 0 && ship.height > 0)) return;
   const muzzles = typeof getEvolutionWingMuzzles === "function" ? getEvolutionWingMuzzles(ship)
@@ -250,8 +257,8 @@ function drawEvolutionWingCannons(ctx, ship, level, quiet = false, time = 0) {
   for (const muzzle of muzzles) {
     if (rail.ready && rail.image) {
       const scale = length / rail.crop[2];
-      ctx.drawImage(rail.image, ...rail.crop, muzzle.x - (rail.tip[0] - rail.crop[0]) * scale,
-        muzzle.y - (rail.tip[1] - rail.crop[1]) * scale, length, rail.crop[3] * scale);
+      drawShipModule(ctx, rail, muzzle.x - (rail.tip[0] - rail.crop[0]) * scale,
+        muzzle.y - (rail.tip[1] - rail.crop[1]) * scale, length, rail.crop[3] * scale, tint);
     } else {
       shipModulePlate(ctx, muzzle.x - length * .5, muzzle.y, length, ship.height * .065, "#8b9ba8");
     }

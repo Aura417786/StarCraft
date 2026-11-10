@@ -16,6 +16,8 @@ const movementHint = document.querySelector("#movement-hint");
 const pauseHint = document.querySelector("#pause-hint");
 const statusMessage = document.querySelector("#status");
 const fighterImage = document.querySelector("#fighter-art");
+const hangarVariantImage = document.querySelector("#hangar-variant-art");
+const fighterOptions = document.querySelector("#fighter-picker")?.querySelectorAll?.("input") ?? [];
 const scoreDisplay = document.querySelector("#score");
 const battleClock = document.querySelector("#battle-clock");
 const lifeDisplay = document.querySelector("#player-lives");
@@ -35,10 +37,30 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let state = "menu";
 let previousTime = 0;
 let windowActive = true;
+const fighterProfiles = {
+  red: { id: "red", rate: 3.6, lanes: 1, damage: 2.2,
+    label: ["赤焰 · 重装突击型", "Crimson · Heavy assault"], code: "CRIMSON / ASSAULT FIGHTER",
+    special: ["蓄力发射高伤害贯穿炮，适合集中打击。", "Fire a high-damage piercing beam for concentrated strikes."] },
+  blue: { id: "blue", rate: 8, lanes: 2, damage: 0.48,
+    label: ["苍电 · 高速截击型", "Azure · Rapid interceptor"], code: "AZURE / INTERCEPTOR",
+    special: ["发射五枚追踪离子弹，优先集火瞄准方向的强敌。", "Launch five homing ion shots that concentrate on threats in your line of fire."] },
+  yellow: { id: "yellow", rate: 4, lanes: 3, damage: 0.65,
+    label: ["曜金 · 广域压制型", "Auric · Area suppression"], code: "AURIC / AREA SUPPRESSION",
+    special: ["三轮弹幕横扫全屏，连机身后方的敌机也能打到。", "Send three waves across the entire screen, hitting enemies even behind your ship."] },
+};
+let selectedFighter = "red";
+let sortieFighter = "red";
+try {
+  const savedFighter = window.localStorage.getItem("star-breaker-fighter");
+  if (Object.hasOwn(fighterProfiles, savedFighter)) selectedFighter = savedFighter;
+} catch { /* 无本地存储时仍可在机库选择。 */ }
+function fighterProfile() { return fighterProfiles[sortieFighter]; }
+
 // interval 是发射间隔（秒），speed 是子弹每秒前进的距离。
-const weapon = { interval: 0.2, speed: 720, length: 26, damage: 1, speedLevel: 1, lanes: 1, tier: 1, damageOverflow: 0, rateOverflow: 0 };
+const weapon = { interval: 1 / fighterProfiles.red.rate, speed: 720, length: 26,
+  damage: fighterProfiles.red.damage, speedLevel: 1, lanes: fighterProfiles.red.lanes, tier: 1, damageOverflow: 0, rateOverflow: 0 };
 // 攻速仍持续成长；过密的连续射击合并伤害，每轮最多绘制 4 条弹道。
-const firingRules = { baseRate: 5, ratePerLevel: 1.25, renderInterval: 0.05 };
+const firingRules = { ratePerLevel: 1.25, renderInterval: 0.05 };
 const maxWeaponLanes = 4;
 // 第四阶再次使用绿色；红色之后从黄色继续循环，阶数不封顶。
 const weaponPalettes = [
@@ -64,7 +86,7 @@ const powerupTypes = {
   red: { color: "#ff6676", label: "伤害", english: "Damage", symbol: "+" },
   heal: { color: "#70f0b0", label: "生命", english: "Life", symbol: "♥" },
 };
-const powerupWeights = [ ["blue", 31], ["yellow", 31], ["red", 31], ["heal", 7] ];
+const powerupWeights = [ ["blue", 32], ["yellow", 32], ["red", 32], ["heal", 4] ];
 function choosePowerupType(roll = Math.random()) {
   let remaining = roll * 100;
   for (const [type, weight] of powerupWeights) {
@@ -230,14 +252,45 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
 }
 
 function readyFighter() {
-  startButton.disabled = !fighterImage.naturalWidth;
-  assetStatus.hidden = !!fighterImage.naturalWidth;
+  const image = !fighterOptions.length || selectedFighter === "red" ? fighterImage : hangarVariantImage;
+  startButton.disabled = !image.complete || !image.naturalWidth;
+  assetStatus.hidden = !image.complete || !!image.naturalWidth;
 }
+function updateFighterSelection() {
+  if (!fighterOptions.length) return;
+  const fighter = fighterProfiles[selectedFighter];
+  const isRed = fighter.id === "red";
+  startScreen.dataset.fighter = fighter.id;
+  for (const option of fighterOptions) option.checked = option.value === fighter.id;
+  const preview = fighterVariantArt[fighter.id];
+  if (!isRed && hangarVariantImage.getAttribute("src") !== preview.src) hangarVariantImage.src = preview.src;
+  hangarVariantImage.alt = tr(...fighter.label);
+  hangarVariantImage.hidden = isRed;
+  fighterImage.hidden = !isRed;
+  document.querySelector("#fighter-label").textContent = tr(...fighter.label);
+  document.querySelector("#fighter-code").textContent = fighter.code;
+  document.querySelector("#fighter-rate").textContent = tr(`${fighter.rate} 次/秒`, `${fighter.rate}/s`);
+  document.querySelector("#fighter-lanes").textContent = String(fighter.lanes);
+  document.querySelector("#fighter-damage").textContent = String(fighter.damage);
+  document.querySelector("#fighter-ultimate").textContent = ultimateName(fighter.id);
+  document.querySelector("#fighter-ultimate-detail").textContent = tr(...fighter.special);
+  readyFighter();
+}
+for (const option of fighterOptions) option.addEventListener("change", () => {
+  if (state !== "menu" || !option.checked || !Object.hasOwn(fighterProfiles, option.value)) return;
+  selectedFighter = option.value;
+  try { window.localStorage.setItem("star-breaker-fighter", selectedFighter); } catch { /* 仅保存偏好。 */ }
+  updateFighterSelection();
+});
 fighterImage.addEventListener("load", readyFighter);
 fighterImage.addEventListener("error", readyFighter);
+hangarVariantImage?.addEventListener("load", readyFighter);
+hangarVariantImage?.addEventListener("error", readyFighter);
 if (fighterImage.complete) readyFighter();
+updateFighterSelection();
 
 function showScreen(nextState) {
+  if (nextState === "battle") sortieFighter = selectedFighter;
   resetShipVisuals();
   resetBattlefield();
   resetJourneyScenes();
@@ -263,8 +316,8 @@ function showScreen(nextState) {
   canvas.tabIndex = inBattle ? 0 : -1;
   updateGameCanvasLabel();
   statusMessage.textContent = inBattle
-    ? tr("异形战役开始。上下移动瞄准，战机自动射击。空格发射贯星炮，V 开启护盾。射中蓝、黄、红球强化武器；绿球恢复一点生命，满血时增加生命上限。依次击败十只异形，再挑战群渊合生体。",
-      "Alien campaign started. Move up or down to aim your automatic fire. Press Space for the beam and V to shield. Shoot blue, yellow and red orbs to upgrade your weapons. Green orbs restore a life and increase capacity at full health. Defeat ten aliens and then the Abyssal Confluence.")
+    ? tr(`${tr(...fighterProfile().label)}出击。上下移动瞄准，空格释放${ultimateName()}，V 开盾。绿球恢复生命，满血时增加生命上限。依次击败十只异形，再挑战群渊合生体。`,
+      `${tr(...fighterProfile().label)} launched. Move up or down to aim. Space uses ${ultimateName()}; V shields. Green orbs restore a life or raise capacity at full health. Defeat ten aliens, then face the Abyssal Confluence.`)
     : tr("已返回开始画面。", "Returned to the main menu.");
   (inBattle ? canvas : startButton).focus({ preventScroll: true });
   updatePauseHint();
@@ -389,12 +442,13 @@ function resetWeapons(preserveUpgrades = true) {
   renderShotCooldown = 0;
   burstStep = 0;
   if (!preserveUpgrades) {
+    const fighter = fighterProfile();
     weapon.speedLevel = 1;
-    weapon.lanes = 1;
+    weapon.lanes = fighter.lanes;
     weapon.tier = 1;
-    weapon.damage = 1;
+    weapon.damage = fighter.damage;
     weapon.damageOverflow = 0; weapon.rateOverflow = 0;
-    weapon.interval = 1 / firingRules.baseRate;
+    weapon.interval = 1 / fighter.rate;
   }
   firingStyle.lastInterval = effectiveShotInterval();
   updateWeaponDisplay();
@@ -927,7 +981,7 @@ function drawMuzzleFlash() {
   context.restore();
 }
 function drawPlayer() {
-  if (state !== "battle" || !fighterImage.complete || !fighterImage.naturalWidth) return;
+  if (state !== "battle") return;
   context.save();
   if (player.hitFlash > 0) {
     context.strokeStyle = "#ff657b";
@@ -939,7 +993,8 @@ function drawPlayer() {
   }
   context.globalAlpha = 1;
   if (!drawEvolvedPlayer(context, player, evolution, reducedMotion.matches, battleTime)
-    && !drawShipPBR(context, player, "crimson", null, reducedMotion.matches, shipVisuals.clock))
+    && !drawFighterVariant(context, player, fighterProfile().id, null, reducedMotion.matches, shipVisuals.clock)
+    && fighterImage.complete && fighterImage.naturalWidth)
     context.drawImage(fighterImage, player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
   context.restore();
 }
@@ -1001,11 +1056,12 @@ function updateGameCanvasLabel() {
   const label = state === "over"
     ? tr("本局已结束，战场已停止。选择重新开始可再玩一局。", "The run is over. Select Restart to play again.")
     : state === "battle"
-    ? tr("可操作的横向星空战场。红色战机自动向右射击，方向键或 WASD 按屏幕方向移动，空格蓄力发射大招，V 开启护盾，Shift 切换射击姿态。", "Playable space battlefield. The red fighter fires automatically. Move with arrows or WASD, fire the charged cannon with Space, shield with V, and switch firing modes with Shift.")
-    : tr("横向星空战场。点击开始游戏后，红色战机从左侧出发。", "Side-scrolling space battlefield. Select Start Game to launch the red fighter.");
+    ? tr("可操作的横向星空战场。战机自动向右射击，方向键或 WASD 移动，空格蓄力大招，V 开启护盾，Shift 切换射击姿态。", "Playable space battlefield. The fighter fires automatically. Move with arrows or WASD, use Space for your charged special, V to shield, and Shift to switch firing modes.")
+    : tr("横向星空战场。先在机库选择战机，再开始游戏。", "Side-scrolling space battlefield. Choose a fighter in the hangar and start the game.");
   canvas.setAttribute("aria-label", label);
 }
 function refreshGameLanguage() {
+  updateFighterSelection();
   if (state === "over") updateResultCopy(gameOverScreen.dataset.victory === "true");
   updateGameCanvasLabel();
   updateFullscreenDisplay();

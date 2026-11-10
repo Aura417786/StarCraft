@@ -6,8 +6,8 @@ const enemyTypes = {
   armored: { name: "重甲机", health: 2.8, speed: 0.65, width: 1.18, height: 0.72, points: 200 },
   gunner: { name: "炮击机", health: 1.5, speed: 0.8, width: 1.03, height: 0.62, points: 150 },
 };
-const enemyCombatRules = { armorArrival: 18, gunnerArrival: 40, maxGunners: 2, minSpawnInterval: 0.42, spawnRampSeconds: 170,
-  fireProtectionTime: 85, warning: 0.9, recovery: 0.65, shotsPerGunner: 2, maxProjectiles: 20, projectileLife: 8 };
+const enemyCombatRules = { armorArrival: 14, gunnerArrival: 30, maxGunners: 2, minSpawnInterval: .32, spawnRampSeconds: 105,
+  fireProtectionTime: 60, warning: .9, recovery: .57, shotsPerGunner: 2, maxProjectiles: 20, projectileLife: 8 };
 const enemyFireProtection = {
   scout: { hit: 0.72, burst: 0.80, refill: 1.30 },
   gunner: { hit: 0.58, burst: 0.70, refill: 1.25 },
@@ -32,8 +32,9 @@ function chooseEnemyKind(roll = Math.random()) {
   if (gunnerAvailable && !enemyIntroduced.has("gunner")) return "gunner";
   if (battleTime >= enemyCombatRules.armorArrival && !enemyIntroduced.has("armored")) return "armored";
   if (battleTime < enemyCombatRules.armorArrival) return "scout";
-  if (battleTime < enemyCombatRules.gunnerArrival) return roll < 0.65 ? "scout" : "armored";
-  return roll < 0.5 ? "scout" : roll < 0.8 ? "armored" : gunnerAvailable ? "gunner" : "scout";
+  if (battleTime < enemyCombatRules.gunnerArrival) return roll < .58 ? "scout" : "armored";
+  const gunnerCutoff = battleTime >= 120 ? .68 : .74;
+  return roll < .43 ? "scout" : roll < gunnerCutoff ? "armored" : gunnerAvailable ? "gunner" : "scout";
 }
 function resetEnemyCombat(resetIntroductions = true) {
   if (typeof resetFormations === "function") resetFormations(resetIntroductions);
@@ -53,16 +54,20 @@ function beginEnemyAim(enemy) {
   enemy.gunTime = 0;
   enemy.aimX = player.x;
   enemy.aimY = player.y;
+  enemy.gunSpread = battleTime >= 120 && enemy.gunShots % 2 === 1 ? .14 : 0;
 }
+function enemyGunAngles(enemy) { return enemy.gunSpread ? [0, -enemy.gunSpread, enemy.gunSpread] : [0]; }
 function fireEnemyGun(enemy) {
   if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) return;
   const muzzle = enemyGunMuzzle(enemy);
-  const distance = Math.hypot(enemy.aimX - muzzle.x, enemy.aimY - muzzle.y);
-  const speed = Math.min(480, 280 + battleTime * 0.15);
-  enemyProjectiles.push({ x: muzzle.x, y: muzzle.y, previousX: muzzle.x, previousY: muzzle.y,
-    vx: (enemy.aimX - muzzle.x) / Math.max(1, distance) * speed,
-    vy: (enemy.aimY - muzzle.y) / Math.max(1, distance) * speed,
-    radius: 6, age: 0 });
+  const heading = Math.atan2(enemy.aimY - muzzle.y, enemy.aimX - muzzle.x);
+  const speed = Math.min(625, 335 + battleTime * .42);
+  for (const spread of enemyGunAngles(enemy)) {
+    if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) break;
+    enemyProjectiles.push({ x: muzzle.x, y: muzzle.y, previousX: muzzle.x, previousY: muzzle.y,
+      vx: Math.cos(heading + spread) * speed, vy: Math.sin(heading + spread) * speed,
+      radius: 6, age: 0 });
+  }
   gameAudio.bossAttack("volley");
 }
 function updateEnemyMovement(enemy, seconds) {
@@ -129,15 +134,18 @@ function drawEnemyThreats() {
   for (const enemy of enemies) {
     if (enemy.kind !== "gunner" || enemy.gunPhase !== "warning") continue;
     const muzzle = enemyGunMuzzle(enemy);
-    const dx = enemy.aimX - muzzle.x, dy = enemy.aimY - muzzle.y;
-    const length = Math.hypot(dx, dy) || 1;
+    const heading = Math.atan2(enemy.aimY - muzzle.y, enemy.aimX - muzzle.x);
     context.strokeStyle = "#ff9bc9";
     context.globalAlpha = 0.45 + Math.min(1, enemy.gunTime / enemyCombatRules.warning) * 0.35;
     context.lineWidth = 1.5;
     context.setLineDash([7, 7]);
-    context.beginPath(); context.moveTo(muzzle.x, muzzle.y);
-    context.lineTo(muzzle.x + dx / length * viewport.width * 1.5,
-      muzzle.y + dy / length * viewport.width * 1.5); context.stroke();
+    context.beginPath();
+    for (const spread of enemyGunAngles(enemy)) {
+      context.moveTo(muzzle.x, muzzle.y);
+      context.lineTo(muzzle.x + Math.cos(heading + spread) * viewport.width * 1.5,
+        muzzle.y + Math.sin(heading + spread) * viewport.width * 1.5);
+    }
+    context.stroke();
     context.setLineDash([]);
     context.beginPath(); context.arc(enemy.aimX, enemy.aimY, 13, 0, Math.PI * 2); context.stroke();
     context.fillStyle = "#ffd7e7";

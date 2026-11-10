@@ -147,7 +147,7 @@ check('normal wave scheduler sends more enemies per second as the battle progres
     return execute('enemySpawnCount') - start;
   });
   assert.ok(arrivals[0] >= 10 && arrivals[0] <= 11, JSON.stringify(arrivals));
-  assert.ok(arrivals[3] >= 26 && arrivals[3] <= 28, JSON.stringify(arrivals));
+  assert.ok(arrivals[3] >= 35 && arrivals[3] <= 38, JSON.stringify(arrivals));
   assert.ok(arrivals.every((count, index) => index === 0 || count > arrivals[index - 1]), JSON.stringify(arrivals));
 });
 check('late wave cadence still respects the enemy cap and Boss warning without a backlog', () => {

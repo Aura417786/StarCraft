@@ -93,8 +93,16 @@ const gameAudio={ muted:false,
 const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
 for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js')) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
-// 各旧功能用例隔离自动刷新的事件；v13-check 会显式开启新事件计时。
-function begin() { emit(window, 'focus'); emit(nodes.get('#start-button'), 'click'); vm.runInContext('powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity; formationState.nextTime = Infinity; battlefieldEvents.nextObject = Infinity; battlefieldEvents.nextTransport = Infinity; if(typeof aceEncounter!=="undefined")aceEncounter.nextTime=Infinity;', sandbox); step(); }
+// 成长曲线用同一火力基准比较，不受出击机型影响。
+function begin() {
+  emit(window, 'focus');
+  emit(nodes.get('#start-button'), 'click');
+  vm.runInContext(`weapon.damage = 1; weapon.interval = 0.2;
+    powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity;
+    formationState.nextTime = Infinity; battlefieldEvents.nextObject = Infinity;
+    battlefieldEvents.nextTransport = Infinity; aceEncounter.nextTime = Infinity;`, sandbox);
+  step();
+}
 function key(code, type = 'keydown', extra) { return emit(window, type, { code, ...extra }); }
 let checks = 0;
 let failedChecks = 0;
@@ -444,13 +452,14 @@ check('high-power auxiliary rounds, main packets and beams damage the fusion Bos
   assert.equal(execute('boss===fusion'),true,'auxiliary round erased the fusion Boss');
   const afterLance=execute('fusion.hp');
   assert.ok(afterLance>0 && afterLance<1);
+  execute('battleTime+=.25;');
   fireExtremePacketAt('fusion');
   assert.equal(execute('boss===fusion'),true,'main round erased the fusion Boss');
   const beforeBeam=execute('fusion.hp');
   assert.ok(beforeBeam<afterLance,'main packet must deal real damage');
   execute('player.y=player.previousY=fusion.y;player.x=player.previousX=fusion.x-500;ultimate.charges=1;requestUltimate();updateUltimate(.85);updateUltimate(.45);');
   assert.equal(execute('boss===fusion'),true,'beam erased the fusion Boss');
-  near(beforeBeam-execute('fusion.hp'),.18);
+  near(beforeBeam-execute('fusion.hp'),.18*.78);
 });
 
 

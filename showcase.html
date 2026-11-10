@@ -11,6 +11,7 @@
   <script src="i18n.js" defer></script>
   <script src="audio.js" defer></script>
   <script src="ship-renderer.js" defer></script>
+  <script src="fighter-variants.js" defer></script>
   <script src="alien-boss-art.js" defer></script>
   <script src="alien-attacks.js" defer></script>
   <script src="bosses.js" defer></script>
@@ -83,7 +84,7 @@
           <button id="stance-button" class="stance-button" type="button" aria-pressed="false" title="Shift 切换扩散或聚焦射击">扩散模式 · Shift 切换</button>
         </div>
         <div id="ultimate-hud" class="ultimate-hud" data-ready="false" data-phase="idle" aria-label="赤焰贯星炮状态">
-          <div class="ultimate-heading"><span class="ultimate-name">赤焰贯星炮</span><strong id="ultimate-count">0 / 5</strong><kbd>空格</kbd></div>
+          <div class="ultimate-heading"><span id="ultimate-name" class="ultimate-name">赤焰贯星炮</span><strong id="ultimate-count">0 / 5</strong><kbd>空格</kbd></div>
           <div class="ultimate-slots" aria-hidden="true"><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i></div>
           <div id="ultimate-meter" class="ultimate-meter" role="progressbar" aria-label="下一次大招能量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="ultimate-fill"></span></div>
           <span id="ultimate-label" class="ultimate-label">命中敌军积能</span>

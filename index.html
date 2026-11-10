@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080b14">
   <meta name="description" content="星际突围，一款逐步开发的横向飞机射击小游戏。">
-  <title>星际突围 · 群渊战役</title>
+  <title>星际突围 · 深空机库</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff414e' d='M30 16 3 3 9 16 3 29Z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="guide.css">
@@ -13,6 +13,7 @@
   <script src="i18n.js" defer></script>
   <script src="audio.js" defer></script>
   <script src="ship-renderer.js" defer></script>
+  <script src="fighter-variants.js" defer></script>
   <script src="alien-boss-art.js" defer></script>
   <script src="alien-attacks.js" defer></script>
   <script src="bosses.js" defer></script>
@@ -44,29 +45,46 @@
 <body>
   <main class="app" id="game-app">
     <section class="battlefield" aria-label="横向星空战场">
-      <canvas id="game-canvas" width="1280" height="720" tabindex="-1" aria-describedby="control-instructions" aria-label="横向星空战场。点击开始游戏后，红色战机从左侧出发。"></canvas>
+      <canvas id="game-canvas" width="1280" height="720" tabindex="-1" aria-describedby="control-instructions" aria-label="横向星空战场"></canvas>
       <div class="field-edge" aria-hidden="true"></div>
       <header class="masthead">
         <a class="brand" href="./" aria-label="星际突围首页"><span class="brand-mark" aria-hidden="true">✦</span> 星际突围 <span class="edition">STAR BREAKER</span></a>
         <div class="header-actions"><button id="shake-button" class="secondary-button shake-button" type="button">震动：轻</button><button id="sound-button" class="secondary-button sound-button" type="button" aria-pressed="true" title="开启或关闭音效和音乐">声音：开</button><button id="fullscreen-button" class="secondary-button fullscreen-button" type="button" aria-pressed="false" hidden>⛶ 全屏</button></div>
       </header>
-      <div id="start-screen" class="start-screen">
+      <div id="start-screen" class="start-screen" data-fighter="red">
         <div class="start-copy">
-          <span class="eyebrow"><span></span> 赤焰战机 / CRIMSON</span>
+          <span class="eyebrow"><span></span> 深空机库 / HANGAR</span>
           <h1>星际<span>突围</span></h1>
-          <p class="intro">穿过行星的晨昏线，深入敌舰的阴影。</p>
+          <p class="intro">选择战机，迎战群渊。</p>
+          <fieldset id="fighter-picker" class="fighter-picker" aria-describedby="fighter-brief">
+            <legend>选择出击战机</legend>
+            <div class="fighter-options">
+              <label class="fighter-option" data-fighter="red"><input type="radio" name="fighter" value="red" checked><span><strong>赤焰</strong><small>重炮</small></span></label>
+              <label class="fighter-option" data-fighter="blue"><input type="radio" name="fighter" value="blue"><span><strong>苍电</strong><small>速射</small></span></label>
+              <label class="fighter-option" data-fighter="yellow"><input type="radio" name="fighter" value="yellow"><span><strong>曜金</strong><small>广域</small></span></label>
+            </div>
+            <div id="fighter-brief" class="fighter-brief" aria-live="polite">
+              <dl class="fighter-stats">
+                <div><dt>发射频率</dt><dd id="fighter-rate">3.6 次/秒</dd></div>
+                <div><dt>弹道</dt><dd id="fighter-lanes">1</dd></div>
+                <div><dt>单发伤害</dt><dd id="fighter-damage">2.2</dd></div>
+              </dl>
+              <p class="fighter-special"><strong id="fighter-ultimate">赤焰贯星炮</strong><span id="fighter-ultimate-detail">蓄力发射高伤害贯穿炮，适合集中打击。</span></p>
+            </div>
+          </fieldset>
           <div class="start-actions">
             <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">→</span></button>
             <button id="guide-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="flight-guide">玩法说明</button>
             <button id="language-button" class="secondary-button" type="button" aria-label="切换游戏语言为英文">English</button>
           </div>
-          <p class="start-caption">方向键 / WASD 操控 · 空格贯星炮 · V 护盾<br>精准格挡 → 3 秒内空格速蓄连携炮<br>Shift 切换扩散 / 聚焦 · 连击开启暴走<br>交锋王牌 · 拆毁武装 · 截获补给<br>持续穿越五片星域 · 击破首领选择进化</p>
+          <p class="start-caption">方向键 / WASD 操控 · 空格大招 · V 护盾<br>Shift 切换扩散 / 聚焦 · 连击开启暴走</p>
           <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>
         </div>
         <div class="hangar-art">
           <div class="orbit" aria-hidden="true"></div>
           <img id="fighter-art" src="assets/ships/crimson-sleek.png" alt="赤焰战机：流线红色涂装、深色座舱和冰蓝双引擎，机头朝右" draggable="false">
-          <div class="ship-label"><span class="label-line"></span><span>赤焰 · 重装突击型<small>CRIMSON / ASSAULT FIGHTER</small></span></div>
+          <img id="hangar-variant-art" alt="" draggable="false" hidden>
+          <div class="ship-label"><span class="label-line"></span><span><span id="fighter-label">赤焰 · 重装突击型</span><small id="fighter-code">CRIMSON / ASSAULT FIGHTER</small></span></div>
         </div>
       </div>
       <div id="battle-screen" class="battle-screen" hidden>
@@ -76,9 +94,9 @@
         </div>
         <div class="difficulty-readout" aria-label="战斗时间"><span>战斗 <time id="battle-clock">00:00</time></span></div>
         <div class="weapon-readout" aria-label="当前武器强化">
-          <span class="weapon-stat blue">蓝 · 攻速 <strong id="weapon-speed">1级 · 5次/秒</strong></span>
+          <span class="weapon-stat blue">蓝 · 攻速 <strong id="weapon-speed">1级 · 3.6次/秒</strong></span>
           <span class="weapon-stat yellow">黄 · 弹道 <strong id="weapon-lanes">1阶 · 1/4条</strong></span>
-          <span class="weapon-stat red">红 · 伤害 <strong id="weapon-damage">1点/发</strong></span>
+          <span class="weapon-stat red">红 · 伤害 <strong id="weapon-damage">2.2点/发</strong></span>
         </div>
         <div id="evolution-readout" class="evolution-readout" aria-label="本局战机进化" hidden></div>
         <div id="momentum-hud" class="momentum-hud" data-overdrive="false" data-frozen="false" aria-label="连击与暴走状态">
@@ -88,8 +106,8 @@
           <span id="rage-label" class="rage-label">再增加 20 连击进入暴走</span>
           <button id="stance-button" class="stance-button" type="button" aria-pressed="false" title="Shift 切换扩散或聚焦射击">扩散模式 · Shift 切换</button>
         </div>
-        <div id="ultimate-hud" class="ultimate-hud" data-ready="false" data-phase="idle" aria-label="赤焰贯星炮状态">
-          <div class="ultimate-heading"><span class="ultimate-name">赤焰贯星炮</span><strong id="ultimate-count">0 / 5</strong><kbd>空格</kbd></div>
+        <div id="ultimate-hud" class="ultimate-hud" data-ready="false" data-phase="idle" aria-label="大招状态">
+          <div class="ultimate-heading"><span id="ultimate-name" class="ultimate-name">赤焰贯星炮</span><strong id="ultimate-count">0 / 5</strong><kbd>空格</kbd></div>
           <div class="ultimate-slots" aria-hidden="true"><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i></div>
           <div id="ultimate-meter" class="ultimate-meter" role="progressbar" aria-label="下一次大招能量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="ultimate-fill"></span></div>
           <span id="ultimate-label" class="ultimate-label">命中敌军积能</span>
@@ -150,7 +168,7 @@
           <div class="result-details"><div><span>存活时间</span><strong id="final-time">00:00</strong></div><div><span>击毁敌机</span><strong id="final-kills">0</strong></div><div><span>最高连击</span><strong id="final-combo">0</strong></div></div>
           <button id="restart-button" class="primary-button" type="button">重新开始 <span aria-hidden="true">↗</span></button>
           <button id="result-menu-button" class="secondary-button" type="button">返回开始画面</button>
-          <p class="result-tip">躲开敌机碰撞 · 空格释放贯星炮 · 击破首领恢复生命</p>
+          <p class="result-tip">躲开敌机碰撞 · 空格释放大招 · 返回首页可更换战机</p>
         </div>
       </section>
       <footer class="lesson-note"><span class="lesson-badge">正式出击</span><p id="control-instructions">方向键 / WASD 移动<span class="training-note"> · 自动射击 · Shift 切换姿态 · 空格大招 · V 护盾</span></p></footer>
@@ -169,17 +187,18 @@
               <div><dt><kbd>方向键</kbd> <kbd>WASD</kbd></dt><dd>向四个方向移动</dd></div>
               <div><dt><kbd>Shift</kbd></dt><dd>切换扩散和聚焦射击</dd></div>
               <div><dt><kbd>V</kbd></dt><dd>护盾充好后开启，保护战机 2 秒</dd></div>
-              <div><dt><kbd>空格</kbd></dt><dd>命中敌军积攒能量，存好一发后释放贯星炮</dd></div>
+              <div><dt><kbd>空格</kbd></dt><dd>命中敌军积攒能量，存好一发后释放所选战机的大招</dd></div>
             </dl>
             <div class="flight-guide-perfect">
               <h4>完美护盾</h4>
               <p>等实体敌弹快碰到战机时按 <kbd>V</kbd>。开盾后 0.25 秒内挡住敌弹，即触发「完美格挡」，向前反击并返还 25% 护盾充能。</p>
-              <p>若已存好一发贯星炮，在「完美连携」出现后 3 秒内按 <kbd>空格</kbd>，蓄力缩短至 0.45 秒。</p>
+              <p>若已存好一次大招，在「完美连携」出现后 3 秒内按 <kbd>空格</kbd>，蓄力缩短至 0.45 秒。</p>
             </div>
           </section>
           <section class="flight-guide-section" aria-labelledby="flight-guide-tips-title">
             <h3 id="flight-guide-tips-title">战斗与升级</h3>
             <ul class="flight-guide-tips">
+              <li><strong>选一架战机出击。</strong>赤焰集中打击，苍电速射并追踪敌人，曜金用全屏弹幕清理敌群。</li>
               <li><strong>躲开敌机和敌弹。</strong>撞机或中弹会扣生命，打不到的敌机可以放过去。</li>
               <li><strong>射中能量球升级。</strong><span class="guide-orb-blue">蓝球提攻速</span>、<span class="guide-orb-yellow">黄球加弹道</span>、<span class="guide-orb-red">红球加伤害</span>、<span class="guide-orb-green">绿球回生命，满血时加生命上限</span>。</li>
               <li><strong>弹道超过四条时晋阶。</strong>原四条的总伤害合到一条高阶弹道，再额外提高 12%。</li>

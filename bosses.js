@@ -1,7 +1,7 @@
 "use strict";
 
-const bossRules = { firstArrival: 75, interval: 35, warning: 5, entry: 1.65,
-  recovery: 1.05, grace: 1.1, maxProjectiles: 240 };
+const bossRules = { firstArrival: 65, interval: 31, warning: 5, entry: 1.65,
+  recovery: .78, grace: 1.1, maxProjectiles: 240, fusionSpecialMultiplier: .78 };
 const bossTypes = [
   { name: "渊潮母体", enName: "Abyssal Broodmother", color: "#79e7f3", patterns: ["broodSweep", "broodArc", "broodSpawn"] },
   { name: "骨冠猎兽", enName: "Ossuary Stalker", color: "#dfa5e6", patterns: ["boneSpears", "boneRibs", "bonePounce"] },
@@ -125,15 +125,21 @@ function bossStageTitle(target) {
   return (target.type + 1) + "/" + bossTypes.length + " · " + target.name;
 }
 
+function bossFireProtectionFor(type) {
+  if (type === finalAlienType) return { hit: .04, burst: .04, refill: .05 };
+  const escalation = type / (finalAlienType - 1);
+  return { hit: .05, burst: .06 - .014 * escalation, refill: .09 - .03 * escalation };
+}
+
 function spawnBoss(type = chooseBossType()) {
   if (!Number.isInteger(type) || !bossTypes[type]) return;
   const arena = bossArena(type);
   const data = bossTypes[type];
   const alienFinal = type === finalAlienType;
-  const endurance = (alienFinal ? 84 : 48 + type * 3.1);
+  const endurance = alienFinal ? 124 : 68 + type * 4.2;
   const healthLog = progressionBossHealthLog(battleTime, endurance);
   boss = { ...arena, type, alien: true, alienFinal, color: data.color, name: bossTypeName(type),
-    hp: 1, maxHp: 1, displayHp: 1, healthLog, endurance,
+    hp: 1, maxHp: 1, displayHp: 1, healthLog, endurance, fireProtection: bossFireProtectionFor(type),
     x: viewport.width + arena.width / 2, previousX: viewport.width + arena.width / 2, previousY: arena.y,
     phase: "enter", phaseTime: 0, age: 0, hitFlash: 0, attackIndex: -1,
     alienAttack: null, enraged: false, lockX: player.x, lockY: player.y, gapY: player.y, gapSize: 0,
@@ -226,11 +232,8 @@ function updateBossEncounter(seconds) {
     boss.phase = "recover";
     boss.phaseTime = 0;
   } else if (boss.phase === "recover") {
-    const recovery = Math.max(.59, bossRules.recovery - boss.type * .03 - (boss.enraged ? .16 : 0));
-    if (boss.phaseTime >= recovery) {
-      clearAlienThreats();
-      prepareAlienAttack(boss);
-    }
+    const recovery = Math.max(.43, bossRules.recovery - boss.type * .027 - (boss.enraged ? .13 : 0));
+    if (boss.phaseTime >= recovery) prepareAlienAttack(boss);
   } else if (boss.phase === "telegraph" && boss.phaseTime >= boss.telegraphDuration) {
     boss.phase = "attack";
     boss.phaseTime -= boss.telegraphDuration;
@@ -275,15 +278,18 @@ function projectileAlienBossHit(bullet, target) {
   return Number.isFinite(first) ? { time: first, component: null } : null;
 }
 
-const bossFireProtection = { hit: .05, burst: .06, refill: .10 };
-
 function applyBossHit(shot, target = boss) {
   if (!bossCanTakeDamage(target)) return;
   const before = target.hp;
   const damageLog = shot.damageLog ?? Math.log(shot.damage ?? weapon.damage);
-  const fraction = shot.source === "ultimate"
+  const special = shot.source === "ultimate";
+  const rawFraction = special
     ? Math.exp(Math.min(Math.log(ultimateRules.bossDamageCap), damageLog - target.healthLog))
-    : progressionHitFraction(target, damageLog, bossFireProtection);
+    : progressionHitFraction(target, damageLog, target.fireProtection);
+  // The attacking shell absorbs part of the incoming damage, but no attack is invulnerable.
+  const attackingShell = target.phase !== "attack" ? 1 : target.alienFinal && target.enraged ? .62 : .78;
+  const specialMultiplier = special && target.alienFinal ? bossRules.fusionSpecialMultiplier : 1;
+  const fraction = rawFraction * attackingShell * specialMultiplier;
   if (fraction <= 0) return;
   target.hp = Math.max(0, target.hp - fraction);
   target.hitFlash = .08;
@@ -322,7 +328,7 @@ function defeatBoss(target = boss) {
   scoreDisplay.textContent = String(score).padStart(6, "0");
   createExplosion(fallen, points);
   const recovered = player.lives;
-  grantPlayerLife();
+  if (!fallen.alienFinal && bossDefeated % 3 === 0) grantPlayerLife();
   clearAlienThreats();
   enemies.length = 0;
   resetEnemyCombat(false);
@@ -341,7 +347,7 @@ function defeatBoss(target = boss) {
   powerupNotice.hidden = false;
   upgradeNoticeTime = 3;
   statusMessage.textContent = powerupNotice.textContent;
-  nextBossTime = fallen.alienFinal ? Infinity : battleTime + Math.max(21, bossRules.interval - (bossDefeated - 1) * 1.5);
+  nextBossTime = fallen.alienFinal ? Infinity : battleTime + Math.max(18, bossRules.interval - (bossDefeated - 1) * 1.5);
   enemyCooldown = 2;
   setBossMessage("", "", false);
   startBossDeathPresentation(fallen);
@@ -350,10 +356,12 @@ function defeatBoss(target = boss) {
 function bossShotHitsPlayer(shot) {
   if (consumeEvolutionShieldProjectile(shot)) return true;
   const radius = player.height * .16 + shot.radius;
-  const dx = shot.x - shot.previousX, dy = shot.y - shot.previousY;
+  const x0 = shot.previousX - (player.previousX ?? player.x);
+  const y0 = shot.previousY - (player.previousY ?? player.y);
+  const dx = shot.x - player.x - x0, dy = shot.y - player.y - y0;
   const distance = dx * dx + dy * dy;
-  const progress = distance ? clamp(((player.x - shot.previousX) * dx + (player.y - shot.previousY) * dy) / distance, 0, 1) : 0;
-  return Math.hypot(player.x - shot.previousX - progress * dx, player.y - shot.previousY - progress * dy) <= radius;
+  const progress = distance ? clamp(-(x0 * dx + y0 * dy) / distance, 0, 1) : 0;
+  return Math.hypot(x0 + progress * dx, y0 + progress * dy) <= radius;
 }
 
 function updateBossDamage() {
@@ -386,6 +394,15 @@ function drawBossBattle() {
       context.beginPath();
       context.roundRect(boss.x - width / 2, y, filled, 7, Math.min(3.5, filled / 2));
       context.fill();
+    }
+    if (boss.phase === "attack") {
+      context.strokeStyle = "#cfdeffd9";
+      context.lineWidth = 1;
+      context.setLineDash([3, 3]);
+      context.beginPath();
+      context.moveTo(boss.x - width / 2, y - 3);
+      context.lineTo(boss.x + width / 2, y - 3);
+      context.stroke();
     }
     context.restore();
   }

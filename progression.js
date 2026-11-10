@@ -71,13 +71,13 @@ function progressionWaveReferenceAt(time) {
     return Math.log(base + increment * Math.min(gain, additiveLevels))
       + Math.max(0, gain - additiveLevels) * Math.log(multiplier);
   };
-  const rateLog = weaponLog(red, firingRules.baseRate, firingRules.ratePerLevel, progressionRules.blueMultiplier);
+  const rateLog = weaponLog(red, 5, firingRules.ratePerLevel, progressionRules.blueMultiplier);
   return weaponLog(red, 1, 1, progressionRules.redMultiplier) + progressionEffectiveRateLog(rateLog) + progressionLaneLog(yellow);
 }
 function progressionEnemyHealthLog(time = battleTime) {
   const t = Math.max(0, time), baseline = Math.log(enemyHealthForTime(t));
   if (t < 20) return baseline;
-  const endurance = .38 + Math.min(.35, t / 1200);
+  const endurance = .47 + Math.min(.42, t / 1040);
   const reference = progressionReferenceDpsLog(t);
   if (t <= 55) return Math.max(baseline, reference + Math.log(endurance));
   const period = progressionRules.stageSeconds;
@@ -85,7 +85,7 @@ function progressionEnemyHealthLog(time = battleTime) {
   const waveReference = progressionWaveReferenceAt(start) * (1 - mix) + progressionWaveReferenceAt(start + period) * mix;
   const ramp = 1 - Math.exp(-(t - 55) / 70);
   return Math.max(baseline, reference + Math.log(endurance),
-    reference + (waveReference - reference) * Math.min(1, (t - 55) / 35) + Math.log(endurance + .88 * ramp));
+    reference + (waveReference - reference) * Math.min(1, (t - 55) / 35) + Math.log(endurance + 1.06 * ramp));
 }
 function progressionBossHealthLog(time, endurance, healthShare = 1) {
   const growth = -Math.expm1(-Math.max(0, time - 90) / 90);

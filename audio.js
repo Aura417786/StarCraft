@@ -545,19 +545,53 @@ const gameAudio = (() => {
     // 只取消大招：不打断普通射击、爆炸或战斗配乐。
     stopVoices("ultimate");
   }
-  function chargeUltimate(duration = 0.85) {
+  function chargeUltimate(duration = 0.85, kind = "red") {
     stopUltimate();
     if (!canPlay()) return;
     duration = Number.isFinite(duration) ? Math.max(0.12, Math.min(3, duration)) : 0.85;
     const common = { bus: "ultimate", time: audio.currentTime, duration, crescendo: true };
+    if (kind === "blue") {
+      note({ ...common, frequency: 240, endFrequency: 870, type: "sine", volume: 0.145, cutoff: 1500 });
+      note({ ...common, frequency: 365, endFrequency: 1510, type: "triangle", volume: 0.064, cutoff: 2200, pan: -0.23 });
+      note({ ...common, noise: true, loopNoise: true, volume: 0.067, filterType: "bandpass", cutoff: 830, endCutoff: 1710 });
+      return;
+    }
+    if (kind === "yellow") {
+      note({ ...common, frequency: 78, endFrequency: 151, type: "sawtooth", volume: 0.12, cutoff: 210, endCutoff: 590 });
+      note({ ...common, frequency: 117, endFrequency: 227, type: "triangle", volume: 0.095, cutoff: 1200, pan: 0.28 });
+      note({ ...common, noise: true, loopNoise: true, volume: 0.085, filterType: "bandpass", cutoff: 530, endCutoff: 1020 });
+      return;
+    }
     note({ ...common, frequency: 125, endFrequency: 660, type: "sine", volume: 0.17, cutoff: 1500 });
     note({ ...common, frequency: 260, endFrequency: 1320, type: "triangle", volume: 0.055, cutoff: 2100 });
     note({ ...common, noise: true, loopNoise: true, volume: 0.045, filterType: "bandpass", cutoff: 1100 });
   }
-  function fireUltimate() {
+  function fireUltimate(kind = "red") {
     stopUltimate();
     if (!canPlay()) return;
     const common = { bus: "ultimate", time: audio.currentTime };
+    if (kind === "blue") {
+      for (let pulse = 0; pulse < 5; pulse++) {
+        note({ ...common, time: common.time + pulse * 0.095, duration: 0.16,
+          frequency: 645 + pulse * 43, endFrequency: 216 + pulse * 17, type: "triangle",
+          volume: 0.135, cutoff: 2450, endCutoff: 880, pan: pulse % 2 ? -0.28 : 0.24 });
+      }
+      note({ ...common, noise: true, duration: 0.48, volume: 0.11, filterType: "bandpass",
+        cutoff: 2400, endCutoff: 740, resonance: 1.6, sustain: true });
+      return;
+    }
+    if (kind === "yellow") {
+      for (let pulse = 0; pulse < 3; pulse++) {
+        const time = common.time + pulse * 0.22;
+        note({ ...common, time, duration: 0.32, frequency: 91 + pulse * 12, endFrequency: 43,
+          type: "sine", volume: 0.29, cutoff: 450, pan: (pulse - 1) * 0.22 });
+        note({ ...common, time, noise: true, duration: 0.31, volume: 0.17,
+          filterType: "bandpass", cutoff: 1530 + pulse * 200, endCutoff: 430, resonance: 1.5 });
+      }
+      note({ ...common, duration: 0.81, frequency: 173, endFrequency: 85, type: "triangle",
+        volume: 0.082, cutoff: 950, sustain: true });
+      return;
+    }
     // 低频冲击负责重量，中频长音与气流覆盖整段贯穿炮发射。
     note({ ...common, duration: 0.8, frequency: 145, endFrequency: 35,
       type: "sine", volume: 0.3, cutoff: 550 });

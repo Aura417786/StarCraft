@@ -1,0 +1,12 @@
+Azure / Auric starter hulls
+Codex built-in ImageGen. Style and camera reference: assets/ships/crimson-sleek.png.
+The generated alpha sprites were resampled to 960 × 640 and encoded as WebP.
+
+Shared prompt
+Production top-down game sprite for a side-scrolling PC shooter, companion craft to reference image. New design with the same material quality, camera, and exact rightward flight direction as the reference: horizontal with the pointed nose at the far right at 50% image height, absolutely no diagonal tilt; both rear nozzles visible on the left side; slight three-quarter top view and enough perspective to see metal thickness. Keep all tips within the image and leave small alpha margins. Precision molded bodywork, believable finely textured satin enamel over titanium, subtly worn panels, dark canopy, physically based specular glints. Silhouette reads on a dark space background at 150-pixel game size. True isolated transparent background with sharp alpha; no background, exhaust, detached lights or haze, shadows, platform, text, graphics or insignia. Only one fighter, centered. Landscape wide aspect ratio.
+
+azure.webp
+Design Azure, an aerospace light interceptor. Main body vivid royal/cobalt blue with desaturated metallic steel blue in the shadows and ivory blue-white tiny accents. Long needle nose, slim waist and narrow scythelike swept-back twin wings, a thin pair of smoothly integrated nacelles. Midline narrow black-blue cockpit and two tiny, icy cyan engine apertures. Crisp silhouette that looks agile and lightweight.
+
+auric.webp
+Design Auric, a broad coverage strike fighter. Main body rich signal-yellow golden yellow with ochre-bronze shadows, deep neutral charcoal underbody, muted yellow-white highlights. Broad angular forward-swept trapezoid twin wings and matching amber recessed rectangular weapon ports, a short distinct single pointed nose along the center, integrated central dark smoked canopy and two cyan-white nozzles. Readable wing surface and substantial compact volume with no orange dominance.

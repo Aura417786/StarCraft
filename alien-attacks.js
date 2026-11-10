@@ -5,9 +5,11 @@ const alienPatterns = {
     t => {
       t.attackMotion = "coil";
       return t.enraged
-        ? [fan(0, 8, .78, 410, "orb", { arc: true, offsetY: -.22, sound: "surge" }),
-          fan(.63, 9, .83, 455, "orb", { arc: true, offsetY: .22, sound: "surge" })]
-        : [fan(0, 7, .68, 365, "orb", { arc: true, sound: "surge" })];
+        ? [fan(0, 8, .78, 450, "orb", { arc: true, offsetY: -.22, sound: "surge" }),
+          fan(.63, 9, .83, 485, "orb", { arc: true, offsetY: .22, sound: "surge" }),
+          fan(1.28, 5, .41, 510, "orb", { arc: true, aim: true, sound: "surge" })]
+        : [fan(0, 7, .68, 400, "orb", { arc: true, sound: "surge" }),
+          fan(.7, 6, .68, 415, "orb", { arc: true, offsetY: .12, sound: "surge" })];
     }],
   broodSweep: ["触须扫潮", "Tentacle Tide", 2.8, "沿预警红线的上下两侧闪避", "Evade above or below each marked lash",
     t => {
@@ -15,16 +17,19 @@ const alienPatterns = {
       t.lashIndex = 0;
       broodLash(t, t.lockY, t.telegraphDuration, t.side, 0);
       return t.enraged ? [beat(.24, x => broodLash(x, player.y, .68, -x.side, 1)),
-        beat(1.13, x => broodLash(x, player.y, .7, x.side, 2))] : [];
+        beat(1.13, x => broodLash(x, player.y, .7, x.side, 2)),
+        fan(2.18, 5, .45, 460, "orb", { aim: true })]
+        : [fan(.58, 3, .25, 430, "orb", { aim: true })];
     }],
   broodSpawn: ["幼体孵化", "Larval Hatch", 3.05, "引开幼体，再穿过它们之间的空隙", "Lure the larvae, then pass through their gaps",
     t => {
       t.attackMotion = "recoil";
       return t.enraged
-        ? [fan(0, 6, .6, 325, "spore", { homingUntil: .93, radius: 11, sound: "hatch" }),
-          fan(.75, 3, .37, 365, "spore", { offsetY: .24, homingUntil: .72, radius: 10, sound: "hatch" }),
-          fan(1.43, 5, .46, 450, "orb", { aim: true })]
-        : [fan(0, 4, .52, 285, "spore", { homingUntil: .8, radius: 11, sound: "hatch" })];
+        ? [fan(0, 6, .6, 365, "spore", { homingUntil: 1.1, radius: 11, sound: "hatch" }),
+          fan(.75, 4, .37, 395, "spore", { offsetY: .24, homingUntil: .87, radius: 10, sound: "hatch" }),
+          fan(1.43, 7, .49, 480, "orb", { aim: true })]
+        : [fan(0, 5, .52, 325, "spore", { homingUntil: .94, radius: 11, sound: "hatch" }),
+          fan(1.15, 3, .3, 425, "orb", { aim: true })];
     }],
 
   boneSpears: ["倒钩三连", "Barbed Triplets", 2.7, "引开骨刺后转向", "Bait the spears and turn",
@@ -90,12 +95,24 @@ const alienPatterns = {
   neuralRupture: ["王巢坏死", "Royal Rupture", 3.45, "保持移动，远离已锁定的圆心", "Keep moving away from the locked centers",
     t => [zoneTell(t, 0, t.lockX, t.lockY, .42), beat(.56, x => zoneTell(x, .82, player.x, player.y, .42)), beat(1.15, x => zoneTell(x, .81, player.x, player.y, .44)), fan(1.45, 3, .48, 370, "spore", { homingUntil: .8, radius: 11 })]],
 
-  fusionBind: ["群渊处刑", "Confluence Execution", 3.45, "离开减速区，红圈将在原地引爆", "Escape the slowing field before the locked red circle detonates",
-    t => [bindTell(t, 0, t.lockX, t.lockY, 2.0, .64), zoneTell(t, 1.02, t.lockX, t.lockY, .49), beat(1.08, x => zoneTell(x, .96, player.x, player.y, .39)), fan(2.09, 5, .5, 620, "shard", { aim: true })]],
-  fusionCorridor: ["神经潮汐", "Synaptic Tide", 3.45, "青色通道抵挡夹击，结束后再移动", "Hold the cyan lane against the crossfire, then move",
-    t => [laneTell(t, 0, 2.07), bandTell(t, 0, .66), wall(.29, 550, "shard"), wall(.83, 575, "thread"), wall(1.36, 605, "prism"), fan(2.0, 5, .35, 600, "shard", { aim: true })]],
-  fusionPrism: ["镜噬孢落", "Prismatic Sporefall", 3.5, "诱开孢群，沿无标线区域闪避", "Lead the spores away and stay off the marked lines",
-    t => { t.attackMotion = "lunge"; return [beamTell(t, 0, t.lockY, .43), fan(.18, 4, .58, 400, "spore", { homingUntil: 1.05, radius: 11 }), fan(.75, 5, .63, 560, "prism", { reflect: true }), beat(1.1, x => zoneTell(x, .92, player.x, player.y, .42)), fan(1.83, 4, .48, 605, "thread", { wave: 30 })]; }],
+  fusionBind: ["群渊处刑", "Confluence Execution", 3.62, "离开减速区，红圈将在原地引爆", "Escape the slowing field before the locked red circle detonates",
+    t => [bindTell(t, 0, t.lockX, t.lockY, 2.0, t.enraged ? .58 : .62),
+      zoneTell(t, 1.12, t.lockX, t.lockY, .49), beat(1.08, x => zoneTell(x, .96, player.x, player.y, .39)),
+      fan(2.09, t.enraged ? 7 : 5, .5, 620, "shard", { aim: true }),
+      t.enraged && beat(2.2, x => zoneTell(x, .88, player.x, player.y, .42))]],
+  fusionCorridor: ["神经潮汐", "Synaptic Tide", 3.58, "守住青色通道，最后一波通过再移动", "Hold the cyan lane until the last wall passes",
+    t => [laneTell(t, 0, t.enraged ? 2.72 : 2.35), bandTell(t, 0, .66),
+      wall(.29, 550, "shard"), wall(.75, 575, "thread"), wall(1.24, 605, "prism"),
+      t.enraged && wall(1.68, 625, "shard"), t.enraged && bandTell(t, 1.5, .52),
+      fan(t.enraged ? 2.82 : 2.45, t.enraged ? 7 : 5, .35, 600, "shard", { aim: true })]],
+  fusionPrism: ["镜噬孢落", "Prismatic Sporefall", 3.55, "诱开孢群，沿无标线区域闪避", "Lead the spores away and stay off the marked lines",
+    t => {
+      t.attackMotion = "lunge";
+      return [beamTell(t, 0, t.lockY, .43), fan(.18, t.enraged ? 6 : 4, .58, 400, "spore", { homingUntil: 1.05, radius: 11 }),
+        fan(.75, t.enraged ? 7 : 5, .63, 560, "prism", { reflect: true }),
+        beat(1.1, x => zoneTell(x, .92, player.x, player.y, .42)), fan(1.83, 4, .48, 605, "thread", { wave: 30 }),
+        t.enraged && beat(2.12, x => beamTell(x, .81, player.y, .32, .37))];
+    }],
 };
 
 function beat(at, fire) { return { at, fire }; }
@@ -119,7 +136,7 @@ function alienThreatRadius(target, size) {
 }
 
 function alienAttackSpeed(target, base) {
-  return base * alienArenaScale() * (1 + target.type * .014) * (target.enraged ? 1.1 : 1);
+  return base * alienArenaScale() * (1.13 + target.type * .023) * (target.enraged ? 1.15 : 1);
 }
 
 function addBossHazard(kind, options) {
@@ -182,7 +199,8 @@ function laneTell(target, at, duration) {
 
 function beamTell(target, at, y, duration, width = .45) {
   addBossHazard("beam", { y, thickness: Math.max(15, Math.min(58, player.height * width)),
-    right: bossPlayerRight() + player.width * .22, color: "#ff6982", warning: target.telegraphDuration + at, duration });
+    right: bossPlayerRight() + player.width * .22, color: "#ff6982",
+    warning: target.phase === "attack" ? at : target.telegraphDuration + at, duration });
 }
 
 function broodLash(target, y, warning, side, index) {
@@ -222,16 +240,23 @@ function prepareAlienAttack(target) {
   target.alienAttack = key;
   target.phase = "telegraph";
   target.phaseTime = 0;
-  target.telegraphDuration = Math.max(.8, 1.12 - target.type * .02 - (target.enraged ? .07 : 0));
-  target.attackDuration = duration - (target.enraged ? .12 : 0);
+  target.telegraphDuration = Math.max(.8, 1.02 - target.type * .014 - (target.enraged ? .06 : 0));
+  target.attackDuration = duration - .11 - target.type * .011 - (target.enraged ? .11 : 0);
   target.attackMotion = null;
   target.lockX = player.x;
   target.lockY = player.y;
   const span = flightBounds.bottom - flightBounds.top;
   target.side = player.y < alienLane(.5) ? 1 : -1;
-  target.gapY = clamp(alienOffsetLane(player.y, target.side * (.12 + target.type * .006)), alienLane(.28), alienLane(.72));
+  const desiredGap = clamp(alienOffsetLane(player.y, target.side * (.12 + target.type * .006)), alienLane(.28), alienLane(.72));
+  // Keep the safe lane reachable even on a tall display and while the player is charging.
+  const reach = player.speed * (target.telegraphDuration - .24) * .65;
+  target.gapY = clamp(desiredGap, player.y - reach, player.y + reach);
   target.gapSize = Math.min(span * .76, Math.max(75, player.height * (1.22 - target.type * .017)));
+  bossHazards.length = 0;
   target.attackEvents = plan(target).filter(Boolean).sort((a, b) => a.at - b.at);
+  // Ordinary volleys finish crossing the arena during the next warning. A marked
+  // safe corridor is exclusive so no old shot can hit a player following its cue.
+  if (bossHazards.some(hazard => hazard.kind === "guide")) bossProjectiles.length = 0;
   target.nextEvent = 0;
   if (target.type === 0 && key !== "broodSpawn") gameAudio.bossAttack("coil");
   const move = key === "broodSweep" && target.enraged ? tr("三重触须扫潮", "Triple Tentacle Tide") : tr(name, enName);

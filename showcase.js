@@ -73,6 +73,7 @@ function enterShowcaseScene(index) {
   showcase.scene = index;
   showcase.sceneStarted = showcase.elapsed;
   showcase.events.clear();
+  selectedFighter = "red";
   showScreen("battle");
   movementHint.hidden = true;
   pauseHint.hidden = true;

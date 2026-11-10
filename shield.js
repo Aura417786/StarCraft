@@ -77,8 +77,8 @@ function tryPerfectShield() {
       damageLog: Math.min(counterLog, target.healthLog + Math.log(shieldRules.bossDamageCap)) }, target);
   }
   updateShieldDisplay();
-  if (isBattleActive()) statusMessage.textContent = tr("完美格挡！返还 25% 护盾充能，3 秒内可消耗已存贯星炮速蓄连携。",
-    "Perfect Guard! Restored 25% shield charge. Use a stored Crimson Beam shot within 3 seconds to charge it faster.");
+  if (isBattleActive()) statusMessage.textContent = tr("完美格挡！返还 25% 护盾充能，3 秒内释放已储存的大招可加快蓄力。",
+    "Perfect Guard! Restored 25% shield charge. Use a stored special within 3 seconds to charge it faster.");
   else { shield.slowRemaining = 0; resetCannonLink(); }
   return true;
 }
