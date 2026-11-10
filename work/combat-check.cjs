@@ -90,7 +90,7 @@ const gameAudio={ muted:false,
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
 const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
-for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js')) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
+for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js' && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
 const position = () => vm.runInContext('({ x: player.x, y: player.y })', sandbox);
 const bounds = vm.runInContext('flightBounds', sandbox);
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
@@ -1223,17 +1223,23 @@ check('fusion binding and detonation leave a keyboard escape after the warning a
     }
   }
 });
-check('half health triggers enrage once without healing or restarting an active telegraph', () => {
+check('half health ruptures armor, replaces old threats, and announces a stronger combo', () => {
   readyBoss(4,'boss.hp=.51;boss.attackIndex=1;prepareAlienAttack(boss);boss.phaseTime=.2;');
-  const phase=bossState().boss.phase; const time=bossState().boss.phaseTime;
-  const warning=bossState().boss.telegraphDuration; const hazard=JSON.stringify(bossState().bossHazards);
-  execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
+  execute(bossProjectile()+'applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
   assert.equal(bossState().boss.enraged,true); near(bossState().boss.hp,.49);
-  assert.equal(bossState().boss.phase,phase); assert.equal(bossState().boss.phaseTime,time);
-  assert.equal(bossState().boss.telegraphDuration,warning); assert.equal(JSON.stringify(bossState().bossHazards),hazard);
+  assert.equal(bossState().boss.phase,'rupture'); near(bossState().boss.phaseTime,0);
+  assert.equal(bossState().bossHazards.length,0); assert.equal(bossState().bossProjectiles.length,0);
+  assert.equal(nodes.get('#game-app').dataset.bossPhase,'rupture');
   const firstStatus=nodes.get('#status').textContent;
-  execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});'); near(bossState().boss.hp,.47);
+  execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});'); near(bossState().boss.hp,.49);
   assert.equal(nodes.get('#status').textContent,firstStatus);
+  execute('updateBossEncounter(bossRuptureDuration(boss));');
+  assert.equal(bossState().boss.phase,'telegraph');
+  assert.equal(bossState().boss.alienAttack,'pressure');
+  assert.equal(nodes.get('#game-app').dataset.bossPhase,'frenzy');
+  assert.equal(execute('bossCanTakeDamage()'),false);
+  execute('updateBossEncounter(boss.telegraphDuration);');
+  assert.equal(execute('bossCanTakeDamage()'),true);
 });
 check('enrage makes subsequent projectiles faster and preparation shorter while leaving a warning', () => {
   function sample(enraged) {

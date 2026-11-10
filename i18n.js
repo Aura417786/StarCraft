@@ -13,5 +13,6 @@ function setGameLanguage(language) {
   gameLanguage = language;
   try { window.localStorage.setItem(gameLanguageKey, gameLanguage); } catch { /* Keep the current tab's choice. */ }
   if (typeof applyGameStaticLanguage === "function") applyGameStaticLanguage();
+  if (typeof refreshRenderQualityLanguage === "function") refreshRenderQualityLanguage();
   if (typeof refreshGameLanguage === "function") refreshGameLanguage();
 }

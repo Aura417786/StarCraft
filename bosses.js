@@ -53,6 +53,9 @@ function setBossMessage(title, action, visible = true) {
   document.querySelector("#boss-action").textContent = action;
   app.dataset.bossActive = String(visible);
   app.dataset.bossFinale = String(visible && !!boss?.finale);
+  app.dataset.bossPhase = !visible ? "" : !boss ? "warning" : boss.finale ? "finale"
+    : boss.phase === "enter" ? "entry" : boss.phase === "rupture" ? "rupture"
+    : boss.phase === "recover" && boss.alienAttack ? "recover" : boss.enraged ? "frenzy" : "hunt";
 }
 
 function clearAlienThreats() {
@@ -155,7 +158,7 @@ function spawnBoss(type = chooseBossType()) {
     hp: 1, maxHp: 1, displayHp: 1, healthLog, endurance, fireProtection: bossFireProtectionFor(type),
     x: viewport.width + arena.width / 2, previousX: viewport.width + arena.width / 2, previousY: arena.y,
     phase: "enter", phaseTime: 0, age: 0, hitFlash: 0, attackIndex: -1,
-    alienAttack: null, enraged: false, lockX: player.x, lockY: player.y, gapY: player.y, gapSize: 0,
+    alienAttack: null, attackLabel: null, pressureCycle: 0, enraged: false, lockX: player.x, lockY: player.y, gapY: player.y, gapSize: 0,
     lashPulse: 0, lashSide: 1, lashIndex: 0 };
   if (typeof preloadAlienBossArt === "function") preloadAlienBossArt(type);
   preloadBossFinaleArt(type);
@@ -183,6 +186,12 @@ function updateAlienBossPose(target, seconds) {
     target.x = arena.x + (viewport.width + arena.width / 2 - arena.x) * Math.pow(1 - progress, 3);
     target.y = clamp(arena.y + swayY * quiet, arena.top, arena.bottom);
     return;
+  }
+  if (target.phase === "rupture") {
+    const progress = clamp(target.phaseTime / bossRuptureDuration(target), 0, 1);
+    const recoil = Math.sin(progress * Math.PI);
+    swayX += Math.min(44, target.width * .19) * recoil;
+    swayY += Math.sin(progress * Math.PI * 2) * Math.min(24, room * .09);
   }
   if (target.phase === "telegraph" || target.phase === "attack") {
     const warming = target.phase === "telegraph";
@@ -248,25 +257,32 @@ function updateBossEncounter(seconds) {
   }
   updateAlienBossPose(boss, seconds);
   if (boss.phase === "enter" && boss.phaseTime >= bossRules.entry) {
-    boss.phase = "recover";
-    boss.phaseTime = 0;
+    beginAlienRecovery(boss);
+  } else if (boss.phase === "rupture") {
+    if (boss.phaseTime >= bossRuptureDuration(boss)) prepareAlienAttack(boss, true);
   } else if (boss.phase === "recover") {
-    const recovery = Math.max(.43, bossRules.recovery - boss.type * .027 - (boss.enraged ? .13 : 0));
-    if (boss.phaseTime >= recovery) prepareAlienAttack(boss);
+    if (boss.phaseTime >= alienRecoveryDuration(boss)) prepareAlienAttack(boss, true);
   } else if (boss.phase === "telegraph" && boss.phaseTime >= boss.telegraphDuration) {
     boss.phase = "attack";
     boss.phaseTime -= boss.telegraphDuration;
+    if (boss.alienAttack === "pressure" && boss.pressureCycle === 1) {
+      const [name, enName, hint, enHint] = boss.attackLabel;
+      setBossMessage(bossStageTitle(boss), tr("狂暴 · " + name + " · " + hint, "Enraged · " + enName + " · " + enHint));
+    }
     runAlienAttack(boss);
   } else if (boss.phase === "attack") {
     runAlienAttack(boss);
-    if (boss.phaseTime >= boss.attackDuration) {
-      boss.phase = "recover";
-      boss.phaseTime = 0;
-    }
+    if (boss.phaseTime >= boss.attackDuration) beginAlienRecovery(boss);
   }
 }
 
-function bossCanTakeDamage(target = boss) { return !!target && target === boss && target.phase !== "enter"; }
+function alienRuptureGuard(target) {
+  return target.phase === "rupture"
+    || (target.phase === "telegraph" && target.alienAttack === "pressure" && target.pressureCycle === 1);
+}
+function bossCanTakeDamage(target = boss) {
+  return !!target && target === boss && target.phase !== "enter" && !alienRuptureGuard(target);
+}
 
 // Measured in visible sprite fractions. A central body and two appendage regions
 // let aimed shots graze organic outlines without treating the whole frame as solid.
@@ -309,7 +325,9 @@ function applyBossHit(shot, target = boss) {
     ? Math.exp(Math.min(Math.log(ultimateRules.bossDamageCap), damageLog - target.healthLog))
     : progressionHitFraction(target, damageLog, target.fireProtection);
   // The attacking shell absorbs part of the incoming damage, but no attack is invulnerable.
-  const attackingShell = target.phase !== "attack" ? 1 : target.alienFinal && target.enraged ? .62 : .78;
+  const exposed = target.phase === "recover" && target.alienAttack;
+  const attackingShell = exposed ? 1.18 : target.phase !== "attack" ? 1
+    : target.alienAttack === "pressure" ? .71 : target.alienFinal && target.enraged ? .62 : .78;
   const specialMultiplier = special && target.alienFinal ? bossRules.fusionSpecialMultiplier : 1;
   const fraction = rawFraction * attackingShell * specialMultiplier * finaleMultiplier;
   if (fraction <= 0) return;
@@ -325,21 +343,7 @@ function applyBossHit(shot, target = boss) {
       beginBossFinale(target);
     }
   } else if (!target.finale && target.hp <= .5 && !target.enraged) {
-    target.enraged = true;
-    target.enragedAt = target.age;
-    gameAudio.bossEnrage();
-    if (target.type === 0) {
-      clearAlienThreats();
-      target.phase = "recover";
-      target.phaseTime = 0;
-      target.lashPulse = 0;
-      target.attackIndex = -1;
-      bossHitGrace = Math.max(bossHitGrace, .6);
-    }
-    setBossMessage(bossStageTitle(target), target.type === 0
-      ? tr("外壳脱落 · 多重触须正在展开", "Shell ruptured · Multiple tendrils unfolding")
-      : tr("狂暴模式 · 攻势加速，保持移动", "Enraged · Attacks speed up. Keep moving."));
-    statusMessage.textContent = tr(target.name + "进入狂暴模式。", target.name + " is enraged.");
+    beginAlienRupture(target);
   }
 }
 
@@ -393,36 +397,53 @@ function bossShotHitsPlayer(shot) {
 
 function updateBossDamage() {
   if (!isBattleActive()) return;
-  let hit = false;
+  let contact;
   for (let index = bossProjectiles.length - 1; index >= 0; index--) {
-    if (bossShotHitsPlayer(bossProjectiles[index])) {
+    const shot = bossProjectiles[index];
+    if (bossShotHitsPlayer(shot)) {
       bossProjectiles.splice(index, 1);
-      hit = true;
+      contact = shot;
     }
   }
-  if (hit) tryPerfectShield();
-  if (hit || bossHazards.some(alienHazardHitsPlayer) || (boss?.finale && bossFinaleHitsPlayer(boss)))
-    damagePlayer(tr("被异形 Boss 攻击命中", "Hit by an alien boss attack"));
+  if (contact) tryPerfectShield();
+  if (!isBattleActive()) return;
+  const hazard = bossHazards.find(area => !area.hitPlayer && alienHazardHitsPlayer(area));
+  const finale = boss?.finale && bossFinaleHitsPlayer(boss) ? boss : null;
+  if (contact || hazard || finale) {
+    // Lingering areas can hit once each. Repeated, newly telegraphed attacks
+    // still damage the player even when they originate from the same move.
+    const damaged = damagePlayer(alienDamageExplanation(contact || hazard || {}, finale));
+    if (damaged && hazard && !contact) hazard.hitPlayer = true;
+  }
 }
 
 function drawBossBattle() {
-  const quiet = reducedMotion.matches;
+  const quiet = reducedMotion.matches || (typeof visualQuality !== "undefined" && visualQuality.id === "low");
   for (const hazard of bossHazards) drawAlienHazard(context, hazard, quiet);
   if (boss?.finale) drawBossFinale(context, boss, quiet);
   else if (boss) {
     drawBossShip(context, boss, quiet);
+    if (boss.phase === "rupture") drawAlienRupture(context, boss, quiet);
     const width = boss.width * .85, y = boss.y - boss.height * .58 - 9;
     context.save();
     context.fillStyle = "#111c30";
     context.beginPath();
     context.roundRect(boss.x - width / 2, y, width, 7, 3.5);
     context.fill();
+    const guarded = alienRuptureGuard(boss);
     const filled = width * clamp(boss.displayHp, 0, 1);
     if (filled > 0) {
-      context.fillStyle = boss.enraged ? "#ff8e98" : boss.color;
+      context.fillStyle = guarded ? "#b1c6d8" : boss.enraged ? "#ff8e98" : boss.color;
       context.beginPath();
       context.roundRect(boss.x - width / 2, y, filled, 7, Math.min(3.5, filled / 2));
       context.fill();
+    }
+    if (guarded) {
+      context.strokeStyle = "#daebf5ab";
+      context.lineWidth = 1.4;
+      context.beginPath();
+      context.roundRect(boss.x - width / 2 - 2, y - 2, width + 4, 11, 5.5);
+      context.stroke();
     }
     if (boss.phase === "attack") {
       context.strokeStyle = "#cfdeffd9";

@@ -3,7 +3,7 @@
 // 预渲染的立体舰体 + 独立的喷流、受光和侧倾。所有数值只用于绘制。
 // tip 为素材机鼻坐标；将它固定到原枪口，侧倾也不会让弹道偏离机头。
 const shipRenderSources = {
-  crimson: { src: "assets/ships/crimson-sleek.png", crop: [69, 122, 1415, 800], tip: [1482, 494.5],
+  crimson: { src: "assets/ships/crimson-sleek.png", atlas: "red", crop: [69, 122, 1415, 800], tip: [1482, 494.5],
     engines: [[96, 400], [94, 580]], direction: 1, color: "#b1e7f2" },
   scout: { src: "assets/ships/scout-sleek.png", crop: [39, 102, 1431, 819], tip: [40, 508],
     engines: [[1442, 401], [1443, 587]], direction: -1, color: "#b1e7f2" },
@@ -29,6 +29,7 @@ function createShipRenderAsset(source) {
 const shipRenderAssets = Object.fromEntries(Object.entries(shipRenderSources).map(([kind, source]) =>
   [kind, createShipRenderAsset(source)]));
 const shipVisuals = { clock: 0, bank: 0 };
+const fighterAtlasImages = new Map();
 // Rim and canopy glints follow existing highlights on the original crimson texture.
 const crimsonReflectionSurfaces = [
   { side: -1, weight: 1, points: [[330, 130], [400, 146], [520, 213], [640, 293], [700, 332]] },
@@ -124,8 +125,47 @@ function shipRenderGeometry(asset, ship, playerShip) {
     anchorX: ship.x + ship.width * (playerShip ? 0.465 : -0.485), anchorY: ship.y,
     point: ([x, y]) => ({ x: (x - asset.tip[0]) * scaleX, y: (y - asset.tip[1]) * scaleY }) };
 }
-function drawShipJet(ctx, x, y, direction, length, radius, color, quiet) {
+function preloadFighterAtlas(id) {
+  if (typeof fighterAtlasCatalog === "undefined" || !fighterAtlasCatalog[id] || typeof Image !== "function") return null;
+  if (fighterAtlasImages.has(id)) return fighterAtlasImages.get(id);
+  const image = new Image();
+  image.decoding = "async";
+  image.src = `assets/fighters/atlas/${id}.webp`;
+  fighterAtlasImages.set(id, image);
+  return image;
+}
+function fighterAtlasPose(asset, ship, bank) {
+  if (visualQuality.meshDetail === 0 || typeof fighterAtlasCatalog === "undefined" || !asset.atlas) return null;
+  const art = fighterAtlasCatalog[asset.atlas];
+  if (!art) return null;
+  const image = preloadFighterAtlas(asset.atlas);
+  if (!image?.complete || image.naturalWidth !== art.width * art.frames.length) return null;
+  const position = (clamp(bank, -1, 1) + 1) * (art.frames.length - 1) / 2;
+  const index = Math.round(position);
+  const pose = art.frames[index];
+  const scale = Math.min(ship.width * .945 / art.bodyWidth, ship.height * .955 / art.bodyHeight);
+  const width = art.width * scale, height = art.height * scale;
+  return { image, sourceX: index * art.width, sourceWidth: art.width, sourceHeight: art.height,
+    width, height, anchorX: ship.x + ship.width * .465, anchorY: ship.y,
+    x: -pose.nose[0] * width, y: -pose.nose[1] * height,
+    residual: position - index,
+    engines: pose.engines, reflections: pose.reflections,
+    point: ([x, y]) => ({ x: (x - pose.nose[0]) * width, y: (y - pose.nose[1]) * height }) };
+}
+function drawShipJet(ctx, x, y, direction, length, radius, color, quiet, phase) {
   ctx.save(); ctx.translate(x, y); ctx.scale(direction, 1);
+  const glow = quiet ? 0 : visualQuality.glow;
+  if (glow && radius > 1.5) {
+    const sheath = ctx.createLinearGradient(0, 0, length * 1.4, 0);
+    sheath.addColorStop(0, color + "60"); sheath.addColorStop(.31, color + "33"); sheath.addColorStop(1, color + "00");
+    const alpha = ctx.globalAlpha;
+    ctx.globalAlpha = alpha * glow;
+    ctx.fillStyle = sheath;
+    ctx.beginPath(); ctx.moveTo(0, -radius * 1.22);
+    ctx.bezierCurveTo(length * .30, -radius * 2.45, length * .87, -radius * .8, length * 1.4, 0);
+    ctx.bezierCurveTo(length * .87, radius * .8, length * .30, radius * 2.45, 0, radius * 1.22); ctx.fill();
+    ctx.globalAlpha = alpha;
+  }
   const flow = ctx.createLinearGradient(0, 0, length, 0);
   flow.addColorStop(0, "#effcffdf"); flow.addColorStop(0.16, color + "c4");
   flow.addColorStop(0.72, color + "38"); flow.addColorStop(1, color + "00");
@@ -135,6 +175,20 @@ function drawShipJet(ctx, x, y, direction, length, radius, color, quiet) {
   ctx.bezierCurveTo(length * 0.7, radius * 0.35, length * 0.38, radius * 0.9, 0, radius); ctx.fill();
   ctx.fillStyle = "#effcff";
   ctx.beginPath(); ctx.ellipse(radius * 0.45, 0, radius * 0.8, radius * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+  if (glow && radius > 1.4) {
+    ctx.strokeStyle = "#f2feffb8";
+    ctx.lineWidth = Math.max(.6, radius * .16);
+    ctx.beginPath();
+    const knots = visualQuality.meshDetail === 2 ? 3 : 2;
+    for (let index = 0; index < knots; index++) {
+      const t = .19 + index * .20 + (Math.sin(phase * 24 + index) + 1) * .025;
+      const edge = radius * (1 - t);
+      ctx.moveTo(length * (t - .04), -edge);
+      ctx.lineTo(length * (t + .055), 0);
+      ctx.lineTo(length * (t - .04), edge);
+    }
+    ctx.stroke();
+  }
   ctx.restore();
 }
 function shipModulePlate(ctx, x, y, width, height, color) {
@@ -195,31 +249,40 @@ function drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, foreground)
 }
 function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0, asset = shipRenderAssets[kind]) {
   if (!asset?.ready || !asset.image || !(ship.width > 0 && ship.height > 0)) return false;
-  const playerShip = kind === "crimson", geometry = shipRenderGeometry(asset, ship, playerShip);
+  const playerShip = kind === "crimson";
   const clock = quiet ? 0 : time;
   const bank = quiet || ship.disabled ? 0 : Number.isFinite(ship.visualBank) ? ship.visualBank : playerShip ? shipVisuals.bank : Math.sin((ship.age ?? clock) * 1.7) * 0.22;
-  const cached = shipRenderSurface(asset, geometry.width, geometry.height);
+  const atlas = playerShip && ship === player ? fighterAtlasPose(asset, ship, bank) : null;
+  const geometry = atlas ?? shipRenderGeometry(asset, ship, playerShip);
+  const cached = atlas ? null : shipRenderSurface(asset, geometry.width, geometry.height);
   ctx.save(); ctx.translate(geometry.anchorX, geometry.anchorY);
-  ctx.transform(1, 0, bank * 0.09, 1 - Math.abs(bank) * 0.10, 0, 0);
+  if (atlas) ctx.transform(1, 0, atlas.residual * .035, 1, 0, 0);
+  else ctx.transform(1, 0, bank * 0.09, 1 - Math.abs(bank) * 0.10, 0, 0);
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
   if (!ship.disabled) {
-    const throttle = playerShip && (pressedKeys.has("ArrowRight") || pressedKeys.has("KeyD")) ? 1.22 : 1;
-    for (const engine of asset.engines) {
+    const boost = playerShip && (pressedKeys.has("ArrowRight") || pressedKeys.has("KeyD"));
+    const throttle = boost ? 1.45 : playerShip ? 1.16 : .89;
+    for (const engine of (atlas?.engines ?? asset.engines)) {
       const nozzle = geometry.point(engine);
-      let length = ship.width * (playerShip ? 0.16 : 0.14) * throttle * (1 + Math.sin(clock * 32 + engine[1]) * 0.06);
+      let length = ship.width * (playerShip ? 0.19 : 0.14) * throttle * (1 + Math.sin(clock * 32 + engine[1]) * 0.06);
       if (playerShip) length = Math.min(length, Math.max(6, geometry.anchorX + nozzle.x - 8));
-      drawShipJet(ctx, nozzle.x, nozzle.y, -asset.direction, length, ship.height * 0.022, asset.color, quiet);
+      drawShipJet(ctx, nozzle.x, nozzle.y, -asset.direction, length, ship.height * (boost ? .030 : .023), asset.color, quiet, clock);
     }
   }
   if (playerShip) drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, false);
   ctx.save();
   if (ship.disabled) ctx.filter = "brightness(0.55) saturate(0.45)";
   else if (ship.hitFlash > 0 && !quiet) ctx.filter = "brightness(1.25) saturate(0.65)";
-  if (cached) ctx.drawImage(cached.body, geometry.x, geometry.y, geometry.width, geometry.height);
+  if (atlas) ctx.drawImage(atlas.image, atlas.sourceX, 0, atlas.sourceWidth, atlas.sourceHeight,
+    atlas.x, atlas.y, atlas.width, atlas.height);
+  else if (cached) ctx.drawImage(cached.body, geometry.x, geometry.y, geometry.width, geometry.height);
   else ctx.drawImage(asset.image, ...asset.crop, geometry.x, geometry.y, geometry.width, geometry.height);
   ctx.restore();
-  if (playerShip && ship === player && !ship.disabled && !(ship.hitFlash > 0))
-    drawPlayerReflection(ctx, geometry, bank, asset.reflections ?? crimsonReflectionSurfaces);
+  if (playerShip && ship === player && !ship.disabled && !(ship.hitFlash > 0)) {
+    const reflections = atlas ? atlas.reflections.map((points, index) => ({ points, side: index ? 1 : -1, weight: .59 }))
+      : asset.reflections ?? crimsonReflectionSurfaces;
+    drawPlayerReflection(ctx, geometry, bank, reflections);
+  }
   if (playerShip) drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, true);
   if (!playerShip && ship.formationLeader && !ship.disabled) {
     for (const side of [-1, 1]) {

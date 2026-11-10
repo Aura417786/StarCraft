@@ -5,6 +5,7 @@ const fighterVariantArt = {
   red: shipRenderAssets.crimson,
   blue: createShipRenderAsset({
     src: "assets/fighters/azure.webp",
+    atlas: "blue",
     crop: [42, 76, 892, 496],
     tip: [929.5, 308.5],
     engines: [[60, 255], [61, 364]],
@@ -19,6 +20,7 @@ const fighterVariantArt = {
   }),
   yellow: createShipRenderAsset({
     src: "assets/fighters/auric.webp",
+    atlas: "yellow",
     crop: [37, 46, 884, 548],
     tip: [915.5, 311],
     engines: [[58, 259], [58, 374]],
@@ -32,6 +34,15 @@ const fighterVariantArt = {
     ],
   }),
 };
+
+function warmSelectedFighterAtlas() {
+  if (!visualQuality.meshDetail) return;
+  const id = document.querySelector("#fighter-picker input:checked")?.value;
+  if (id) preloadFighterAtlas(id);
+}
+document.addEventListener("DOMContentLoaded", warmSelectedFighterAtlas);
+document.querySelector("#fighter-picker")?.addEventListener("change", warmSelectedFighterAtlas);
+document.querySelector("#render-quality")?.addEventListener("change", warmSelectedFighterAtlas);
 
 function drawFighterVariant(ctx, ship, id, upgrades = null, quiet = false, time = 0) {
   const art = Object.hasOwn(fighterVariantArt, id) ? fighterVariantArt[id] : fighterVariantArt.red;

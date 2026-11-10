@@ -462,12 +462,14 @@ function drawSpaceProp(ctx, kind, pose) {
   ctx.save();
   ctx.globalAlpha *= pose.alpha;
   if (device) {
-    const resolution = Math.min(device.surface.width, Math.max(48, Math.round(Math.max(pose.width, pose.height) * .78)));
-    spacePropRenderGpu(device, spacePropMesh(kind, variant), matrix, pose, key, bounce, resolution);
+    const budget = typeof visualQuality === "undefined" ? null : visualQuality;
+    const resolution = Math.min(device.surface.width,
+      Math.max(48, Math.round(Math.max(pose.width, pose.height) * (budget?.propScale ?? .78))));
+    spacePropRenderGpu(device, spacePropMesh(kind, variant, budget?.meshDetail === 0), matrix, pose, key, bounce, resolution);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     const x = pose.x - pose.width / 2, y = pose.y - pose.height / 2;
-    if (pose.streak) {
+    if (pose.streak && budget?.meshDetail !== 0) {
       const alpha = ctx.globalAlpha;
       ctx.globalAlpha *= .12;
       ctx.drawImage(device.surface, 0, 0, resolution, resolution, x + pose.streak, y, pose.width, pose.height);

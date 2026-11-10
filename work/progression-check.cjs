@@ -91,7 +91,7 @@ const gameAudio={ muted:false,
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
 const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
-for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js')) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
+for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js' && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
 // 成长曲线用同一火力基准比较，不受出击机型影响。
 function begin() {
@@ -433,8 +433,8 @@ check('changing tier emits a stronger differently shaped packet without mutating
   near(fresh.damage/old.damage,1.08);
   assert.ok(fresh.length>old.length);
   assert.notEqual(fresh.color,old.color);
-  assert.deepEqual(beforeSound.args,[false,1]);
-  assert.deepEqual(audioCalls.filter(call=>call.name==='shoot').at(-1).args,[false,2]);
+  assert.deepEqual(beforeSound.args,[false,1,'red']);
+  assert.deepEqual(audioCalls.filter(call=>call.name==='shoot').at(-1).args,[false,2,'red']);
 });
 
 

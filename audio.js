@@ -1,6 +1,6 @@
 "use strict";
 
-// 所有声音在浏览器内合成，不下载音频；首次点击后才创建 AudioContext。
+// 优先播放离线渲染的多轨配乐和声音素材。合成声在解码不可用时接替。
 const gameAudio = (() => {
   const EPSILON = 0.0001;
   // 留出短淡出的余量，密集弹幕中实际同时工作的节点也保持在小规模。
@@ -34,6 +34,21 @@ const gameAudio = (() => {
   let lastEnrageTime = -Infinity;
   let lastOverdriveTime = -Infinity;
   let lastPerfectShieldTime = -Infinity;
+  let lastImpactTime = -Infinity;
+  let duckPriority = 1;
+  let duckUntil = -Infinity;
+  let lastBossVoiceTime = -Infinity;
+  let bossType = null;
+  let bossPhase = null;
+  let threat = 0;
+  let bankLoading = false;
+  let liveScore = null;
+  const scoreOffsets = { adventure: 0, boss: 0 };
+  const buffers = new Map();
+  const authoredStems = {
+    adventure: ["flight_harmony", "flight_pulse"],
+    boss: ["boss_harmony", "boss_pressure", "boss_finale"],
+  };
   const bossCueIntervals = { volley: 0.28, beam: 0.65, summon: 0.7, burst: 0.45,
     coil: 0.4, whip: 0.12, hatch: 0.21, surge: 0.25 };
   const lastBossAttack = new Map();
@@ -53,6 +68,9 @@ const gameAudio = (() => {
   }
   function duckMusic(level, duration) {
     const time = audio.currentTime;
+    if (time < duckUntil && level > duckPriority) return;
+    duckPriority = level;
+    duckUntil = time + duration * .46;
     const gain = musicDuck.gain;
     gain.cancelScheduledValues(time);
     gain.setValueAtTime(gain.value, time);
@@ -82,7 +100,7 @@ const gameAudio = (() => {
     if (voices.size >= MAX_VOICES) {
       // 蓄力与炮声有独立声部，密集射击和背景乐不会抢断它们。
       const expendable = Array.from(voices).find(voice => voice.bus === "sfx") ||
-        Array.from(voices).find(voice => voice.bus !== "ultimate");
+        Array.from(voices).find(voice => voice.bus !== "ultimate" && !voice.loop);
       if (expendable) retireVoice(expendable, 0.008);
       else return false;
     }
@@ -134,15 +152,137 @@ const gameAudio = (() => {
       gain.connect(panner); panner.connect(bus === "music" ? musicBus : sfxBus);
       chain.push(panner);
     } else gain.connect(bus === "music" ? musicBus : sfxBus);
-    const voice = { source, gain, bus, chain };
+    trackVoice(source, gain, bus, chain);
+    source.start(start);
+    source.stop(start + duration + 0.01);
+  }
+  function trackVoice(source, gain, bus, chain, loop = false) {
+    const voice = { source, gain, bus, chain, loop };
     voices.add(voice);
     source.onended = () => {
       voices.delete(voice);
       fadingVoices.delete(voice);
       for (const node of chain) disconnect(node);
     };
+  }
+  function sample(name, { bus = "sfx", time = audio.currentTime, level = .28, rate = 1,
+    duration = Infinity, pan = 0 } = {}) {
+    const buffer = buffers.get(name);
+    if (!buffer || !canPlay() || !limitVoices(bus)) return false;
+    const source = audio.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    const gain = audio.createGain();
+    const chain = [source, gain];
+    source.connect(gain);
+    if (pan && audio.createStereoPanner) {
+      const space = audio.createStereoPanner();
+      space.pan.value = pan;
+      gain.connect(space); space.connect(sfxBus); chain.push(space);
+    } else gain.connect(sfxBus);
+    const start = Math.max(time, audio.currentTime);
+    const length = Math.min(buffer.duration / rate, duration);
+    gain.gain.setValueAtTime(level, start);
+    gain.gain.setValueAtTime(level, start + Math.max(0, length - .05));
+    gain.gain.linearRampToValueAtTime(0, start + length);
+    trackVoice(source, gain, bus, chain);
     source.start(start);
-    source.stop(start + duration + 0.01);
+    source.stop(start + length);
+    return true;
+  }
+  function bossVoice(options) {
+    if (!Number.isInteger(bossType)) return false;
+    return sample("boss_" + String(bossType + 1).padStart(2, "0"), { bus: "boss", ...options });
+  }
+  function matchLoopSeam(buffer) {
+    // Lossy coding can leave a small discontinuity across an otherwise
+    // sample-aligned loop. Taper out that offset in the first few milliseconds.
+    const transition = Math.min(buffer.length, Math.round(buffer.sampleRate * .012));
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      const data = buffer.getChannelData(channel);
+      const difference = data[data.length - 1] - data[0];
+      for (let index = 0; index < transition; index++) {
+        const blend = .5 + .5 * Math.cos(Math.PI * index / transition);
+        data[index] += difference * blend;
+      }
+    }
+  }
+  function loadBank(current) {
+    if (bankLoading || typeof starBreakerAudioBank === "undefined"
+      || typeof current.decodeAudioData !== "function" || typeof atob !== "function") return;
+    bankLoading = true;
+    async function decode(name, encoded) {
+      try {
+        const bytes = Uint8Array.from(atob(encoded), letter => letter.charCodeAt(0));
+        const buffer = await current.decodeAudioData(bytes.buffer);
+        if (!disposed && audio === current) {
+          if (name === "room" || Object.hasOwn(starBreakerAudioBank.stems, name)) matchLoopSeam(buffer);
+          buffers.set(name, buffer);
+        }
+      } catch { /* 当前浏览器会使用本地合成声音。 */ }
+    }
+    async function prepare() {
+      const { stems, effects } = starBreakerAudioBank;
+      await Promise.all([
+        ...authoredStems.adventure.map(name => decode(name, stems[name][1])),
+        decode("room", effects.room),
+      ]);
+      if (audio === current && !disposed) reconcile();
+      const remaining = [
+        ...Object.entries(effects).filter(([name]) => name !== "room" && !name.startsWith("boss_")),
+        ...authoredStems.boss.map(name => [name, stems[name][1]]),
+        ...Object.entries(effects).filter(([name]) => name.startsWith("boss_")),
+      ];
+      // Small batches keep decompression work off the foreground start button.
+      let bossScoreReady = false;
+      for (let index = 0; index < remaining.length && !disposed; index += 4) {
+        await Promise.all(remaining.slice(index, index + 4).map(([name, bytes]) => decode(name, bytes)));
+        if (!bossScoreReady && audio === current && !disposed && authoredStems.boss.every(name => buffers.has(name))) {
+          bossScoreReady = true;
+          reconcile();
+        }
+      }
+    }
+    prepare().catch(() => { /* No network dependency if the bank is unavailable. */ });
+  }
+  function updateScoreMix() {
+    if (!liveScore) return;
+    const [base, rhythm, finale] = liveScore.layers;
+    smoothGain(liveScore.ambience, bossActive ? .055 : .23, .38);
+    if (bossActive) {
+      const exposed = bossPhase === "recover";
+      smoothGain(base, exposed ? .72 : .83, .24);
+      smoothGain(rhythm, .31 + threat * .15 + (overdriveMusic ? .13 : 0), .24);
+      smoothGain(finale, bossPhase === "finale" ? .66 : enraged ? .20 + threat * .065 : 0, .42);
+    } else {
+      smoothGain(base, .82, .22);
+      smoothGain(rhythm, overdriveMusic ? .89 : .30 + comboLayer * .12, .32);
+    }
+  }
+  function startScore(theme) {
+    const names = authoredStems[theme];
+    const clips = names.map(name => buffers.get(name));
+    const duration = Math.min(...clips.map(clip => clip.duration), starBreakerAudioBank.stems[names[0]][0]);
+    if (!(duration > 0)) return;
+    const start = audio.currentTime + .024;
+    const offset = scoreOffsets[theme] % duration;
+    function loop(clip, loopEnd) {
+      const source = audio.createBufferSource();
+      source.buffer = clip;
+      source.loop = true;
+      source.loopEnd = loopEnd;
+      const gain = audio.createGain();
+      gain.gain.value = 0;
+      source.connect(gain);
+      gain.connect(musicBus);
+      trackVoice(source, gain, "music", [source, gain], true);
+      source.start(start, offset % loopEnd);
+      return gain;
+    }
+    const layers = clips.map(clip => loop(clip, duration));
+    const room = buffers.get("room");
+    const ambience = room ? loop(room, room.duration) : null;
+    liveScore = { theme, duration, start, offset, layers, ambience };
   }
   function midi(value) { return 440 * Math.pow(2, (value - 69) / 12); }
   function warDrum(time, heavy = true, strength = 1) {
@@ -268,7 +408,11 @@ const gameAudio = (() => {
   function stopMusic() {
     if (scheduler !== null) window.clearTimeout(scheduler);
     scheduler = null;
-    if (!musicPlaying) return;
+    if (liveScore) {
+      const { theme, start, offset, duration } = liveScore;
+      scoreOffsets[theme] = (offset + Math.max(0, audio.currentTime - start)) % duration;
+      liveScore = null;
+    } else if (!musicPlaying) return;
     musicPlaying = false;
     smoothGain(musicBus, 0, 0.035);
     stopVoices("music");
@@ -285,7 +429,15 @@ const gameAudio = (() => {
     if (theme !== musicTheme) {
       stopMusic();
       musicTheme = theme;
+      scoreOffsets[theme] = 0;
       musicStep = 0;
+    }
+    if (authoredStems[theme].every(name => buffers.has(name))) {
+      if (musicPlaying) stopMusic();
+      smoothGain(musicBus, bossActive ? .59 : .52, .2);
+      if (!liveScore) startScore(theme);
+      updateScoreMix();
+      return;
     }
     smoothGain(musicBus, bossActive ? 0.3 : overdriveMusic ? 0.29 : comboLayer ? 0.245 : 0.22, 0.14);
     if (musicPlaying) return;
@@ -296,7 +448,10 @@ const gameAudio = (() => {
   function initialize() {
     const AudioContextType = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextType || disposed) return false;
-    audio = new AudioContextType();
+    // The authored sound palette is concentrated below 14 kHz. A 32 kHz mix
+    // keeps simultaneous decoded stems light on browsers that support it.
+    try { audio = new AudioContextType({ sampleRate: 32000 }); }
+    catch { audio = new AudioContextType(); }
     master = audio.createGain();
     sfxBus = audio.createGain();
     musicBus = audio.createGain();
@@ -327,6 +482,7 @@ const gameAudio = (() => {
         .then(() => {
           if (audio !== current || disposed) return false;
           reconcile();
+          loadBank(current);
           return current.state === "running";
         }).catch(() => false);
     } catch {
@@ -351,9 +507,16 @@ const gameAudio = (() => {
     const nextWarning = !!context?.warning;
     const nextCinematic = !!context?.cinematic;
     const nextOverdrive = !!context?.overdrive;
+    const nextType = Number.isInteger(context?.bossType) ? context.bossType : null;
+    const nextPhase = context?.bossPhase ?? null;
+    const nextThreat = (nextEnraged ? 1 : 0) + (nextPhase === "attack" || nextPhase === "finale" ? 1 : 0)
+      + (Number.isFinite(context?.lives) && context.lives <= 1 ? 1 : 0);
+    const entering = nextPhase === "enter" && (bossPhase !== nextPhase || bossType !== nextType);
+    const transforming = nextPhase === "finale" && bossPhase !== nextPhase;
     const changed = active !== !!nextActive || bossActive !== !!nextBossActive || enraged !== !!nextEnraged ||
       comboLayer !== nextComboLayer || warningActive !== nextWarning || cinematicActive !== nextCinematic ||
-      overdriveMusic !== nextOverdrive;
+      overdriveMusic !== nextOverdrive || bossType !== nextType || bossPhase !== nextPhase || threat !== nextThreat;
+    const wasActive = active;
     active = !!nextActive;
     bossActive = !!nextBossActive;
     enraged = !!nextEnraged;
@@ -361,14 +524,25 @@ const gameAudio = (() => {
     warningActive = nextWarning;
     cinematicActive = nextCinematic;
     overdriveMusic = nextOverdrive;
+    bossType = nextType;
+    bossPhase = nextPhase;
+    threat = nextThreat;
     if (changed) reconcile();
+    if (wasActive && canPlay() && (entering || transforming)) {
+      duckMusic(.39, 1.05);
+      sample("stage", { bus: "boss", level: .37 });
+      bossVoice({ level: .47, rate: transforming ? .79 : 1, pan: .21 });
+    }
   }
-  function shoot(overdrive = false, tier = 1) {
+  function shoot(overdrive = false, tier = 1, fighter = "red") {
     if (!canPlay()) return;
     const time = audio.currentTime;
     if (time - lastShotTime < 0.043) return;
     lastShotTime = time;
     const weight = Math.min(4, Math.max(0, tier - 1));
+    const cannon = fighter === "yellow" ? "gold" : fighter === "blue" ? "blue" : "red";
+    if (sample("shot_" + cannon, { level: overdrive ? .25 : .19,
+      rate: 1.05 - weight * .048 - (overdrive ? .11 : 0) + .065 * Math.random() })) return;
     if (overdrive) {
       // 保留清晰的短射击节奏，以较低的主音和低频脉冲表现引擎过载。
       note({ time, duration: 0.065, frequency: 920, endFrequency: 320,
@@ -416,6 +590,18 @@ const gameAudio = (() => {
     note({ time: time + 0.02, noise: true, duration: 0.22, volume: 0.07,
       filterType: "bandpass", cutoff: 650, endCutoff: 2100, resonance: 0.55, attack: 0.014 });
   }
+  function hit(isBoss, source = "") {
+    if (!canPlay() || audio.currentTime - lastImpactTime < .072) return;
+    const heavy = source === "ultimate";
+    if (sample(isBoss ? "hit_organic" : "hit_metal",
+      { level: heavy ? .29 : .19, rate: (heavy ? .77 : .94) + .12 * Math.random(), pan: .19 })) {
+      lastImpactTime = audio.currentTime;
+    }
+  }
+  function hurt() {
+    if (!canPlay()) return;
+    if (sample("hurt", { level: .46 })) duckMusic(.46, .41);
+  }
   function explode(isBoss = false) {
     if (!canPlay()) return;
     const time = audio.currentTime;
@@ -423,6 +609,14 @@ const gameAudio = (() => {
     if (isBoss) lastBossExplosionTime = time; else lastExplosionTime = time;
     const weight = isBoss ? 1.2 : 1;
     const variation = 0.93 + Math.random() * 0.14;
+    if (sample(isBoss ? "collapse" : "blast", { bus: isBoss ? "boss" : "sfx",
+      level: isBoss ? .66 : .32, rate: variation })) {
+      if (isBoss) {
+        duckMusic(.28, 1.22);
+        bossVoice({ level: .52, rate: .68, time: time + .14, pan: .24 });
+      }
+      return;
+    }
     // 爆裂冲击 → 宽频火团 → 鼓腔低震 → 碎片尾音；滤波随衰减收暗，不做塑料般的高音滑音。
     note({ time, noise: true, duration: 0.075, volume: 0.17 * weight,
       filterType: "bandpass", cutoff: 1900, endCutoff: 1000, resonance: 0.45, attack: 0.001 });
@@ -450,6 +644,7 @@ const gameAudio = (() => {
     const time = audio.currentTime;
     if (time - lastWarningTime < 1.5) return;
     lastWarningTime = time;
+    if (sample("warning", { bus: "boss", level: .62 })) return;
     // 双响低沉警报，低频冲击和号角负责威胁感，不靠尖锐蜂鸣提高音量。
     for (let index = 0; index < 2; index++) {
       const start = time + index * 0.65;
@@ -469,6 +664,17 @@ const gameAudio = (() => {
     const time = audio.currentTime;
     if (time - (lastBossAttack.get(kind) ?? -Infinity) < bossCueIntervals[kind]) return;
     lastBossAttack.set(kind, time);
+    const pressure = kind === "surge" || kind === "beam";
+    const cue = pressure ? "pressure" : kind === "coil" ? "stage" : kind === "whip" ? "snap" : "hit_organic";
+    const level = pressure ? .56 : kind === "volley" ? .17 : .34;
+    if (sample(cue, { bus: "boss", level, rate: kind === "beam" ? 1.37 : 1,
+      duration: kind === "coil" ? .45 : Infinity, pan: .14 })) {
+      if (pressure || kind === "whip") duckMusic(pressure ? .44 : .61, pressure ? .56 : .32);
+      if (time - lastBossVoiceTime > (pressure ? .38 : .62)
+        && bossVoice({ level: pressure ? .40 : .29, rate: kind === "coil" ? .87 : 1.12,
+          duration: pressure ? 1.08 : .62, pan: .29 })) lastBossVoiceTime = time;
+      return;
+    }
     const common = { bus: "boss", time };
     if (kind === "coil") {
       note({ ...common, duration: 0.42, frequency: 57, endFrequency: 144, type: "sawtooth",
@@ -532,6 +738,10 @@ const gameAudio = (() => {
     if (time - lastEnrageTime < 2) return;
     lastEnrageTime = time;
     duckMusic(0.27, 1.04);
+    if (sample("stage", { bus: "boss", level: .55 })) {
+      bossVoice({ level: .53, rate: .83, time: time + .10 });
+      return;
+    }
     note({ bus: "boss", time, duration: 1.1, frequency: 110, endFrequency: 63,
       type: "triangle", volume: 0.22, cutoff: 1700, endCutoff: 550, attack: 0.04, sustain: true });
     note({ bus: "boss", time, duration: 1.15, frequency: 62, endFrequency: 31,
@@ -549,6 +759,9 @@ const gameAudio = (() => {
     stopUltimate();
     if (!canPlay()) return;
     duration = Number.isFinite(duration) ? Math.max(0.12, Math.min(3, duration)) : 0.85;
+    const rate = Math.min(3, Math.max(.42, .85 / duration));
+    if (sample("charge", { bus: "ultimate", level: .33, rate, duration,
+      pan: kind === "blue" ? -.19 : kind === "yellow" ? .19 : 0 })) return;
     const common = { bus: "ultimate", time: audio.currentTime, duration, crescendo: true };
     if (kind === "blue") {
       note({ ...common, frequency: 240, endFrequency: 870, type: "sine", volume: 0.145, cutoff: 1500 });
@@ -569,6 +782,11 @@ const gameAudio = (() => {
   function fireUltimate(kind = "red") {
     stopUltimate();
     if (!canPlay()) return;
+    const launch = kind === "blue" ? "blue" : kind === "yellow" ? "gold" : "red";
+    if (sample("launch_" + launch, { bus: "ultimate", level: .58 })) {
+      duckMusic(.51, .61);
+      return;
+    }
     const common = { bus: "ultimate", time: audio.currentTime };
     if (kind === "blue") {
       for (let pulse = 0; pulse < 5; pulse++) {
@@ -611,8 +829,14 @@ const gameAudio = (() => {
       audio.onstatechange = null;
       try { Promise.resolve(audio.close()).catch(() => {}); } catch { /* 已关闭。 */ }
     }
+    for (const voice of fadingVoices) {
+      voice.source.onended = null;
+      for (const node of voice.chain) disconnect(node);
+    }
+    fadingVoices.clear();
+    buffers.clear();
     audio = null;
   }
-  return { unlock, setMuted, get muted() { return muted; }, sync, shoot, overdrive, perfectShield, explode, warning, bossAttack, bossEnrage,
+  return { unlock, setMuted, get muted() { return muted; }, sync, shoot, hit, hurt, overdrive, perfectShield, explode, warning, bossAttack, bossEnrage,
     chargeUltimate, fireUltimate, stopUltimate, destroy };
 })();

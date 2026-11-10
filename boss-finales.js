@@ -22,6 +22,11 @@ function bossFinaleHint(type) { return tr(...bossFinaleStages[type].hint); }
 function bossFinaleCollapseDuration() { return 2.05; }
 
 function preloadBossFinaleArt(type) {
+  if (typeof preloadStarBreakerModel === "function") {
+    preloadStarBreakerModel(type);
+    preloadStarBreakerModel(starBreakerFinaleModelIndex(type));
+  }
+  if (type === 0 && typeof preloadHadalSurface === "function") preloadHadalSurface();
   if (type !== 0 || typeof Image !== "function" || bossFinaleEggImage) return;
   bossFinaleEggImage = new Image();
   bossFinaleEggImage.src = "assets/aliens/broodmother-egg.webp";
@@ -485,6 +490,8 @@ function drawFinaleTide(ctx, hazard, quiet) {
       ctx.save();
       finaleCrestPath(ctx, hazard, top, bottom, width);
       ctx.clip();
+      if (typeof drawHadalSurface === "function")
+        drawHadalSurface(ctx, edge - hazard.width * .58, top, width + hazard.width, bottom - top, hazard.age);
       const flows = ["#c8fcffc7", "#75d6f17d", "#b6e1f543"];
       for (const [layer, color] of flows.entries()) {
         ctx.beginPath();
@@ -680,6 +687,10 @@ function finaleVolume(ctx, x, y, rx, ry, color, light = 1, rotation = 0) {
 }
 
 function drawFinaleEgg(ctx, w, h, age, hp, quiet) {
+  if (typeof drawStarBreakerModel === "function" && drawStarBreakerModel(ctx, 11, 0, 0, w, h, {
+    time: quiet ? 0 : age, charge: .36 + .26 * Math.sin(age * 3.1),
+    ruptured: 1 - clamp(hp, 0, 1), hit: 0, recoil: 0, quiet, color: "#78dbed",
+  })) return;
   const pulse = quiet ? 1 : 1 + .023 * Math.sin(age * 4.4);
   ctx.save();
   ctx.scale(pulse, 1 / pulse);
@@ -752,6 +763,22 @@ function drawFinaleShell(ctx, target, w, h, quiet) {
   const rx = w * .43, ry = h * .44;
   if (mode === "egg") {
     drawFinaleEgg(ctx, w, h, age, target.hp, quiet);
+    return;
+  }
+  if (typeof drawStarBreakerModel === "function"
+    && drawStarBreakerModel(ctx, starBreakerFinaleModelIndex(target.type), 0, 0, w, h, {
+      time: age, charge: lit ? .14 : .37 + .23 * Math.sin(age * 2.7),
+      ruptured: lit ? 1 : .16 + .4 * (1 - clamp(target.hp, 0, 1)),
+      hit: target.hitFlash ? 1 : 0, recoil: 0, quiet, color, cooling: lit,
+    })) {
+    if (lit) {
+      ctx.strokeStyle = "#b8f4ffab";
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([4, 6]);
+      finaleEllipse(ctx, 0, 0, rx * 1.14, ry * 1.05);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     return;
   }
   if (mode === "bones") {

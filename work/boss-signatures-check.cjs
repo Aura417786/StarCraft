@@ -17,16 +17,19 @@ function signatureArena() {
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const gameAudio = { bossAttack() {} };
     const addCombatShake = () => {};
-    function positionBoss(type, enraged = false, pattern = 0) {
+    const consumeEvolutionShieldProjectile = () => false;
+    function positionBoss(type, enraged = false, pattern = 0, pressure = false) {
       clearAlienThreats();
       boss = { x: viewport.width * .84, y: viewport.height * .48, width: 252, height: 190,
-        color: bossTypes[type].color, type, enraged, attackIndex: pattern - 1 };
-      prepareAlienAttack(boss);
+        color: bossTypes[type].color, type, enraged, pressureCycle: 0, attackIndex: pattern - 1 };
+      prepareAlienAttack(boss, pressure);
       return boss;
     }
-    function playSignature(type, pattern, enraged) {
-      positionBoss(type, enraged, pattern);
+    function playSignature(type, pattern, enraged, pressure = false) {
+      positionBoss(type, enraged, pattern, pressure);
       let peak = 0;
+      let threatensStationary = false;
+      let readable = true;
       const kinds = new Set(bossHazards.map(hazard => hazard.kind));
       for (let time = 0; time <= 7; time += 1 / 60) {
         const dt = 1 / 60;
@@ -36,13 +39,18 @@ function signatureArena() {
           runAlienAttack(boss);
         }
         updateBossProjectiles(dt);
-        for (const hazard of bossHazards) kinds.add(hazard.kind);
+        for (const hazard of bossHazards) {
+          kinds.add(hazard.kind);
+          if (pressure) readable &&= hazard.warning >= .79;
+          threatensStationary ||= alienHazardHitsPlayer(hazard);
+        }
+        threatensStationary ||= bossProjectiles.some(bossShotHitsPlayer);
         peak = Math.max(peak, bossProjectiles.length);
       }
-      return { peak, kinds: [...kinds] };
+      return { peak, kinds: [...kinds], threatensStationary, readable, name: boss.attackLabel[1] };
     }
   `);
-  for (const file of ["bosses.js", "alien-attacks.js"]) {
+  for (const file of ["bosses.js", "alien-attacks.js", "alien-pressure.js"]) {
     run(fs.readFileSync(path.join(__dirname, "..", file), "utf8"));
   }
   // The production HUD writes to DOM. These checks only exercise the simulation.
@@ -152,4 +160,46 @@ test("diagonal filaments share geometry with their real hit and remap with the p
   })()`);
   assert.ok(result.mapped && result.before && result.movedSafe && result.warningSafe);
   assert.ok(Math.abs(result.origin / result.oldOrigin - .65) < 1e-9);
+});
+
+
+test("eleven rupture combos have distinct labels, sufficient tells, and real stationary damage", () => {
+  const run = signatureArena();
+  const labels = new Set();
+  for (let type = 0; type < 11; type++) {
+    const result = run(`playSignature(${type}, 0, true, true)`);
+    assert.equal(run("boss.alienAttack"), "pressure");
+    assert.ok(result.readable, `type ${type} warns before collision`);
+    assert.ok(result.threatensStationary, `type ${type} threatens a pilot that stays still`);
+    assert.ok(result.kinds.length >= 2, `type ${type} layers distinguishable hazard geometry`);
+    assert.equal(run("bossHazards.length"), 0);
+    labels.add(result.name);
+  }
+  assert.equal(labels.size, 11);
+});
+
+test("the reverse tide leaves the same reachable escape corridor and remaps it after resizing", () => {
+  const run = signatureArena();
+  const result = run(`(() => {
+    Object.assign(viewport, { width: 640, height: 450 });
+    Object.assign(flightBounds, { left: 44, right: 620, top: 225, bottom: 335 });
+    Object.assign(player, { x: 80, y: 227, width: 95, height: 56 });
+    positionBoss(0, true, 0, true);
+    const first = bossHazards[0];
+    boss.phase = "attack";
+    boss.phaseTime = 1.27;
+    runAlienAttack(boss);
+    const last = bossHazards.find(hazard => hazard.kind === "tide" && hazard.direction === 1);
+    last.age = last.warning + last.duration * .47;
+    player.y = alienTideGap(last, .47);
+    player.x = alienTideX(last, player.y, .47);
+    return {
+      firstDirection: first.direction, lastDirection: last.direction, centerTravel: Math.abs(last.gapY - first.gapY),
+      safe: !alienHazardHitsPlayer(last), warning: last.warning,
+      reach: player.speed * first.warning,
+    };
+  })()`);
+  assert.equal(result.firstDirection, -1);
+  assert.equal(result.lastDirection, 1);
+  assert.ok(result.safe && result.warning >= .79 && result.centerTravel <= result.reach);
 });

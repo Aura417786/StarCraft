@@ -127,3 +127,33 @@ test("pin and relay punish a stationary pilot but permit reacting to both marks 
     }
   }
 });
+test("late scouts announce a fixed intercept route, then only the marked scout dives", () => {
+  const run = sandbox();
+  run(`battleTime = scoutTactics.arrival;
+    enemies.length = 0;
+    function makeScout(ratio) {
+      const scout = { kind: "scout", x: width * ratio, y: pointAt(.23),
+        width: hull * .55, height: hull * .36, speed: 165, age: 1,
+        baseY: pointAt(.23), waveAmplitude: 0 };
+      enemies.push(scout);
+      return scout;
+    }
+    const diver = makeScout(.71), backup = makeScout(.74);
+    updateEnemyMovement(diver, .001); updateEnemyMovement(backup, .001);
+  `);
+  const target = run("scoutInterceptRoute(diver)");
+  assert.ok(run("diver.scoutIntercept && !backup.scoutIntercept"));
+  assert.ok(run("diver.y < scoutInterceptRoute(diver).y"));
+  run("player.y=pointAt(.80); updateEnemyMovement(diver, scoutTactics.windup - .01); drawEnemyThreats();");
+  assert.equal(run("diver.scoutIntercept.start"), null);
+  assert.ok(run("moves.some(move => move[0] === 'lineTo' && move[2] === scoutInterceptRoute(diver).y)"));
+  assert.equal(run("scoutInterceptRoute(diver).y"), target.y);
+  run("updateEnemyMovement(diver, scoutTactics.dive + .02);");
+  assert.equal(run("diver.scoutIntercept"), null);
+  assert.equal(run("diver.y"), target.y);
+  assert.equal(run("diver.x"), target.x);
+  run("updateEnemyMovement(diver, .1);");
+  assert.equal(run("diver.scoutIntercept"), null);
+  run("updateEnemyMovement(backup, .001); activeAce = true; updateEnemyMovement(backup, .1);");
+  assert.equal(run("backup.scoutIntercept"), null);
+});

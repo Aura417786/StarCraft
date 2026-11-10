@@ -186,14 +186,19 @@ function aceDashRemainsSafe(enemy) {
 function beginAceFire(enemy, followup = false) {
   enemy.aceRoute = null;
   const muzzleX = enemy.x - enemy.width * 0.5;
-  const dx = player.x - muzzleX, dy = player.y - enemy.y, distance = Math.hypot(dx, dy);
+  const drift = player.y - (player.previousY ?? player.y);
+  const lead = followup && battleTime >= 148 && Math.abs(drift) > 1.2;
+  const span = flightBounds.bottom - flightBounds.top;
+  const interceptY = lead ? clamp(player.y + Math.sign(drift) * Math.min(80, span * .20),
+    flightBounds.top, flightBounds.bottom) : player.y;
+  const dx = player.x - muzzleX, dy = interceptY - enemy.y, distance = Math.hypot(dx, dy);
   if (dx >= -55 || distance < Math.max(140, player.width * 1.2)) {
     enemy.aceAim = null; aceSetPhase(enemy, "recover"); return;
   }
   const spread = clamp(Math.atan2(player.height * 0.4 + 22, distance), 0.12, 0.32);
   const offsets = followup && flightBounds.bottom - flightBounds.top >= 145
     ? [-spread, 0, spread] : [0];
-  enemy.aceAim = { x: player.x, y: player.y, angle: Math.atan2(dy, dx), offsets, followup };
+  enemy.aceAim = { x: player.x, y: interceptY, angle: Math.atan2(dy, dx), offsets, followup };
   aceSetPhase(enemy, "fire");
 }
 function beginAceFlank(enemy, arena) {

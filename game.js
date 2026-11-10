@@ -106,6 +106,7 @@ let enemySpawnCount = 0;
 let score = 0;
 let kills = 0;
 let battleTime = 0;
+let lastDamageMessage = "";
 let lastDifficultySecond = -1;
 const pressedKeys = new Set();
 const movementKeys = new Set([
@@ -136,7 +137,8 @@ function syncGameAudio() {
   const active = isBattleActive();
   const cinematic = isBossDeathPlaying();
   gameAudio.sync(active || (cinematic && canAnimateCombatEffects()), !!boss, activeBosses().some(target => target.enraged),
-    { combo: momentum.count, overdrive: isOverdriveActive(), warning: pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning), cinematic });
+    { combo: momentum.count, overdrive: isOverdriveActive(), warning: pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning), cinematic,
+      bossType: boss?.type ?? pendingBossType ?? combatEffects.choiceTarget?.type, bossPhase: boss?.phase, lives: player.lives });
   syncUltimateAudio(active);
 }
 function updateSoundButton() {
@@ -292,6 +294,7 @@ updateFighterSelection();
 
 function showScreen(nextState) {
   if (nextState === "battle") sortieFighter = selectedFighter;
+  lastDamageMessage = "";
   resetShipVisuals();
   resetBattlefield();
   resetJourneyScenes();
@@ -572,7 +575,7 @@ function updateShooting(seconds) {
     renderShotCooldown = grouped ? highRateBurstSpacing[burstStep] * burstTempo : firingRules.renderInterval;
     burstStep = grouped ? (burstStep + 1) % highRateBurstSpacing.length : 0;
     muzzleFlash = 0.055;
-    gameAudio.shoot(isOverdriveActive(), weapon.tier);
+    gameAudio.shoot(isOverdriveActive(), weapon.tier, sortieFighter);
   }
 }
 function resetEncounter(resetScore = true) {
@@ -838,6 +841,8 @@ function enemyTouchesPlayer(enemy) {
 function damagePlayer(message) {
   // 小怪碰撞与 Boss 弹幕共享受伤保护，避免同帧连续扣命。
   if (!isBattleActive() || bossHitGrace > 0 || shieldIsActive()) return false;
+  lastDamageMessage = message;
+  gameAudio.hurt?.();
   player.lives = Math.max(0, player.lives - 1);
   player.hitFlash = 0.35;
   bossHitGrace = bossRules.grace;
@@ -855,7 +860,9 @@ function updatePlayerDamage(seconds) {
     if (enemyTouchesPlayer(enemy)) {
       enemies.splice(index, 1);
       createExplosion(enemy, 0);
-      damagePlayer(tr("撞到敌机", "Crashed into an enemy"));
+      damagePlayer(enemy.scoutIntercept?.start !== undefined
+        ? tr("被突击机拦截 · 看见橙色航线后换高度", "Intercepted by a scout · Change altitude when the orange route appears")
+        : tr("撞到敌机", "Crashed into an enemy"));
       if (state !== "battle") break;
     } else if (enemy.x + enemy.width / 2 < 0) {
       // 安全飞过玩家的敌机继续向左飞，离屏再清理，不扣血也不计分。
@@ -868,7 +875,7 @@ function updateResultCopy(won) {
   const intro = gameOverScreen.querySelector(".result-intro");
   title.textContent = won ? tr("异形战役通关", "Campaign Cleared") : tr("游戏结束", "Game Over");
   intro.textContent = won ? tr("群渊合生体已击破。", "The Abyssal Confluence has fallen.")
-    : tr("调整航线，再次突围。", "Plot a new course and try again.");
+    : (lastDamageMessage || tr("调整航线，再次突围。", "Plot a new course and try again."));
 }
 function endGame(won = false) {
   state = "over";
@@ -949,9 +956,8 @@ function drawExplosions() {
 }
 function drawBullets() {
   context.save();
-  context.shadowBlur = reducedMotion.matches ? 0 : 12;
+  const glow = reducedMotion.matches ? 0 : visualQuality.glow;
   for (const bullet of bullets) {
-    context.shadowColor = bullet.color;
     context.save(); context.translate(bullet.x, bullet.y); context.rotate(bullet.angle ?? 0);
     const half = bullet.halfHeight ?? 2.5, length = bullet.length ?? weapon.length;
     context.fillStyle = bullet.color;
@@ -959,10 +965,29 @@ function drawBullets() {
     if (bullet.visual === "lance" || bullet.visual === "counter") {
       context.moveTo(0, -half * .65); context.lineTo(length * .78, -half);
       context.lineTo(length, 0); context.lineTo(length * .78, half); context.lineTo(0, half * .65); context.closePath();
-    } else context.roundRect(0, -half, length, half * 2, Math.min(half, 4));
+    } else {
+      context.moveTo(0, -half * .32);
+      context.lineTo(length * .24, -half * .76);
+      context.quadraticCurveTo(length * .86, -half * 1.38, length, 0);
+      context.quadraticCurveTo(length * .86, half * 1.38, length * .24, half * .76);
+      context.lineTo(0, half * .32); context.closePath();
+    }
+    if (glow && half >= 2) {
+      context.strokeStyle = bullet.color;
+      context.lineJoin = "round";
+      context.globalAlpha = .18 * glow;
+      context.lineWidth = half * 2.3; context.stroke();
+      context.globalAlpha = .38 * glow;
+      context.lineWidth = half * .8; context.stroke();
+      context.globalAlpha = 1;
+    }
     context.fill();
     context.fillStyle = bullet.core;
-    context.fillRect(3, -half * 0.4, length - 4, half * 0.8);
+    context.beginPath(); context.moveTo(length * .17, 0);
+    context.lineTo(length * .75, -half * .48);
+    context.quadraticCurveTo(length * .94, -half * .42, length * .96, 0);
+    context.quadraticCurveTo(length * .94, half * .42, length * .75, half * .48);
+    context.closePath(); context.fill();
     context.restore();
   }
   context.restore();
@@ -970,14 +995,28 @@ function drawBullets() {
 function drawMuzzleFlash() {
   if (state !== "battle" || muzzleFlash <= 0 || reducedMotion.matches) return;
   const muzzle = muzzlePosition();
+  const glow = visualQuality.glow;
+  const intensity = muzzleFlash / .055;
+  const palette = weaponPalette();
   context.save();
-  context.globalAlpha = muzzleFlash / 0.055;
-  context.fillStyle = weaponPalette().core;
-  context.shadowColor = weaponPalette().color;
-  context.shadowBlur = 14;
+  context.globalAlpha = intensity;
+  context.fillStyle = palette.core;
+  context.shadowColor = palette.color;
+  context.shadowBlur = 8 * glow;
   for (const offset of shotOffsets()) {
+    const y = muzzle.y + offset;
+    if (glow) {
+      context.strokeStyle = palette.color; context.lineWidth = 1.5;
+      context.globalAlpha = intensity * glow * .8;
+      context.beginPath(); context.moveTo(muzzle.x + 2, y);
+      context.lineTo(muzzle.x + 17 + 9 * intensity, y);
+      context.moveTo(muzzle.x + 3, y - 6 * intensity);
+      context.lineTo(muzzle.x + 9, y);
+      context.lineTo(muzzle.x + 3, y + 6 * intensity); context.stroke();
+      context.globalAlpha = intensity;
+    }
     context.beginPath();
-    context.ellipse(muzzle.x + 3, muzzle.y + offset, 8, 4, 0, 0, Math.PI * 2);
+    context.ellipse(muzzle.x + 3, y, 4 + 4 * intensity, 1 + 3 * intensity, 0, 0, Math.PI * 2);
     context.fill();
   }
   context.restore();
@@ -1025,10 +1064,11 @@ function drawFrame(time) {
   updateEnemyProjectileDamage();
   updateBossDamage();
   context.clearRect(0, 0, viewport.width, viewport.height);
+  context.save();
+  applyBossCollapseCamera(context);
   drawBattlefield();
   drawActiveJourney("front");
   context.globalAlpha = 1;
-  context.save();
   const cameraOffset = combatShakeOffset();
   context.translate(cameraOffset.x, cameraOffset.y);
   drawGravityTide();

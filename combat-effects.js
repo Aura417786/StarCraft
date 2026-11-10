@@ -26,6 +26,17 @@ if (shakeButton) shakeButton.addEventListener("click", () => {
 });
 updateShakeButton();
 function isBossDeathPlaying() { return combatEffects.deathRemaining > 0; }
+function applyBossCollapseCamera(ctx) {
+  const target = combatEffects.choiceTarget;
+  if (!target?.finale || !isBossDeathPlaying() || reducedMotion.matches || shakePreference === "off") return;
+  const progress = 1 - combatEffects.deathRemaining / combatEffects.deathTotal;
+  const rise = Math.sin(Math.PI * clamp(progress, 0, 1));
+  const zoom = 1 + rise * (shakePreference === "full" ? .066 : .035);
+  const x = clamp(target.x, viewport.width * .28, viewport.width * .78);
+  const y = clamp(target.y, viewport.height * .22, viewport.height * .78);
+  ctx.translate(x * (1 - zoom), y * (1 - zoom));
+  ctx.scale(zoom, zoom);
+}
 function canAnimateCombatEffects() {
   return state === "battle" && !evolution.pending && windowActive && !document.hidden && document.activeElement === canvas;
 }
@@ -87,6 +98,7 @@ function recordCombatImpact(target, bullet, bossHit = false) {
   const ultimateHit = bullet.source === "ultimate";
   if (!ultimateHit && (target.fxNextImpact ?? -1) > combatEffects.clock) return;
   target.fxNextImpact = combatEffects.clock + 0.07;
+  gameAudio.hit?.(bossHit, bullet.source);
   const x = target.x - (target.width || 80) * 0.31;
   const y = Number.isFinite(bullet.y) ? clamp(bullet.y, target.y - target.height * 0.3, target.y + target.height * 0.3) : target.y;
   pushCombatEffect(combatEffects.impacts, { x, y, age: 0, duration: ultimateHit ? 0.3 : 0.13,

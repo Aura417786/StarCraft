@@ -114,6 +114,10 @@ function drawWaterFront(ctx, hazard, progress, top, bottom, material, quiet) {
   ctx.fill();
   ctx.save();
   ctx.clip();
+  if (!quiet && typeof drawHadalSurface === "function") {
+    const left = direction < 0 ? center - depth * .74 : center - depth * 2.32;
+    drawHadalSurface(ctx, left, top, depth * 3.06, bottom - top, hazard.age, direction > 0);
+  }
   ctx.strokeStyle = "#03223a";
   ctx.globalAlpha = .34;
   ctx.lineWidth = depth * .28;

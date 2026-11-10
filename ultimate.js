@@ -356,10 +356,11 @@ function updateUltimate(seconds) {
 }
 function drawIonSwarm(shot) {
   const glow = shot.linked ? "#e7fdff" : "#91eaff";
+  const detail = reducedMotion.matches ? 0 : visualQuality.meshDetail;
   for (const missile of shot.missiles) {
     if (!missile.active || missile.done) continue;
     const oldest = missile.trail[0];
-    if (oldest.x < missile.x) {
+    if (detail && oldest.x < missile.x) {
       const vapor = context.createLinearGradient(oldest.x, oldest.y, missile.x, missile.y);
       vapor.addColorStop(0, "#116bf100");
       vapor.addColorStop(0.52, "#2b89ff82");
@@ -386,6 +387,9 @@ function drawIonSwarm(shot) {
     context.beginPath(); context.moveTo(21, 0); context.lineTo(-3, -6); context.lineTo(-15, 0);
     context.lineTo(-3, 6); context.closePath(); context.fill();
     context.fillStyle = glow; context.fillRect(-5, -1.5, 21, 3);
+    context.strokeStyle = "#d9f9ffbd"; context.lineWidth = 1;
+    context.beginPath(); context.moveTo(-9, -2); context.lineTo(-3, -5.3); context.lineTo(16, -.6);
+    context.moveTo(-9, 2); context.lineTo(-3, 5.3); context.lineTo(16, .6); context.stroke();
     context.restore();
   }
   for (const burst of shot.bursts) {
@@ -396,10 +400,21 @@ function drawIonSwarm(shot) {
     context.lineWidth = 1.5;
     const radius = reducedMotion.matches ? 12 : 5 + age * 89;
     context.beginPath(); context.arc(burst.x, burst.y, radius, 0, Math.PI * 2); context.stroke();
+    if (detail) {
+      context.beginPath();
+      for (let ray = 0; ray < (detail === 2 ? 8 : 4); ray++) {
+        const angle = ray * Math.PI / (detail === 2 ? 4 : 2) + burst.y * .01;
+        const dx = Math.cos(angle), dy = Math.sin(angle);
+        context.moveTo(burst.x + dx * radius * .65, burst.y + dy * radius * .65);
+        context.lineTo(burst.x + dx * radius * 1.25, burst.y + dy * radius * 1.25);
+      }
+      context.stroke();
+    }
   }
 }
 function drawCoronaBarrage(shot) {
-  const rows = clamp(Math.ceil(viewport.height / 25), 10, 44);
+  const detail = reducedMotion.matches ? 0 : visualQuality.meshDetail;
+  const rows = clamp(Math.ceil(viewport.height / (detail ? 24 : 36)), 10, 44);
   const gap = viewport.height / rows;
   for (const [index, wave] of shot.waves.entries()) {
     if (wave.x <= 0 || wave.x - wave.length >= viewport.width) continue;
@@ -409,16 +424,25 @@ function drawCoronaBarrage(shot) {
     trail.addColorStop(0, "#cf642000");
     trail.addColorStop(0.62, "#ffa536bb");
     trail.addColorStop(1, shot.linked ? "#fffaf0" : "#fff8be");
-    context.fillStyle = trail;
+    context.fillStyle = trail; context.beginPath();
     for (let row = -1; row < rows; row++) {
       const y = gap * (row + 0.34 + (index * 0.28 + row % 2 * 0.16) % 0.7);
       const size = row % 3 === 0 ? 4.6 : 2.5;
       const drift = Math.min(front - tail, wave.length * (0.02 + 0.19 * (1 + Math.sin(row * 1.7 + index)) / 2));
-      context.fillRect(tail, y - size, front - tail - drift, size * 2);
+      const tip = front - drift;
+      const shoulder = Math.max(tail, tip - 9);
+      context.moveTo(tail, y); context.lineTo(shoulder, y - size); context.lineTo(tip, y);
+      context.lineTo(shoulder, y + size); context.closePath();
     }
+    context.fill();
     context.strokeStyle = "#ffe29256";
     context.lineWidth = 1;
     context.beginPath(); context.moveTo(front, 0); context.lineTo(front, viewport.height); context.stroke();
+    if (detail) {
+      const lens = context.createLinearGradient(Math.max(0, front - 34), 0, front + 9, 0);
+      lens.addColorStop(0, "#f98c2a00"); lens.addColorStop(.78, "#ffbe5133"); lens.addColorStop(1, "#fff1a300");
+      context.fillStyle = lens; context.fillRect(front - 34, 0, 43, viewport.height);
+    }
   }
 }
 function drawUltimate() {
@@ -442,13 +466,15 @@ function drawUltimate() {
       context.strokeStyle = "#c1f4ff"; context.lineWidth = 2.5;
       context.beginPath(); context.ellipse(muzzle.x, muzzle.y, radius * 0.55, radius * 1.55, 0, 0, Math.PI * 2); context.stroke();
     }
-    if (!reducedMotion.matches) {
-      for (let index = 0; index < 10; index++) {
-        const angle = index * Math.PI / 5 + ultimate.elapsed * 2;
-        const distance = radius + 22 + (1 - (progress * 3 + index / 10) % 1) * 32;
+    if (!reducedMotion.matches && visualQuality.glow) {
+      const count = visualQuality.particles;
+      for (let index = 0; index < count; index++) {
+        const angle = index * Math.PI * 2 / count + ultimate.elapsed * 2;
+        const distance = radius + 22 + (1 - (progress * 3 + index / count) % 1) * 32;
         context.globalAlpha = 0.35 + progress * 0.55;
         context.beginPath(); context.moveTo(muzzle.x + Math.cos(angle) * distance, muzzle.y + Math.sin(angle) * distance);
-        context.lineTo(muzzle.x + Math.cos(angle) * (distance - 12), muzzle.y + Math.sin(angle) * (distance - 12)); context.stroke();
+        context.quadraticCurveTo(muzzle.x + Math.cos(angle + .07) * (distance - 6), muzzle.y + Math.sin(angle + .07) * (distance - 6),
+          muzzle.x + Math.cos(angle + .14) * (distance - 12), muzzle.y + Math.sin(angle + .14) * (distance - 12)); context.stroke();
       }
     }
   } else if (ultimate.phase === "firing" && ultimate.kind === "blue") {
@@ -460,7 +486,8 @@ function drawUltimate() {
     const left = Math.max(shot.startX, shot.x - shot.length), right = Math.min(viewport.width + shot.radius, shot.x);
     const radius = shot.radius;
     if (right > left) {
-      context.shadowColor = "#ff172a"; context.shadowBlur = reducedMotion.matches ? 0 : 25;
+      const glow = reducedMotion.matches ? 0 : visualQuality.bloom;
+      context.shadowColor = "#ff172a"; context.shadowBlur = 17 * glow;
       const body = context.createLinearGradient(0, shot.y - radius, 0, shot.y + radius);
       body.addColorStop(0, "#b70e24dd"); body.addColorStop(0.18, "#ff2339");
       body.addColorStop(0.46, shot.linked ? "#ffe9e0" : "#ffab94"); body.addColorStop(0.5, shot.linked ? "#ffffff" : "#ffe6cf");
@@ -473,6 +500,18 @@ function drawUltimate() {
       const offset = reducedMotion.matches ? 0 : ultimate.elapsed * 90 % 75;
       for (let x = left + 15 + offset; x < right - 10; x += 75) {
         context.beginPath(); context.ellipse(x, shot.y, radius * 0.24, radius * 0.9, 0, -Math.PI / 2, Math.PI / 2); context.stroke();
+      }
+      if (glow && right - left > 35) {
+        context.strokeStyle = "#fff0cf9a"; context.lineWidth = 1.15;
+        context.beginPath();
+        for (const side of [-1, 1]) {
+          context.moveTo(left + 3, shot.y + side * radius * .58);
+          for (let x = left + 20; x < right; x += 20) {
+            const ripple = Math.sin(x * .105 - ultimate.elapsed * 35);
+            context.lineTo(x, shot.y + side * radius * (.54 + ripple * .13));
+          }
+        }
+        context.stroke();
       }
       context.strokeStyle = "#fff2df"; context.lineWidth = 2;
       context.beginPath(); context.ellipse(right, shot.y, radius * 0.32, radius, 0, 0, Math.PI * 2); context.stroke();

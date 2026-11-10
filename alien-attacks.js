@@ -203,7 +203,9 @@ function alienThreatRadius(target, size) {
 }
 
 function alienAttackSpeed(target, base) {
-  return base * alienArenaScale() * (1.13 + target.type * .023) * (target.enraged ? 1.15 : 1);
+  const escalation = 1.13 + target.type * .027;
+  const frenzy = target.enraged ? 1.17 + target.type * .004 : 1;
+  return base * alienArenaScale() * escalation * frenzy;
 }
 
 const alienSignatureKinds = new Set(["tide", "vortex", "filament", "ring"]);
@@ -343,13 +345,13 @@ function alienCurrentVector() {
 }
 
 function addBossHazard(kind, options) {
-  bossHazards.push({ kind, age: 0, color: boss.color, right: boss.x - boss.width * .37, ...options });
+  bossHazards.push({ kind, age: 0, color: boss.color, right: boss.x - boss.width * .37, attackLabel: boss.attackLabel, ...options });
 }
 
 function addBossProjectile(x, y, vx, vy, options = {}) {
   if (bossProjectiles.length >= bossRules.maxProjectiles) return;
   bossProjectiles.push({ x, y, previousX: x, previousY: y, vx, vy, age: 0, radius: 7,
-    color: boss ? boss.color : "#ffb66f", ...options });
+    color: boss ? boss.color : "#ffb66f", attackLabel: boss?.attackLabel, ...options });
 }
 
 function fan(at, count, spread, speed, glyph, options = {}) {
@@ -445,7 +447,7 @@ function firePortal(hazard) {
   const speed = alienAttackSpeed(boss, hazard.speed) / distance;
   gameAudio.bossAttack("volley");
   addBossProjectile(hazard.originX, hazard.originY, dx * speed, dy * speed,
-    { glyph: "prism", radius: 10, color: hazard.color });
+    { glyph: "prism", radius: 10, color: hazard.color, attackLabel: hazard.attackLabel });
 }
 
 function bindTell(target, at, x, y, duration, slow) {
@@ -462,16 +464,21 @@ function alienMovementScale() {
   return scale;
 }
 
-function prepareAlienAttack(target) {
+function prepareAlienAttack(target, allowPressure = false) {
+  const pressure = allowPressure ? chooseAlienPressure(target) : null;
   const patterns = bossTypes[target.type].patterns;
-  const key = patterns[target.attackIndex = (target.attackIndex + 1) % patterns.length];
-  const [name, enName, duration, hint, enHint, plan] = alienPatterns[key];
+  const key = pressure ? "pressure" : patterns[target.attackIndex = (target.attackIndex + 1) % patterns.length];
+  const [name, enName, duration, hint, enHint, plan] = pressure
+    ? [pressure.name, pressure.enName, 3.74, pressure.hint, pressure.enHint, pressure.build]
+    : alienPatterns[key];
+  target.attackLabel = [name, enName, hint, enHint];
   target.alienAttack = key;
   target.phase = "telegraph";
   target.phaseTime = 0;
-  target.telegraphDuration = Math.max(.8, 1.02 - target.type * .014 - (target.enraged ? .06 : 0));
+  target.telegraphDuration = pressure ? 1.21 - target.type * .012
+    : Math.max(.8, 1.03 - target.type * .015 - (target.enraged ? .075 : 0));
   target.attackDuration = duration - .11 - target.type * .011 - (target.enraged ? .11 : 0);
-  target.attackMotion = null;
+  target.attackMotion = pressure?.motion ?? null;
   target.lockX = player.x;
   target.lockY = player.y;
   const span = flightBounds.bottom - flightBounds.top;
@@ -487,9 +494,12 @@ function prepareAlienAttack(target) {
   // is announced separately, with enough horizontal room to move.
   if (bossHazards.some(hazard => hazard.kind === "guide" || isWaterTide(hazard))) bossProjectiles.length = 0;
   target.nextEvent = 0;
-  if (target.type === 0 && key !== "broodSpawn") gameAudio.bossAttack("coil");
+  if (target.type === 0 && !pressure && key !== "broodSpawn") gameAudio.bossAttack("coil");
   const move = key === "broodSweep" && target.enraged ? tr("三重触须扫潮", "Triple Tentacle Tide") : tr(name, enName);
-  setBossMessage(bossStageTitle(target), (target.enraged ? tr("狂暴 · ", "Enraged · ") : "") + move + " · " + tr(hint, enHint));
+  if (pressure) gameAudio.bossAttack("coil");
+  const prefix = pressure && target.pressureCycle === 1 ? tr("护甲蓄势 · ", "Guarded charge · ")
+    : target.enraged ? tr("狂暴 · ", "Enraged · ") : "";
+  setBossMessage(bossStageTitle(target), prefix + move + " · " + tr(hint, enHint));
 }
 
 function runAlienAttack(target) {
@@ -544,7 +554,7 @@ function updateBossProjectiles(seconds) {
       for (let part = 0; part < count; part++) {
         const angle = part * Math.PI * 2 / count;
         addBossProjectile(shot.x, shot.y, Math.cos(angle) * speed, Math.sin(angle) * speed,
-          { radius: 6, color: shot.color, glyph: "orb" });
+          { radius: 6, color: shot.color, glyph: "orb", attackLabel: shot.attackLabel });
       }
     } else if (shot.x < -40 || shot.x > viewport.width + 40 || shot.y < -45 || shot.y > viewport.height + 45 || shot.age > 8) {
       bossProjectiles.splice(i, 1);
@@ -567,7 +577,7 @@ function updateBossProjectiles(seconds) {
       } else if (hazard.kind === "portal" && boss) {
         firePortal(hazard);
       } else if (hazard.kind === "beam" || hazard.kind === "band" || hazard.kind === "zone" || hazard.kind === "seam") {
-        gameAudio.bossAttack(hazard.kind === "zone" ? "burst" : "beam");
+        gameAudio.bossAttack(hazard.sound || (hazard.kind === "zone" ? "burst" : "beam"));
       }
     }
     if (hazard.age >= hazard.warning + hazard.duration) bossHazards.splice(i, 1);
@@ -606,6 +616,7 @@ function alienHazardHitsPlayer(hazard) {
 }
 
 function drawAlienHazard(ctx, hazard, quiet) {
+  if (typeof drawPressureColumn === "function" && drawPressureColumn(ctx, hazard, quiet)) return;
   if (typeof drawAlienSignatureHazard === "function" && drawAlienSignatureHazard(ctx, hazard, quiet)) return;
   if (alienSignatureKinds.has(hazard.kind)) return;
   const active = hazard.age >= hazard.warning;

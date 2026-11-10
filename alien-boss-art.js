@@ -376,6 +376,10 @@ function drawAlienArtFallback(ctx, width, height, profile, color, time, charge, 
 }
 
 function drawBossShip(ctx, target, reduceMotion = false) {
+  if (typeof drawStarBreakerBoss === "function" && drawStarBreakerBoss(ctx, target, reduceMotion)) {
+    preloadAlienBossArt(target.type + 1);
+    return;
+  }
   const profile = alienArtProfiles[target.type] || alienArtProfiles[0];
   const asset = preloadAlienBossArt(target.type);
   preloadAlienBossArt(target.type + 1);
