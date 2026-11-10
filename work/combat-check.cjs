@@ -391,9 +391,9 @@ check('all three hangar selections apply distinct starting weapons and special n
 const orbScene = () => JSON.parse(execute('JSON.stringify({powerups,powerupCooldown,powerupSpawnCount,upgradeNoticeTime})'));
 const orb = (type='blue', x=400, y=300) => `powerups.push({x:${x},previousX:${x},y:${y},radius:18,type:'${type}'});`;
 check('each orb takes one bullet, changes no score and counts no enemy kill', () => {
-  for (const [type, attribute] of [['blue','speedLevel'],['yellow','lanes'],['red','damage']]) {
+  for (const [type, attribute, value] of [['blue','speedLevel',2],['yellow','lanes',2],['red','damage',1.8]]) {
     isolatedBattle(orb(type) + shot()); step();
-    assert.equal(weaponState()[attribute],2); assert.equal(orbScene().powerups.length,0);
+    near(weaponState()[attribute],value); assert.equal(orbScene().powerups.length,0);
     assert.equal(shots().length,0); assert.equal(scene().score,0); assert.equal(health().kills,0);
   }
 });
@@ -443,11 +443,12 @@ check('three lanes stay symmetric and two blue upgrades increase fire rate moder
   assert.equal(shots().length,3); assert.equal(new Set(shots().map(b=>b.y)).size,3);
   assert.equal(shots()[1].y,position().y); frames(20);
   assert.equal(shots().length,24);
-  assert.equal(execute('bullets.every(bullet=>Math.abs(bullet.damage-3)<1e-8)'),true);
+  assert.equal(execute('bullets.every(bullet=>Math.abs(bullet.damage-2.6)<1e-8)'),true);
 });
 check('red upgrade affects only bullets fired after the upgrade', () => {
   isolatedBattle('resetWeapons();updateShooting(0);applyPowerup("red");'); frames(4);
-  assert.deepEqual(JSON.parse(execute('JSON.stringify(bullets.map(b=>b.damage))')),[1,2]);
+  const damage=JSON.parse(execute('JSON.stringify(bullets.map(b=>b.damage))'));
+  assert.equal(damage.length,2); near(damage[0],1); near(damage[1],1.8);
 });
 check('bullet damage reduces enemy health correctly and awards one lethal score', () => {
   isolatedBattle(target(400,300,100,5) + shot() + 'bullets[0].damage=3;'); step();
@@ -607,7 +608,7 @@ check('muzzle flashes share the exact symmetry axis of each emitted volley', () 
     assert.deepEqual(flashes.map(op=>op.args[1]),emitted().map(b=>b.y));
   }
 });
-check('four lanes stay in the first tier; the fifth consolidates with a twelve-percent promotion reward', () => {
+check('four lanes stay in the first tier; the fifth consolidates with an eight-percent promotion reward', () => {
   isolatedBattle('battleTime=0;');
   for(let i=0;i<3;i++) execute('applyPowerup("yellow");');
   assert.equal(weaponState().tier,1); assert.equal(weaponState().lanes,4);
@@ -616,13 +617,13 @@ check('four lanes stay in the first tier; the fifth consolidates with a twelve-p
   const totalDamage=fullVolley.reduce((sum,b)=>sum+b.damage,0);
   execute('applyPowerup("yellow");resetWeapons();updateShooting(0);');
   assert.equal(weaponState().tier,2); assert.equal(weaponState().lanes,1);
-  assert.equal(emitted().length,1); near(emitted()[0].damage,totalDamage*1.12);
+  assert.equal(emitted().length,1); near(emitted()[0].damage,totalDamage*1.08);
   assert.equal(emitted()[0].y,position().y);
 });
 check('every tier follows yellow green purple green blue red and cycles while damage grows', () => {
   isolatedBattle('battleTime=0;');
   const names=['黄色','绿色','紫色','绿色','蓝色','红色','黄色','绿色'];
-  const expectedDamage=Array.from({length:8},(_,tier)=>Math.pow(4.48,tier));
+  const expectedDamage=Array.from({length:8},(_,tier)=>Math.pow(4.32,tier));
   const colors=[];
   for(let i=0;i<names.length;i++) {
     assert.equal(weaponState().tier,i+1); assert.equal(weaponState().lanes,1);
@@ -645,10 +646,10 @@ check('red damage multiplies each tier and an old bullet retains its original da
     assert.equal(after[i].damage,before[i].damage);
     assert.equal(after[i].color,before[i].color); assert.equal(after[i].core,before[i].core);
   }
-  near(after[4].damage,8.96); assert.notEqual(after[4].color,before[0].color);
+  near(after[4].damage,7.776); assert.notEqual(after[4].color,before[0].color);
   execute('battleTime=360;applyPowerup("red");updateShooting(.2);');
-  near(weaponState().damage,5); near(emitted().at(-1).damage,22.4);
-  near(emitted()[4].damage,8.96);
+  near(weaponState().damage,4.2); near(emitted().at(-1).damage,18.144);
+  near(emitted()[4].damage,7.776);
 });
 check('rendering mixed old and new bullets uses the color and core stored on each bullet', () => {
   isolatedBattle('battleTime=0;weapon.lanes=4;resetWeapons();updateShooting(0);applyPowerup("yellow");updateShooting(.2);');
@@ -660,7 +661,7 @@ check('rendering mixed old and new bullets uses the color and core stored on eac
 check('tiered damage is applied to enemies exactly once per projectile', () => {
   isolatedBattle('battleTime=0;weapon.tier=3;weapon.damage=2;resetWeapons();updateShooting(0);');
   execute(target(400,position().y,100,50)+'bullets[0].previousX=350;bullets[0].x=400;resolveProjectileHits();');
-  near(scene().enemies[0].hp,50-2*4.48**2); assert.equal(scene().score,0); assert.equal(shots().length,0);
+  near(scene().enemies[0].hp,50-2*4.32**2); assert.equal(scene().score,0); assert.equal(shots().length,0);
   execute('updateShooting(.2);bullets[0].previousX=350;bullets[0].x=400;resolveProjectileHits();');
   assert.equal(scene().enemies.length,0); assert.equal(scene().score,100); assert.equal(health().kills,1);
 });
@@ -689,7 +690,7 @@ check('high-rate four-lane fire preserves total damage across frame rates with b
     isolatedBattle('weapon.tier=3;weapon.lanes=4;weapon.damage=1000;weapon.interval=.001;resetWeapons();updateShooting(0);');
     execute(`for(let i=0;i<${fps};i++) updateShooting(1/${fps});`);
     const attack=execute('bullets.reduce((sum,b)=>sum+b.damage,0)+pendingShots*weapon.lanes*projectileDamage()');
-    near(attack,1001*4*1000*4.48**2,1e-6);
+    near(attack,1001*4*1000*4.32**2,1e-6);
     assert.ok(shots().length<=84);
     assert.equal(execute('shotLanes().length'),4);
   }
@@ -986,26 +987,26 @@ check('yellow batched gains preserve every step across promotions at the new slo
   }
 });
 check('blue increases fire rate moderately and late blue/red gains do not change the current tier', () => {
-  isolatedBattle('applyPowerup("blue");'); near(1/weaponState().interval,6.25);
-  execute('applyPowerup("blue");'); near(1/weaponState().interval,7.5);
+  isolatedBattle('applyPowerup("blue");'); near(1/weaponState().interval,6);
+  execute('applyPowerup("blue");'); near(1/weaponState().interval,7);
   execute('weapon.tier=4;weapon.lanes=3;');
   for(const [time,gain] of [[0,1],[180,2],[360,3],[3600,21]]) {
     execute('battleTime='+time); const before=weaponState(); execute('applyPowerup("blue");applyPowerup("red");');
     const after=weaponState(); assert.equal(after.speedLevel-before.speedLevel,gain);
-    near(after.damage,Math.max(before.damage+gain,before.damage*1.09**gain));
-    near(1/after.interval,Math.max(1/before.interval+1.25*gain,1/before.interval*1.065**gain));
+    near(after.damage,Math.max(before.damage+.8*gain,before.damage*1.075**gain));
+    near(1/after.interval,Math.max(1/before.interval+gain,1/before.interval*1.055**gain));
     assert.equal(after.tier,4); assert.equal(after.lanes,3);
   }
 });
 check('collecting every scheduled orb for five minutes no longer jumps through many projectile tiers', () => {
   isolatedBattle();
   execute('for(let time=3,index=0;time<=300;time+=7,index++){battleTime=time;applyPowerup(["blue","yellow","red","blue","yellow","red","blue","yellow","red","heal"][index%10]);}');
-  const result=weaponState(); assert.ok(result.tier>=3&&result.tier<=4); assert.ok(result.damage>20&&result.damage<23);
-  assert.ok(1/result.interval>28&&1/result.interval<30); assert.ok(result.lanes>=1&&result.lanes<=4);
+  const result=weaponState(); assert.ok(result.tier>=3&&result.tier<=4); assert.ok(result.damage>16&&result.damage<19);
+  assert.ok(1/result.interval>22&&1/result.interval<25); assert.ok(result.lanes>=1&&result.lanes<=4);
 });
-check('opening enemies die in one hit while later enemies keep a frozen growing health snapshot', () => {
-  isolatedBattle('battleTime=19.9;spawnEnemy("scout");'); assert.equal(scene().enemies[0].healthLog,0);
-  execute('applyEnemyHit(enemies[0],{damage:1});'); assert.equal(scene().enemies[0].hp,0);
+check('opening enemies require stronger hits while later enemies keep a frozen growing health snapshot', () => {
+  isolatedBattle('battleTime=19.9;spawnEnemy("scout");'); assert.ok(scene().enemies[0].healthLog>0);
+  execute('applyEnemyHit(enemies[0],{damage:1});'); assert.ok(scene().enemies[0].hp>0);
   isolatedBattle('battleTime=20;spawnEnemy("scout");'); const first=scene().enemies[0];
   assert.ok(first.healthLog>0); assert.equal(first.hp,1);
   execute('battleTime=200;spawnEnemy("scout");'); const later=scene().enemies;
@@ -1030,7 +1031,7 @@ check('upgrades during a fight still improve damage against an already spawned e
   execute('applyEnemyHit(enemies[0],{damageLog:weaponDamageLog()});'); const firstLoss=1-scene().enemies[0].hp;
   const before=scene().enemies[0].hp; execute('applyPowerup("red");applyEnemyHit(enemies[0],{damageLog:weaponDamageLog()});');
   const nextLoss=before-scene().enemies[0].hp;
-  assert.ok(nextLoss>firstLoss); near(nextLoss/firstLoss,1.3,1e-7); assert.equal(scene().enemies[0].healthLog,birth);
+  assert.ok(nextLoss>firstLoss); near(nextLoss/firstLoss,1.075**3,1e-7); assert.equal(scene().enemies[0].healthLog,birth);
 });
 check('huge-tier actual projectiles damage normalized enemies without Infinity-minus-Infinity or lost kills', () => {
   isolatedBattle('battleTime=3600;weapon.tier=500;weapon.damage=1000;spawnEnemy("scout");enemies[0].x=500;enemies[0].previousX=500;enemies[0].y=player.y;enemies[0].healthLog=weaponDamageLog()+Math.log(4);resetWeapons();updateShooting(0);bullets[0].previousX=400;bullets[0].x=500;resolveProjectileHits();');
@@ -1058,7 +1059,7 @@ check('resize preserves normalized combat progression and restart restores openi
   surface={width:640,height:360}; emit(window,'resize'); assert.equal(scene().battleTime,300);
   assert.equal(execute('enemyHealthLogForTime()'),log); execute('spawnEnemy("scout");'); assert.equal(scene().enemies[0].healthLog,log);
   emit(nodes.get('#menu-button'),'click'); begin(); assert.equal(scene().battleTime,0);
-  execute('spawnEnemy("scout");'); assert.equal(scene().enemies[0].healthLog,0);
+  execute('spawnEnemy("scout");'); near(scene().enemies[0].healthLog,Math.log(1.14));
 });
 check('the opening alien follows its crescent with another and uses a third aimed arc when enraged', () => {
   readyBoss(0,'boss.attackIndex=bossTypes[0].patterns.indexOf("broodArc")-1;prepareAlienAttack(boss);boss.phase="attack";runAlienAttack(boss);');
@@ -1110,6 +1111,64 @@ check('the fusion corridor is reachable from either edge while charging in a tal
     execute('updatePlayer(boss.telegraphDuration-.24);');
     key(move,'keyup');
     assert.ok(Math.abs(position().y-guide.y)<guide.thickness/2-execute('player.height*.16'));
+  }
+});
+check('the first lash follow-up locks the player after the initial dodge and rewards a second move', () => {
+  for (const escape of [false, true]) {
+    readyBoss(0, 'prepareAlienAttack(boss);');
+    const firstY = bossState().bossHazards[0].y;
+    key('ArrowUp'); frames(7); key('ArrowUp', 'keyup');
+    frames(37);
+    const follow = bossState().bossHazards.find(hazard => hazard.kind === 'zone');
+    assert.ok(follow && follow.age < follow.warning);
+    near(follow.y, position().y);
+    assert.ok(Math.abs(follow.y - firstY) > 80);
+    assert.equal(health().lives, 3);
+    if (escape) {
+      key('ArrowUp'); key('ArrowLeft'); frames(11);
+      key('ArrowUp', 'keyup'); key('ArrowLeft', 'keyup');
+      near(bossState().bossHazards.find(hazard => hazard.kind === 'zone').y, follow.y);
+    } else frames(11);
+    frames(9);
+    assert.equal(health().lives, escape ? 3 : 2);
+  }
+});
+check('mirror pincer locks separate lines and sends real projectiles from both screen edges', () => {
+  readyBoss(5, 'boss.attackIndex=0;prepareAlienAttack(boss);');
+  frames(Math.ceil((bossState().boss.telegraphDuration + .49) / .05));
+  const rear = bossState().bossHazards.find(hazard => hazard.kind === 'portal');
+  assert.ok(rear.originX < rear.x && rear.age < rear.warning);
+  key('ArrowUp'); frames(11); key('ArrowUp', 'keyup');
+  near(bossState().bossHazards.find(hazard => hazard.kind === 'portal').y, rear.y);
+  frames(6);
+  const front = bossState().bossHazards.find(hazard => hazard.kind === 'portal' && hazard.originX > hazard.x);
+  assert.ok(front && front.y < rear.y - 120);
+  assert.ok(bossState().bossProjectiles.some(shot => shot.vx > 0));
+  key('ArrowDown'); frames(18); key('ArrowDown', 'keyup');
+  assert.ok(bossState().bossProjectiles.some(shot => shot.vx < 0));
+  assert.equal(health().lives, 3);
+});
+check('a sideways dodge solves the rift inside the final cyan corridor in compact and wide windows', () => {
+  for (const size of [{width:640,height:360},{width:1280,height:720},{width:2560,height:1440}]) {
+    for (const escape of [false, true]) {
+      readyBoss(10);
+      surface = size; emit(window, 'resize');
+      execute('player.y=player.previousY=alienLane(.30);boss.enraged=true;boss.attackIndex=0;prepareAlienAttack(boss);bossHitGrace=0;');
+      const guide = bossState().bossHazards.find(hazard => hazard.kind === 'guide');
+      key('ArrowDown');
+      for (let frame = 0; frame < 30 && position().y < guide.y - 8; frame++) step();
+      key('ArrowDown', 'keyup');
+      while (!bossState().bossHazards.some(hazard => hazard.kind === 'seam') && scene().battleTime < 3) step();
+      const seam = bossState().bossHazards.find(hazard => hazard.kind === 'seam');
+      assert.ok(seam && seam.age < seam.warning);
+      const start = position();
+      if (escape) key('ArrowRight');
+      frames(9);
+      key('ArrowRight', 'keyup');
+      frames(13);
+      assert.equal(position().y, start.y);
+      assert.equal(health().lives, escape ? 3 : 2, `${size.width}x${size.height}, escape ${escape}`);
+    }
   }
 });
 check('attacking shells reduce damage but leave an opening after each attack', () => {
@@ -1346,7 +1405,7 @@ check('a weak cannon respects its own damage below the boss cap instead of alway
   assert.ok(hp>.99&&hp<1); near(ult().energy,0);
 });
 check('a cannon can finish the wounded third boss once, award its milestone heal and never feed back energy', () => {
-  readyBoss(2,'player.y=boss.y;boss.hp=.1;player.lives=2;'); primeUltimate(); castUltimate(); execute('updateUltimate(.5);');
+  readyBoss(2,'player.y=boss.y;boss.hp=.06;player.lives=2;'); primeUltimate(); castUltimate(); execute('updateUltimate(.5);');
   assert.equal(bossState().boss,null); assert.equal(scene().score,2000); assert.equal(health().lives,3);
   execute('updateUltimate(.1);resolveUltimateHits();'); assert.equal(scene().score,2000); near(ult().energy,0);
 });
@@ -1459,15 +1518,15 @@ check('removed purple rewards cannot add a future use during charging or duplica
   surface={width:1200,height:700}; emit(window,'resize'); assert.equal(ult().charges,2);
   emit(window,'resize'); assert.equal(ult().charges,2); assert.equal(ult().phase,'idle');
 });
-check('four-lane promotion adds twelve percent without changing a simultaneous Boss birth', () => {
+check('four-lane promotion adds eight percent without changing a simultaneous Boss birth', () => {
   isolatedBattle('weapon.damage=3;weapon.tier=6;');
-  near(execute('Math.exp(weaponDamageLog())'),3*4.48**5,1e-7);
-  near(execute('projectileDamage()'),3*4.48**5);
+  near(execute('Math.exp(weaponDamageLog())'),3*4.32**5,1e-7);
+  near(execute('projectileDamage()'),3*4.32**5);
   execute('weapon.lanes=4;spawnBoss(1);');
   const durability=bossState().boss.healthLog;
   const before=execute('projectileDamage()*weapon.lanes');
   execute('applyPowerup("yellow");spawnBoss(1);');
-  near(execute('projectileDamage()*weapon.lanes')/before,1.12);
+  near(execute('projectileDamage()*weapon.lanes')/before,1.08);
   assert.equal(bossState().boss.healthLog,durability);
 });
 check('cannon exit restores idle in the same frame and the next fresh press immediately starts charging', () => {
@@ -1646,7 +1705,7 @@ check('first wave starts with a centered straight scout that dies to one opening
   isolatedBattle('spawnEnemy();'); const opening=scene().enemies[0];
   assert.equal(opening.kind,'scout'); near(opening.y,(bounds.top+bounds.bottom)/2);
   execute('updateEnemyMovement(enemies[0],.5);'); near(scene().enemies[0].y,opening.y);
-  assert.ok(scene().enemies[0].x<opening.x); execute('applyEnemyHit(enemies[0],{damage:1});');
+  assert.ok(scene().enemies[0].x<opening.x); execute('applyEnemyHit(enemies[0],{damage:fighterProfiles.red.damage});');
   assert.equal(scene().enemies[0].hp,0); execute('defeatEnemy(0);'); assert.equal(scene().score,100);
 });
 check('new enemy types unlock at fourteen and thirty seconds and are guaranteed once', () => {
@@ -1860,7 +1919,7 @@ check('death, menu and restarting discard ordinary shells and reset type introdu
   emit(nodes.get('#restart-button'),'click'); assert.equal(enemyCombat().enemyProjectiles.length,0); assert.deepEqual(enemyCombat().introduced,[]);
   execute('spawnEnemy("gunner");'+enemyShot('600','200')); emit(nodes.get('#menu-button'),'click');
   assert.equal(enemyCombat().enemyProjectiles.length,0); assert.deepEqual(enemyCombat().introduced,[]);
-  begin(); execute('spawnEnemy();'); assert.equal(scene().enemies[0].kind,'scout'); assert.equal(scene().enemies[0].healthLog,0);
+  begin(); execute('spawnEnemy();'); assert.equal(scene().enemies[0].kind,'scout'); near(scene().enemies[0].healthLog,Math.log(1.14));
 });
 check('gunner audio cues occur on the shot rather than the warning or after destruction', () => {
   readyGunner(); audioCalls.length=0; execute('updateEnemyMovement(enemies[0],.899);');
@@ -2205,7 +2264,7 @@ check('rage accelerates emission by sixty percent without multiplying projectile
       isolatedBattle(`weapon.lanes=4;weapon.tier=2;firingStyle.mode="${mode}";resetWeapons();`); comboKills(20);
       execute(`updateShooting(0);for(let i=0;i<${fps};i++) updateShooting(1/${fps});`);
       const total=execute('bullets.reduce((sum,b)=>sum+b.damage,0)+pendingShots*weapon.lanes*projectileDamage()');
-      near(total,9*4*4.48); assert.equal(execute('weapon.interval'),.2); near(execute('weaponDamageLog()'),Math.log(4.48));
+      near(total,9*4*4.32); assert.equal(execute('weapon.interval'),.2); near(execute('weaponDamageLog()'),Math.log(4.32));
     }
   }
 });
@@ -2258,7 +2317,7 @@ check('diagonal projectile resolves earliest collision time rather than final ob
   isolatedBattle(target(460,320,40,10)+orb('red',500,305));
   execute('enemies[0].previousX=620;enemies[0].previousY=350;powerups[0].previousX=300;powerups[0].previousY=276;bullets.push({previousX:300,x:700,previousY:276,y:324,angle:.12,length:24,halfHeight:2.5,damage:1});');
   assert.ok(execute('projectileOrbEntry(bullets[0],powerups[0])<projectileEnemyEntry(bullets[0],enemies[0])'));
-  execute('resolveProjectileHits();'); assert.equal(orbScene().powerups.length,0); assert.equal(scene().enemies[0].hp,10); assert.equal(weaponState().damage,2);
+  execute('resolveProjectileHits();'); assert.equal(orbScene().powerups.length,0); assert.equal(scene().enemies[0].hp,10); near(weaponState().damage,1.8);
 });
 check('slanted shots clean up beyond every edge, rage effects draw finite geometry and reduced motion removes flicker', () => {
   isolatedBattle('weapon.lanes=4;resetWeapons();updateShooting(0);shotCooldown=999;bullets[0].y=-100;bullets[1].y=viewport.height+100;bullets[2].x=viewport.width+1;updatePowerups(0);');

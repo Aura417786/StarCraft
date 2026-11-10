@@ -211,6 +211,89 @@ check('pincer leaves a player-sized opening or declines an arena that is too cra
     assert.equal(execute('enemies.every(e=>Math.abs(e.y-formationState.active.centerY)>player.height*.5+e.height*.25)'),true, JSON.stringify(dimensions));
   }
 });
+function primeFormationTactic(kind, dimensions = { width: 1280, height: 720 }) {
+  isolated();
+  surface = dimensions;
+  execute(`resizeBattlefield();battleTime=50;player.x=player.previousX=flightBounds.left+15;
+    player.y=player.previousY=(flightBounds.top+flightBounds.bottom)/2;
+    trySpawnFormation(${JSON.stringify(kind)});updateFormations(1.351);
+    formationState.active.x=viewport.width*.70;
+    for (const member of formationState.active.members) formationControlsEnemy(member,0);
+    updateFormations(.01);bossHitGrace=0;`);
+}
+function advanceFormationTactic(seconds, move = false) {
+  execute(`${move ? 'updatePlayer(' + seconds + ');' : 'player.previousY=player.y;'}
+    updateFormations(${seconds});for (const member of enemies) updateEnemyMovement(member,${seconds});
+    updateEnemyProjectiles(${seconds});updateEnemyProjectileDamage();`);
+}
+check('all three formations preview an opening and lock a fresh target for the follow-up', () => {
+  for (const kind of ['escort','command','pincer']) {
+    primeFormationTactic(kind);
+    const before = snapshot('formationState.active.coordination.cue');
+    assert.ok(before.remaining >= 1 && before.shots.length >= 2);
+    assert.equal(Boolean(before.gap), kind !== 'escort');
+    assert.equal(execute('enemyProjectiles.length'), 0);
+    assert.equal(execute('formationsBlockWaves()'), true);
+    execute('player.y=player.previousY=flightBounds.bottom;');
+    let shots = [];
+    for (let frame=0; frame<100; frame++) {
+      advanceFormationTactic(.05);
+      if (!shots.length) shots = snapshot('enemyProjectiles.filter(shot=>shot.formationAttack)');
+      if (execute('formationState.active.coordination.beat===1&&!!formationState.active.coordination.cue')) break;
+    }
+    assert.ok(shots.length >= 2 && shots.every(shot => shot.vx < 0 && shot.formationTint),kind);
+    assert.equal(execute('formationState.active.coordination.beat'),1,kind);
+    assert.equal(execute('formationState.active.coordination.cue.target.y'),execute('flightBounds.bottom'));
+    assert.notEqual(before.target.y,execute('formationState.active.coordination.cue.target.y'));
+    assert.equal(execute('formationState.active.coordination.cue.gap'),null);
+  }
+});
+check('command wall leaves a keyboard-reachable passage on compact and wide battlefields, then aims again', () => {
+  for (const [width,height] of [[640,360],[1280,720],[1920,1080],[2560,1440]]) {
+    primeFormationTactic('command',{width,height});
+    const open = snapshot('formationState.active.coordination.cue');
+    const safeY = (open.gap.top + open.gap.bottom)/2;
+    const distance = Math.abs(safeY-open.target.y);
+    const key = safeY < open.target.y ? 'ArrowUp' : 'ArrowDown';
+    assert.ok(distance>0 && distance < open.warning*195);
+    assert.ok(open.shots.some(shot => shot.y===open.target.y));
+    const clearance=execute('player.height*.16+7');
+    assert.ok(open.shots.every(shot => shot.y<open.gap.top-clearance || shot.y>open.gap.bottom+clearance));
+    execute(`pressedKeys.add(${JSON.stringify(key)});`);
+    advanceFormationTactic(distance/300,true);
+    execute('pressedKeys.clear();');
+    near(execute('player.y'),safeY);
+    for (let frame=0; frame<100; frame++) {
+      if (execute('formationState.active.coordination.beat===1&&!!formationState.active.coordination.cue')) break;
+      advanceFormationTactic(.05);
+    }
+    assert.equal(execute('player.lives'),3,`${width}×${height}`);
+    near(execute('formationState.active.coordination.cue.target.y'),safeY);
+    // Let the front of the previous volley clear the player before crossing its rails.
+    for (let frame=0;frame<5;frame++) advanceFormationTactic(.05);
+    const endpoint = execute(safeY < open.target.y ? 'flightBounds.bottom' : 'flightBounds.top');
+    const escape = Math.min(56,Math.abs(endpoint-safeY));
+    const reverse = key === 'ArrowUp' ? 'ArrowDown' : 'ArrowUp';
+    execute(`pressedKeys.add(${JSON.stringify(reverse)});`);
+    advanceFormationTactic(escape/300,true);
+    execute('pressedKeys.clear();');
+    for (let frame=0;frame<85;frame++) advanceFormationTactic(.05);
+    assert.equal(execute('player.lives'),3,`${width}×${height} follow-up`);
+  }
+});
+check('resizing reissues an unfinished formation warning, and destroying its leader cancels it', () => {
+  primeFormationTactic('command');
+  advanceFormationTactic(.55);
+  surface={width:1920,height:1080}; execute('resizeBattlefield();');
+  near(execute('formationState.active.coordination.cue.remaining'),1.1);
+  assert.equal(execute('formationState.active.coordination.beat'),0);
+  assert.equal(execute('enemyProjectiles.length'),0);
+  execute('defeatEnemy(enemies.findIndex(enemy=>enemy.formationLeader));');
+  assert.equal(execute('formationState.active.broken'),true);
+  assert.equal(execute('formationState.active.coordination.cue'),null);
+  for (let frame=0;frame<60;frame++) advanceFormationTactic(.05);
+  assert.equal(execute('enemyProjectiles.some(shot=>shot.formationAttack)'),false);
+});
 check('transport and formation schedulers do not start overlapping waves', () => {
   isolated('battleTime=55;spawnSupplyTransport();'); assert.equal(execute('trySpawnFormation()'),false);
   isolated('battleTime=55;trySpawnFormation();battlefieldEvents.nextTransport=0;updateBattlefieldEvents(.1);');

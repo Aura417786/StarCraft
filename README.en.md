@@ -9,9 +9,10 @@ Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alie
 ![Star Breaker gameplay](media/gameplay.gif)
 
 - **Choose a fighter before each sortie.** Crimson hits hardest per shot and fires a piercing beam, Azure shoots fastest and launches five homing ion shots, and Auric spreads three lanes with a three-wave screen-wide barrage.
+- **Break coordinated attacks.** Gunships aim from different heights, while the ace fires, changes flanks and locks on again. The final fusion attacks along both axes.
 - **Fight a fixed alien campaign.** Watch the Broodmother coil before it strikes. At half health, its shell opens and one lash becomes a chain of three. The final boss pairs a slowing field with a locked explosion and uses two other chained attacks.
 - **Grow your life capacity.** Green orbs heal a life. When you're already full, they add one to both your current life and your capacity.
-- **Upgrade your main gun.** Shoot power-up orbs to fire faster, add firing lanes, or launch harder-hitting rounds. Later orbs can grant several levels at once. Green orbs are rarer, and only bosses 3, 6 and 9 restore a missing life.
+- **Upgrade your main gun.** Shoot power-up orbs to fire faster, add firing lanes, or launch harder-hitting rounds. Later orbs can grant several levels at once. Each boost is smaller and enemies have more endurance as the campaign advances. Green orbs are rarer, and only bosses 3, 6 and 9 restore a missing life.
 - **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. Sustain focused fire against late armored fighters and gunships, or clear a lane with the Crimson Beam.
 - **Evolve after boss victories.** Choose wing guns, an AI wingman, or a shield that absorbs enemy shots and fires them back.
 - **Time your shield.** A perfect block gives you three seconds to trigger a faster charge for a cannon shot you already have stored.
@@ -19,7 +20,7 @@ Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alie
 
 ## Quick start
 
-Use a desktop browser and keyboard. On your first visit, select **明白了** (Got it) to close the guide. Select **English** on the main menu to switch the whole game to English, then select **Start Game**. You can reopen the guide with **How to Play**. Pick your ship in the hangar. Your main gun fires automatically. Earlier gunners and lingering boss shots force you to keep moving.
+Use a desktop browser and keyboard. On your first visit, select **明白了** (Got it) to close the guide. Select **English** on the main menu to switch the whole game to English, then select **Start Game**. You can reopen the guide with **How to Play**. Pick your ship in the hangar. Your main gun fires automatically. A dashed line or circle marks the locked position. Watch for a second lock before choosing your next move.
 
 | Key | Action |
 | --- | --- |

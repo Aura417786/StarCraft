@@ -3,7 +3,7 @@
 // Fixed copy from index.html. Runtime messages are localized where they are produced.
 const gameStaticEnglish = new Map([
   ["星际突围，一款逐步开发的横向飞机射击小游戏。", "Star Breaker is a side-scrolling space shooter for desktop browsers."],
-  ["星际突围 · 深空机库", "Star Breaker · Deep Space Hangar"],
+  ["星际突围 · 交火战区", "Star Breaker · Crossfire Zone"],
   ["深空机库 / HANGAR", "DEEP SPACE / HANGAR"],
   ["选择战机，迎战群渊。", "Choose your fighter. Face the Abyss."],
   ["选择出击战机", "Choose your fighter"],
@@ -121,6 +121,8 @@ const gameStaticEnglish = new Map([
   ["赤焰集中打击，苍电速射并追踪敌人，曜金用全屏弹幕清理敌群。", "Crimson delivers heavy focused hits, Azure fires rapidly and homes in, and Auric clears swarms with a screen-wide barrage."],
   ["躲开敌机和敌弹。", "Dodge enemies and shots. "],
   ["撞机或中弹会扣生命，打不到的敌机可以放过去。", "Collisions and hits cost a life. You can let enemies fly past."],
+  ["留意第二次锁定。", "Watch for the second lock. "],
+  ["虚线和圆圈标出锁定的路线或位置。躲过第一击后，等追击锁定再换位。", "Dashed lines and circles mark targeted paths and positions. Dodge the first shot, then move again once the follow-up locks on."],
   ["射中能量球升级。", "Shoot orbs to upgrade. "],
   ["蓝球提攻速", "Blue raises fire rate"],
   ["黄球加弹道", "yellow adds lanes"],
@@ -129,7 +131,7 @@ const gameStaticEnglish = new Map([
   ["、", ", "],
   ["。", "."],
   ["弹道超过四条时晋阶。", "Rank up past four lanes. "],
-  ["原四条的总伤害合到一条高阶弹道，再额外提高 12%。", "Four lanes merge into one stronger lane with 12% bonus damage."],
+  ["原四条的总伤害合到一条高阶弹道，再额外提高 8%。", "Four lanes merge into one stronger lane with 8% bonus damage."],
   ["击败前十只异形后可进化。", "Evolve after each of the first ten victories. "],
   ["依序击败十只异形与最终合体。", "Defeat ten aliens in order, then face their fusion. "],
   ["看见标记先离开危险区。减速时仍能移动和开盾。群渊合生体会用一招限制路线，再用另一招追击。", "Leave marked danger zones early. You can still move and shield while slowed. The Abyssal Confluence uses one move to limit your route and another to follow up."],

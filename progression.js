@@ -2,8 +2,9 @@
 
 // Player gains and the enemy schedule are deliberately independent. Extra pickups
 // and evolution can put the player ahead of this fixed, time-based reference.
-const progressionRules = { tierBonus: 1.12, redMultiplier: 1.09, blueMultiplier: 1.065,
+const progressionRules = { tierBonus: 1.08, redIncrement: 0.8, redMultiplier: 1.075, blueMultiplier: 1.055,
   rateOverflowWeight: 0.35, maxPhysicalRate: 200, stageSeconds: 30 };
+const referenceGrowth = { tierBonus: 1.12, redMultiplier: 1.09, blueMultiplier: 1.065, blueIncrement: 1.25 };
 function progressionLogSum(a, b) {
   const high = Math.max(a, b), low = Math.min(a, b);
   return high + Math.log1p(Math.exp(low - high));
@@ -15,7 +16,8 @@ function progressionPacketDamageLog() {
 }
 function progressionGrowDamage(gain) {
   const before = progressionBaseDamageLog();
-  const next = Math.max(progressionLogSum(before, Math.log(gain)), before + gain * Math.log(progressionRules.redMultiplier));
+  const next = Math.max(progressionLogSum(before, Math.log(gain * progressionRules.redIncrement)),
+    before + gain * Math.log(progressionRules.redMultiplier));
   const stored = Math.min(next, Math.log(1e100));
   weapon.damage = Math.exp(stored); weapon.damageOverflow = Math.max(0, next - stored);
   return { before, after: next };
@@ -40,7 +42,7 @@ function progressionExpectedGain(time, step) {
 }
 function progressionLaneLog(gain) {
   const whole = Math.floor(gain), fraction = gain - whole;
-  const laneLog = level => Math.floor(level / maxWeaponLanes) * Math.log(maxWeaponLanes * progressionRules.tierBonus)
+  const laneLog = level => Math.floor(level / maxWeaponLanes) * Math.log(maxWeaponLanes * referenceGrowth.tierBonus)
     + Math.log(level % maxWeaponLanes + 1);
   return laneLog(whole) * (1 - fraction) + laneLog(whole + 1) * fraction;
 }
@@ -71,25 +73,29 @@ function progressionWaveReferenceAt(time) {
     return Math.log(base + increment * Math.min(gain, additiveLevels))
       + Math.max(0, gain - additiveLevels) * Math.log(multiplier);
   };
-  const rateLog = weaponLog(red, 5, firingRules.ratePerLevel, progressionRules.blueMultiplier);
-  return weaponLog(red, 1, 1, progressionRules.redMultiplier) + progressionEffectiveRateLog(rateLog) + progressionLaneLog(yellow);
+  const rateLog = weaponLog(red, 5, referenceGrowth.blueIncrement, referenceGrowth.blueMultiplier);
+  return weaponLog(red, 1, 1, referenceGrowth.redMultiplier) + progressionEffectiveRateLog(rateLog) + progressionLaneLog(yellow);
+}
+function enemyDurabilityLog(time) {
+  return Math.log(1.14 - 0.12 * Math.expm1(-Math.max(0, time) / 200));
 }
 function progressionEnemyHealthLog(time = battleTime) {
   const t = Math.max(0, time), baseline = Math.log(enemyHealthForTime(t));
-  if (t < 20) return baseline;
+  const durability = enemyDurabilityLog(t);
+  if (t < 20) return baseline + durability;
   const endurance = .47 + Math.min(.42, t / 1040);
   const reference = progressionReferenceDpsLog(t);
-  if (t <= 55) return Math.max(baseline, reference + Math.log(endurance));
+  if (t <= 55) return Math.max(baseline, reference + Math.log(endurance)) + durability;
   const period = progressionRules.stageSeconds;
   const start = Math.floor(t / period) * period, mix = (t - start) / period;
   const waveReference = progressionWaveReferenceAt(start) * (1 - mix) + progressionWaveReferenceAt(start + period) * mix;
   const ramp = 1 - Math.exp(-(t - 55) / 70);
   return Math.max(baseline, reference + Math.log(endurance),
-    reference + (waveReference - reference) * Math.min(1, (t - 55) / 35) + Math.log(endurance + 1.06 * ramp));
+    reference + (waveReference - reference) * Math.min(1, (t - 55) / 35) + Math.log(endurance + 1.06 * ramp)) + durability;
 }
 function progressionBossHealthLog(time, endurance, healthShare = 1) {
   const growth = -Math.expm1(-Math.max(0, time - 90) / 90);
-  const baseline = progressionReferenceDpsLog(time) + Math.log(endurance * (1 + 0.55 * growth));
+  const baseline = progressionReferenceDpsLog(time) + Math.log(endurance * (1 + 0.55 * growth)) + enemyDurabilityLog(time);
   if (growth === 0) return baseline;
   return Math.max(baseline, progressionEnemyHealthLog(time) + Math.log(9 * growth * healthShare));
 }

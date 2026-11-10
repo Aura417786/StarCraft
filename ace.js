@@ -1,8 +1,9 @@
 "use strict";
 
-// 王牌只有固定出生血量；真正的交锋节奏来自有限闪避、锁线突进和反击空档。
+// 王牌先锁住一条航线，再换侧重新瞄准，最后进入可反击的冷却。
 const aceRules = { firstArrival: 36, interval: 65, warning: 1.35, lifetime: 20,
   strafe: 1.9, feint: 0.9, dash: 0.52, fire: 0.8, recover: 1.4, retreat: 1.0,
+  flank: 0.65, secondWarning: 0.74,
   dodgeCooldown: 1.9, dodgeSpeed: 175, moveSpeed: 205, dashSpeed: 410 };
 const aceEncounter = { nextTime: 36, warning: 0, target: null, warningY: 0,
   sequence: 0, notice: "", noticeTime: 0 };
@@ -60,7 +61,7 @@ function spawnAceEnemy() {
     y: aceEncounter.warningY, previousX: viewport.width + width * 0.6, previousY: aceEncounter.warningY,
     hp: 1, maxHp: 1, displayHp: 1, hitFlash: 0, points: 800,
     healthLog: Math.max(enemyHealthLogForTime() + Math.log(3),
-      progressionReferenceDpsLog(battleTime) + Math.log(4.5)),
+      progressionReferenceDpsLog(battleTime) + Math.log(4.5) + enemyDurabilityLog(battleTime)),
     fireProtection: enemyProtectionAtBirth("ace"),
     age: 0, speed: aceRules.moveSpeed, acePhase: "entry", acePhaseTime: 0,
     aceCycle: 0, aceDodgeCooldown: 0.85, aceDodgeTime: 0, aceSettled: false,
@@ -182,7 +183,7 @@ function aceDashRemainsSafe(enemy) {
   return Math.hypot(route.startX + dx * t - player.x, route.startY + dy * t - player.y)
     > Math.max(85, player.width * 0.55 + enemy.width * 0.42);
 }
-function beginAceFire(enemy) {
+function beginAceFire(enemy, followup = false) {
   enemy.aceRoute = null;
   const muzzleX = enemy.x - enemy.width * 0.5;
   const dx = player.x - muzzleX, dy = player.y - enemy.y, distance = Math.hypot(dx, dy);
@@ -190,16 +191,28 @@ function beginAceFire(enemy) {
     enemy.aceAim = null; aceSetPhase(enemy, "recover"); return;
   }
   const spread = clamp(Math.atan2(player.height * 0.4 + 22, distance), 0.12, 0.32);
-  const offsets = enemy.aceCycle % 2 ? [-spread, spread, spread * 1.85] : [-spread, spread];
-  enemy.aceAim = { x: player.x, y: player.y, angle: Math.atan2(dy, dx), offsets };
+  const offsets = followup && flightBounds.bottom - flightBounds.top >= 145
+    ? [-spread, 0, spread] : [0];
+  enemy.aceAim = { x: player.x, y: player.y, angle: Math.atan2(dy, dx), offsets, followup };
   aceSetPhase(enemy, "fire");
+}
+function beginAceFlank(enemy, arena) {
+  const span = arena.bottom - arena.top;
+  if (span < 94 || enemy.age + aceRules.flank + aceRules.secondWarning >= aceRules.lifetime - aceRules.retreat) return false;
+  const destination = arena.top + span * (enemy.y > arena.top + span / 2 ? 0.22 : 0.78);
+  const step = Math.min(122, span * 0.58);
+  enemy.aceTargetY = clamp(destination, enemy.y - step, enemy.y + step);
+  enemy.aceTargetX = Math.max(enemy.x, enemy.aceAnchorX);
+  aceSetPhase(enemy, "flank");
+  return true;
 }
 function fireAceVolley(enemy) {
   const aim = enemy.aceAim;
   if (!aim) return;
   const x = enemy.x - enemy.width * 0.5, y = enemy.y;
   if (player.x >= x - 55 || Math.hypot(player.x - x, player.y - y) < Math.max(140, player.width * 1.2)) return;
-  const speed = Math.min(340, 275 + battleTime * 0.08);
+  // 让超宽屏上靠左的玩家也能实际遇到这两轮弹。
+  const speed = clamp(viewport.width * (aim.followup ? 0.47 : 0.50), 380, 1060);
   let fired = false;
   for (const offset of aim.offsets) {
     if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) break;
@@ -245,9 +258,15 @@ function updateAceMovement(enemy, seconds) {
       enemy.aceRoute = null; enemy.aceAim = null; aceSetPhase(enemy, "recover");
     } else if (!route || aceMoveTo(enemy, route.endX, route.endY, aceRules.dashSpeed, seconds)
         || enemy.acePhaseTime >= aceRules.dash) beginAceFire(enemy);
+  } else if (enemy.acePhase === "flank") {
+    if (aceMoveTo(enemy, enemy.aceTargetX, enemy.aceTargetY, aceRules.moveSpeed * 1.35, seconds)
+        || enemy.acePhaseTime >= aceRules.flank) beginAceFire(enemy, true);
   } else if (enemy.acePhase === "fire") {
-    if (enemy.acePhaseTime >= aceRules.fire) {
-      fireAceVolley(enemy); enemy.aceAim = null; aceSetPhase(enemy, "recover");
+    const followup = enemy.aceAim?.followup;
+    if (enemy.acePhaseTime >= (followup ? aceRules.secondWarning : aceRules.fire)) {
+      fireAceVolley(enemy);
+      enemy.aceAim = null;
+      if (followup || !beginAceFlank(enemy, arena)) aceSetPhase(enemy, "recover");
     }
   } else if (enemy.acePhase === "recover" && enemy.acePhaseTime >= aceRules.recover) {
     enemy.aceCycle++;
@@ -306,13 +325,15 @@ function drawAceThreats(ctx = context) {
     }
     if (enemy.acePhase === "fire" && enemy.aceAim) {
       const aim = enemy.aceAim, muzzleX = enemy.x - enemy.width * 0.5;
-      ctx.strokeStyle = "#ffb58e"; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.62; ctx.setLineDash([5, 8]);
+      ctx.strokeStyle = aim.followup ? "#ff7999" : "#ffb58e";
+      ctx.lineWidth = 1.7; ctx.globalAlpha = 0.84; ctx.setLineDash([7, 7]);
       for (const offset of aim.offsets) {
         const angle = aim.angle + offset;
         ctx.beginPath(); ctx.moveTo(muzzleX, enemy.y);
         ctx.lineTo(muzzleX + Math.cos(angle) * viewport.width, enemy.y + Math.sin(angle) * viewport.width); ctx.stroke();
       }
       ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(aim.x, aim.y, aim.followup ? 13 : 9, 0, Math.PI * 2); ctx.stroke();
     }
   }
   // 独立的一行状态提示，避开机体血条与底部姿态/大招控件。
@@ -320,7 +341,10 @@ function drawAceThreats(ctx = context) {
     strafe: tr("王牌侧移 · 闪避后仍有追击机会", "Ace strafing · Stay on its tail after the dodge"),
     feint: tr("王牌锁线 · 离开橙色突进航线", "Ace locking on · Clear the orange line"),
     dash: tr("王牌突进 · 随后准备反击", "Ace dashing · Get ready to counter"),
-    fire: tr("王牌蓄射 · 虚线之间留有空隙", "Ace charging · Find a gap between the dashed lines"),
+    flank: tr("王牌换侧 · 留意下一次锁定", "Ace changing flanks · Watch for the next lock"),
+    fire: enemy?.aceAim?.followup
+      ? tr("王牌交叉追击 · 离开新锁线", "Ace crossfire · Break the new lock")
+      : tr("王牌定点狙击 · 离开锁线", "Ace precision shot · Break the lock"),
     recover: tr("王牌冷却 · 现在集中火力", "Ace cooling · Focus fire now"),
     retreat: tr("王牌撤离 · 最后一次集火机会", "Ace retreating · Last chance to fire") };
   const hint = aceEncounter.warning > 0 ? tr("敌方王牌接近 · 观察机动，抓住冷却空档", "Enemy ace approaching · Watch its moves and strike during cooldown")

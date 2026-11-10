@@ -198,11 +198,19 @@ check('ace never shoots before entering view and its first committed attack has 
   const aim=snapshot('aceEncounter.target.aceAim');
   execute('player.y=clamp(player.y+80,flightBounds.top,flightBounds.bottom);updateEncounter(.1);');
   assert.deepEqual(snapshot('aceEncounter.target.aceAim'),aim, 'telegraphed aim must not secretly track later movement');
+  advanceUntil('aceEncounter.target.acePhase==="flank"');
+  assert.deepEqual(snapshot('enemyProjectiles.filter(p=>p.source==="ace").map(p=>Math.atan2(p.vy,p.vx))'),[aim.angle]);
+  const firstSide=execute('aceEncounter.target.y');
+  advanceUntil('aceEncounter.target.aceAim?.followup');
+  const second=snapshot('aceEncounter.target.aceAim');
+  assert.ok(Math.abs(execute('aceEncounter.target.y')-firstSide)>30, 'the ace must change its firing angle physically');
+  assert.equal(second.y,execute('player.y')); assert.notEqual(second.y,aim.y);
+  execute('player.y=clamp(player.y-70,flightBounds.top,flightBounds.bottom);updateEncounter(.1);');
+  assert.deepEqual(snapshot('aceEncounter.target.aceAim'),second);
   advanceUntil('aceEncounter.target.acePhase==="recover"');
-  const angles=snapshot('enemyProjectiles.filter(p=>p.source==="ace").map(p=>Math.atan2(p.vy,p.vx))');
-  assert.ok(angles.length>=2 && angles.length<=3);
-  for(const angle of angles) assert.ok(Math.abs(Math.atan2(Math.sin(angle-aim.angle),Math.cos(angle-aim.angle)))>.08,
-    'the volley must retain its telegraphed central escape gap');
+  const angles=snapshot('enemyProjectiles.filter(p=>p.source==="ace").slice(-3).map(p=>Math.atan2(p.vy,p.vx))');
+  assert.equal(angles.length,3);
+  for(let i=0;i<angles.length;i++) near(Math.atan2(Math.sin(angles[i]-second.angle),Math.cos(angles[i]-second.angle)),second.offsets[i]);
   assert.ok(execute('enemyProjectiles.length<=enemyCombatRules.maxProjectiles'));
   aceScene('feint');
   const route=snapshot('aceEncounter.target.aceRoute');
@@ -211,6 +219,17 @@ check('ace never shoots before entering view and its first committed attack has 
   assert.deepEqual(snapshot('aceEncounter.target.aceRoute'),route, 'dash preview must commit to a fixed line');
   execute('player.x=aceEncounter.target.aceRoute.endX;player.y=aceEncounter.target.aceRoute.endY;updateEncounter(.81);');
   assert.notEqual(execute('aceEncounter.target.acePhase'),'dash', 'entering a previewed route must cancel an unsafe dash');
+});
+check('the two ace locks hit a stationary fighter and allow a two-step dodge without a shield', () => {
+  for (const steer of [false,true]) {
+    aceScene('fire');
+    if (steer) { key('ArrowUp'); for(let i=0;i<9;i++)step(); key('ArrowUp','keyup'); }
+    advanceUntil('aceEncounter.target.aceAim?.followup', 'updateEncounter(.05);updateEnemyProjectileDamage();');
+    if (steer) { key('ArrowDown'); for(let i=0;i<13;i++)step(); key('ArrowDown','keyup'); }
+    for(let i=0;i<65;i++)execute('updateEncounter(.05);updateEnemyProjectileDamage();updateBossEncounter(.05);');
+    if (steer) assert.equal(execute('player.lives'),3);
+    else assert.ok(execute('player.lives') < 3);
+  }
 });
 check('ace recovery creates a usable one-second attack gap with no new enemy rounds', () => {
   aceScene('recover');

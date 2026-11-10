@@ -60,7 +60,7 @@ function fighterProfile() { return fighterProfiles[sortieFighter]; }
 const weapon = { interval: 1 / fighterProfiles.red.rate, speed: 720, length: 26,
   damage: fighterProfiles.red.damage, speedLevel: 1, lanes: fighterProfiles.red.lanes, tier: 1, damageOverflow: 0, rateOverflow: 0 };
 // 攻速仍持续成长；过密的连续射击合并伤害，每轮最多绘制 4 条弹道。
-const firingRules = { ratePerLevel: 1.25, renderInterval: 0.05 };
+const firingRules = { ratePerLevel: 1, renderInterval: 0.05 };
 const maxWeaponLanes = 4;
 // 第四阶再次使用绿色；红色之后从黄色继续循环，阶数不封顶。
 const weaponPalettes = [
@@ -242,6 +242,7 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
       slot.y *= scaleY;
     }
     resizePincerFormation(plan);
+    resizeFormationTactics(plan);
   }
   // 重建尺寸后重新预警，避免旧弹道或激光在新位置立即命中玩家。
   resizeAceEncounter(scaleX, scaleY, resizeY);

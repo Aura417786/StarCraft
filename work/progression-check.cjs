@@ -157,7 +157,7 @@ function shieldContacts(count, family = 'enemyProjectiles') {
   });`);
 }
 
-check('a first red orb gives a bigger shot that deals double damage to the same existing enemy', () => {
+check('a first red orb adds 0.8 damage without changing an existing enemy’s durability', () => {
   isolated('battleTime=96;');
   placeWaveTarget('armored');
   const originalHealth = execute('enemies[0].healthLog');
@@ -169,7 +169,7 @@ check('a first red orb gives a bigger shot that deals double damage to the same 
   assert.equal(execute('powerups.length'),0);
   assert.equal(execute('enemies[0].hp'), healthAfterOriginal);
   const upgradedPacket = fireSinglePacket();
-  near(healthAfterOriginal - execute('enemies[0].hp'), 2 * (1 - healthAfterOriginal));
+  near(healthAfterOriginal - execute('enemies[0].hp'), 1.8 * (1 - healthAfterOriginal));
   assert.ok(upgradedPacket.length > originalPacket.length && upgradedPacket.halfHeight > originalPacket.halfHeight);
   execute('spawnEnemy("armored");');
   assert.deepEqual(snapshot('enemies.map(enemy=>enemy.healthLog)'), [originalHealth, originalHealth]);
@@ -185,10 +185,11 @@ check('first blue and yellow orbs add real firing cadence and independent symmet
     execute('resetWeapons();updateShooting(0);');
     const lanes = snapshot('bullets.map(shot=>({offset:shot.y-player.y,vy:shot.vy,damage:shot.damage}))');
     execute('for(let frame=0;frame<50;frame++)updateShooting(.02);');
-    return { lanes, rounds: execute('bullets.length') };
+    return { lanes, rounds: execute('bullets.length'), rate: execute('1/weapon.interval') };
   }
   const original = fire(), blue = fire('blue'), yellow = fire('yellow');
   assert.deepEqual(blue.lanes, original.lanes);
+  near(blue.rate - original.rate, 1);
   assert.ok(blue.rounds > original.rounds);
   assert.equal(yellow.lanes.length, 2);
   assert.equal(yellow.rounds, 2 * original.rounds);
@@ -196,6 +197,11 @@ check('first blue and yellow orbs add real firing cadence and independent symmet
   near(yellow.lanes[0].offset, -yellow.lanes[1].offset);
   near(yellow.lanes[0].vy, -yellow.lanes[1].vy);
   assert.ok(yellow.lanes.every(lane=>lane.damage === original.lanes[0].damage));
+});
+check('higher firepower growth uses the revised red and blue multiplier floors', () => {
+  isolated('weapon.damage=60;weapon.interval=1/80;applyPowerup("red");applyPowerup("blue");');
+  near(execute('weapon.damage'), 60 * 1.075);
+  near(execute('1/weapon.interval'), 80 * 1.055);
 });
 check('the 2:19 tier-three screenshot loadout damages but does not one-shot ordinary wave fighters', () => {
   for (const kind of ['scout', 'gunner', 'armored']) {
@@ -223,18 +229,43 @@ check('reinforced armor absorbs oversized normal shots and can still be finished
   assert.equal(execute('enemies.length'), 0);
   assert.equal(execute('kills'), 1);
 });
-check('ace, transport, ordinary alien and fusion Boss births use the same stage after a player upgrades', () => {
+check('ordinary fighters, ace, transport and Boss births use the same stage after a player upgrades', () => {
   function sample(gear) {
     isolated('battleTime=420;'+gear);
-    return snapshot(`(()=>{const ace=spawnAceEnemy().healthLog;resetAceEncounter();enemies.length=0;
+    return snapshot(`(()=>{for(const kind of ["scout","armored","gunner"])spawnEnemy(kind);
+      const ordinaryEnemies=enemies.map(enemy=>enemy.healthLog);
+      const ace=spawnAceEnemy().healthLog;resetAceEncounter();enemies.length=0;
       const transport=spawnSupplyTransport().healthLog;spawnBoss(0);
       const ordinary=boss.healthLog;spawnBoss(10);
-      return [ace,transport,ordinary,boss.healthLog];})()`);
+      return [...ordinaryEnemies,ace,transport,ordinary,boss.healthLog];})()`);
   }
   const baseline=sample('');
   const reinforced=sample('for(let i=0;i<10;i++){applyPowerup("blue");applyPowerup("yellow");applyPowerup("red");}');
   assert.ok(baseline.every(Number.isFinite));
   assert.deepEqual(reinforced,baseline);
+});
+check('all enemy spawn paths receive the independent durability ramp', () => {
+  isolated('battleTime=12;');
+  const durability = 1.14 + .12 * (1 - Math.exp(-12 / 200));
+  near(execute('Math.exp(enemyDurabilityLog(0))'), 1.14);
+  near(execute('Math.exp(enemyDurabilityLog(10000))'), 1.26);
+  assert.ok(execute('enemyDurabilityLog(12)<enemyDurabilityLog(200)&&enemyDurabilityLog(200)<enemyDurabilityLog(1000)'));
+  const stage = execute('Math.exp(progressionReferenceDpsLog())');
+  const ordinary = execute('enemyHealthForTime()');
+  const spawned = snapshot(`(() => {
+    for (const kind of ["scout", "armored", "gunner"]) spawnEnemy(kind);
+    const ships = enemies.map(enemy => Math.exp(enemy.healthLog));
+    const ace = Math.exp(spawnAceEnemy().healthLog);
+    resetAceEncounter();
+    const transport = Math.exp(spawnSupplyTransport().healthLog);
+    spawnBoss(0); const first = { hp: Math.exp(boss.healthLog), endurance: boss.endurance };
+    spawnBoss(10); const final = { hp: Math.exp(boss.healthLog), endurance: boss.endurance };
+    return { ships, ace, transport, first, final };
+  })()`);
+  for (const [index, typeHealth] of [1, 2.8, 1.5].entries()) near(spawned.ships[index], ordinary * typeHealth * durability);
+  near(spawned.ace, Math.max(ordinary * 3, stage * 4.5) * durability);
+  near(spawned.transport, stage * 2.6 * durability);
+  for (const boss of [spawned.first, spawned.final]) near(boss.hp, stage * boss.endurance * durability);
 });
 check('the independent firepower curve grows without a jump at thirty-second boundaries', () => {
   isolated();
@@ -399,7 +430,7 @@ check('changing tier emits a stronger differently shaped packet without mutating
   execute('applyPowerup("yellow");shotCooldown=0;renderShotCooldown=0;updateShooting(0);');
   const all=snapshot('bullets'), fresh=all.at(-1);
   assert.deepEqual(all[0],old);
-  near(fresh.damage/old.damage,1.12);
+  near(fresh.damage/old.damage,1.08);
   assert.ok(fresh.length>old.length);
   assert.notEqual(fresh.color,old.color);
   assert.deepEqual(beforeSound.args,[false,1]);

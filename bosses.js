@@ -99,9 +99,9 @@ function resizeBossEncounter(oldWidth, oldHeight, oldBounds) {
     }
     for (const hazard of bossHazards) {
       if (hazard.x !== undefined) hazard.x *= scaleX;
-      hazard.y = resizeY(hazard.y);
+      if (hazard.y !== undefined) hazard.y = resizeY(hazard.y);
       if (hazard.radius !== undefined) hazard.radius *= widthScale;
-      if (hazard.thickness !== undefined) hazard.thickness *= scaleY;
+      if (hazard.thickness !== undefined) hazard.thickness *= hazard.kind === "seam" ? scaleX : scaleY;
       if (hazard.originX !== undefined) {
         hazard.originX *= scaleX;
         hazard.originY = resizeY(hazard.originY);

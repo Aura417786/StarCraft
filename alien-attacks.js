@@ -11,15 +11,17 @@ const alienPatterns = {
         : [fan(0, 7, .68, 400, "orb", { arc: true, sound: "surge" }),
           fan(.7, 6, .68, 415, "orb", { arc: true, offsetY: .12, sound: "surge" })];
     }],
-  broodSweep: ["触须扫潮", "Tentacle Tide", 2.8, "沿预警红线的上下两侧闪避", "Evade above or below each marked lash",
+  broodSweep: ["触须扫潮", "Tentacle Tide", 2.8, "躲开横扫，再离开追来的红圈", "Dodge each lash, then leave the follow-up circle",
     t => {
       t.attackMotion = "sweep";
       t.lashIndex = 0;
       broodLash(t, t.lockY, t.telegraphDuration, t.side, 0);
+      if (t.enraged) t.attackDuration += .65;
       return t.enraged ? [beat(.24, x => broodLash(x, player.y, .68, -x.side, 1)),
         beat(1.13, x => broodLash(x, player.y, .7, x.side, 2)),
-        fan(2.18, 5, .45, 460, "orb", { aim: true })]
-        : [fan(.58, 3, .25, 430, "orb", { aim: true })];
+        beat(2.12, x => zoneTell(x, .93, player.x, player.y, .34))]
+        : [fan(.58, 3, .25, 430, "orb", { aim: true }),
+          beat(.98, x => zoneTell(x, .94, player.x, player.y, .34))];
     }],
   broodSpawn: ["幼体孵化", "Larval Hatch", 3.05, "引开幼体，再穿过它们之间的空隙", "Lure the larvae, then pass through their gaps",
     t => {
@@ -62,8 +64,9 @@ const alienPatterns = {
 
   mirrorPrism: ["三棱反照", "Prismatic Reflection", 2.9, "预判镜像弹的折返", "Watch for the ricochets",
     t => [fan(0, 6, .78, 510, "prism", { reflect: true }), fan(.57, 5, .62, 520, "prism", { reflect: true, aim: true }), fan(1.16, 4, .46, 545, "prism", { reflect: true })]],
-  mirrorBlades: ["双翼折光", "Refracted Wings", 3.0, "移动到两片光翼外", "Move outside the two wings of light",
-    t => [beamTell(t, 0, alienOffsetLane(t.lockY, -.11), .21), beamTell(t, .22, alienOffsetLane(t.lockY, .11), .21), fan(.9, 5, .56, 515, "prism", { aim: true, wave: 24 })]],
+  mirrorBlades: ["折镜夹击", "Mirror Pincer", 3.0, "躲开双翼，再看两侧折镜的虚线", "Dodge both wings, then leave each dashed mirror shot",
+    t => [beamTell(t, 0, alienOffsetLane(t.lockY, -.11), .21), beamTell(t, .22, alienOffsetLane(t.lockY, .11), .21),
+      beat(.47, x => portalTell(x, .81, -1)), beat(1.26, x => portalTell(x, .83, 1))]],
   mirrorDecoy: ["镜域回落", "Mirrored Strike", 3.1, "避开亮圈，再躲反弹晶体", "Clear the bright rings, then dodge the crystal ricochets",
     t => [zoneTell(t, 0, t.lockX, t.lockY, .38), zoneTell(t, .35, t.lockX, flightBounds.top + flightBounds.bottom - t.lockY, .3), fan(.67, 5, .8, 535, "prism", { reflect: true })]],
 
@@ -92,26 +95,31 @@ const alienPatterns = {
     t => [aimTell(t, 0), fan(0, 5, .29, 620, "prism", { lock: true }), fan(.45, 5, .34, 565, "prism", { aim: true, reflect: true }), fan(.97, 6, .61, 580, "thread", { wave: 31 }), fan(1.51, 4, .25, 620, "shard", { aim: true })]],
   neuralPulse: ["神经风暴", "Neural Storm", 3.25, "穿过青色缺口，再闪避追击", "Use the cyan corridor, then evade the pursuit",
     t => [laneTell(t, 0, 1.7), bandTell(t, 0, .4), wall(.32, 550, "prism"), wall(.81, 580, "thread"), fan(1.47, 5, .37, 600, "prism", { aim: true })]],
-  neuralRupture: ["王巢坏死", "Royal Rupture", 3.45, "保持移动，远离已锁定的圆心", "Keep moving away from the locked centers",
-    t => [zoneTell(t, 0, t.lockX, t.lockY, .42), beat(.56, x => zoneTell(x, .82, player.x, player.y, .42)), beat(1.15, x => zoneTell(x, .81, player.x, player.y, .44)), fan(1.45, 3, .48, 370, "spore", { homingUntil: .8, radius: 11 })]],
+  neuralRupture: ["王巢坏死", "Royal Rupture", 3.45, "先离开爆点，再左右跨出纵向裂隙", "Escape the blasts, then move sideways out of the vertical rift",
+    t => [zoneTell(t, 0, t.lockX, t.lockY, .42), beat(.56, x => zoneTell(x, .82, player.x, player.y, .42)),
+      beat(1.15, x => zoneTell(x, .81, player.x, player.y, .44)), beat(1.71, x => seamTell(x, .97))]],
 
-  fusionBind: ["群渊处刑", "Confluence Execution", 3.62, "离开减速区，红圈将在原地引爆", "Escape the slowing field before the locked red circle detonates",
+  fusionBind: ["群渊处刑", "Confluence Execution", 3.62, "逃离减速爆点，再左右躲开纵向裂隙", "Escape the slowing blast, then move sideways out of the rift",
     t => [bindTell(t, 0, t.lockX, t.lockY, 2.0, t.enraged ? .58 : .62),
       zoneTell(t, 1.12, t.lockX, t.lockY, .49), beat(1.08, x => zoneTell(x, .96, player.x, player.y, .39)),
-      fan(2.09, t.enraged ? 7 : 5, .5, 620, "shard", { aim: true }),
-      t.enraged && beat(2.2, x => zoneTell(x, .88, player.x, player.y, .42))]],
-  fusionCorridor: ["神经潮汐", "Synaptic Tide", 3.58, "守住青色通道，最后一波通过再移动", "Hold the cyan lane until the last wall passes",
+      fan(1.74, 4, .47, 600, "shard", { aim: true }),
+      beat(2.08, x => {
+        seamTell(x, .96);
+        if (x.enraged) zoneTell(x, .96, player.x, player.y, .39);
+      })]],
+  fusionCorridor: ["神经潮汐", "Synaptic Tide", 3.58, "待在青色通道内，左右避开纵向裂隙", "Stay in the cyan lane and dodge the vertical rift sideways",
     t => [laneTell(t, 0, t.enraged ? 2.72 : 2.35), bandTell(t, 0, .66),
       wall(.29, 550, "shard"), wall(.75, 575, "thread"), wall(1.24, 605, "prism"),
       t.enraged && wall(1.68, 625, "shard"), t.enraged && bandTell(t, 1.5, .52),
+      beat(1.29, x => seamTell(x, .93)),
       fan(t.enraged ? 2.82 : 2.45, t.enraged ? 7 : 5, .35, 600, "shard", { aim: true })]],
-  fusionPrism: ["镜噬孢落", "Prismatic Sporefall", 3.55, "诱开孢群，沿无标线区域闪避", "Lead the spores away and stay off the marked lines",
+  fusionPrism: ["镜噬孢落", "Prismatic Sporefall", 3.55, "引开孢群后换位，留意后方折镜", "Lure the spores, then dodge the portals from behind",
     t => {
       t.attackMotion = "lunge";
       return [beamTell(t, 0, t.lockY, .43), fan(.18, t.enraged ? 6 : 4, .58, 400, "spore", { homingUntil: 1.05, radius: 11 }),
-        fan(.75, t.enraged ? 7 : 5, .63, 560, "prism", { reflect: true }),
-        beat(1.1, x => zoneTell(x, .92, player.x, player.y, .42)), fan(1.83, 4, .48, 605, "thread", { wave: 30 }),
-        t.enraged && beat(2.12, x => beamTell(x, .81, player.y, .32, .37))];
+        fan(.68, t.enraged ? 5 : 4, .63, 560, "prism", { reflect: true }),
+        beat(.89, x => portalTell(x, .83, -1)), beat(1.57, x => zoneTell(x, .92, player.x, player.y, .36)),
+        t.enraged && beat(2.04, x => portalTell(x, .87, 1))];
     }],
 };
 
@@ -219,6 +227,31 @@ function zoneTell(target, at, x, y, size) {
     warning: target.phase === "attack" ? at : target.telegraphDuration + at, duration: .36 });
 }
 
+function seamTell(target, warning) {
+  const room = bossPlayerRight() - flightBounds.left;
+  if (room < player.height * .56) return;
+  const thickness = Math.min(room * .27, Math.max(16, player.width * (target.enraged ? .43 : .34)));
+  addBossHazard("seam", { x: player.x, thickness, warning, duration: .32, color: "#ffb476" });
+}
+
+function portalTell(target, warning, edge) {
+  const originX = edge < 0 ? 12 : bossPlayerRight() + Math.min(32, player.width * .3);
+  // Alternate the diagonal relative to the last dodge; the shot never tracks after the tell.
+  const originY = alienLane(player.y < alienLane(.5) ? .86 : .14);
+  addBossHazard("portal", { x: player.x, y: player.y, originX, originY,
+    warning, duration: .23, speed: target.enraged ? 705 : 650, color: "#d7b7ff" });
+}
+
+function firePortal(hazard) {
+  const dx = hazard.x - hazard.originX, dy = hazard.y - hazard.originY;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 1e-9) return;
+  const speed = alienAttackSpeed(boss, hazard.speed) / distance;
+  gameAudio.bossAttack("volley");
+  addBossProjectile(hazard.originX, hazard.originY, dx * speed, dy * speed,
+    { glyph: "prism", radius: 10, color: hazard.color });
+}
+
 function bindTell(target, at, x, y, duration, slow) {
   addBossHazard("bind", { x, y, radius: alienThreatRadius(target, .61), color: "#bc88f8",
     warning: target.telegraphDuration + at, duration, slow });
@@ -254,8 +287,8 @@ function prepareAlienAttack(target) {
   target.gapSize = Math.min(span * .76, Math.max(75, player.height * (1.22 - target.type * .017)));
   bossHazards.length = 0;
   target.attackEvents = plan(target).filter(Boolean).sort((a, b) => a.at - b.at);
-  // Ordinary volleys finish crossing the arena during the next warning. A marked
-  // safe corridor is exclusive so no old shot can hit a player following its cue.
+  // Clear old projectiles before a marked corridor. Any follow-up inside it
+  // is announced separately, with enough horizontal room to move.
   if (bossHazards.some(hazard => hazard.kind === "guide")) bossProjectiles.length = 0;
   target.nextEvent = 0;
   if (target.type === 0 && key !== "broodSpawn") gameAudio.bossAttack("coil");
@@ -320,7 +353,9 @@ function updateBossProjectiles(seconds) {
         boss.lashSide = hazard.side;
         boss.lashY = hazard.y;
         gameAudio.bossAttack("whip");
-      } else if (hazard.kind === "beam" || hazard.kind === "band" || hazard.kind === "zone") {
+      } else if (hazard.kind === "portal" && boss) {
+        firePortal(hazard);
+      } else if (hazard.kind === "beam" || hazard.kind === "band" || hazard.kind === "zone" || hazard.kind === "seam") {
         gameAudio.bossAttack(hazard.kind === "zone" ? "burst" : "beam");
       }
     }
@@ -332,6 +367,7 @@ function alienHazardHitsPlayer(hazard) {
   if (hazard.age < hazard.warning) return false;
   const radius = player.height * .16;
   if (hazard.kind === "zone") return Math.hypot(player.x - hazard.x, player.y - hazard.y) < hazard.radius + radius;
+  if (hazard.kind === "seam") return Math.abs(player.x - hazard.x) < hazard.thickness / 2 + radius;
   if (player.x >= hazard.right) return false;
   const offset = Math.abs(player.y - hazard.y);
   if (hazard.kind === "beam") return offset < hazard.thickness / 2 + radius;
@@ -406,12 +442,40 @@ function drawAlienHazard(ctx, hazard, quiet) {
       }
     } else ctx.lineTo(hazard.right, hazard.y);
     ctx.stroke();
-  } else if (hazard.kind === "aim") {
+  } else if (hazard.kind === "seam") {
+    ctx.globalAlpha = active ? .54 : .11 + progress * .13;
+    ctx.fillRect(hazard.x - half, 0, hazard.thickness, viewport.height);
+    ctx.globalAlpha = active ? .96 : .76;
+    if (!active) ctx.setLineDash([11, 7]);
+    ctx.beginPath();
+    ctx.moveTo(hazard.x - half, 0); ctx.lineTo(hazard.x - half, viewport.height);
+    ctx.moveTo(hazard.x + half, 0); ctx.lineTo(hazard.x + half, viewport.height);
+    ctx.stroke();
+    if (active) {
+      ctx.strokeStyle = "#fff1dd";
+      ctx.beginPath();
+      ctx.moveTo(hazard.x, 0); ctx.lineTo(hazard.x, viewport.height);
+      ctx.stroke();
+    }
+  } else if (hazard.kind === "aim" || hazard.kind === "portal") {
     ctx.globalAlpha = active ? .24 : .42 + progress * .34;
     ctx.setLineDash([7, 7]);
-    ctx.beginPath(); ctx.moveTo(hazard.originX, hazard.originY); ctx.lineTo(hazard.x, hazard.y); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(hazard.originX, hazard.originY);
+    ctx.lineTo(hazard.x, hazard.y);
+    if (hazard.kind === "portal") {
+      const dx = hazard.x - hazard.originX, dy = hazard.y - hazard.originY;
+      const extension = (viewport.width + viewport.height) / Math.max(1, Math.hypot(dx, dy));
+      ctx.lineTo(hazard.x + dx * extension, hazard.y + dy * extension);
+    }
+    ctx.stroke();
     ctx.setLineDash([]);
     ctx.beginPath(); ctx.arc(hazard.x, hazard.y, 12, 0, Math.PI * 2); ctx.stroke();
+    if (hazard.kind === "portal") {
+      ctx.beginPath(); ctx.ellipse(hazard.originX, hazard.originY, 9, 18, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha *= .35;
+      ctx.fill();
+    }
   } else {
     const binding = hazard.kind === "bind";
     ctx.globalAlpha = active ? binding ? .19 : .59 : .07;
