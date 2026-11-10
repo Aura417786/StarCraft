@@ -317,7 +317,9 @@ void main() {
   shade *= mix(.68 + large * .36 + grain * .12 - scratches * .22 + textureValue * 1.93,
     .51 + large * .42 + grain * .16 + rubble * .16 + fine * .07 - seam * .19 - fissure * .18 + lip * .12 + textureValue * 2.39, rock);
   shade += gloss * keyTint * (.55 + grain * .55 + textureValue * .7);
-  shade += vec3(.44, .62, .76) * (rim * mix(.23, .13, rock) + fill * .13);
+  // Metallic edges take on the local key instead of an artificial blue edge.
+  vec3 edgeTint = mix(keyTint * vec3(.48, .43, .39), vec3(.44, .56, .63), rock);
+  shade += edgeTint * (rim * mix(.16, .13, rock) + fill * .11);
   shade += vec3(.10,.039,.013) * smoothstep(.56, .83, large * .82 + grain * .18) * (1.0 - rock) * key;
   shade += finish.rgb * emit * (.42 + large * .3);
   shade = mix(shade, bounceTint * .68, environment.x);

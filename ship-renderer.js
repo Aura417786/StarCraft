@@ -87,10 +87,10 @@ function drawPlayerReflection(ctx, geometry, bank, surfaces) {
 }
 
 function resetShipVisuals() { shipVisuals.clock = 0; shipVisuals.bank = 0; }
-function updateShipVisuals(seconds) {
-  if (!isBattleActive() || !Number.isFinite(seconds) || seconds <= 0) return;
+function updateShipVisuals(seconds, cinematic = false) {
+  if ((!cinematic && !isBattleActive()) || !Number.isFinite(seconds) || seconds <= 0) return;
   shipVisuals.clock += seconds;
-  const velocity = (player.y - (player.previousY ?? player.y)) / (player.speed * seconds);
+  const velocity = cinematic ? 0 : (player.y - (player.previousY ?? player.y)) / (player.speed * seconds);
   const target = reducedMotion.matches ? 0 : clamp(velocity, -1, 1);
   shipVisuals.bank += (target - shipVisuals.bank) * (1 - Math.exp(-seconds * 9));
 }

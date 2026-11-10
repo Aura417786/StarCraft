@@ -130,7 +130,6 @@ function beginAlienRupture(target) {
   target.attackEvents = [];
   target.nextEvent = 0;
   target.alienAttack = null;
-  clearAlienThreats();
   bossHitGrace = Math.max(bossHitGrace, .72);
   setBossMessage(bossStageTitle(target), tr("看清下一次攻击预警", "Watch for the next tell"));
   statusMessage.textContent = tr(target.name + "进入狂暴模式。", target.name + " is enraged.");

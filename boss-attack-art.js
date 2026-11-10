@@ -560,7 +560,7 @@ function drawSignatureRing(ctx, hazard, material, active, progress, quiet) {
   if (!active) signatureGlow(ctx, x, y, hazard.radius * 1.06, material, .23);
   ctx.strokeStyle = material.rim;
   ctx.globalAlpha = active ? .30 : .72;
-  ctx.lineWidth = active ? hazard.thickness * 1.02 : 1.8;
+  ctx.lineWidth = active ? hazard.thickness : 1.8;
   ctx.setLineDash(active ? [] : [8, 9]);
   ctx.beginPath(); ctx.arc(x, y, active ? radius : hazard.radius, 0, Math.PI * 2); ctx.stroke();
   ctx.setLineDash([]);

@@ -40,6 +40,10 @@ function mockNode() {
   };
 }
 nodes.set('#game-over-title', mockNode());
+for (const id of ['boss-health', 'boss-stage', 'boss-track', 'boss-core-life', 'boss-shell-life', 'boss-finale-label']) {
+  nodes.set('#' + id, mockNode());
+}
+nodes.get('#boss-track').style.setProperty = function (key, value) { this[key] = value; };
 for (const id of ['pause-button', 'pause-screen', 'pause-menu', 'pause-settings-panel', 'pause-confirm-panel',
   'pause-title', 'pause-description', 'pause-resume', 'pause-cancel', 'pause-confirm', 'pause-sound',
   'pause-shake', 'pause-quality', 'pause-restart', 'pause-settings', 'pause-back', 'pause-exit']) {
@@ -203,7 +207,8 @@ const shots = () => JSON.parse(vm.runInContext('JSON.stringify(bullets.map(({x,y
 function frames(count, seconds = 0.05) { for (let index = 0; index < count; index++) step(seconds); }
 function finishBossPresentation() {
   const left = execute('bossPresentation.duration - bossPresentation.age');
-  frames(Math.ceil(left / .05) + 2);
+  const budget = left + execute('presentationSlowDuration');
+  for (let index = 0; index < Math.ceil(budget / .05) + 2 && execute('isBossDeathPlaying()'); index++) step();
   assert.equal(execute('isBossDeathPlaying()'), false);
 }
 check('fires immediately, then five shots per second without keyboard input', () => {
@@ -967,13 +972,18 @@ check('boss projectile count is bounded and all abandoned projectiles and hazard
   execute('addBossProjectile(-50,300,0,0);addBossProjectile(500,-50,0,0);updateBossProjectiles(0);');
   assert.equal(bossState().bossProjectiles.length,0);
 });
-check('boss bar remains a continuous fill without health numbers or labels', () => {
-  readyBoss(3,'boss.hp=.4;boss.displayHp=.4;bossHitGrace=0;');
+check('boss health dock shows armor, core and visible recent damage without a floating model bar', () => {
+  readyBoss(3,'boss.hp=.4;boss.displayHp=.48;boss.hitFlash=.08;boss.enraged=true;bossHitGrace=0;');
   captureDraws=true; drawOperations.length=0; execute('drawBossBattle();'); captureDraws=false;
-  assert.equal(drawOperations.filter(op=>op.name==='fillText').length,0);
+  assert.equal(nodes.get('#boss-health').hidden,false);
+  assert.equal(nodes.get('#boss-health').dataset.hit,'true');
+  assert.equal(nodes.get('#boss-track').style['--boss-hp'],'40%');
+  assert.equal(nodes.get('#boss-track').style['--boss-lag'],'48%');
+  assert.match(nodes.get('#boss-core-life').textContent,/80%/);
+  assert.match(nodes.get('#boss-shell-life').textContent,/ 0%/);
   const b=bossState().boss;
   const bars=drawOperations.filter(op=>op.name==='roundRect' && Math.abs(op.args[1]-(b.y-b.height*.58-9))<1e-8);
-  assert.equal(bars.length,2); near(bars[0].args[2],b.width*.85); near(bars[1].args[2],b.width*.85*.4);
+  assert.equal(bars.length,0);
 });
 check('player cannot overlap the boss spawn corridor during entry or battle', () => {
   isolatedBattle('player.x=flightBounds.right;spawnBoss(0);');

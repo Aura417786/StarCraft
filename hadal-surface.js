@@ -48,7 +48,7 @@ let hadalWaterDevice;
 let hadalWaterUnavailable = false;
 
 function canUseHadalWater() {
-  return typeof visualQuality !== "undefined" && visualQuality.modelScale > 0
+  return typeof visualQuality !== "undefined" && visualQuality.waterDetail > 0
     && typeof location !== "undefined" && /^https?:$/.test(location.protocol);
 }
 
@@ -99,7 +99,7 @@ function hadalWaterSetup() {
     hadalWaterDevice = null;
   });
   hadalWaterDevice = { canvas, gl, age: gl.getUniformLocation(program, "age"),
-    detail: gl.getUniformLocation(program, "detail"), sample: NaN };
+    detail: gl.getUniformLocation(program, "detail"), sample: NaN, quality: 0 };
   return hadalWaterDevice;
 }
 
@@ -107,7 +107,16 @@ function preloadHadalSurface() {
   if (!canUseHadalWater() || hadalWaterImage || typeof Image !== "function") return;
   hadalWaterImage = new Image();
   hadalWaterImage.onload = () => {
-    window.requestIdleCallback?.(hadalWaterSetup, { timeout: 1500 });
+    const warm = () => {
+      const device = hadalWaterSetup();
+      if (!device) return;
+      // Upload, link and execute a throwaway frame while the encounter is still being announced.
+      device.gl.uniform1f(device.detail, visualQuality.waterDetail);
+      device.gl.drawArrays(device.gl.TRIANGLES, 0, 3);
+      device.gl.flush();
+    };
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(warm, { timeout: 1500 });
+    else window.setTimeout(warm, 0);
   };
   hadalWaterImage.src = "assets/models/hadal-surface.png";
 }
@@ -118,12 +127,13 @@ function drawHadalSurface(ctx, x, y, width, height, age, reverse = false) {
   if (!hadalWaterImage?.complete || !hadalWaterImage.naturalWidth || height <= 0 || width <= 0) return;
   const device = hadalWaterSetup();
   if (!device) return;
-  if (device.sample !== age) {
+  if (device.sample !== age || device.quality !== visualQuality.waterDetail) {
     const { gl } = device;
     gl.uniform1f(device.age, age);
-    gl.uniform1f(device.detail, visualQuality.modelScale);
+    gl.uniform1f(device.detail, visualQuality.waterDetail);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     device.sample = age;
+    device.quality = visualQuality.waterDetail;
   }
   ctx.save();
   ctx.globalCompositeOperation = "screen";

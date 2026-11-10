@@ -30,11 +30,18 @@ function checkModelArchive() {
     const json = JSON.parse(file.toString("utf8", 20, 20 + file.readUInt32LE(12)));
     assert.ok(json.meshes.length >= 3 && json.meshes.length <= 4, model + " material batches");
     assert.ok(json.animations?.length > 0, model + " missing Blender-authored animation");
+    assert.ok(json.images?.length >= 4 && json.images.every(image => Number.isInteger(image.bufferView)),
+      model + " missing embedded PBR maps");
     for (const mesh of json.meshes) {
       assert.deepEqual(mesh.extras.targetNames, ["Pulse", "Attack", "Unfurl"]);
-      assert.ok(mesh.primitives[0].attributes.COLOR_0 >= 0, model + " missing vertex pigments");
+      for (const primitive of mesh.primitives) {
+        assert.ok(primitive.attributes.TEXCOORD_0 >= 0, model + " missing UV coordinates");
+        const material = json.materials[primitive.material];
+        assert.ok(material.pbrMetallicRoughness.baseColorTexture && material.pbrMetallicRoughness.metallicRoughnessTexture
+          && material.normalTexture && material.occlusionTexture && material.emissiveTexture, model + " incomplete PBR material");
+      }
     }
-    assert.ok(file.length <= 1_650_000, model + " exceeds streaming budget");
+    assert.ok(file.length <= 15_000_000, model + " exceeds streaming budget");
   }
 }
 
@@ -69,6 +76,7 @@ async function checkInBrowser(browser) {
       battleTime = 66 + type * 34;
       nextBossTime = enemyCooldown = powerupCooldown = Infinity;
       spawnBoss(type);
+      resetBossPresentation();
       Object.assign(boss, bossArena(type), { phase: "recover", age: .5, phaseTime: -1e5 });
       boss.previousX = boss.x;
       boss.previousY = boss.y;
@@ -94,6 +102,7 @@ async function checkInBrowser(browser) {
   for (let type = 0; type < 11; type++) {
     await page.evaluate(index => inspectBossModel(index), type);
     await page.waitForFunction(index => !!starBreakerModelCache.get(index)?.model && starBreakerModelStage.current === starBreakerModelCache.get(index).model, type);
+    if (type === 0) await page.waitForFunction(() => starBreakerModelStage.sectorMaps.get(0), null, { timeout: 15000 });
     const visual = await page.evaluate(() => {
       const current = starBreakerModelStage.current;
       return {
@@ -101,10 +110,12 @@ async function checkInBrowser(browser) {
         draws: starBreakerModelStage.renderer.info.render.calls,
         cache: starBreakerModelCache.size,
         influences: current.animatedMeshes.length,
+        materials: current.animatedMeshes.every(({node}) => node.material.map && node.material.normalMap
+          && node.material.aoMap && node.material.roughnessMap && node.material.metalnessMap),
       };
     });
     assert.ok(visual.triangles > 1000 && visual.triangles < 29000 && visual.draws <= 4);
-    assert.ok(visual.cache <= 3 && visual.influences >= 3);
+    assert.ok(visual.cache <= 3 && visual.influences >= 3 && visual.materials);
     if (output && [0,2,5,8,10].includes(type)) {
       await page.screenshot({ path: path.join(output, "commercial-boss-" + models[type] + ".png") });
     }
@@ -114,6 +125,7 @@ async function checkInBrowser(browser) {
       inspectBossModel(index);
       beginBossFinale(boss);
       boss.finale.age = boss.finale.transform + .01;
+      resetBossPresentation();
     }, type);
     await page.waitForFunction(index => !!starBreakerModelCache.get(11 + index)?.model && starBreakerModelStage.current === starBreakerModelCache.get(11 + index).model, type);
   }
@@ -121,6 +133,7 @@ async function checkInBrowser(browser) {
     inspectBossModel(0);
     beginBossFinale(boss);
     boss.finale.age = boss.finale.transform + .01;
+    resetBossPresentation();
   });
   await page.waitForFunction(() => !!starBreakerModelCache.get(11)?.model && starBreakerModelStage.current === starBreakerModelCache.get(11).model);
   await page.waitForFunction(() => !!hadalWaterDevice, null, { timeout: 15000 });
@@ -166,11 +179,24 @@ async function checkInBrowser(browser) {
     return { cache: starBreakerModelCache.size, geometries: renderer.info.memory.geometries };
   });
   assert.ok(drawBudget.cache <= 3 && drawBudget.geometries <= 12, JSON.stringify(drawBudget));
-  await page.evaluate(() => setVisualQuality("low", false));
-  assert.equal(await page.evaluate(() => canUseStarBreakerModels()), false);
+  const qualityProof = [];
+  for (const [quality, minimum] of [["low", 320], ["medium", 384], ["high", 448]]) {
+    await page.evaluate(quality => setVisualQuality(quality, false), quality);
+    await page.evaluate(() => inspectBossModel(2));
+    await page.waitForFunction(() => starBreakerModelStage.current === starBreakerModelCache.get(2)?.model
+      && !!starBreakerModelCache.get(2)?.model);
+    const state = await page.evaluate(() => ({
+      width: starBreakerModelStage.renderer.domElement.width,
+      environment: starBreakerModelStage.scene.environment === starBreakerModelStage.sectorMaps.get(0).texture,
+      emitter: starBreakerModelStage.emitter.intensity,
+    }));
+    assert.ok(state.width >= minimum && state.environment && state.emitter > 0, JSON.stringify(state));
+    qualityProof.push({quality, ...state});
+    if (output) await page.screenshot({path: path.join(output, "cinder-" + quality + ".png")});
+  }
   assert.deepEqual(errors, []);
   assert.deepEqual(missing.filter(url => !url.endsWith("favicon.ico")), []);
-  console.log(JSON.stringify({ models: models.length, gpu, performance, cpuTaskMs, drawBudget, pageErrors: errors.length }));
+  console.log(JSON.stringify({ models: models.length, gpu, performance, cpuTaskMs, drawBudget, qualityProof, pageErrors: errors.length }));
   await page.close();
 }
 

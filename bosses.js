@@ -1,7 +1,7 @@
 "use strict";
 
-const bossRules = { firstArrival: 65, interval: 31, warning: 5,
-  recovery: .78, grace: 1.1, maxProjectiles: 240, fusionSpecialMultiplier: .78 };
+const bossRules = { firstArrival: 65, interval: 31, warning: 5, artLead: 20,
+  recovery: .78, grace: 1.1, maxProjectiles: 240, fusionSpecialMultiplier: .78, shellThreshold: .5 };
 const bossTypes = [
   { name: "渊潮母体", enName: "Abyssal Broodmother", color: "#79e7f3", patterns: ["broodSweep", "broodArc", "broodSpawn"] },
   { name: "骨冠猎兽", enName: "Ossuary Stalker", color: "#dfa5e6", patterns: ["boneSpears", "boneRibs", "bonePounce"] },
@@ -20,6 +20,7 @@ let boss = null;
 let nextBossTime = bossRules.firstArrival;
 let bossDefeated = 0;
 let pendingBossType = null;
+let prefetchedBossType = null;
 // 普通敌机碰撞与 Boss 弹幕共用受伤保护时间。
 let bossHitGrace = 0;
 const bossProjectiles = [];
@@ -58,6 +59,52 @@ function setBossMessage(title, action, visible = true) {
     : boss.phase === "recover" && boss.alienAttack ? "recover" : boss.enraged ? "frenzy" : "hunt";
 }
 
+function bossHealthStage(target) {
+  if (target.finale) return tr("III · 终局形态", "III · Final form");
+  if (target.phase === "rupture") return tr("II · 外壳破裂", "II · Shell rupture");
+  if (!target.enraged) return tr("I · 护壳防御", "I · Armored");
+  return target.phase === "recover" && target.alienAttack ? tr("II · 核心外露", "II · Core exposed")
+    : tr("II · 狂暴核心", "II · Frenzied core");
+}
+
+function updateBossHealthHud() {
+  const health = document.querySelector("#boss-health");
+  if (!health) return;
+  const stage = document.querySelector("#boss-stage");
+  const hidden = !boss;
+  if (health.hidden !== hidden) health.hidden = hidden;
+  if (stage.hidden !== hidden) stage.hidden = hidden;
+  if (!boss) return;
+  const track = document.querySelector("#boss-track");
+  const life = clamp(boss.hp, 0, 1);
+  const lag = clamp(boss.displayHp ?? life, life, 1);
+  const phase = bossHealthStage(boss);
+  const finale = !!boss.finale;
+  const percentOf = ratio => Math.ceil(clamp(ratio, 0, 1) * 100 - 1e-9);
+  const core = percentOf(life / bossRules.shellThreshold);
+  const shell = percentOf((life - bossRules.shellThreshold) / (1 - bossRules.shellThreshold));
+  const percent = percentOf(life);
+  const feedback = boss.hitFlash > 0;
+  const key = [phase, gameLanguage, finale, life, lag.toFixed(3), feedback].join("/");
+  if (track.dataset.valueKey === key) return;
+  track.dataset.valueKey = key;
+  health.dataset.finale = String(finale);
+  health.dataset.hit = String(feedback);
+  track.style.setProperty("--boss-break", bossRules.shellThreshold * 100 + "%");
+  track.style.setProperty("--boss-hp", life * 100 + "%");
+  track.style.setProperty("--boss-lag", lag * 100 + "%");
+  stage.textContent = phase;
+  const coreText = finale ? tr("终局核心", "Finale core") + " " + percent + "%" : tr("核心", "Core") + " " + core + "%";
+  const shellText = tr("护壳", "Shell") + " " + shell + "%";
+  document.querySelector("#boss-core-life").textContent = coreText;
+  const shellLabel = document.querySelector("#boss-shell-life");
+  shellLabel.hidden = finale;
+  shellLabel.textContent = shellText;
+  document.querySelector("#boss-finale-label").textContent = finale ? tr("终局", "FINALE") : tr("◇ 终局待开启", "◇ Finale ahead");
+  track.setAttribute("aria-valuenow", String(percent));
+  track.setAttribute("aria-valuetext", phase + " · " + coreText + (finale ? "" : " · " + shellText));
+}
+
 function clearAlienThreats() {
   bossProjectiles.length = 0;
   bossHazards.length = 0;
@@ -78,6 +125,7 @@ function resetBossEncounter() {
   nextBossTime = bossRules.firstArrival;
   bossDefeated = 0;
   pendingBossType = null;
+  prefetchedBossType = null;
   bossHitGrace = 0;
   clearAlienThreats();
   setBossMessage("", "", false);
@@ -220,6 +268,14 @@ function updateBossEncounter(seconds) {
   bossHitGrace = Math.max(0, bossHitGrace - seconds);
   updateBossProjectiles(seconds);
   if (!boss) {
+    // Start streaming the upcoming body before the five-second encounter warning.
+    if (battleTime >= nextBossTime - bossRules.artLead && prefetchedBossType !== bossDefeated) {
+      prefetchedBossType = chooseBossType();
+      if (prefetchedBossType !== null && typeof preloadStarBreakerModel === "function") {
+        preloadStarBreakerModel(prefetchedBossType);
+      }
+      if (prefetchedBossType === 0 && typeof preloadHadalSurface === "function") preloadHadalSurface();
+    }
     if (battleTime < nextBossTime - bossRules.warning) return;
     if (pendingBossType === null) {
       pendingBossType = chooseBossType();
@@ -328,7 +384,7 @@ function applyBossHit(shot, target = boss) {
       resetEnemyCombat(false);
       beginBossFinale(target);
     }
-  } else if (!target.finale && target.hp <= .5 && !target.enraged) {
+  } else if (!target.finale && target.hp <= bossRules.shellThreshold && !target.enraged) {
     beginAlienRupture(target);
   }
 }
@@ -336,6 +392,7 @@ function applyBossHit(shot, target = boss) {
 function defeatBoss(target = boss) {
   if (!target || target !== boss) return;
   const fallen = target;
+  const motion = fallen.finale ? captureBossPresentationMotion() : null;
   boss = null;
   bossDefeated = Math.max(bossDefeated, fallen.type + 1);
   const points = fallen.alienFinal ? 6000 : 2000;
@@ -363,18 +420,11 @@ function defeatBoss(target = boss) {
   nextBossTime = fallen.alienFinal ? Infinity : battleTime + Math.max(18, bossRules.interval - (bossDefeated - 1) * 1.5);
   enemyCooldown = 2;
   setBossMessage("", "", false);
-  startBossDeathPresentation(fallen, reward);
+  startBossDeathPresentation(fallen, reward, motion);
 }
 
 function bossShotHitsPlayer(shot) {
-  if (consumeEvolutionShieldProjectile(shot)) return true;
-  const radius = player.height * .16 + shot.radius;
-  const x0 = shot.previousX - (player.previousX ?? player.x);
-  const y0 = shot.previousY - (player.previousY ?? player.y);
-  const dx = shot.x - player.x - x0, dy = shot.y - player.y - y0;
-  const distance = dx * dx + dy * dy;
-  const progress = distance ? clamp(-(x0 * dx + y0 * dy) / distance, 0, 1) : 0;
-  return Math.hypot(x0 + progress * dx, y0 + progress * dy) <= radius;
+  return consumeEvolutionShieldProjectile(shot) || hostileShotHitsHull(shot, player);
 }
 
 function updateBossDamage() {
@@ -400,46 +450,14 @@ function updateBossDamage() {
 }
 
 function drawBossBattle() {
+  updateBossHealthHud();
   const quiet = reducedMotion.matches || (typeof visualQuality !== "undefined" && visualQuality.id === "low");
   for (const hazard of bossHazards) drawAlienHazard(context, hazard, quiet);
   const scene = activeBossPresentation();
   if (scene && scene.kind !== "death") drawBossPresentationBody(context, scene, quiet);
   else if (boss?.finale) drawBossFinale(context, boss, quiet);
-  else if (boss) {
-    drawBossShip(context, boss, quiet);
-    const width = boss.width * .85, y = boss.y - boss.height * .58 - 9;
-    context.save();
-    context.fillStyle = "#111c30";
-    context.beginPath();
-    context.roundRect(boss.x - width / 2, y, width, 7, 3.5);
-    context.fill();
-    const guarded = alienRuptureGuard(boss);
-    const filled = width * clamp(boss.displayHp, 0, 1);
-    if (filled > 0) {
-      context.fillStyle = guarded ? "#b1c6d8" : boss.enraged ? "#ff8e98" : boss.color;
-      context.beginPath();
-      context.roundRect(boss.x - width / 2, y, filled, 7, Math.min(3.5, filled / 2));
-      context.fill();
-    }
-    if (guarded) {
-      context.strokeStyle = "#daebf5ab";
-      context.lineWidth = 1.4;
-      context.beginPath();
-      context.roundRect(boss.x - width / 2 - 2, y - 2, width + 4, 11, 5.5);
-      context.stroke();
-    }
-    if (boss.phase === "attack") {
-      context.strokeStyle = "#cfdeffd9";
-      context.lineWidth = 1;
-      context.setLineDash([3, 3]);
-      context.beginPath();
-      context.moveTo(boss.x - width / 2, y - 3);
-      context.lineTo(boss.x + width / 2, y - 3);
-      context.stroke();
-    }
-    context.restore();
-  }
-  for (const shot of bossProjectiles) drawAlienProjectile(context, shot, quiet);
+  else if (boss) drawBossShip(context, boss, quiet);
+  for (const shot of bossProjectiles) drawHostileProjectile(context, shot, shot.color, quiet);
   if (bossHitGrace > 0 && boss && state === "battle") {
     context.save();
     context.strokeStyle = "#c5e7ff";

@@ -629,9 +629,13 @@ function alienHazardHitsPlayer(hazard) {
   }
   if (hazard.kind === "zone") return Math.hypot(player.x - hazard.x, player.y - hazard.y) < hazard.radius + radius;
   if (hazard.kind === "seam") return Math.abs(player.x - hazard.x) < hazard.thickness / 2 + radius;
+  if (hazard.kind === "beam") {
+    const horizontal = player.x - clamp(player.x, 0, hazard.right);
+    const vertical = Math.max(0, Math.abs(player.y - hazard.y) - hazard.thickness / 2);
+    return Math.hypot(horizontal, vertical) < radius;
+  }
   if (player.x >= hazard.right) return false;
   const offset = Math.abs(player.y - hazard.y);
-  if (hazard.kind === "beam") return offset < hazard.thickness / 2 + radius;
   if (hazard.kind === "band") return offset > Math.max(0, hazard.thickness / 2 - radius);
   return false;
 }
@@ -779,34 +783,6 @@ function drawAlienHazard(ctx, hazard, quiet) {
       }
       ctx.stroke();
     }
-  }
-  ctx.restore();
-}
-
-function drawAlienProjectile(ctx, shot, quiet) {
-  ctx.save();
-  ctx.translate(shot.x, shot.y);
-  ctx.rotate(Math.atan2(shot.vy, shot.vx));
-  const r = shot.radius;
-  ctx.strokeStyle = ctx.fillStyle = ctx.shadowColor = shot.color;
-  if (!quiet) {
-    ctx.globalAlpha = .48; ctx.lineWidth = r * .75; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(-r * (shot.glyph === "thread" ? 6 : 3.8), 0); ctx.lineTo(0, 0); ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = quiet ? 0 : shot.burstAt ? 21 : 12;
-  ctx.beginPath();
-  if (shot.glyph === "prism" || shot.glyph === "shard") {
-    ctx.moveTo(r * 1.5, 0); ctx.lineTo(-r * .33, r * .7); ctx.lineTo(-r, 0); ctx.lineTo(-r * .33, -r * .7); ctx.closePath();
-  } else {
-    ctx.ellipse(0, 0, r, r * (shot.glyph === "thread" ? .52 : .93), 0, 0, Math.PI * 2);
-  }
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "#fff7ed"; ctx.beginPath(); ctx.arc(r * .21, 0, r * .36, 0, Math.PI * 2); ctx.fill();
-  if (shot.burstAt || shot.glyph === "spore") {
-    ctx.globalAlpha = .75; ctx.lineWidth = 1.25; ctx.beginPath();
-    ctx.arc(0, 0, r * 1.35, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.restore();
 }

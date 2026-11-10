@@ -6,7 +6,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(path.join(__dirname, "..", "enemies.js"), "utf8");
+const source = file => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
 function sandbox(width = 1280, height = 720) {
   const world = vm.createContext({ width, height });
   const run = code => vm.runInContext(code, world);
@@ -29,6 +29,7 @@ function sandbox(width = 1280, height = 720) {
     const bossBlocksWaves = () => bossWarning;
     const applyGravityTide = () => {};
     const consumeEvolutionShieldProjectile = () => false;
+    const document = { querySelector: () => ({ addEventListener() {} }) };
     const tryPerfectShield = () => {};
     const updateAceMovement = () => false;
     const damagePlayer = () => { player.lives--; };
@@ -45,7 +46,7 @@ function sandbox(width = 1280, height = 720) {
     const moves = [];
     const context = new Proxy({}, { get: (_, name) => (...args) => moves.push([name, ...args]) });
   `);
-  run(source);
+  for (const file of ["hostile-projectiles.js", "fire-control.js", "enemies.js"]) run(source(file));
   return run;
 }
 

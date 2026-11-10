@@ -145,17 +145,72 @@ h1 > span { color: var(--red); }
 .weapon-stat.red strong, .powerup-notice[data-type="red"] { color: #ff6676; }
 .powerup-notice[data-type="heal"] { color: #70f0b0; }
 .powerup-notice { position: absolute; top: 140px; left: 50%; transform: translateX(-50%); padding: 8px 18px; border: 1px solid currentColor; border-radius: 5px; background: #080e1de8; font-size: 14px; text-align: center; }
-.boss-hud { position: absolute; top: 137px; left: 50%; transform: translateX(-50%); max-width: 90%; padding: 9px 24px; text-align: center; border: 1px solid #d37c6455; border-radius: 5px; background: #0b1122dc; }
-.boss-hud strong { display: block; color: #ffbea5; font-size: 15px; letter-spacing: .16em; }
-.boss-hud span { display: block; margin-top: 4px; color: #c4cede; font-size: 11px; white-space: nowrap; }
+.boss-hud {
+  position: absolute; top: 117px; left: 50%; transform: translateX(-50%);
+  width: min(544px, 78vw); padding: 8px 11px 7px;
+  border: 1px solid #83a8cc58; border-radius: 6px;
+  background: linear-gradient(135deg, #171f31ee, #080d1ae8);
+  box-shadow: 0 5px 24px #02060a68; pointer-events: none;
+}
+.boss-heading, .boss-health-labels { display: flex; justify-content: space-between; align-items: center; gap: 7px; }
+.boss-heading strong { min-width: 0; overflow-wrap: anywhere; color: #f2e7ed; font-size: 14px; letter-spacing: .035em; line-height: 1.25; }
+.boss-stage {
+  flex: none; padding: 1px 5px; color: #b9d7ed; border: 1px solid #8ca5d347; border-radius: 3px;
+  font-size: 10px; line-height: 1.25; letter-spacing: .04em;
+}
+.boss-track {
+  position: relative; height: 14px; margin-top: 5px; border: 1px solid #a9c1e070; border-radius: 3px;
+  background: #030712; box-shadow: inset 0 1px 3px #0009; overflow: hidden;
+}
+.boss-health-fill, .boss-health-lag { position: absolute; inset: 0; }
+.boss-health-lag { background: #f2e3d6; opacity: .55; clip-path: inset(0 calc(100% - var(--boss-lag, 100%)) 0 0); }
+.boss-health-fill {
+  background: linear-gradient(90deg, #8f2d56, #f0879f var(--boss-break, 50%), #47779d var(--boss-break, 50%), #96d7ea);
+  clip-path: inset(0 calc(100% - var(--boss-hp, 100%)) 0 0);
+}
+.boss-break-point {
+  position: absolute; left: var(--boss-break, 50%); top: 0; bottom: 0; width: 2px;
+  background: #fff0cd; box-shadow: 0 0 3px 1px #080d1a;
+}
+.boss-health-labels { margin-top: 2px; color: #c2d1e6; font: 10px/1.2 system-ui, sans-serif; }
+#boss-core-life { color: #ffc0c9; }
+#boss-shell-life { color: #b5d9ee; }
+#boss-finale-label { color: #bba7e6; }
+.boss-action { margin: 4px 0 0; color: #f0e2c6; text-align: center; font-size: 11px; line-height: 1.25; }
+.boss-action:empty { display: none; }
+#boss-health[data-finale="true"] .boss-health-fill { background: linear-gradient(90deg, #763eb4, #d7a9ff); }
+#boss-health[data-finale="true"] .boss-break-point { display: none; }
+#boss-health[data-finale="true"] #boss-core-life { color: #e3c6ff; }
+#boss-health[data-hit="true"] .boss-health-fill { filter: brightness(1.42); }
 .app[data-boss-presentation]:not([data-boss-presentation=""]) .boss-hud { opacity: 0; }
 .app[data-boss-finale="true"] .boss-hud { border-color: #ad91eb9e; background: linear-gradient(120deg, #261631f5, #080f1eec); }
-.app[data-boss-finale="true"] .boss-hud strong { color: #e9d2ff; }
-.app[data-boss-finale="true"] .boss-hud span { white-space: normal; }
-.app[data-boss-active="true"] .powerup-notice { top: 217px; }
-@media (max-width: 1000px) { .boss-hud { top: 153px; } .app[data-boss-active="true"] .powerup-notice { top: 230px; } }
-@media (max-width: 520px) { .boss-hud { top: 212px; padding: 7px 12px; } .boss-hud strong { font-size: 12px; } .boss-hud span { font-size: 10px; white-space: normal; } .app[data-boss-active="true"] .powerup-notice { top: 285px; } }
-@media (max-height: 450px) and (min-width: 521px) { .boss-hud { top: 122px; padding: 5px 12px; } .boss-hud strong { font-size: 12px; } .app[data-boss-active="true"] .powerup-notice { top: 186px; } }
+.app[data-boss-finale="true"] .boss-stage { color: #f1d9ff; border-color: #bd90e280; }
+.battle-screen:has(.boss-warning:not([hidden])) .boss-hud { visibility: hidden; }
+.app[data-boss-active="true"] .powerup-notice { top: 213px; }
+@media (min-width: 741px) and (max-width: 1000px) {
+  .boss-hud { top: 140px; }
+  .app[data-boss-active="true"] .powerup-notice { top: 235px; }
+}
+@media (max-height: 450px) and (min-width: 741px) {
+  .boss-hud { top: 111px; padding-block: 5px; }
+  .boss-heading strong { font-size: 12px; }
+  .app[data-boss-active="true"] .powerup-notice { top: 197px; }
+}
+@media (max-width: 740px) {
+  .boss-hud { top: 76px; width: min(430px, 59vw); padding: 5px 7px; }
+  .boss-heading strong { font-size: 11px; }
+  .boss-stage { font-size: 9px; }
+  .boss-track { height: 12px; }
+  .boss-health-labels, .boss-action { font-size: 9px; }
+  .app[data-boss-active="true"] .powerup-notice { top: 190px; }
+}
+@media (max-height: 450px) and (min-width: 521px) and (max-width: 740px) { .boss-hud { top: 63px; } }
+@media (max-width: 520px) {
+  .boss-hud { width: 60vw; }
+  .boss-heading { flex-wrap: wrap; gap: 2px; }
+  .boss-health-labels { gap: 4px; }
+  .app[data-boss-active="true"] .powerup-notice { top: 205px; }
+}
 @media (max-width: 1000px) { .weapon-readout { top: 119px; left: 3.4vw; right: auto; gap: 16px; } .powerup-notice { top: 157px; } }
 @media (max-width: 520px) { .weapon-readout { top: 164px; left: 20px; right: 12px; flex-wrap: wrap; gap: 4px 12px; font-size: 10px; } .weapon-stat strong { font-size: 10px; margin-left: 2px; } .powerup-notice { top: 212px; width: max-content; max-width: 90%; font-size: 12px; } }
 @media (max-height: 450px) and (min-width: 521px) { .weapon-readout { top: 94px; left: 3.4vw; right: auto; gap: 14px; } .powerup-notice { top: 124px; padding: 5px 12px; font-size: 12px; } }
@@ -303,8 +358,7 @@ h1 > span { color: var(--red); }
   .hud strong { font-size: 20px; }
   .difficulty-readout { top: 139px; }
   .weapon-readout { top: 161px; }
-  .boss-hud, .powerup-notice { top: 198px; }
-  .app[data-boss-active="true"] .powerup-notice { top: 265px; }
+  .powerup-notice { top: 198px; }
   .header-actions { gap: 5px; }
   .header-actions .secondary-button { padding: 7px 9px; min-width: 64px; font-size: 11px; }
 }
@@ -329,15 +383,20 @@ h1 > span { color: var(--red); }
 }
 .app[data-boss-active="true"] .lesson-note { display: none; }
 @media (max-width: 740px) {
+  .battle-actions { gap: 5px; }
+  .battle-actions .secondary-button { min-height: 34px; padding: 5px 8px; font-size: 11px; }
+  .battle-actions kbd { margin-left: 3px; font-size: 9px; }
   .app[data-boss-active="true"] .momentum-hud {
-    left: 3.4vw; width: calc(100% - 6.8vw - 140px); transform: none;
+    left: 3.4vw; width: calc(100% - 6.8vw - 180px); transform: none;
     grid-template-columns: 35px minmax(0, 1fr) 116px; column-gap: 7px;
   }
+  html[lang="en"] .app[data-boss-active="true"] .momentum-hud { width: calc(100% - 6.8vw - 225px); }
   .app[data-boss-active="true"] .stance-button { font-size: 9px; }
   .app[data-boss-active="true"] .combo-heading { font-size: 7px; }
 }
 @media (max-width: 520px) {
-  .app[data-boss-active="true"] .momentum-hud { left: 14px; width: calc(100% - 132px); padding: 6px 8px; grid-template-columns: 30px minmax(0, 1fr) 108px; column-gap: 5px; }
+  .app[data-boss-active="true"] .momentum-hud { left: 14px; width: calc(100% - 166px); padding: 6px 8px; grid-template-columns: 30px minmax(0, 1fr) 108px; column-gap: 5px; }
+  html[lang="en"] .app[data-boss-active="true"] .momentum-hud { width: calc(100% - 197px); }
   .app[data-boss-active="true"] #combo-best { display: none; }
   .app[data-boss-active="true"] .rage-label { font-size: 7px; white-space: normal; line-height: 1.2; }
 }
@@ -360,7 +419,7 @@ h1 > span { color: var(--red); }
 
 html[lang="en"] .start-copy h1 { font-size: clamp(28px, 5vw, 80px); letter-spacing: .02em; }
 html[lang="en"] .start-copy .intro { letter-spacing: .07em; }
-html[lang="en"] .boss-hud span, html[lang="en"] .rage-label { white-space: normal; }
+html[lang="en"] .rage-label { white-space: normal; }
 @media (min-width: 741px) {
   html[lang="en"] .hud { right: calc(3.4vw + 330px); }
 }

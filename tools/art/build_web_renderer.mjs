@@ -10,9 +10,9 @@ const requireTool = createRequire(path.join(toolchain, "package.json"));
 const { build } = requireTool("esbuild");
 const source = `
 export {
-  WebGLRenderer, Scene, Group, OrthographicCamera, DirectionalLight, HemisphereLight,
-  AnimationMixer, Vector3, Color, Box3, ACESFilmicToneMapping, SRGBColorSpace,
-  CanvasTexture, EquirectangularReflectionMapping, PMREMGenerator,
+  WebGLRenderer, Scene, Group, OrthographicCamera, DirectionalLight, HemisphereLight, PointLight,
+  AnimationMixer, Vector3, Color, Box3, AgXToneMapping, SRGBColorSpace,
+  CanvasTexture, DataTexture, FloatType, RGBAFormat, LinearSRGBColorSpace, EquirectangularReflectionMapping, PMREMGenerator,
   Mesh, PlaneGeometry, ShaderMaterial, Vector2, NormalBlending
 } from 'three';
 export { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';

@@ -51,8 +51,8 @@ async function fixture(browser, options) {
       const start = performance.now();
       const scene = bossPresentation;
       const mark = scene.duration * fraction;
-      const count = Math.max(0, Math.ceil((mark - scene.age) / .025));
-      for (let i = 0; i < count; i++) flightStep();
+      let count = 0;
+      while (scene.age < mark && count < 220) { flightStep(); count++; }
       return (performance.now() - start) / Math.max(1, count);
     };
     window.finishPresentationFixture = kind => {
@@ -169,13 +169,53 @@ async function run() {
     await quiet.page.keyboard.press("Escape");
     await quiet.page.evaluate(() => { flightStep(); flightStep(); });
     assert.ok(await quiet.page.evaluate(() => bossPresentation.age) > playing);
+    await quiet.page.keyboard.press("Escape");
+    await quiet.page.locator("#pause-settings").click();
+    await quiet.page.locator("#pause-motion").click();
+    assert.equal(await quiet.page.locator("#pause-motion").getAttribute("aria-pressed"), "true");
+    assert.equal(await quiet.page.evaluate(() => localStorage.getItem("star-breaker-reduce-combat-motion")), "true");
     await quiet.page.evaluate(() => showScreen("menu"));
     assert.equal(await quiet.page.evaluate(() => activeBossPresentation()), null);
     assert.deepEqual(quiet.errors, []);
     await quiet.context.close();
 
+    const slow = await fixture(browser, { viewport: { width: 1280, height: 720 }, reducedMotion: "no-preference" });
+    const ages = await slow.page.evaluate(async () => {
+      await setPresentationFixture(0);
+      for (let frame = 0; frame < 120 && activeBossPresentation(); frame++) flightStep();
+      bossProjectiles.push({ x: player.x, y: player.y, vx: -120, vy: 0, radius: 5 });
+      beginAlienRupture(boss);
+      const scene = bossPresentation;
+      scene.age = scene.slowFrom;
+      combatBurst(boss.x, boss.y, 1);
+      const snapshot = () => ({ age: scene.age, realtime: scene.realAge, combat: combatEffects.clock,
+        particles: combatEffects.particles[0].age, sky: battlefieldState.ambientClock, ship: shipVisuals.clock,
+        time: battleTime, life: player.lives });
+      const before = snapshot();
+      for (let frame = 0; frame < 14; frame++) flightStep();
+      window.slowSnapshot = snapshot;
+      return { before, after: snapshot(), safeProjectile: !bossProjectiles.length && scene.motion.projectiles.length > 0 };
+    });
+    assert.ok(ages.safeProjectile);
+    for (const name of ["age", "combat", "particles", "sky", "ship"]) {
+      assert.ok(Math.abs(ages.after[name] - ages.before[name] - .105) < 1e-8, name);
+    }
+    assert.ok(Math.abs(ages.after.realtime - ages.before.realtime - .35) < 1e-8);
+    assert.deepEqual([ages.after.time, ages.after.life], [ages.before.time, ages.before.life]);
+    await slow.page.keyboard.press("Escape");
+    await slow.page.locator("#pause-screen").waitFor({ state: "visible" });
+    await slow.page.evaluate(() => { for (let frame = 0; frame < 50; frame++) flightStep(); });
+    assert.deepEqual(await slow.page.evaluate(() => slowSnapshot()), ages.after);
+    await slow.page.keyboard.press("Escape");
+    await slow.page.evaluate(() => { flightStep(); flightStep(); });
+    const resumed = await slow.page.evaluate(() => slowSnapshot());
+    assert.ok(Math.abs(resumed.age - ages.after.age - .025) < 1e-8);
+    assert.deepEqual(slow.errors, []);
+    await slow.context.close();
+
     if (output && !video) fs.writeFileSync(path.join(output, "results.json"), JSON.stringify(measured, null, 2));
-    console.log(JSON.stringify({ scenes: measured.length, reducedMotionPauseResize: true,
+    if (output && !video) fs.writeFileSync(path.join(output, "world-clock.json"), JSON.stringify({ ages, resumed }, null, 2));
+    console.log(JSON.stringify({ scenes: measured.length, reducedMotionPauseResize: true, worldClock: { ages, resumed },
       drawMs: measured.map(item => item.drawMs).sort((a, b) => a - b).slice(-6), errors: 0 }));
   } finally {
     await browser.close();

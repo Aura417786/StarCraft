@@ -63,7 +63,7 @@ async function run() {
       const sample = (x, y) => Array.from(copy.getImageData(x, y, 1, 1).data);
       copy.drawImage(canvas, 0, 0);
       const scale = canvas.width / viewport.width;
-      const pixel = sample(Math.round(409 * scale), Math.round((shot.y + 17) * scale));
+      const pixel = sample(Math.round(404 * scale), Math.round((shot.y + 17) * scale));
       return { phase: ultimate.phase, x: shot.x, y: shot.y, contacts: shot.contacts?.length ?? null,
         enemyBullet: pixel, radius: shot.radius, target: enemies.map(enemy => ({ x: enemy.x, y: enemy.y, hp: enemy.hp })) };
     });

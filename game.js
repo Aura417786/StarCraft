@@ -25,6 +25,7 @@ const pauseCancelButton = document.querySelector("#pause-cancel");
 const pauseConfirmButton = document.querySelector("#pause-confirm");
 const pauseSoundButton = document.querySelector("#pause-sound");
 const pauseShakeButton = document.querySelector("#pause-shake");
+const pauseMotionButton = document.querySelector("#pause-motion");
 const pauseQualityControl = document.querySelector("#pause-quality");
 const pauseBackground = new Map();
 const statusMessage = document.querySelector("#status");
@@ -453,6 +454,12 @@ function refreshPauseCopy() {
   pauseSoundButton.textContent = soundButton.textContent;
   pauseSoundButton.setAttribute("aria-pressed", String(!gameAudio.muted));
   pauseShakeButton.textContent = shakeButton?.textContent ?? "";
+  if (pauseMotionButton) {
+    pauseMotionButton.textContent = reduceCombatMotion
+      ? tr("演出动态：减少", "Effects motion: Reduced")
+      : tr("演出动态：跟随系统", "Effects motion: System");
+    pauseMotionButton.setAttribute("aria-pressed", String(reduceCombatMotion));
+  }
   pauseQualityControl.value = visualQuality.id;
   if (pauseQualityControl.options) {
     const labels = { low: tr("低", "Low"), medium: tr("中", "Medium"), high: tr("高", "High") };
@@ -509,6 +516,7 @@ pauseConfirmButton?.addEventListener("click", () => {
 });
 pauseSoundButton?.addEventListener("click", () => { toggleGameSound(); refreshPauseCopy(); });
 pauseShakeButton?.addEventListener("click", () => { cycleShakePreference(); refreshPauseCopy(); });
+pauseMotionButton?.addEventListener("click", () => { toggleCombatMotion(); refreshPauseCopy(); });
 pauseQualityControl?.addEventListener("change", () => setVisualQuality(pauseQualityControl.value));
 pauseScreen?.addEventListener("keydown", (event) => {
   if (event.code !== "Tab") return;
@@ -970,6 +978,7 @@ function damagePlayer(message) {
   gameAudio.hurt?.();
   player.lives = Math.max(0, player.lives - 1);
   player.hitFlash = 0.35;
+  pulseCombatLight(player.x, player.y, player.width * 1.7, "#ff6984", "hit");
   bossHitGrace = bossRules.grace;
   movementHint.hidden = true;
   updateLifeDisplay();
@@ -1170,7 +1179,16 @@ function drawFrame(time) {
   const realSeconds = previousTime ? Math.min((time - previousTime) / 1000, 0.05) : 0;
   previousTime = time;
   syncGameAudio();
-  if (!pauseView) {
+  const cinematic = activeBossPresentation();
+  if (cinematic) {
+    const seconds = bossPresentationFrameSeconds(cinematic, realSeconds);
+    if (seconds > 0) {
+      updateBattlefield(seconds, true);
+      updateShipVisuals(seconds, true);
+      updateCombatEffects(seconds);
+      if (cinematic.kind !== "death") updateBossEncounter(seconds);
+    }
+  } else if (!pauseView) {
     const seconds = shieldFrameSeconds(realSeconds);
     updateCombatEffects(seconds);
     updateMomentum(seconds);
@@ -1199,14 +1217,17 @@ function drawFrame(time) {
   drawBattlefield(showCombat);
   drawActiveJourney("front");
   drawBossPresentationBackdrop(context);
+  if (showCombat) drawCombatPostProcessing(context);
   context.globalAlpha = 1;
   if (showCombat) {
     const cameraOffset = combatShakeOffset();
     context.translate(cameraOffset.x, cameraOffset.y);
+    const presentation = activeBossPresentation();
     drawGravityTide();
     drawFormationSignals();
     drawBattlefieldObjects();
-    drawEnemies();
+    if (presentation?.motion) drawBossPresentationMotion(context, presentation);
+    else drawEnemies();
     drawAceThreats(context);
     drawEnemyThreats();
     drawBossBattle();

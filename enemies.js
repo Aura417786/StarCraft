@@ -218,14 +218,7 @@ function updateEnemyProjectiles(seconds) {
   }
 }
 function enemyShotHitsPlayer(shot) {
-  if (consumeEvolutionShieldProjectile(shot)) return true;
-  // 用双方相对移动检测擦身而过，避免低帧率时穿过战机却不受伤。
-  const x0 = shot.previousX - (player.previousX ?? player.x);
-  const y0 = shot.previousY - (player.previousY ?? player.y);
-  const x1 = shot.x - player.x, y1 = shot.y - player.y;
-  const dx = x1 - x0, dy = y1 - y0, squared = dx * dx + dy * dy;
-  const t = squared ? clamp(-(x0 * dx + y0 * dy) / squared, 0, 1) : 0;
-  return Math.hypot(x0 + dx * t, y0 + dy * t) <= player.height * 0.16 + shot.radius;
+  return consumeEvolutionShieldProjectile(shot) || hostileShotHitsHull(shot, player);
 }
 function updateEnemyProjectileDamage() {
   if (!isBattleActive()) return;
@@ -293,17 +286,8 @@ function drawEnemyThreats() {
     context.beginPath(); context.arc(muzzle.x, muzzle.y, 4 + 4 * Math.min(1, enemy.gunTime / enemyCombatRules.warning), 0, Math.PI * 2); context.fill();
   }
   context.globalAlpha = 1;
-  context.lineCap = "round";
-  context.shadowBlur = reducedMotion.matches ? 0 : 10;
   for (const shot of enemyProjectiles) {
-    const length = Math.hypot(shot.vx, shot.vy) || 1;
-    const tint = shot.formationTint || shot.tint;
-    context.shadowColor = tint || "#ff428b";
-    context.strokeStyle = tint || "#ff528c"; context.lineWidth = shot.radius * 2;
-    context.beginPath(); context.moveTo(shot.x - shot.vx / length * 13, shot.y - shot.vy / length * 13);
-    context.lineTo(shot.x, shot.y); context.stroke();
-    context.fillStyle = "#fff1d9";
-    context.beginPath(); context.arc(shot.x, shot.y, shot.radius * 0.48, 0, Math.PI * 2); context.fill();
+    drawHostileProjectile(context, shot, shot.formationTint || shot.tint || "#ff528c", reducedMotion.matches);
   }
   context.restore();
 }

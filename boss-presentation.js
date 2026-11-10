@@ -16,6 +16,9 @@ const bossPresentationProfiles = [
 ];
 
 const bossPresentationTiming = { entry: 0, rupture: 1, transform: 2, death: 3 };
+const presentationImpactAt = { entry: .63, rupture: .44, transform: .44, death: .39 };
+const presentationSlowScale = .30;
+const presentationSlowDuration = .35;
 let bossPresentation = null;
 
 function bossPresentationDuration(target, kind) {
@@ -41,9 +44,27 @@ function resetBossPresentation() {
   app.dataset.bossPresentation = "";
 }
 
-function startBossPresentation(kind, target) {
+function captureBossPresentationMotion() {
+  if (quietCombatMotion()) return null;
+  const projectiles = [];
+  for (const list of [bossProjectiles, enemyProjectiles, bullets]) {
+    for (const shot of list.slice(-8)) {
+      if (!Number.isFinite(shot.x + shot.y + shot.vx + shot.vy)) continue;
+      projectiles.push({ x: shot.x, y: shot.y, vx: shot.vx, vy: shot.vy,
+        radius: Math.max(1.4, Math.min(5, shot.radius ?? shot.halfHeight ?? 2)),
+        color: list === bullets ? "#efd4ab" : "#adc4d1" });
+    }
+  }
+  return { projectiles, enemies: enemies.slice(0, 8).map(enemy => ({ ...enemy, hitFlash: 0 })) };
+}
+
+function startBossPresentation(kind, target, motion = null) {
+  const duration = bossPresentationDuration(target, kind);
+  const slowed = kind === "rupture" || (kind === "death" && !!target.finale);
   bossPresentation = {
-    kind, target, age: 0, duration: bossPresentationDuration(target, kind),
+    kind, target, age: 0, duration, realAge: 0,
+    slowFrom: slowed ? duration * presentationImpactAt[kind] - .036 : null,
+    motion: slowed ? motion ?? captureBossPresentationMotion() : null,
     profile: bossPresentationProfiles[target.type], impact: false,
   };
   app.dataset.bossPresentation = kind;
@@ -57,14 +78,50 @@ function startBossPresentation(kind, target) {
 function playEntrance(target) { startBossPresentation("entry", target); }
 function playRupture(target) { startBossPresentation("rupture", target); }
 function playFinaleTransform(target) { startBossPresentation("transform", target); }
-function playDeath(target, reward) {
-  startBossPresentation("death", target);
+function playDeath(target, reward, motion) {
+  startBossPresentation("death", target, motion);
   bossPresentation.reward = reward;
 }
 
 function presentationEase(value, start, end) {
   const t = clamp((value - start) / (end - start), 0, 1);
   return t * t * (3 - 2 * t);
+}
+
+// Split each frame at the slow window edges. At any frame rate the window spans
+// the same real time, and the same scaled delta drives every world animation.
+function bossPresentationFrameSeconds(scene, seconds) {
+  if (!canAnimateCombatEffects() || !Number.isFinite(seconds) || seconds <= 0) return 0;
+  scene.realAge += seconds;
+  if (scene.slowFrom === null || quietCombatMotion()) return seconds;
+  const outsideBefore = clamp(scene.slowFrom - scene.age, 0, seconds);
+  const slowEnd = scene.slowFrom + presentationSlowDuration * presentationSlowScale;
+  const inside = clamp((slowEnd - Math.max(scene.age, scene.slowFrom)) / presentationSlowScale, 0, seconds - outsideBefore);
+  return seconds - inside * (1 - presentationSlowScale);
+}
+
+function drawBossPresentationMotion(ctx, scene) {
+  if (!scene?.motion || quietCombatMotion()) return;
+  const t = scene.age;
+  const coast = (1 - Math.exp(-t * 1.7)) / 1.7;
+  const clearAt = scene.slowFrom + presentationSlowDuration * presentationSlowScale;
+  const opacity = (1 - presentationEase(t, clearAt, clearAt + .24)) * .46;
+  if (opacity <= 0) return;
+  ctx.save();
+  ctx.globalAlpha *= opacity;
+  for (const enemy of scene.motion.enemies) {
+    drawEnemyHull({ ...enemy, x: enemy.x - (enemy.speed ?? 0) * coast });
+  }
+  for (const shot of scene.motion.projectiles) {
+    const x = shot.x + shot.vx * coast, y = shot.y + shot.vy * coast;
+    const speed = Math.max(1, Math.hypot(shot.vx, shot.vy));
+    ctx.fillStyle = shot.color;
+    ctx.strokeStyle = shot.color + "65";
+    ctx.lineWidth = shot.radius;
+    ctx.beginPath(); ctx.moveTo(x - shot.vx / speed * 16, y - shot.vy / speed * 16); ctx.lineTo(x, y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, shot.radius, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 
 function advanceLivingBossPresentation(seconds) {
@@ -92,11 +149,12 @@ function advanceLivingBossPresentation(seconds) {
   }
   target.previousX = target.x;
   target.previousY = target.y;
-  if (!scene.impact && scene.age >= duration * (kind === "entry" ? .63 : .44)) {
+  if (!scene.impact && scene.age >= duration * presentationImpactAt[kind]) {
     scene.impact = true;
     if (kind === "rupture") gameAudio.bossEnrage();
     gameAudio.bossPresentationCue?.(kind, target.type);
     addCombatShake(kind === "entry" ? 2 : 4.5);
+    if (kind === "rupture") pulseCombatLight(target.x, target.y, target.width * 1.75, profile.ink, "impact");
   }
   if (scene.age >= duration - 1e-9) {
     resetBossPresentation();
@@ -115,11 +173,12 @@ function advanceBossDeathPresentation(seconds) {
   const scene = bossPresentation;
   if (!scene || scene.kind !== "death") return;
   scene.age = Math.min(scene.duration, scene.age + seconds);
-  if (scene.target.finale && !scene.impact && scene.age >= scene.duration * .39) {
+  if (scene.target.finale && !scene.impact && scene.age >= scene.duration * presentationImpactAt.death) {
     scene.impact = true;
     gameAudio.explode(true);
     gameAudio.bossPresentationCue?.("death", scene.target.type);
     addCombatShake(scene.target.alienFinal ? 7 : 5.5);
+    pulseCombatLight(scene.target.x, scene.target.y, scene.target.width * 2.4, scene.profile.ink, "collapse");
   }
   if (scene.age >= scene.duration - 1e-9) {
     resetBossPresentation();
@@ -140,7 +199,7 @@ function advanceBossDeathPresentation(seconds) {
 
 function applyBossPresentationCamera(ctx) {
   const scene = activeBossPresentation();
-  if (!scene || reducedMotion.matches || shakePreference === "off") return;
+  if (!scene || quietCombatMotion() || shakePreference === "off") return;
   const p = scene.age / scene.duration;
   const entry = scene.kind === "entry", rupture = scene.kind === "rupture";
   const death = scene.kind === "death";
@@ -353,6 +412,69 @@ function presentationFragmentDelay(order, x, y) {
   return (order === "inward" ? 1 - distance : distance) * .22;
 }
 
+const bossCollapseLabels = [
+  ["深海压力释放", "ABYSSAL PRESSURE RELEASE"], ["骨节崩裂", "VERTEBRAL FRACTURE"],
+  ["熔核内爆", "FURNACE IMPLOSION"], ["裂网垂坠", "WEB UNRAVELLING"],
+  ["巨螯断裂", "CLAW SEVERANCE"], ["镜面碎裂", "MIRROR SHATTER"],
+  ["断尾放电", "TAIL DISCHARGE"], ["卵囊喷裂", "SPORE BURST"],
+  ["奇点吞噬", "SINGULARITY INGESTION"], ["神经断电", "NEURAL BLACKOUT"],
+  ["群渊核心坍缩", "CONFLUENCE COLLAPSE"],
+];
+function deathFragmentTravel(type, x, y, depth, t, index) {
+  const fall = t * t, wave = Math.sin(t * Math.PI), side = Math.sign(y || 1);
+  const ejection = .55 + depth * .95;
+  switch (type) {
+    case 0: return [x * (1 - wave * .65) - t * .56, y * (1 + t * 1.62) + fall * .61];
+    case 1: return [x + (x * .79 + .34) * t, y + (.15 - depth * .63) * t + fall * 1.12];
+    case 2: return [x * (1 - wave * .84 + fall * 1.9), y * (1 - wave * .56 + fall * 2) + fall * .60];
+    case 3: return [x * (1 - t * .44) + (index % 3 - 1) * wave * .14, y - .34 * wave + fall * 1.72];
+    case 4: return [x + t * (.22 + x * .5), y + side * ejection * t + fall * .56];
+    case 5: return [x + (x * 1.18 + side * .47) * t, y + (y * .64 - x * .57) * t + fall * .24];
+    case 6: return [x + (.73 + x * .68) * t, y + Math.sin(x * 8 - t * 5) * wave * .35 + fall * .49];
+    case 7: return [x * (1 + ejection * t), y + (y * .70 - .97) * t + fall * .37];
+    case 8: return [x * (1 - fall) - y * wave * .81, y * (1 - fall) + x * wave * .64 + fall * .08];
+    case 9: return [x * (1 + .64 * t) + (index % 3 - 1) * t * .29, y - depth * .50 * t + fall * .85];
+    default: {
+      const organ = index % 3 * 2.094 + .35;
+      return [x * (1 + t * .62) + Math.cos(organ) * wave * .73,
+        y * (1 + t * .73) + Math.sin(organ) * wave * .67 + fall * .47];
+    }
+  }
+}
+
+function drawPresentationChip(ctx, edge, w, h, thickness, yaw, pitch, frontColor, sideColor, rim) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const offsetX = sy * thickness * .5, offsetY = -cy * sp * thickness * .5;
+  const front = [], back = [];
+  for (let j = 0; j < edge.length; j += 2) {
+    const x = edge[j] * w, y = edge[j + 1] * h;
+    const px = x * cy, py = y * cp + x * sy * sp;
+    front.push([px + offsetX, py + offsetY]);
+    back.push([px - offsetX, py - offsetY]);
+  }
+  const face = cy * cp >= 0 ? front : back;
+  const underside = face === front ? back : front;
+  const trace = points => {
+    ctx.beginPath();
+    for (let i = 0; i < points.length; i++) {
+      if (!i) ctx.moveTo(...points[i]); else ctx.lineTo(...points[i]);
+    }
+    ctx.closePath();
+  };
+  trace(underside); ctx.fillStyle = sideColor; ctx.fill();
+  ctx.beginPath();
+  for (let j = 0; j < face.length; j++) {
+    const next = (j + 1) % face.length;
+    const [a, b] = [face[j], face[next]];
+    const [c, d] = [underside[next], underside[j]];
+    ctx.moveTo(...a); ctx.lineTo(...b); ctx.lineTo(...c); ctx.lineTo(...d); ctx.closePath();
+  }
+  ctx.fill();
+  trace(face);
+  ctx.fillStyle = face === front ? frontColor : sideColor; ctx.fill();
+  ctx.strokeStyle = rim; ctx.lineWidth = .55; ctx.stroke();
+}
+
 function drawPresentationFragments(ctx, scene, progress, quiet, finale = false) {
   if (progress <= 0 || progress >= 1) return;
   const { target, profile, kind } = scene;
@@ -360,78 +482,59 @@ function drawPresentationFragments(ctx, scene, progress, quiet, finale = false) 
   const pieces = bossFragmentAtlas[key];
   const g = finale ? finaleCoreGeometry(target) : target;
   const w = g.width * .88, h = g.height * .87;
-  const folding = kind === "death" && profile.order === "inward";
-  // Freeze neither the scene nor the HUD. Only debris travel is slowed near the impact.
-  const slow = kind === "death" && !quiet
-    ? progress < .30 ? progress * .30 : .09 + (progress - .30) * 1.46
-    : progress;
+  const death = kind === "death";
   ctx.save();
   for (let i = 0; i < pieces.length; i += quiet ? 3 : 1) {
     const [x, y, depth, light, ...edge] = pieces[i];
     const delay = presentationFragmentDelay(profile.order, x, y);
-    const t = clamp((slow - delay) / (1 - delay), 0, 1);
+    const t = clamp((progress - delay) / (1 - delay), 0, 1);
     if (t <= 0) continue;
     const opacity = presentationEase(t, 0, .11) * (1 - presentationEase(t, .48, 1));
-    const yaw = (i % 2 ? -1 : 1) * (.7 + depth * 2.4) * t;
+    const yaw = (i % 2 ? -1 : 1) * (.7 + depth * 3.4) * t;
+    const pitch = (i % 2 ? 1 : -1) * (.38 + Math.abs(y) * 2.75 + depth) * t;
     const roll = (i % 3 === 0 ? -1 : 1) * (.5 + Math.abs(x) * 2.9) * t;
-    const force = folding ? -.63 * Math.sin(t * Math.PI) + t ** 2.4 * 1.3 : t * (.65 + depth * .64);
-    const range = quiet ? .25 : kind === "death" ? 1 : .48;
-    const sx = w * (x + range * (x * force * 2 + profile.drift[0] * t * t));
-    const freeY = h * (y + range * (y * force * 2 + profile.drift[1] * t * t));
+    const force = t * (.65 + depth * .64);
+    const [travelX, travelY] = death ? deathFragmentTravel(target.type, x, y, depth, t, i)
+      : [x + x * force + profile.drift[0] * t * t * .46,
+        y + y * force + (.28 + profile.drift[1] * .24) * t * t];
+    const range = quiet ? .25 : death ? 1 : .60;
+    const sx = w * (x + (travelX - x) * range);
+    const freeY = h * (y + (travelY - y) * range);
     const floor = viewport.height - target.y + h * .07;
     const sy = Math.min(floor, freeY);
     const landing = 1 - presentationEase(freeY, floor, floor + h * .17);
     ctx.save();
     ctx.globalAlpha *= opacity * landing * (quiet ? .71 : .94);
     if (!quiet && t > .10) {
-      const dx = w * range * (x * force + profile.drift[0] * t);
-      const dy = h * range * (y * force + profile.drift[1] * t);
-      const tailX = sx - dx * .34, tailY = sy - dy * .34;
+      const tailX = sx - w * (travelX - x) * range * .14;
+      const tailY = sy - h * (travelY - y) * range * .14;
       if (Math.hypot(sx - tailX, sy - tailY) > 2) {
         const tail = ctx.createLinearGradient(tailX, tailY, sx, sy);
-        tail.addColorStop(0, profile.ink + "00"); tail.addColorStop(1, profile.ink + "89");
-        ctx.strokeStyle = tail; ctx.lineWidth = Math.max(.8, w * .011);
+        tail.addColorStop(0, profile.ink + "00"); tail.addColorStop(1, profile.ink + (target.type === 5 ? "84" : "35"));
+        ctx.strokeStyle = tail; ctx.lineWidth = Math.max(.6, w * .006);
         ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(sx, sy); ctx.stroke();
       }
     }
     ctx.translate(sx, sy);
     ctx.rotate(quiet ? 0 : roll);
     const chipScale = kind === "rupture" ? .57 + (i % 5) * .076 : .68 + (i % 5) * .081;
-    ctx.scale(chipScale * Math.max(.22, Math.cos(quiet ? 0 : yaw)), chipScale);
-    const thickness = Math.max(1.25, w * (.008 + depth * .035));
-    const trace = (dx, dy) => {
-      ctx.beginPath();
-      for (let j = 0; j < edge.length; j += 2) {
-        const px = edge[j] * w + dx, py = edge[j + 1] * h + dy;
-        if (!j) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-    };
-    ctx.fillStyle = "#111525";
-    trace(thickness * .44, thickness); ctx.fill();
+    ctx.scale(chipScale, chipScale);
+    const thickness = Math.max(1.4, w * (.013 + depth * .053) * (target.type === 5 ? .37 : 1));
     const gradient = ctx.createLinearGradient(-w * .067, -h * .076, w * .073, h * .068);
-    gradient.addColorStop(0, profile.light + (light > .42 ? "bf" : "6e"));
-    gradient.addColorStop(.18 + light * .17, profile.ink + (i % 3 ? "86" : "a1"));
+    gradient.addColorStop(0, profile.light + (light > .42 ? "a2" : "68"));
+    gradient.addColorStop(.18 + light * .17, profile.ink + (i % 3 ? "73" : "a1"));
     gradient.addColorStop(.57, target.type === 2 ? "#422823" : "#30394e");
     gradient.addColorStop(1, "#101422");
-    trace(0, 0); ctx.fillStyle = gradient; ctx.fill();
-    ctx.lineWidth = .72; ctx.strokeStyle = profile.ink + "95"; ctx.stroke();
-    if (!quiet && edge.length >= 8) {
-      const stripe = target.type === 2 ? "#ffc37499" : target.type === 0 ? "#c6f6ff8a" : profile.light + "51";
-      ctx.strokeStyle = stripe;
-      ctx.lineWidth = .85;
-      ctx.beginPath();
-      ctx.moveTo(edge[0] * w * .71, edge[1] * h * .71);
-      ctx.lineTo(edge[4] * w * .44, edge[5] * h * .51);
-      ctx.lineTo(edge[6] * w * .73, edge[7] * h * .74);
-      ctx.stroke();
-    }
+    const sideColor = target.type === 2 ? "#482824" : target.type === 1 ? "#524938" : "#1a283c";
+    drawPresentationChip(ctx, edge, w, h, thickness, quiet ? .48 : yaw, quiet ? .40 : pitch,
+      gradient, sideColor, profile.ink + "69");
     ctx.restore();
   }
   ctx.restore();
 }
 
 function drawBossPresentationBody(ctx, scene, quiet) {
+  quiet ||= quietCombatMotion();
   const { kind, target, profile, age, duration } = scene;
   const p = clamp(age / duration, 0, 1);
   const bank = quiet ? 0 : profile.approach[2];
@@ -520,7 +623,8 @@ function drawBossPresentationBody(ctx, scene, quiet) {
       ctx.rotate(bank * squeeze);
       ctx.scale(1 - squeeze * (profile.order === "inward" ? .36 : .18),
         1 - squeeze * (profile.order === "inward" ? .30 : .12));
-      drawFinaleShell(ctx, { ...target, x: 0, y: 0 }, g.width, g.height, quiet);
+      drawFinaleShell(ctx, { ...target, x: 0, y: 0, finale: { ...target.finale, age: target.finale.age + age } },
+        g.width, g.height, quiet);
       ctx.restore();
     }
     drawPresentationCore(ctx, 0, -release * g.height * .11, radius, profile,
@@ -554,12 +658,13 @@ function drawBossPresentationOverlay(ctx) {
   if (!scene) return;
   const { kind, target, profile } = scene;
   const p = scene.age / scene.duration;
-  const opacity = presentationEase(p, .08, .25) * (1 - presentationEase(p, .73, .99));
+  const titleTime = Math.max(p, (scene.realAge || 0) / scene.duration);
+  const opacity = presentationEase(titleTime, .08, .25) * (1 - presentationEase(titleTime, .73, .99));
   const head = {
     entry: ["异形信号锁定", "HOSTILE CONTACT"],
     rupture: ["外壳裂变", "CARAPACE FRACTURE"],
     transform: ["终局形态", "TERMINAL METAMORPHOSIS"],
-    death: target.alienFinal ? ["群渊瓦解", "CONFLUENCE COLLAPSE"] : ["异形信号消失", "HOSTILE SIGNAL LOST"],
+    death: bossCollapseLabels[target.type],
   };
   const title = kind === "transform" ? bossFinaleStageLabel(target.type) : target.name;
   const size = clamp(viewport.width * .025, 16, 29);

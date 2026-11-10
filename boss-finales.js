@@ -795,17 +795,4 @@ function drawBossFinale(ctx, target, quiet) {
   drawFinaleShell(ctx, target, g.width, g.height, quiet);
   ctx.restore();
   drawFinaleNodes(ctx, target, quiet);
-  const width = target.width * .82;
-  const x = target.x - width / 2;
-  const y = target.y - target.height * .60 - 12;
-  ctx.save();
-  ctx.fillStyle = "#172238";
-  ctx.fillRect(x, y, width, 8);
-  const life = ctx.createLinearGradient(x, 0, x + width, 0);
-  life.addColorStop(0, target.color); life.addColorStop(1, "#e5f8ff");
-  ctx.fillStyle = life;
-  ctx.fillRect(x, y, width * clamp(target.displayHp, 0, 1), 8);
-  ctx.strokeStyle = "#e8f7ffa9"; ctx.lineWidth = 1;
-  ctx.strokeRect(x - 1, y - 1, width + 2, 10);
-  ctx.restore();
 }

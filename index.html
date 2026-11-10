@@ -26,6 +26,7 @@
   <script src="boss-attack-art.js" defer></script>
   <script src="boss-fragments-data.js" defer></script>
   <script src="boss-presentation.js" defer></script>
+  <script src="hostile-projectiles.js" defer></script>
   <script src="alien-attacks.js" defer></script>
   <script src="alien-pressure.js" defer></script>
   <script src="boss-finales.js" defer></script>
@@ -134,7 +135,16 @@
           <span id="shield-label" class="shield-label">自动充能 · 25 秒</span>
         </div>
         <div id="powerup-notice" class="powerup-notice" hidden></div>
-        <div id="boss-hud" class="boss-hud" role="status" hidden><strong id="boss-name"></strong><span id="boss-action"></span></div>
+        <div id="boss-hud" class="boss-hud" hidden>
+          <div class="boss-heading"><strong id="boss-name"></strong><span id="boss-stage" class="boss-stage"></span></div>
+          <div id="boss-health" hidden>
+            <div id="boss-track" class="boss-track" role="meter" aria-labelledby="boss-name" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+              <i class="boss-health-lag" aria-hidden="true"></i><i class="boss-health-fill" aria-hidden="true"></i><i class="boss-break-point" aria-hidden="true"></i>
+            </div>
+            <div class="boss-health-labels" aria-hidden="true"><span id="boss-core-life"></span><span id="boss-shell-life"></span><span id="boss-finale-label"></span></div>
+          </div>
+          <p id="boss-action" class="boss-action" role="status"></p>
+        </div>
         <div id="boss-warning" class="boss-warning" role="alert" hidden><div class="warning-band"><strong>WARNING</strong><span id="boss-warning-name"></span></div></div>
         <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>Shift 切换扩散 / 聚焦 · 20 连击进入暴走<br>空格释放大招 · V 开启护盾</p><span class="flight-direction">蓝攻速 · 黄弹道 · 红伤害<br>绿生命（稀有） <span aria-hidden="true">→</span></span></div>
         <div id="pause-hint" class="pause-message" hidden><strong>已暂停</strong><span>点击战场继续战斗</span></div>
@@ -160,6 +170,7 @@
             <div class="pause-settings-row">
               <button id="pause-sound" class="secondary-button" type="button" aria-pressed="true">声音：开</button>
               <button id="pause-shake" class="secondary-button" type="button">震动：轻</button>
+              <button id="pause-motion" class="secondary-button" type="button" aria-pressed="false">演出动态：跟随系统</button>
               <label for="pause-quality">画质</label>
               <select id="pause-quality" class="secondary-button"><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select>
             </div>

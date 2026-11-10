@@ -184,6 +184,8 @@ function fireUltimate() {
   }
   gameAudio.stopUltimate();
   gameAudio.fireUltimate(ultimate.kind);
+  const launchColor = ultimate.kind === "blue" ? "#84d3ff" : ultimate.kind === "yellow" ? "#ffdf7c" : "#ff6858";
+  pulseCombatLight(muzzle.x, muzzle.y, Math.max(118, player.width * 1.85), launchColor, "ultimate");
   updateUltimateDisplay();
 }
 function ultimateHitsTarget(shot, target) {
