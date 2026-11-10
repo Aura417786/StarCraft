@@ -13,7 +13,7 @@ Shoot the guns off a boss, upgrade your fighter, and survive five sectors of dee
 - **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. After two minutes, newly spawned armored fighters can survive a single heavy hit from your main gun.
 - **Evolve after boss victories.** Choose wing guns, an AI wingman, or a shield that absorbs enemy shots and fires them back.
 - **Time your shield.** A perfect block gives you three seconds to trigger a faster charge for a cannon shot you already have stored.
-- **Travel through five sectors.** Fly past planets, debris, and capital ships. Each galaxy casts a different tint on the Crimson Fighter's wings and canopy.
+- **Fly through five distinct encounters.** Follow the sunrise along a planet’s rim, shoot a yellow orb through an asteroid gap, and time your fire through a drifting wreck. A capital ship eclipses the stars as fighters leave its hangar. At the black hole, distorted starlight signals a tide that bends ordinary shots.
 
 ## Quick start
 

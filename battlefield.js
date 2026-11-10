@@ -85,6 +85,7 @@ function scenerySyncJourney() {
   battlefieldState.sector = journey.blend >= 0.5 ? journey.next : journey.current;
   battlefieldState.transition = journey.blend > 0 ? sceneryRules.interval - journey.phase : 0;
   sceneryLayer(journey.current); sceneryLayer(journey.next);
+  if (battlefieldSectors[journey.next].id === "citadel") loadJourneyCitadelImage();
 }
 function updateBattlefield(seconds) {
   if (state !== "menu" && (typeof isBattleActive !== "function" || !isBattleActive())) return;
@@ -177,6 +178,7 @@ function drawBattlefield() {
     ctx.fillRect(0, 0, w, h);
   }
   sceneryDrawParticles();
+  drawActiveJourney("back");
   const vignette = ctx.createLinearGradient(0, 0, 0, h);
   vignette.addColorStop(0, "#02040b40"); vignette.addColorStop(0.12, "#02040b18"); vignette.addColorStop(0.24, "#02040b00");
   vignette.addColorStop(0.78, "#02040b00"); vignette.addColorStop(1, "#02040b24");

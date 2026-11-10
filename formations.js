@@ -196,7 +196,7 @@ function updateFormations(seconds) {
     }
   } else if (typeof battlefieldEventBlocksWaves === "function" && battlefieldEventBlocksWaves()) {
     formationState.nextTime = Math.max(formationState.nextTime, battleTime + 3);
-  } else if (!formationState.active && battleTime >= formationState.nextTime) {
+  } else if (!formationState.active && battleTime >= formationState.nextTime && !journeyBlocksNewEncounters()) {
     if (!trySpawnFormation()) formationState.nextTime = battleTime + 2;
   }
 }

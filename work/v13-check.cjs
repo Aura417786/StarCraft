@@ -730,6 +730,249 @@ check('transient zero-size notifications leave the current battle untouched', ()
   assert.deepEqual(snapshot('({viewport,player,enemies,bullets,enemyCooldown})'),before);
 });
 
+function positionJourneyClock(leg, phase) {
+  execute(`battleTime=battlefieldState.clock=${leg * 75 + phase};scenerySyncJourney();`);
+}
+function advanceJourneyFrames(seconds) {
+  for (let frame = 0; frame < Math.round(seconds / .05); frame++) step();
+}
+check('five flight encounters start from their own sector and advance on the active clock', () => {
+  const ids = ['orbit','belt','wreck','citadel','rift'];
+  for (const [leg,id] of ids.entries()) {
+    isolated();
+    positionJourneyClock(leg, leg === 0 ? 8.9 : 13.9);
+    step();
+    assert.equal(execute('journeyState.scene'),null);
+    advanceJourneyFrames(.15);
+    assert.equal(execute('journeyState.scene.id'),id);
+    near(execute('journeyState.scene.duration'),30);
+    const elapsed=execute('journeyState.scene.elapsed');
+    advanceJourneyFrames(.5);
+    near(execute('journeyState.scene.elapsed'),elapsed+.5);
+  }
+});
+check('flight encounters wait for already active special events', () => {
+  const conflicts = [
+    ['spawnSupplyTransport();','battlefieldEvents.transport'],
+    ['trySpawnFormation("command");','formationState.warning'],
+    ['spawnAceEnemy();','aceEncounter.target']
+  ];
+  for (const [setup,occupant] of conflicts) {
+    isolated();
+    positionJourneyClock(3,15);
+    execute(setup);
+    assert.ok(execute(occupant),setup);
+    step();
+    assert.equal(execute('journeyState.scene'),null,setup);
+    assert.ok(execute(occupant),setup);
+  }
+});
+check('a due flight encounter reserves room before same-frame major spawns', () => {
+  isolated();
+  positionJourneyClock(3,15);
+  execute('aceEncounter.nextTime=formationState.nextTime=battlefieldEvents.nextTransport=0;');
+  step();
+  assert.equal(execute('journeyState.scene.id'),'citadel');
+  assert.equal(execute('journeyBlocksNewEncounters()'),true);
+  assert.equal(execute('aceBlocksWaves()||!!formationState.warning||battlefieldEventBlocksWaves()'),false);
+});
+check('a missed flight encounter remains eligible next loop and a completed one does not repeat', () => {
+  isolated();
+  positionJourneyClock(3,15);
+  execute('nextBossTime=battleTime+20;');
+  step();
+  assert.equal(execute('journeyState.scene'),null);
+  assert.equal(execute('journeyState.seen.has("citadel")'),false);
+  positionJourneyClock(3,53.1);
+  execute('nextBossTime=Infinity;');
+  step();
+  assert.equal(execute('journeyState.scene'),null);
+  positionJourneyClock(8,3.1);
+  step();
+  assert.equal(execute('journeyState.scene.id'),'citadel');
+  execute('bossHitGrace=60;');
+  advanceJourneyFrames(30.1);
+  assert.equal(execute('journeyState.scene'),null);
+  assert.equal(execute('journeyState.seen.has("citadel")'),true);
+  positionJourneyClock(13,15);
+  step();
+  assert.equal(execute('journeyState.scene'),null);
+});
+check('pausing, changing fullscreen and restarting keep or clear the flight encounter at the right time', () => {
+  isolated();
+  positionJourneyClock(1,15);
+  step();
+  execute('var liveJourneyScene=journeyState.scene;');
+  assert.equal(execute('liveJourneyScene.id'),'belt');
+  const elapsed=execute('liveJourneyScene.elapsed'),clock=execute('battlefieldState.clock');
+  emit(window,'blur'); advanceJourneyFrames(.5);
+  near(execute('liveJourneyScene.elapsed'),elapsed);
+  near(execute('battlefieldState.clock'),clock);
+  emit(window,'focus'); canvas.focus();
+  for (const fullscreen of [true,false]) {
+    surface=fullscreen?{width:1920,height:1080}:{width:1280,height:720};
+    document.fullscreenElement=fullscreen?nodes.get('#game-app'):null;
+    emit(window,'resize'); emit(document,'fullscreenchange');
+    assert.equal(execute('liveJourneyScene===journeyState.scene'),true);
+    near(execute('liveJourneyScene.elapsed'),elapsed);
+  }
+  advanceJourneyFrames(.5);
+  const resumed=execute('liveJourneyScene.elapsed')-elapsed;
+  near(resumed,execute('battlefieldState.clock')-clock);
+  assert.ok(resumed>=.44&&resumed<=.50000001);
+  begin();
+  assert.equal(execute('journeyState.scene'),null);
+  assert.equal(execute('journeyState.seen.size'),0);
+});
+check('a newly due Boss warning takes precedence over an active flight encounter', () => {
+  isolated();
+  positionJourneyClock(3,15);
+  step();
+  assert.equal(execute('journeyState.scene.id'),'citadel');
+  execute('nextBossTime=battleTime+bossRules.warning;');
+  step();
+  assert.equal(execute('journeyState.scene'),null);
+  assert.ok(execute('pendingBossType!==null'));
+  assert.equal(execute('journeyState.seen.has("citadel")'),false);
+});
+check('the hangar wave respects the same global enemy cap under saturated conditions', () => {
+  isolated();
+  positionJourneyClock(3,15);
+  step();
+  assert.equal(execute('journeyState.scene.id'),'citadel');
+  execute(`while(enemies.length<enemyRules.maxOnScreen){
+    spawnEnemy("scout");
+    const enemy=enemies.at(-1);
+    Object.assign(enemy,{x:viewport.width*2,previousX:viewport.width*2,speed:0});
+  }`);
+  advanceJourneyFrames(14);
+  assert.equal(execute('enemies.length'),execute('enemyRules.maxOnScreen'));
+});
+
+check('sunrise gives normal waves a breather and leaves existing fighters in play', () => {
+  isolated('spawnEnemy("scout");var sunriseEnemy=enemies[0];sunriseEnemy.speed=0;');
+  positionJourneyClock(0,9);
+  execute('enemyCooldown=0;');
+  step();
+  assert.equal(execute('journeyState.scene.id'),'orbit');
+  assert.equal(execute('journeyBlocksWaves()'),true);
+  advanceJourneyFrames(8);
+  assert.equal(execute('enemies[0]===sunriseEnemy'),true);
+  near(execute('enemyCooldown'),0);
+  advanceJourneyFrames(5.1);
+  assert.equal(execute('journeyBlocksWaves()'),false);
+  assert.ok(execute('enemies.length>1'));
+});
+check('belt encounter puts a real yellow upgrade between the two moving covers', () => {
+  isolated();
+  positionJourneyClock(1,15);
+  step(); advanceJourneyFrames(11.2);
+  const rocks=snapshot('battlefieldEvents.objects.filter(object=>object.journeyType==="belt")');
+  assert.equal(rocks.length,2);
+  const orb=snapshot('powerups.find(powerup=>powerup.journeyBelt)');
+  assert.equal(orb.type,'yellow');
+  assert.ok(orb.y > rocks[0].y + rocks[0].height * .4);
+  assert.ok(orb.y < rocks[1].y - rocks[1].height * .4);
+  const lanes=execute('weapon.lanes');
+  projectile(orb.x-150,orb.x+40,orb.y);
+  execute('resolveProjectileHits();');
+  assert.equal(execute('powerups.some(powerup=>powerup.journeyBelt)'),false);
+  assert.equal(execute('weapon.lanes'),lanes+1);
+  assert.equal(execute('battlefieldEvents.objects.filter(object=>object.journeyType==="belt"&&object.hp===1).length'),2);
+});
+check('wreck cover opens a new central line of fire', () => {
+  isolated();
+  positionJourneyClock(2,15);
+  step(); advanceJourneyFrames(9.1);
+  const centralLineBlocked = () => execute(`(()=>{
+    const covers=battlefieldEvents.objects.filter(object=>object.journeyType==="wreck");
+    const y=(flightBounds.top+flightBounds.bottom)/2;
+    const shot={previousX:covers[0].x-200,x:covers[0].x+200,y,previousY:y,halfHeight:2.5,length:26,angle:0};
+    return covers.some(cover=>Number.isFinite(projectileEnemyEntry(shot,cover)));
+  })()`);
+  assert.equal(centralLineBlocked(),true);
+  advanceJourneyFrames(7.4);
+  assert.equal(centralLineBlocked(),false);
+});
+check('the citadel hangar launches three real fighters and creates live cover', () => {
+  isolated();
+  positionJourneyClock(3,15);
+  step(); advanceJourneyFrames(12.1);
+  assert.equal(execute('formationState.active.kind'),'hangar');
+  assert.equal(execute('formationState.active.members.length'),3);
+  assert.equal(execute('formationState.active.members.every(member=>enemies.includes(member))'),true);
+  assert.equal(execute('battlefieldEvents.objects.some(object=>object.journeyType==="citadel")'),true);
+  assert.ok(execute('formationState.active.members[0].journeyLaunchUntil>battleTime'));
+});
+check('the rift scene holds the tide until its cue and keeps a complete warning', () => {
+  isolated();
+  positionJourneyClock(4,15);
+  step(); advanceJourneyFrames(11.9);
+  assert.equal(execute('journeyState.scene.id'),'rift');
+  assert.equal(execute('gravityTide.phase'),'idle');
+  advanceJourneyFrames(.2);
+  assert.equal(execute('gravityTide.phase'),'warning');
+  advanceJourneyFrames(2.1);
+  assert.equal(execute('gravityTide.phase'),'warning');
+  advanceJourneyFrames(.4);
+  assert.equal(execute('gravityTide.phase'),'active');
+});
+
+check('flight encounter layers render finite geometry with normal and reduced motion', () => {
+  isolated();
+  for (const quiet of [false,true]) for (const id of ['orbit','belt','wreck','citadel','rift']) {
+    let painted=false;
+    for (const elapsed of [3,12,20,27]) {
+      drawOperations.length=0;
+      captureDraws=true;
+      try {
+        execute(`reducedMotion.matches=${quiet};var sceneUnderTest={id:"${id}",elapsed:${elapsed},duration:30,progress:${elapsed}/30,blend:0,events:new Set()};
+          drawJourneyScene(sceneUnderTest,"back");drawJourneyScene(sceneUnderTest,"front");`);
+      } finally { captureDraws=false; }
+      painted ||= drawOperations.some(op=>['fill','fillRect','drawImage','stroke'].includes(op.name));
+      for (const op of drawOperations) for (const value of op.args) if (typeof value==='number')
+        assert.ok(Number.isFinite(value),id+' '+op.name+' emitted '+value);
+    }
+    assert.ok(painted,id+' should paint at least one phase');
+  }
+});
+
+check('a late scene can reserve its main action without delaying a Boss warning', () => {
+  isolated();
+  positionJourneyClock(3,51);
+  execute('nextBossTime=battleTime+28;');
+  step();
+  assert.equal(execute('journeyState.scene.id'),'citadel');
+  advanceJourneyFrames(23.1);
+  assert.equal(execute('journeyState.scene'),null);
+  assert.ok(execute('pendingBossType!==null'));
+  assert.equal(execute('journeyState.seen.has("citadel")'),true);
+});
+
+check('live belt cover keeps its hit state and usable gap on viewport round trips', () => {
+  isolated();
+  positionJourneyClock(1,15);
+  step(); advanceJourneyFrames(11.2);
+  execute('var resizedRocks=battlefieldEvents.objects.filter(object=>object.journeyType==="belt");resizedRocks[0].hp=.54;');
+  const original=snapshot('resizedRocks.map(rock=>({width:rock.width,height:rock.height}))');
+  for (const size of [{width:800,height:450},{width:1280,height:720}]) {
+    surface=size;emit(window,'resize');
+    assert.equal(execute('resizedRocks.every(rock=>battlefieldEvents.objects.includes(rock))'),true);
+    near(execute('resizedRocks[0].hp'),.54);
+    assert.equal(execute('resizedRocks.every(rock=>rock.previousX===rock.x&&rock.previousY===rock.y)'),true);
+    const dimensions=snapshot('resizedRocks.map(rock=>({width:rock.width,height:rock.height}))');
+    if (size.width===800) assert.ok(dimensions[0].width<original[0].width&&dimensions[0].height<original[0].height);
+    else assert.deepEqual(dimensions,original);
+    assert.ok(execute(`(()=>{
+      const orb=powerups.find(powerup=>powerup.journeyBelt);
+      const y=orb.y;
+      const shot={previousX:orb.x-150,x:orb.x+40,y,previousY:y,halfHeight:2.5,length:26,angle:0};
+      return resizedRocks[0].y+resizedRocks[0].height/2<y && y<resizedRocks[1].y-resizedRocks[1].height/2
+        && resizedRocks.every(rock=>!Number.isFinite(projectileEnemyEntry(shot,rock)));
+    })()`));
+  }
+});
+
 process.stdout.write(`\n${checks} v13 integration checks passed, ${failedChecks} failed.\n`);
 if (failedChecks) process.exitCode=1;
 

@@ -122,7 +122,7 @@ function updateAceEncounter(seconds) {
     if (aceEncounter.warning <= 0 && !spawnAceEnemy()) aceEncounter.nextTime = battleTime + 3;
     return;
   }
-  if (battleTime < aceEncounter.nextTime || aceHasEncounterConflict()) return;
+  if (battleTime < aceEncounter.nextTime || aceHasEncounterConflict() || journeyBlocksNewEncounters()) return;
   if (enemies.length >= enemyRules.maxOnScreen || viewport.width < 420 || viewport.height < 320) {
     aceEncounter.nextTime = battleTime + 3; return;
   }

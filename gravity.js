@@ -42,7 +42,7 @@ function updateGravityTide(seconds) {
   if (!gravityTideEligible()) { suspendGravityTide(); return; }
   gravityTide.elapsed += seconds;
   const t = gravityTide.elapsed;
-  if (gravityTide.phase === "idle" && t + 1e-9 >= gravityRules.firstDelay) startGravityWarning();
+  if (gravityTide.phase === "idle" && t + 1e-9 >= gravityRules.firstDelay && journeyGravityCanWarn()) startGravityWarning();
   else if (gravityTide.phase === "warning" && t + 1e-9 >= gravityRules.warning) {
     // 保留完整的生效时长，长帧不会跳过预警或直接结算整次潮汐。
     gravityTide.phase = "active"; gravityTide.elapsed = 0;
@@ -54,7 +54,7 @@ function updateGravityTide(seconds) {
       gravityTide.phase = "rest"; gravityTide.elapsed = 0; gravityTide.strength = 0;
       statusMessage.textContent = tr("引力潮汐平息。", "The gravity tide has subsided.");
     }
-  } else if (gravityTide.phase === "rest" && t + 1e-9 >= gravityRules.cooldown) startGravityWarning();
+  } else if (gravityTide.phase === "rest" && t + 1e-9 >= gravityRules.cooldown && journeyGravityCanWarn()) startGravityWarning();
 }
 function applyGravityTide(shot, seconds, kind = "player") {
   if (!isBattleActive() || gravityTide.phase !== "active" || !gravityTideEligible()

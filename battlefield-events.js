@@ -22,7 +22,7 @@ function announceBattlefieldEvent(text, duration = 4) {
   battlefieldEvents.notice = text; battlefieldEvents.noticeTime = duration;
   statusMessage.textContent = text;
 }
-function spawnBattlefieldObject(kind) {
+function spawnBattlefieldObject(kind, journeyCover = false) {
   if (battlefieldEvents.objects.length >= 3 || viewport.width < 420 || viewport.height < 360) return null;
   kind = kind || (battlefieldEvents.objectCount % 3 === 1 ? "wreck" : "cell");
   const width = kind === "wreck" ? Math.min(112, player.width * 0.72) : Math.min(62, player.width * 0.43);
@@ -32,7 +32,9 @@ function spawnBattlefieldObject(kind) {
   const object = { kind, x, previousX: x, y, previousY: y, width, height: width * (kind === "wreck" ? 0.65 : 0.72),
     hp: 1, maxHp: 1, healthLog: progressionReferenceDpsLog(battleTime) + Math.log(kind === "wreck" ? 1.3 : .45),
     speed: kind === "wreck" ? 62 : 86, hitFlash: 0, phase: battlefieldEvents.objectCount * 1.7, age: 0 };
-  battlefieldEvents.objects.push(object); battlefieldEvents.objectCount++;
+  battlefieldEvents.objects.push(object);
+  if (journeyCover) return object;
+  battlefieldEvents.objectCount++;
   if (battlefieldEvents.objectCount <= 2) announceBattlefieldEvent(kind === "cell"
     ? tr("能源罐 · 射爆可清除附近敌弹，并炸伤敌军", "Energy canister · Shoot to clear nearby bullets and damage enemies")
     : tr("漂浮残骸 · 可挡普通敌弹，也会挡住主炮", "Drifting wreckage · Blocks enemy shots and your main gun"));
@@ -92,10 +94,10 @@ function updateBattlefieldEvents(seconds) {
     object.hitFlash = Math.max(0, object.hitFlash - seconds);
     if (object.x + object.width < 0) battlefieldEvents.objects.splice(i, 1);
   }
-  if (battleTime >= battlefieldEvents.nextObject) {
+  if (battleTime >= battlefieldEvents.nextObject && !journeyReservesCover()) {
     spawnBattlefieldObject(); battlefieldEvents.nextObject = battleTime + 18;
   }
-  if (battleTime >= battlefieldEvents.nextTransport && !battlefieldEventBlocksWaves()
+  if (battleTime >= battlefieldEvents.nextTransport && !journeyBlocksNewEncounters() && !battlefieldEventBlocksWaves()
       && !aceBlocksWaves() && !gravityTideBusy()
       && !(typeof formationsBlockWaves === "function" && formationsBlockWaves())) {
     if (spawnSupplyTransport()) battlefieldEvents.nextTransport = battleTime + 76;
@@ -189,7 +191,8 @@ function drawBattlefieldObjects() {
   for (const object of battlefieldEvents.objects) {
     context.save(); context.translate(object.x, object.y);
     context.scale(object.width / 100, object.height / 65);
-    if (object.kind === "wreck") {
+    if (object.journeyCover) drawJourneyCoverShape(object);
+    else if (object.kind === "wreck") {
       eventMetalShape([[-49,-9],[-30,-30],[19,-28],[48,-11],[37,21],[12,30],[-33,19]], "#79848d", "#151e2a");
       context.strokeStyle = "#101c29"; context.lineWidth = 5;
       context.beginPath(); context.moveTo(-24,-25); context.lineTo(-10,0); context.lineTo(-26,22); context.moveTo(6,-26); context.lineTo(19,4); context.lineTo(40,15); context.stroke();

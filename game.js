@@ -192,6 +192,7 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
     entity.y = resizeY(entity.y);
     entity.previousX = entity.x;
     entity.previousY = entity.y;
+    if (entity.journeyCover) resizeJourneyCover(entity);
   }
   for (const enemy of enemies) {
     if (Number.isFinite(enemy.baseY)) enemy.baseY = resizeY(enemy.baseY);
@@ -239,6 +240,7 @@ if (fighterImage.complete) readyFighter();
 function showScreen(nextState) {
   resetShipVisuals();
   resetBattlefield();
+  resetJourneyScenes();
   resetCombatEffects();
   resetEvolution();
   resetMomentum();
@@ -638,10 +640,13 @@ function bulletHitsEnemy(bullet, enemy) { return Number.isFinite(projectileEnemy
 function updateEncounter(seconds) {
   if (!isBattleActive()) return;
   battleTime += seconds;
+  updateJourneyScene(seconds);
   updateDifficultyDisplay();
   updateAceEncounter(seconds);
   updateBattlefieldEvents(seconds);
   updateFormations(seconds);
+  const scene = journeyState.scene;
+  if (scene && seconds > 0) updateJourneyEncounter(scene, scene.previousElapsed);
   updateEnemyProjectiles(seconds);
   for (let index = explosions.length - 1; index >= 0; index--) {
     explosions[index].age += seconds;
@@ -655,7 +660,8 @@ function updateEncounter(seconds) {
     const displayed = enemy.displayHp ?? enemy.hp;
     enemy.displayHp = reducedMotion.matches ? enemy.hp : displayed + (enemy.hp - displayed) * (1 - Math.exp(-seconds * 14));
   }
-  if (!bossBlocksWaves() && !formationsBlockWaves() && !battlefieldEventBlocksWaves() && !aceBlocksWaves()) {
+  if (!bossBlocksWaves() && !formationsBlockWaves() && !battlefieldEventBlocksWaves()
+    && !aceBlocksWaves() && !journeyBlocksWaves()) {
     enemyCooldown -= seconds;
     if (enemyCooldown <= 0.00000001) {
       if (enemies.length < enemyRules.maxOnScreen) spawnEnemy();
@@ -689,7 +695,8 @@ function updatePowerups(seconds) {
   }
   powerupCooldown -= seconds;
   if (powerupCooldown <= 0.00000001) {
-    if (powerups.length < powerupRules.maxOnScreen) spawnPowerup();
+    const limit = powerupRules.maxOnScreen - (journeyReservesPickup() ? 1 : 0);
+    if (powerups.length < limit) spawnPowerup();
     powerupCooldown += powerupRules.interval;
   }
   resolveProjectileHits();
@@ -773,6 +780,7 @@ function updateLifeDisplay() {
   lifeDisplay.setAttribute("aria-label", tr(player.lives + " 点生命", player.lives + (player.lives === 1 ? " life" : " lives")));
 }
 function enemyTouchesPlayer(enemy) {
+  if (enemy.journeyLaunchUntil > battleTime) return false;
   // 主机身的椭圆碰撞区不包含图片透明边缘；用双方相对移动路径检测高速交错。
   const rx = player.width * 0.37 + enemy.width * 0.42;
   const ry = player.height * 0.30 + enemy.height * 0.35;
@@ -965,6 +973,7 @@ function drawFrame(time) {
   updateBossDamage();
   context.clearRect(0, 0, viewport.width, viewport.height);
   drawBattlefield();
+  drawActiveJourney("front");
   context.globalAlpha = 1;
   context.save();
   const cameraOffset = combatShakeOffset();

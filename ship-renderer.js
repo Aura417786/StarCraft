@@ -47,13 +47,19 @@ function shipReflectionLight() {
   const from = shipReflectionLights[battlefieldSectors[current].id];
   const to = shipReflectionLights[battlefieldSectors[next].id];
   const mix = (a, b) => a + (b - a) * blend;
-  const channels = from.channels.map((value, index) => Math.round(mix(value, to.channels[index])));
-  return { channels, side: mix(from.side, to.side) };
+  const channels = from.channels.map((value, index) => mix(value, to.channels[index]));
+  const side = mix(from.side, to.side);
+  const scene = journeyState.scene;
+  const cinematic = journeyArtLight(scene);
+  if (!cinematic) return { channels: channels.map(Math.round), side };
+  const weight = cinematic.amount * (1 - scene.blend);
+  return { channels: channels.map((value, index) => Math.round(value + (cinematic.channels[index] - value) * weight)),
+    side: side + (cinematic.side - side) * weight, intensity: 1 + (cinematic.intensity - 1) * weight };
 }
 
 function drawCrimsonReflection(ctx, geometry, bank) {
   const light = shipReflectionLight(), color = light.channels.join(",");
-  const alpha = ctx.globalAlpha;
+  const alpha = ctx.globalAlpha * (light.intensity ?? 1);
   ctx.save();
   ctx.globalCompositeOperation = "screen";
   ctx.lineCap = "round"; ctx.lineJoin = "round";

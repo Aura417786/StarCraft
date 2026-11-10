@@ -143,7 +143,8 @@ function aceScene(phase) {
   if (phase) advanceUntil(`aceEncounter.target?.acePhase===${JSON.stringify(phase)}`);
 }
 function gravityScene(phase = 'active') {
-  isolated('battlefieldState.clock=sceneryRules.interval*4+1;scenerySyncJourney();resetGravityTide();');
+  // The timed first-visit encounter is tested separately in v13-check.
+  isolated('battlefieldState.clock=sceneryRules.interval*4+1;scenerySyncJourney();resetGravityTide();journeyState.seen.add("rift");');
   advanceUntil(`gravityTide.phase===${JSON.stringify(phase)}`, 'updateGravityTide(.05)');
   if (phase==='active') execute('updateGravityTide(.6);');
 }
@@ -260,12 +261,12 @@ check('gravity begins only in the actual rift sector, with a full 2.4-second war
     isolated(`battlefieldState.clock=sceneryRules.interval*${sector}+1;scenerySyncJourney();resetGravityTide();for(let i=0;i<300;i++)updateGravityTide(.05);`);
     assert.notEqual(execute('gravityTide.phase'),'warning'); assert.notEqual(execute('gravityTide.phase'),'active');
   }
-  isolated('battlefieldState.clock=295;scenerySyncJourney();resetGravityTide();for(let i=0;i<300;i++)updateGravityTide(.05);');
+  isolated('battlefieldState.clock=295;scenerySyncJourney();resetGravityTide();journeyState.seen.add("rift");for(let i=0;i<300;i++)updateGravityTide(.05);');
   assert.equal(execute('battlefieldState.sector'),4);
   assert.ok(execute('battlefieldState.transition>0'));
   assert.notEqual(execute('gravityTide.phase'),'warning'); assert.notEqual(execute('gravityTide.phase'),'active');
   isolated();surface={width:480,height:360};emit(window,'resize');
-  execute('battlefieldState.clock=301;scenerySyncJourney();resetGravityTide();for(let i=0;i<300;i++)updateGravityTide(.05);');
+  execute('battlefieldState.clock=301;scenerySyncJourney();resetGravityTide();journeyState.seen.add("rift");for(let i=0;i<300;i++)updateGravityTide(.05);');
   assert.notEqual(execute('gravityTide.phase'),'warning'); assert.notEqual(execute('gravityTide.phase'),'active');
   gravityScene('warning');
   const before=execute('gravityTide.elapsed');
@@ -345,7 +346,7 @@ check('leaving rift or an approaching Boss immediately stops gravity and removes
 });
 check('pending formation, supply transport and ace encounters defer gravity rather than layering hazards', () => {
   for(const setup of ['trySpawnFormation("command");','spawnSupplyTransport();','aceEncounter.nextTime=battleTime;updateAceEncounter(.05);']) {
-    isolated('battleTime=60;battlefieldState.clock=301;scenerySyncJourney();resetGravityTide();'+setup+'for(let i=0;i<100;i++)updateGravityTide(.05);');
+    isolated('battleTime=60;battlefieldState.clock=301;scenerySyncJourney();resetGravityTide();journeyState.seen.add("rift");'+setup+'for(let i=0;i<100;i++)updateGravityTide(.05);');
     assert.notEqual(execute('gravityTide.phase'),'active',setup);
   }
 });
