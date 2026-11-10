@@ -39,6 +39,9 @@ function mockNode() {
     focus() { if(document.activeElement && document.activeElement!==this) emit(document.activeElement,'blur'); document.activeElement=this; emit(this,'focus'); emit(document,'focusin',{target:this}); },
   };
 }
+nodes.set('#game-over-title', mockNode());
+const resultIntro = mockNode();
+nodes.get('#game-over-screen').querySelector = selector => selector === '.result-intro' ? resultIntro : undefined;
 const evolutionCards = ['pierce','blast','aegis'].map(kind => {
   const card=mockNode(); card.dataset.choice=kind;
   const children=new Map(['level','title','effect','art','action'].map(name=>['.evolution-card-'+name,mockNode()]));
@@ -113,10 +116,9 @@ function isolated(extra = '') {
     battleTime=0;score=0;kills=0;bossHitGrace=0;resetUltimate();` + extra);
   execute('previousTime='+now+';');
 }
-function activeBoss(type = 0, duo = false, time = 95) {
-  isolated(`battleTime=${time};spawnBoss(${type}${duo ? ',( '+type+' + 1)%5' : ''});
-    for(const t of activeBosses()){Object.assign(t,${duo ? 'duoArena(t.slot)' : 'bossArena()'});t.previousX=t.x;t.previousY=t.y;t.phase='recover';ensureBossComponents(t);}
-    if(duoEncounter){duoEncounter.phase='recover';duoEncounter.time=0;}`);
+function activeBoss(type = 0, time = 95) {
+  isolated(`battleTime=${time};spawnBoss(${type});Object.assign(boss,bossArena());
+    boss.previousX=boss.x;boss.previousY=boss.y;boss.phase='recover';`);
 }
 function setEnemy(x = 800, y = 350, hp = 100) {
   execute(`spawnEnemy('scout');var target=enemies.at(-1);Object.assign(target,{x:${x},previousX:${x},y:${y},previousY:${y},waveAmplitude:0,healthLog:Math.log(${hp})});`);
@@ -213,12 +215,13 @@ check('reinforced armor absorbs oversized normal shots and can still be finished
   assert.equal(execute('enemies.length'), 0);
   assert.equal(execute('kills'), 1);
 });
-check('ace, transport and dual Boss births use the same stage after a player upgrades', () => {
+check('ace, transport, ordinary alien and fusion Boss births use the same stage after a player upgrades', () => {
   function sample(gear) {
     isolated('battleTime=420;'+gear);
     return snapshot(`(()=>{const ace=spawnAceEnemy().healthLog;resetAceEncounter();enemies.length=0;
-      const transport=spawnSupplyTransport().healthLog;spawnBoss(0,1);
-      return [ace,transport,boss.healthLog,wingBoss.healthLog];})()`);
+      const transport=spawnSupplyTransport().healthLog;spawnBoss(0);
+      const ordinary=boss.healthLog;spawnBoss(10);
+      return [ace,transport,ordinary,boss.healthLog];})()`);
   }
   const baseline=sample('');
   const reinforced=sample('for(let i=0;i<10;i++){applyPowerup("blue");applyPowerup("yellow");applyPowerup("red");}');
@@ -304,15 +307,12 @@ check('the support projectile cap leaves room for main fire and resets after res
   assert.equal(execute('bullets.filter(shot=>shot.auxiliary).length'),0);
   assert.deepEqual(snapshot('[evolution.pierce,evolution.blast,evolution.aegis,evolution.refits]'),[0,0,0,0]);
 });
-check('an actual wing lance can damage a Boss weapon with the component transfer rule', () => {
+check('an actual wing lance damages an organic appendage once through the Boss hit regions', () => {
   activeBoss();
-  execute(`const upperPart=boss.components[0], upperBounds=bossComponentBounds(boss,upperPart);
-    spawnEvolutionRound({x:upperBounds.x-160,y:upperBounds.y},"lance",.8,{pierces:3});`);
+  execute('spawnEvolutionRound({x:boss.x-200,y:boss.y-boss.height*.31},"lance",.8,{pierces:3});');
   const damage=execute('Math.exp(bullets[0].damageLog-boss.healthLog)');
   execute('updateShooting(.22);resolveProjectileHits();resolveProjectileHits();');
-  near(execute('boss.components[0].hp'),.13-damage);
-  near(execute('boss.components[1].hp'),.13);
-  near(execute('boss.hp'),1-damage*.8);
+  near(execute('boss.hp'),1-damage);
 });
 check('each Aegis rank absorbs only its physical-contact limit and releases once at shield expiry', () => {
   for(const [rank,limit] of [[1,3],[2,5],[3,8]]) {
@@ -424,42 +424,33 @@ check('a maximum-rate focused burst cannot erase a fresh ordinary fighter at mid
   }
 });
 
-check('each of the five Boss hulls survives an overpowered focus packet at late game', () => {
-  for (const [type, time] of [[0,139], [1,300], [2,600], [3,1200], [4,1200]]) {
-    activeBoss(type,false,time);
+check('all eleven Boss bodies survive an overpowered focus packet at late game', () => {
+  for (let type=0;type<11;type++) {
+    const time=139+type*105;
+    activeBoss(type,time);
     execute(extremeLoadout + 'var bossTarget=boss;');
     const packet = fireExtremePacketAt('bossTarget');
     assert.ok(packet.overdrive && packet.mode === 'focus');
     assert.ok(packet.damageLog > execute('bossTarget.healthLog') + Math.log(100));
     assert.equal(execute('activeBosses().includes(bossTarget)'),true,`Boss ${type} was erased at ${time}s`);
     assert.ok(execute('bossTarget.hp>0&&bossTarget.hp<1'));
-    assert.ok(execute('bossTarget.components.every(part=>!part.destroyed)'), 'a center-line hit should land on the hull');
   }
 });
 
-check('a high-power auxiliary round, main packet and beam damage both dual Bosses without erasing either', () => {
-  activeBoss(2,true,1200);
-  execute(extremeLoadout + 'var originalDuo=activeBosses().slice();shotCooldown=999;');
-  for (const index of [0,1]) {
-    const target = 'originalDuo[' + index + ']';
-    execute(`{ const hit=${target}; const muzzle={x:hit.x-260,y:hit.y};
-      spawnEvolutionRound(muzzle,"lance",.8,{pierces:3});updateShooting(.45);resolveProjectileHits(); }`);
-    assert.equal(execute('activeBosses().length'),2,'auxiliary round erased a Boss');
-    assert.ok(execute(target+'.hp>0&&'+target+'.hp<1'), 'lance must deal real damage');
-    const afterLance=execute(target+'.hp');
-    fireExtremePacketAt(target);
-    assert.equal(execute('activeBosses().length'),2,'main round erased a Boss');
-    assert.ok(execute(target+'.hp')<afterLance,'main packet must deal real damage');
-  }
-  const beforeBeam=snapshot('originalDuo.map(target=>target.hp)');
-  execute(`{
-    const first=originalDuo[0], second=originalDuo[1];
-    second.y=second.previousY=first.y;
-    player.y=player.previousY=first.y; player.x=player.previousX=first.x-500;
-    ultimate.charges=1;requestUltimate();updateUltimate(.85);updateUltimate(.45);
-  }`);
-  assert.equal(execute('activeBosses().length'),2,'beam erased a Boss');
-  for (const [index, hp] of snapshot('originalDuo.map(target=>target.hp)').entries()) near(beforeBeam[index]-hp,.18);
+check('high-power auxiliary rounds, main packets and beams damage the fusion Boss without erasing it', () => {
+  activeBoss(10,1200);
+  execute(extremeLoadout + 'var fusion=boss;shotCooldown=999;');
+  execute('spawnEvolutionRound({x:fusion.x-260,y:fusion.y},"lance",.8,{pierces:3});updateShooting(.45);resolveProjectileHits();');
+  assert.equal(execute('boss===fusion'),true,'auxiliary round erased the fusion Boss');
+  const afterLance=execute('fusion.hp');
+  assert.ok(afterLance>0 && afterLance<1);
+  fireExtremePacketAt('fusion');
+  assert.equal(execute('boss===fusion'),true,'main round erased the fusion Boss');
+  const beforeBeam=execute('fusion.hp');
+  assert.ok(beforeBeam<afterLance,'main packet must deal real damage');
+  execute('player.y=player.previousY=fusion.y;player.x=player.previousX=fusion.x-500;ultimate.charges=1;requestUltimate();updateUltimate(.85);updateUltimate(.45);');
+  assert.equal(execute('boss===fusion'),true,'beam erased the fusion Boss');
+  near(beforeBeam-execute('fusion.hp'),.18);
 });
 
 
@@ -476,7 +467,7 @@ check('the recorded 2:48 piercing build cannot erase fresh fighters or a Boss wi
     assert.equal(execute('enemies.length'),1,kind + ' was erased');
     assert.ok(execute('enemies[0].hp>0&&enemies[0].hp<1'));
   }
-  activeBoss(3,false,168);
+  activeBoss(3,168);
   execute(recordedGear);
   fireExtremePacketAt('boss');
   assert.equal(execute('activeBosses().length'),1);
@@ -484,7 +475,7 @@ check('the recorded 2:48 piercing build cannot erase fresh fighters or a Boss wi
 });
 
 check('sustained automatic fire and all support sources give a Boss time to fight back yet still win', () => {
-  activeBoss(4,false,600);
+  activeBoss(4,600);
   execute(extremeLoadout + 'var sustainedTarget=boss;shotCooldown=renderShotCooldown=0;');
   function engage(frames) {
     execute(`for(let frame=0;frame<${frames}&&activeBosses().includes(sustainedTarget);frame++){

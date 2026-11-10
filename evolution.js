@@ -58,7 +58,7 @@ function evolutionCardDetails(kind) {
   const refit = evolutionRefits[kind];
   if (refit) {
     const healing = kind === "refit-heal", shielding = kind === "refit-shield";
-    const disabled = (healing && player.lives >= playerRules.maxLives) || (shielding && shield.charges >= shieldRules.maxCharges);
+    const disabled = (healing && player.lives >= player.maxLives) || (shielding && shield.charges >= shieldRules.maxCharges);
     const damage = progressionFormatLog(evolution.overclock);
     return { ...refit, name: tr(refit.name, refit.nameEn), effect: tr(refit.effect, refit.effectEn),
       level: tr("超限整备 · " + (evolution.refits + 1), "Overlimit Refit · " + (evolution.refits + 1)),
@@ -177,8 +177,7 @@ function chooseEvolution(kind) {
     evolution.overclock += Math.log(refit.factor);
     evolution.refits++;
     if (kind === "refit-heal") {
-      player.lives = Math.min(playerRules.maxLives, player.lives + 1);
-      updateLifeDisplay();
+      grantPlayerLife();
     } else if (kind === "refit-shield") {
       shield.charges = Math.min(shieldRules.maxCharges, shield.charges + 1);
       if (shield.charges === shieldRules.maxCharges) shield.energy = 0;

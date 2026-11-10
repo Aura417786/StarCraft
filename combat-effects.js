@@ -110,7 +110,9 @@ function startBossDeathPresentation(target) {
   combatEffects.choiceTarget = target;
   clearMovement(); cancelUltimate(true); bullets.length = 0;
   movementHint.hidden = true;
-  statusMessage.textContent = tr(target.name + "正在解体，随后选择战机进化。", target.name + " is breaking apart. Choose an evolution next.");
+  statusMessage.textContent = target.alienFinal
+    ? tr("群渊合生体正在瓦解。", "The Abyssal Confluence is collapsing.")
+    : tr(target.name + "正在解体，随后选择战机进化。", target.name + " is breaking apart. Choose an evolution next.");
   updatePauseHint();
 }
 function updateCombatEffects(seconds) {
@@ -148,8 +150,10 @@ function updateCombatEffects(seconds) {
     }
     combatEffects.deathRemaining = Math.max(0, combatEffects.deathRemaining - seconds);
     if (combatEffects.deathRemaining < 1e-9) {
+      const clearedCampaign = combatEffects.choiceTarget?.alienFinal;
       combatEffects.deathRemaining = 0; combatEffects.choiceTarget = null;
-      openEvolutionChoice();
+      if (clearedCampaign) endGame(true);
+      else openEvolutionChoice();
     }
   }
 }

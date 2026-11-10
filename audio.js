@@ -11,6 +11,7 @@ const gameAudio = (() => {
   let master = null;
   let sfxBus = null;
   let musicBus = null;
+  let musicDuck = null;
   let noiseBuffer = null;
   let muted = false;
   let active = false;
@@ -33,7 +34,9 @@ const gameAudio = (() => {
   let lastEnrageTime = -Infinity;
   let lastOverdriveTime = -Infinity;
   let lastPerfectShieldTime = -Infinity;
-  const lastBossAttack = { volley: -Infinity, beam: -Infinity, summon: -Infinity, burst: -Infinity };
+  const bossCueIntervals = { volley: 0.28, beam: 0.65, summon: 0.7, burst: 0.45,
+    coil: 0.4, whip: 0.12, hatch: 0.21, surge: 0.25 };
+  const lastBossAttack = new Map();
 
   function disconnect(node) {
     try { node.disconnect(); } catch { /* 已断开的节点无需再处理。 */ }
@@ -47,6 +50,15 @@ const gameAudio = (() => {
     node.gain.cancelScheduledValues(time);
     node.gain.setValueAtTime(node.gain.value, time);
     node.gain.linearRampToValueAtTime(value, time + duration);
+  }
+  function duckMusic(level, duration) {
+    const time = audio.currentTime;
+    const gain = musicDuck.gain;
+    gain.cancelScheduledValues(time);
+    gain.setValueAtTime(gain.value, time);
+    gain.linearRampToValueAtTime(level, time + 0.025);
+    gain.setValueAtTime(level, time + duration * 0.46);
+    gain.linearRampToValueAtTime(1, time + duration);
   }
   function retireVoice(voice, fade = 0.025) {
     if (!audio || !voices.has(voice)) return;
@@ -133,26 +145,6 @@ const gameAudio = (() => {
     source.stop(start + duration + 0.01);
   }
   function midi(value) { return 440 * Math.pow(2, (value - 69) / 12); }
-  function pluckedString(pitch, time, strength = 1, pan = -0.2) {
-    // 短衰减与略带非整数倍的泛音，模拟拨弦；淡回声代替厚重混响。
-    const frequency = midi(pitch);
-    const partials = [[1, 0.105, 0.39], [2.003, 0.035, 0.23], [3.012, 0.019, 0.14]];
-    for (const [ratio, volume, duration] of partials) note({ bus: "music", time,
-      frequency: frequency * ratio, type: "sine", volume: volume * strength,
-      duration, attack: 0.002, cutoff: 3600, pan });
-    note({ bus: "music", time: time + 0.095, frequency, type: "sine",
-      volume: 0.011 * strength, duration: 0.22, attack: 0.005, cutoff: 1800, pan: -pan });
-  }
-  function bambooFlute(pitch, time, duration, strength = 1) {
-    const frequency = midi(pitch);
-    note({ bus: "music", time, frequency, endFrequency: frequency * 1.0015,
-      type: "sine", volume: 0.071 * strength, duration, attack: 0.04,
-      cutoff: 2600, sustain: true, pan: 0.12 });
-    note({ bus: "music", time, frequency: frequency * 2, type: "sine",
-      volume: 0.01 * strength, duration: duration * 0.9, attack: 0.05, cutoff: 2800, pan: 0.12 });
-    note({ bus: "music", time, noise: true, volume: 0.005 * strength,
-      duration: Math.min(0.2, duration), attack: 0.035, filterType: "bandpass", cutoff: 1600, pan: 0.12 });
-  }
   function warDrum(time, heavy = true, strength = 1) {
     // 鼓皮的瞬态、中频鼓腔和低频余震分开合成，避免只有一声薄脆的电子提示。
     note({ bus: "music", time, duration: heavy ? 0.48 : 0.23,
@@ -166,7 +158,7 @@ const gameAudio = (() => {
       endFrequency: 70, type: "triangle", volume: 0.06 * strength, cutoff: 500 });
   }
   function lowWarHorn(pitch, time, duration, strength = 1) {
-    // 低沉号角与拨弦、笛声共用和声，保留国风旋律，同时给 Boss 战增加厚度。
+    // 带少量不谐振动的低沉号角给强拍增加空间和厚度。
     const frequency = midi(pitch);
     note({ bus: "music", time, duration, frequency, endFrequency: frequency * 0.996,
       type: "triangle", volume: 0.12 * strength, cutoff: 700, attack: 0.09, sustain: true });
@@ -180,47 +172,51 @@ const gameAudio = (() => {
         type: "sine", volume: volume * strength, duration, attack: 0.012, cutoff: 2600, pan: -0.1 });
     }
   }
+  function pulseBass(pitch, time, duration, strength = 1, hot = false) {
+    const frequency = midi(pitch);
+    note({ bus: "music", time, duration, frequency, type: "sawtooth",
+      endFrequency: frequency * 0.992, volume: 0.126 * strength,
+      cutoff: hot ? 800 : 480, endCutoff: 145, attack: 0.008 });
+    note({ bus: "music", time, duration, frequency: frequency / 2, type: "sine",
+      volume: 0.085 * strength, cutoff: 170, attack: 0.013 });
+  }
+  function tensionStab(pitch, time, duration, strength, pan) {
+    for (const [offset, weight] of [[0, 1], [7, 0.32], [12, 0.24]]) {
+      const frequency = midi(pitch + offset);
+      note({ bus: "music", time, duration, frequency, endFrequency: frequency * 0.996,
+        type: "sawtooth", volume: 0.09 * strength * weight, cutoff: 690, endCutoff: 240,
+        attack: 0.029, pan });
+    }
+  }
+  const flightRoots = [40, 40, 41, 43, 40, 36, 38, 41];
+  const siegeRoots = [40, 40, 41, 34, 40, 38, 36, 41];
   function adventureBeat(step, time, length) {
-    // 原创八小节探索旋律：笛声与拨弦交替留白，连击只叠鼓，不从头重播旋律。
+    // 重拍从 3+3+2 的低音推进，奇数小节留半拍空白给远处的金属回声。
     const beat = step % 16;
-    const bar = Math.floor(step / 16) % 8;
-    const roots = [50, 46, 48, 45, 50, 53, 48, 50];
-    const root = roots[bar];
-    const melody = [
-      [0, null, 7, 5, 3, null, 5, 7],
-      [10, 7, null, 5, 3, null, 0, 3],
-      [5, null, 7, 10, 12, null, 10, 7],
-      [5, 3, null, 0, -2, null, 3, 5],
-      [7, null, 12, 10, 7, 5, null, 3],
-      [10, 12, null, 15, 12, null, 10, 7],
-      [5, null, 10, 7, 5, null, 3, 0],
-      [3, 5, null, 7, 3, null, 0, null],
-    ];
-    if (beat === 0 || beat === 8) {
-      pluckedString(root + (beat === 8 ? 7 : 0), time, 0.64, -0.3);
-      if (beat === 0) note({ bus: "music", time, duration: length * 13,
-        frequency: midi(root - 12), type: "sine", volume: 0.043,
-        cutoff: 220, attack: 0.08, sustain: true });
-    }
-    if (beat === 6 || beat === 14) pluckedString(root + 12, time, 0.37, 0.25);
-    if (beat % 2 === 0) {
-      const index = beat / 2;
-      const pitch = melody[bar][index];
-      if (pitch !== null) bambooFlute(74 + pitch, time,
-        length * (index === 7 || melody[bar][index + 1] === null ? 3.1 : 1.65), 0.62);
-    }
+    const bar = Math.floor(step / 16) % flightRoots.length;
+    const root = flightRoots[bar];
+    const notes = { 0: 0, 3: 0, 6: 7, 8: 0, 11: bar % 2 ? 1 : 0, 14: -2 };
+    if (Object.hasOwn(notes, beat) && (beat !== 14 || bar % 2 === 0))
+      pulseBass(root + notes[beat], time, length * (beat === 0 ? 2.8 : 1.65), beat === 0 ? 0.86 : 0.57);
+    if ([0, 8, 11].includes(beat)) warDrum(time, beat !== 11, beat === 0 ? 0.73 : 0.5);
+    if ([4, 12].includes(beat)) warDrum(time, false, 0.65);
+    if (beat === 2 || (beat === 10 && bar % 2 === 0))
+      tensionStab(root + (beat === 2 ? 12 : 13), time, length * 4.1, 0.66, beat === 2 ? -0.37 : 0.33);
+    if (beat === 15 && bar % 2 === 1)
+      note({ bus: "music", time, noise: true, filterType: "bandpass", cutoff: 1900, endCutoff: 390,
+        duration: length * 1.7, volume: 0.06, crescendo: true, pan: 0.25 });
     if (!overdriveMusic) {
-      if (comboLayer >= 1 && (beat === 0 || beat === 8)) warDrum(time, false, 0.36);
-      if (comboLayer >= 2 && (beat === 4 || beat === 12)) warDrum(time, true, 0.43);
-      if (comboLayer >= 3 && [3, 7, 11, 15].includes(beat)) warDrum(time, false, 0.48);
+      if (comboLayer >= 1 && beat === 6) warDrum(time, false, 0.4);
+      if (comboLayer >= 2 && [5, 13].includes(beat)) warDrum(time, false, 0.45);
+      if (comboLayer >= 3 && [3, 15].includes(beat)) warDrum(time, true, 0.43);
     }
   }
   function overdriveBeat(step, time, length) {
     if (!overdriveMusic) return;
     const beat = step % 16;
     const bar = Math.floor(step / 16) % 8;
-    const root = [38, 34, 36, 33, 38, 41, 36, 38][bar];
-    // 暴走依然沿用当前乐曲的和声，只增加鼓阵和脉冲低音；Boss 主旋律保持完整。
+    const root = (bossActive ? siegeRoots : flightRoots)[bar];
+    // 暴走叠加同调的鼓阵，首领原有拍点与低音动机保留。
     const strength = bossActive ? 0.46 : 0.82;
     if ([0, 3, 6, 8, 11, 14].includes(beat)) warDrum(time, true, strength);
     if ([2, 5, 7, 10, 13, 15].includes(beat)) warDrum(time, false, strength * 0.85);
@@ -231,46 +227,27 @@ const gameAudio = (() => {
     if (beat === 0 && !bossActive) lowWarHorn(root, time, length * 6, 0.44);
   }
   function bossMusicBeat(step, time, length) {
-    // 原创八小节国风奇幻战斗动机；D 小调五声音阶，并非任何现有游戏原曲。
+    // 同一个半音动机跨过两相；第二相压缩留白，加入三全音应答和双击。
     const beat = step % 16;
-    const bar = Math.floor(step / 16) % 8;
-    const root = [38, 34, 36, 33, 38, 41, 36, 38][bar];
-    const melodies = [
-      [0, 3, 7, null, 10, 7, 5, 3],
-      [3, 5, 7, 12, null, 10, 7, 5],
-      [5, 7, 10, null, 12, 10, 7, 3],
-      [7, 10, 12, 15, 12, null, 10, 7],
-      [12, 10, 7, 5, 3, 5, 7, 10],
-      [10, 7, 5, null, 3, 0, 3, 5],
-      [7, 12, 10, 7, 5, 3, 0, -2],
-      [3, 5, 7, 3, 0, -2, 0, null],
-    ];
-    if (beat === 0) {
-      note({ bus: "music", time, duration: length * 15.7,
-        frequency: midi(root - 12), type: "sine", volume: enraged ? 0.15 : 0.12,
-        cutoff: 260, attack: 0.1, sustain: true });
-      lowWarHorn(root, time, length * 7, enraged ? 1.05 : 0.85);
-      if (bar % 2 === 0) bronzeGong(time, enraged ? 1.15 : 0.98);
-    }
-    if ([0, 3, 6, 8, 11, 14].includes(beat)) warDrum(time, true, beat === 0 || beat === 8 ? 1 : 0.7);
-    if ([4, 10, 12, 15].includes(beat)) warDrum(time, false, 0.85);
-    if (enraged && [2, 5, 7, 13].includes(beat)) warDrum(time, false, 0.65);
-    if (enraged && beat === 8) lowWarHorn(root + 7, time, length * 6, 0.65);
-    if ((bar === 3 || bar === 7) && beat === 14) bronzeGong(time, 0.45);
-    if (beat % (enraged ? 2 : 4) === 0) {
-      const strings = [0, 7, 12, 15, 12, 7, 5, 10];
-      const index = Math.floor(beat / (enraged ? 2 : 4));
-      pluckedString(50 + strings[(index + bar % 3) % strings.length], time,
-        enraged ? 1.08 : 0.86, beat % 4 === 0 ? -0.28 : 0.24);
-    }
-    if (beat % 2 === 0) {
-      const index = beat / 2;
-      const pitch = melodies[bar][index];
-      if (pitch !== null) {
-        const holds = index === 7 || melodies[bar][index + 1] === null;
-        bambooFlute(62 + pitch, time, length * (holds ? 3.2 : 1.7), enraged ? 0.88 : 0.8);
-      }
-    }
+    const bar = Math.floor(step / 16) % siegeRoots.length;
+    const root = siegeRoots[bar];
+    const breakBeat = bar === 7 && beat > 11;
+    const notes = enraged
+      ? { 0: 0, 2: 0, 3: 1, 6: 0, 7: 6, 8: 0, 10: 0, 11: -2, 13: 1, 14: 7 }
+      : { 0: 0, 3: 1, 6: 0, 8: 0, 11: -2, 14: 7 };
+    if (!breakBeat && Object.hasOwn(notes, beat))
+      pulseBass(root + notes[beat], time, length * (enraged ? 1.12 : 1.75), beat === 0 ? 1.3 : 0.91, enraged);
+    if (!breakBeat && (enraged ? [0, 2, 6, 8, 11, 14] : [0, 6, 8, 14]).includes(beat))
+      warDrum(time, true, beat === 0 || beat === 8 ? 1.09 : 0.76);
+    if ([4, 10, 12].includes(beat) || (enraged && [3, 7, 13, 15].includes(beat)))
+      warDrum(time, false, breakBeat ? 0.4 : 0.8);
+    if (beat === 0 && (bar % 2 === 0 || enraged)) lowWarHorn(root, time, length * 6, 0.94);
+    if ((beat === 3 && bar % 2 === 0) || beat === 9 || (enraged && beat === 13))
+      tensionStab(root + (beat === 9 ? 18 : 13), time, length * (enraged ? 2.3 : 3.6), 0.98, beat === 9 ? 0.32 : -0.32);
+    if (bar % 4 === 0 && beat === 0) bronzeGong(time, 0.86);
+    if (beat === 7 || (enraged && beat === 15))
+      note({ bus: "music", time, noise: true, filterType: "bandpass", cutoff: 480, endCutoff: 1850,
+        duration: length * 1.3, volume: 0.08, crescendo: true, pan: beat === 7 ? -0.3 : 0.3 });
   }
   function scheduleMusic() {
     scheduler = null;
@@ -279,7 +256,7 @@ const gameAudio = (() => {
     // 电脑卡顿或恢复后从当前时刻接着演奏，绝不追补积压的鼓点。
     if (nextStepTime < now - 0.04) nextStepTime = now + 0.02;
     while (nextStepTime < now + 0.12) {
-      const tempo = bossActive ? (enraged ? 132 : 104) : (overdriveMusic ? 124 : 88);
+      const tempo = bossActive ? (enraged ? 146 : 126) : (overdriveMusic ? 124 : 98);
       const length = 60 / tempo / 4;
       if (bossActive) bossMusicBeat(musicStep, nextStepTime, length);
       else adventureBeat(musicStep, nextStepTime, length);
@@ -323,6 +300,7 @@ const gameAudio = (() => {
     master = audio.createGain();
     sfxBus = audio.createGain();
     musicBus = audio.createGain();
+    musicDuck = audio.createGain();
     const limiter = audio.createDynamicsCompressor();
     master.gain.value = muted ? 0 : 0.68;
     sfxBus.gain.value = 0.65;
@@ -332,7 +310,8 @@ const gameAudio = (() => {
     limiter.ratio.value = 4;
     limiter.attack.value = 0.003;
     limiter.release.value = 0.18;
-    sfxBus.connect(master); musicBus.connect(master); master.connect(limiter); limiter.connect(audio.destination);
+    sfxBus.connect(master); musicBus.connect(musicDuck); musicDuck.connect(master);
+    master.connect(limiter); limiter.connect(audio.destination);
     noiseBuffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * 2), audio.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let index = 0; index < data.length; index++) data[index] = Math.random() * 2 - 1;
@@ -486,13 +465,42 @@ const gameAudio = (() => {
   }
   function bossAttack(kind = "volley") {
     if (!canPlay()) return;
-    if (!Object.prototype.hasOwnProperty.call(lastBossAttack, kind)) kind = "volley";
+    if (!Object.hasOwn(bossCueIntervals, kind)) kind = "volley";
     const time = audio.currentTime;
-    const intervals = { volley: 0.28, beam: 0.65, summon: 0.7, burst: 0.45 };
-    if (time - lastBossAttack[kind] < intervals[kind]) return;
-    lastBossAttack[kind] = time;
+    if (time - (lastBossAttack.get(kind) ?? -Infinity) < bossCueIntervals[kind]) return;
+    lastBossAttack.set(kind, time);
     const common = { bus: "boss", time };
-    if (kind === "beam") {
+    if (kind === "coil") {
+      note({ ...common, duration: 0.42, frequency: 57, endFrequency: 144, type: "sawtooth",
+        volume: 0.22, cutoff: 160, endCutoff: 800, resonance: 1.6, crescendo: true, pan: 0.38 });
+      note({ ...common, noise: true, duration: 0.36, volume: 0.16, filterType: "bandpass",
+        cutoff: 170, endCutoff: 990, crescendo: true, pan: 0.2 });
+    } else if (kind === "whip") {
+      duckMusic(0.49, 0.32);
+      note({ ...common, noise: true, duration: 0.24, volume: 0.28, filterType: "bandpass",
+        cutoff: 2300, endCutoff: 260, resonance: 0.8, pan: 0.32 });
+      note({ ...common, duration: 0.32, frequency: 159, endFrequency: 38, type: "triangle",
+        volume: 0.32, cutoff: 720, endCutoff: 120, pan: 0.08 });
+      note({ ...common, time: time + 0.036, noise: true, duration: 0.37, volume: 0.115,
+        filterType: "bandpass", cutoff: 520, endCutoff: 120, resonance: 1.6, pan: -0.3 });
+    } else if (kind === "hatch") {
+      duckMusic(0.67, 0.38);
+      for (let pulse = 0; pulse < 3; pulse++) note({ ...common, time: time + pulse * 0.073,
+        duration: 0.27, frequency: 68 + pulse * 15, endFrequency: 34 + pulse * 5,
+        type: "triangle", volume: 0.2 - pulse * 0.036, cutoff: 560, endCutoff: 220,
+        resonance: 2, pan: 0.34 - pulse * 0.19 });
+      note({ ...common, noise: true, duration: 0.34, volume: 0.15, filterType: "bandpass",
+        cutoff: 350, endCutoff: 150, attack: 0.024, resonance: 3 });
+    } else if (kind === "surge") {
+      duckMusic(0.46, 0.47);
+      note({ ...common, duration: 0.45, frequency: 102, endFrequency: 34, type: "sawtooth",
+        volume: 0.23, cutoff: 780, endCutoff: 200, attack: 0.01, pan: 0.28 });
+      note({ ...common, duration: 0.5, frequency: 69, endFrequency: 33, type: "sine",
+        volume: 0.26, cutoff: 210, attack: 0.01 });
+      note({ ...common, noise: true, duration: 0.37, volume: 0.2, filterType: "bandpass",
+        cutoff: 1320, endCutoff: 220, resonance: 1.3 });
+    } else if (kind === "beam") {
+      duckMusic(0.64, 0.47);
       note({ ...common, duration: 0.45, frequency: 145, endFrequency: 68,
         type: "triangle", volume: 0.15, cutoff: 1150, sustain: true });
       note({ ...common, noise: true, duration: 0.44, volume: 0.15,
@@ -523,6 +531,7 @@ const gameAudio = (() => {
     const time = audio.currentTime;
     if (time - lastEnrageTime < 2) return;
     lastEnrageTime = time;
+    duckMusic(0.27, 1.04);
     note({ bus: "boss", time, duration: 1.1, frequency: 110, endFrequency: 63,
       type: "triangle", volume: 0.22, cutoff: 1700, endCutoff: 550, attack: 0.04, sustain: true });
     note({ bus: "boss", time, duration: 1.15, frequency: 62, endFrequency: 31,
@@ -533,7 +542,7 @@ const gameAudio = (() => {
       type: "triangle", volume: 0.085, cutoff: 1100, pan: 0.2, sustain: true });
   }
   function stopUltimate() {
-    // 只取消大招：不打断普通射击、爆炸或国风配乐。
+    // 只取消大招：不打断普通射击、爆炸或战斗配乐。
     stopVoices("ultimate");
   }
   function chargeUltimate(duration = 0.85) {

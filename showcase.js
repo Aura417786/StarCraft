@@ -21,10 +21,10 @@ const showcaseWatch = document.querySelector("#showcase-watch");
 const showcaseRecord = document.querySelector("#showcase-record");
 const showcaseDownload = document.querySelector("#showcase-download");
 const showcaseScenes = [
-  { start: 0, title: "拆掉炮组，改写战局", subtitle: "聚焦射击可摧毁首领武器，削弱对应攻击", sector: 3, time: 96 },
+  { start: 0, title: "渊潮母体，深空来客", subtitle: "触须随身躯呼吸，蓄力时留意发亮的器官", sector: 3, time: 96 },
   { start: 7, title: "连击点燃暴走", subtitle: "持续击杀，释放更快、更猛烈的主炮", sector: 1, time: 60 },
   { start: 13, title: "进化，决定你的战斗方式", subtitle: "破阵翼刃 · 星隼僚机 · 赤金壁垒", sector: 0, time: 180 },
-  { start: 20, title: "双舰来袭，寻找突破口", subtitle: "协同弹幕留有安全通道，抓住反击时机", sector: 4, time: 390 },
+  { start: 20, title: "群渊合生体", subtitle: "预判控制与追击，抓住连招间的反击时机", sector: 4, time: 680 },
   { start: 27, title: "星际突围", subtitle: "电脑浏览器 · 免费试玩 · 挑战你的第一只首领", sector: 0, time: 0 },
 ];
 
@@ -100,8 +100,7 @@ function enterShowcaseScene(index) {
     boss.y = boss.previousY = arena.y;
     boss.phase = "recover";
     boss.hp = boss.displayHp = 0.72;
-    ensureBossComponents(boss)[0].hp = 0.025;
-    player.y = player.previousY = bossComponentBounds(boss, boss.components[0]).y;
+    player.y = player.previousY = boss.y;
   } else if (index === 1) {
     momentum.count = momentum.best = 19;
     trySpawnFormation("command");
@@ -126,7 +125,7 @@ function enterShowcaseScene(index) {
   } else if (index === 3) {
     evolution.pierce = 2;
     evolution.aegis = 1;
-    spawnBoss(2, 4);
+    spawnBoss(10);
   } else {
     shotCooldown = Infinity;
     player.x = player.previousX = viewport.width * 0.5;
@@ -147,8 +146,8 @@ function updateShowcaseMovement(seconds) {
   let desiredY = viewport.height * 0.5;
   const age = showcase.elapsed - showcase.sceneStarted;
   if (showcase.scene === 0) {
-    if (age < 2.8 && boss?.components[0] && !boss.components[0].destroyed) {
-      desiredY = bossComponentBounds(boss, boss.components[0]).y;
+    if (age < 2.8 && boss) {
+      desiredY = boss.y;
     } else {
       desiredY += Math.sin(age * 1.2) * viewport.height * 0.11;
     }
@@ -160,7 +159,7 @@ function updateShowcaseMovement(seconds) {
     desiredY = nearest ? nearest.y : desiredY + Math.sin(age) * 65;
     if (showcase.scene === 2) showcaseOnce("shield", 0.8, () => requestShield());
   } else if (showcase.scene === 3) {
-    desiredY = duoEncounter?.safeWidth ? duoEncounter.safeY : viewport.height * 0.5;
+    desiredY = viewport.height * (0.5 + Math.sin(age * 1.2) * 0.18);
     showcaseOnce("shield", 4.4, () => requestShield());
     showcaseOnce("ultimate", 4.9, () => requestUltimate());
   } else {
@@ -184,7 +183,7 @@ function drawShowcaseTitles() {
   context.fillRect(0, 0, width, height * 0.3);
   context.fillStyle = "#ff6377";
   context.font = `600 ${12 * scale}px Consolas, sans-serif`;
-  context.fillText("STAR BREAKER  /  V13", width * 0.045, height * 0.065);
+  context.fillText("STAR BREAKER  /  ALIEN CAMPAIGN", width * 0.045, height * 0.065);
   context.fillStyle = "#f1f4fc";
   context.font = `700 ${35 * scale}px Microsoft YaHei, sans-serif`;
   context.fillText(scene.title, width * 0.045, height * 0.13);

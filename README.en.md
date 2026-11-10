@@ -1,14 +1,15 @@
 # Star Breaker · 星际突围
 
-Shoot the guns off a boss, upgrade your fighter, and survive five sectors of deep space. Star Breaker is a single-player, side-scrolling shooter for desktop browsers.
+Upgrade your fighter, fly through five sectors and defeat ten alien bosses and their final fusion. Star Breaker is a single-player, side-scrolling shooter for desktop browsers.
 
-[Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Watch the 30-second trailer](media/trailer.mp4) · [中文说明](README.md)
+[Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Watch the previous version's trailer](media/trailer.mp4) · [中文说明](README.md)
 
 [Fullscreen bug fix comparison video](media/fullscreen-compare.mp4) · [Development write-up in Chinese](promotion/全屏敌机消失复盘.md)
 
 ![Star Breaker gameplay](media/gameplay.gif)
 
-- **Disarm bosses under fire.** Find openings to focus fire on their upper or lower gun mounts and shut down the attacks those mounts control. Later battles pit you against two bosses at once.
+- **Fight a fixed alien campaign.** Watch the Broodmother coil before it strikes. At half health, its shell opens and one lash becomes a chain of three. The final boss pairs a slowing field with a locked explosion and uses two other chained attacks.
+- **Grow your life capacity.** Green orbs heal a life. When you're already full, they add one to both your current life and your capacity.
 - **Upgrade your main gun.** Shoot power-up orbs to fire faster, add firing lanes, or launch harder-hitting rounds. Later orbs can grant several levels at once.
 - **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. Sustain focused fire against late armored fighters and gunships, or clear a lane with the Crimson Beam.
 - **Evolve after boss victories.** Choose wing guns, an AI wingman, or a shield that absorbs enemy shots and fires them back.

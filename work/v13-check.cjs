@@ -116,10 +116,9 @@ function isolated(extra = '') {
     battleTime=0;score=0;kills=0;bossHitGrace=0;resetUltimate();` + extra);
   execute('previousTime='+now+';');
 }
-function activeBoss(type = 0, duo = false) {
-  isolated(`battleTime=95;spawnBoss(${type}${duo ? ',( '+type+' + 1)%5' : ''});
-    for(const t of activeBosses()){Object.assign(t,${duo ? 'duoArena(t.slot)' : 'bossArena()'});t.previousX=t.x;t.previousY=t.y;t.phase='recover';ensureBossComponents(t);}
-    if(duoEncounter){duoEncounter.phase='recover';duoEncounter.time=0;}`);
+function activeBoss(type = 0) {
+  isolated(`battleTime=95;spawnBoss(${type});Object.assign(boss,bossArena());
+    boss.previousX=boss.x;boss.previousY=boss.y;boss.phase='recover';`);
 }
 function setObject(kind = 'wreck', x = 500, y = 350) {
   execute(`var prop=spawnBattlefieldObject('${kind}');Object.assign(prop,{x:${x},previousX:${x},y:${y},previousY:${y},healthLog:Math.log(10)});`);
@@ -133,7 +132,7 @@ function projectile(x0 = 100, x1 = 900, y = 350, damage = 2, pierces = 0) {
 }
 
 check('v13 production modules load in index order without missing hooks', () => {
-  for (const name of ['updateFormations','drawFormationSignals','updateBattlefieldEvents','drawBattlefield','projectileBossHit','drawBossComponents'])
+  for (const name of ['updateFormations','drawFormationSignals','updateBattlefieldEvents','drawBattlefield','projectileAlienBossHit','drawBossShip'])
     assert.equal(execute('typeof '+name),'function');
 });
 check('normal wave scheduler sends more enemies per second as the battle progresses', () => {
@@ -313,87 +312,14 @@ check('Boss entry clears transport without paying a destruction reward', () => {
   assert.equal(execute('powerups.length'),0);assert.equal(execute('score'),0);
 });
 
-check('all five Boss types have two embedded independently damageable weapons', () => {
-  for(let type=0;type<5;type++){activeBoss(type);assert.equal(execute('boss.components.length'),2);
-    assert.equal(execute('boss.components.every(p=>p.hp>0&&!p.destroyed)'),true);
-    assert.equal(execute('bossComponentBounds(boss,boss.components[0]).y < boss.y && bossComponentBounds(boss,boss.components[1]).y > boss.y'),true);}
-});
-check('swept shot at visible upper pod selects component while center shot selects hull', () => {
-  for(let type=0;type<5;type++){activeBoss(type);
-    execute('var b=bossComponentBounds(boss,boss.components[0]);var shot={previousX:100,x:boss.x+boss.width,previousY:b.y,y:b.y,length:26,angle:0,halfHeight:2.5};');
-    assert.equal(execute('projectileBossHit(shot,boss)?.component===boss.components[0]'),true);
-    execute('shot.previousY=shot.y=boss.y;');assert.equal(execute('projectileBossHit(shot,boss)?.component'),null);}
-});
-check('pod damage transfers once to hull and charges only actual hull damage', () => {
-  activeBoss();execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02),source:"bullet"},boss,boss.components[0]);');
-  near(execute('boss.hp'),.984);near(execute('boss.components[0].hp'),.11);near(execute('ultimate.energy'),.016*180);
-});
-check('breaking pod does not add score, kill count or duplicate destruction', () => {
-  activeBoss();execute('damageBossComponent(boss,boss.components[0],1);damageBossComponent(boss,boss.components[0],1);');
-  assert.equal(execute('bossComponentWrecks.length'),1);assert.equal(execute('bossWeaponOnline(boss,-1)'),false);
-  assert.equal(execute('bossWeaponOnline(boss,1)'),true);assert.equal(execute('score'),0);assert.equal(execute('kills'),0);
-});
-check('destroyed weapons are skipped in every solo Boss attack cycle', () => {
-  for(let type=0;type<5;type++){activeBoss(type);execute('damageBossComponent(boss,boss.components[0],1);boss.attackIndex=-1;startBossAttack();');
-    assert.equal(execute('boss.attackIndex'),1);execute('damageBossComponent(boss,boss.components[1],1);boss.attackIndex=-1;startBossAttack();');
-    assert.equal(execute('boss.attackIndex'),2);}
-});
-check('destroying a preparing launcher cancels un-fired hazards but preserves existing shots', () => {
-  activeBoss(1);execute('boss.attackIndex=0;startBossAttack();bossProjectiles.push({x:450,y:350,previousX:460,previousY:350,radius:7});damageBossComponent(boss,boss.components[1],1);');
-  assert.equal(execute('boss.phase'),'recover');assert.equal(execute('bossHazards.length'),0);assert.equal(execute('bossProjectiles.length'),1);
-});
-check('large-area damage never double damages both parts and the hull', () => {
-  activeBoss();execute('applyBossHit({damageLog:boss.healthLog+Math.log(.1),source:"ultimate"},boss,boss.components[0]);');
-  near(execute('boss.hp'),.9);near(execute('boss.components[0].hp'),.13);near(execute('ultimate.energy'),0);
-});
-check('destroyed sockets remain hittable without becoming phantom shields', () => {
-  activeBoss();execute('damageBossComponent(boss,boss.components[0],1);var b=bossComponentBounds(boss,boss.components[0]);var hit=projectileBossHit({previousX:100,x:boss.x+boss.width,previousY:b.y,y:b.y,length:26},boss);');
-  assert.equal(execute('Number.isFinite(hit.time)'),true);assert.equal(execute('hit.component'),null);
-});
 check('air beyond the outer wings does not falsely absorb a near-miss', () => {
-  activeBoss();execute('var h=projectileBossHit({previousX:100,x:boss.x+boss.width,previousY:boss.y+boss.height*.6,y:boss.y+boss.height*.6,length:26},boss);');
+  activeBoss();execute('var h=projectileAlienBossHit({previousX:100,x:boss.x+boss.width,previousY:boss.y+boss.height*.6,y:boss.y+boss.height*.6,length:26},boss);');
   assert.equal(execute('h'),null);
 });
-check('pause freezes detached weapon pieces and damaged emitter timers', () => {
-  activeBoss();execute('damageBossComponent(boss,boss.components[0],1);');
-  const previous=snapshot('({age:bossComponentWrecks[0].age,x:bossComponentWrecks[0].x,d:boss.components[0].damagedAge})');
-  emit(window,'blur');step(.05);step(.05);
-  assert.deepEqual(snapshot('({age:bossComponentWrecks[0].age,x:bossComponentWrecks[0].x,d:boss.components[0].damagedAge})'),previous);
-});
-check('detached weapon pieces have a bounded lifetime and count', () => {
-  activeBoss();execute('for(let i=0;i<15;i++){const copy={...boss,components:undefined};damageBossComponent(copy,ensureBossComponents(copy)[0],1);}');
-  assert.equal(execute('bossComponentWrecks.length'),10);execute('updateBossComponents(2);');assert.equal(execute('bossComponentWrecks.length'),0);
-});
-check('duo component damage preserves locked lane and shared attack phase', () => {
-  activeBoss(0,true);execute('beginDuoAttack();');const before=snapshot('({y:duoEncounter.safeY,w:duoEncounter.safeWidth,p:duoEncounter.phase})');
-  execute('damageBossComponent(boss,boss.components[0],1);');
-  assert.deepEqual(snapshot('({y:duoEncounter.safeY,w:duoEncounter.safeWidth,p:duoEncounter.phase})'),before);
-});
-check('duo broken barrels reduce fire while all shots retain the safe corridor', () => {
-  activeBoss(0,true);execute('beginDuoAttack();duoEncounter.attackIndex=2;fireDuoWave();');const original=execute('bossProjectiles.length');
-  assert.ok(original>0);execute('bossProjectiles.length=0;for(const t of activeBosses())damageBossComponent(t,ensureBossComponents(t)[0],1);fireDuoWave();');
-  assert.ok(execute('bossProjectiles.length')<original);
-  assert.equal(execute('bossProjectiles.every(p=>duoShotIsOutsideLane(p.y,p.radius))'),true);
-});
-check('losing a duo beam launcher removes only its half of the lockout', () => {
-  activeBoss(0,true);execute('beginDuoAttack();duoEncounter.attackIndex=1;duoEncounter.fired=0;fireDuoWave();');
-  const original=execute('bossHazards.length');assert.equal(original,2);
-  execute('bossHazards.length=0;damageBossComponent(boss,boss.components[0],1);duoEncounter.fired=0;fireDuoWave();');
-  assert.equal(execute('bossHazards.length'),1);
-});
-
 check('a single Boss victory does not jump or reset the timed journey', () => {
   activeBoss();execute('battlefieldState.clock=34;scenerySyncJourney();');
   const before=snapshot('({c:battlefieldState.completed,s:battlefieldState.sector,t:battlefieldState.clock})');
   execute('var fallen=boss;defeatBoss(fallen);defeatBoss(fallen);');
-  assert.deepEqual(snapshot('({c:battlefieldState.completed,s:battlefieldState.sector,t:battlefieldState.clock})'),before);
-});
-check('both duo kills leave the scenery journey unchanged', () => {
-  activeBoss(0,true);execute('battlefieldState.clock=102;scenerySyncJourney();');
-  const before=snapshot('({c:battlefieldState.completed,s:battlefieldState.sector,t:battlefieldState.clock})');
-  execute('defeatBoss(boss);');assert.equal(execute('activeBosses().length'),1);
-  assert.deepEqual(snapshot('({c:battlefieldState.completed,s:battlefieldState.sector,t:battlefieldState.clock})'),before);
-  execute('defeatBoss(boss);');
   assert.deepEqual(snapshot('({c:battlefieldState.completed,s:battlefieldState.sector,t:battlefieldState.clock})'),before);
 });
 check('effective flight time changes sectors every 75 seconds and loops all five', () => {
@@ -471,19 +397,19 @@ check('evolution selection freezes scenery transition and object timers', () => 
   const previous=snapshot('({t:battlefieldState.transition,s:battlefieldState.clock,e:battlefieldEvents.clock})');step(.05);
   assert.deepEqual(snapshot('({t:battlefieldState.transition,s:battlefieldState.clock,e:battlefieldEvents.clock})'),previous);
 });
-check('resize preserves scenery progression, Boss part damage and live world objects', () => {
-  activeBoss();execute('advanceBattlefield();damageBossComponent(boss,boss.components[0],1);spawnBattlefieldObject();');
+check('resize preserves scenery progression, Boss hull damage and live world objects', () => {
+  activeBoss();execute('advanceBattlefield();boss.hp=.67;spawnBattlefieldObject();');
   execute('var retainedBossResizeObject=battlefieldEvents.objects[0];');
   surface={width:900,height:540};emit(window,'resize');
-  assert.equal(execute('battlefieldState.sector'),1);assert.equal(execute('boss.components[0].destroyed'),true);
-  assert.equal(execute('battlefieldEvents.objects.length'),1);assert.equal(execute('bossComponentWrecks.length'),0);
+  assert.equal(execute('battlefieldState.sector'),1);assert.equal(execute('boss.hp'),.67);
+  assert.equal(execute('battlefieldEvents.objects.length'),1);
   assert.equal(execute('battlefieldEvents.objects[0]===retainedBossResizeObject'),true);
 });
 check('restart resets sector, event clock, formation cycle and debris', () => {
   isolated('advanceBattlefield();battleTime=50;trySpawnFormation();updateFormations(1.4);spawnBattlefieldObject();');
   emit(nodes.get('#restart-button'),'click');
-  assert.deepEqual(snapshot('({sector:battlefieldState.sector,completed:battlefieldState.completed,f:formationState.sequence,e:battlefieldEvents.clock,objects:battlefieldEvents.objects.length,parts:bossComponentWrecks.length})'),
-    {sector:0,completed:0,f:0,e:0,objects:0,parts:0});
+  assert.deepEqual(snapshot('({sector:battlefieldState.sector,completed:battlefieldState.completed,f:formationState.sequence,e:battlefieldEvents.clock,objects:battlefieldEvents.objects.length})'),
+    {sector:0,completed:0,f:0,e:0,objects:0});
 });
 check('reduced motion removes parallax and keeps clear scene labels', () => {
   isolated('reducedMotion.matches=true;player.x=flightBounds.right;player.y=flightBounds.bottom;updateBattlefield(.1);');
@@ -495,7 +421,7 @@ check('reduced motion removes parallax and keeps clear scene labels', () => {
 check('all sectors, damaged Bosses, props and formations render finite geometry', () => {
   for(const quiet of [false,true])for(let type=0;type<5;type++){
     activeBoss(type);execute(`reducedMotion.matches=${quiet};battlefieldState.clock=${type*75+70};scenerySyncJourney();
-      damageBossComponent(boss,boss.components[0],1);boss.components[1].hp=.03;spawnBattlefieldObject('cell');spawnBattlefieldObject('wreck');`);
+      boss.hp=.43;spawnBattlefieldObject('cell');spawnBattlefieldObject('wreck');`);
     drawOperations.length=0;captureDraws=true;execute('drawBattlefield();drawBossBattle();drawBattlefieldObjects();');captureDraws=false;
     for(const op of drawOperations)for(const arg of op.args)if(typeof arg==='number')assert.ok(Number.isFinite(arg),`${op.name} emitted ${arg}`);
   }

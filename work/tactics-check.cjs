@@ -116,11 +116,6 @@ function isolated(extra = '') {
     battleTime=0;score=0;kills=0;bossHitGrace=0;resetUltimate();` + extra);
   execute('previousTime='+now+';');
 }
-function activeBoss(type = 0, duo = false) {
-  isolated(`battleTime=95;spawnBoss(${type}${duo ? ',( '+type+' + 1)%5' : ''});
-    for(const t of activeBosses()){Object.assign(t,${duo ? 'duoArena(t.slot)' : 'bossArena()'});t.previousX=t.x;t.previousY=t.y;t.phase='recover';ensureBossComponents(t);}
-    if(duoEncounter){duoEncounter.phase='recover';duoEncounter.time=0;}`);
-}
 function setObject(kind = 'wreck', x = 500, y = 350) {
   execute(`var prop=spawnBattlefieldObject('${kind}');Object.assign(prop,{x:${x},previousX:${x},y:${y},previousY:${y},healthLog:Math.log(10)});`);
 }

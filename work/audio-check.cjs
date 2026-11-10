@@ -180,8 +180,8 @@ async function run() {
     assert.ok(peak <= 48, "observed " + peak);
     assert.ok(musicAudio.sources.every(node => Number.isFinite(node.startAt) && Number.isFinite(node.stopAt)));
   });
-  await check("music retains flute and plucked harmonics alongside low horns, without electronic hats", () => {
-    assert.ok(musicAudio.sources.filter(node => node.oscillator).every(node => ["sine", "triangle"].includes(node.type)));
+  await check("the new score layers filtered synth bass, low horns and percussion", () => {
+    assert.ok(musicAudio.sources.some(node => node.type === "sawtooth"));
     assert.ok(musicAudio.sources.some(node => node.type === "triangle" && node.frequency.events[0].value < 150));
     assert.ok(musicAudio.sources.some(node => node.oscillator && node.frequency.events[0].value < 45));
     assert.ok(musicAudio.filters.every(filter => filter.type !== "highpass"));
@@ -199,6 +199,30 @@ async function run() {
     assert.equal(normal.timers.size, 1); assert.equal(rage.timers.size, 1);
   });
   normal.api.destroy(); rage.api.destroy();
+
+  const cues = world(FakeContext);
+  cues.api.sync(true, true);
+  await cues.api.unlock();
+  const cueAudio = instances.at(-1);
+  await check("Broodmother charge, whip, hatch and surge have distinct cues and duck only the score", () => {
+    for (const [kind, count, pitch] of [["coil", 2, 57], ["whip", 3, 159], ["hatch", 4, 68], ["surge", 3, 102]]) {
+      const start = cueAudio.sources.length;
+      cues.api.bossAttack(kind);
+      const layers = cueAudio.sources.slice(start);
+      assert.equal(layers.length, count);
+      assert.ok(layers.some(node => node.frequency.events[0]?.value === pitch));
+      assert.ok(layers.some(node => !node.oscillator));
+      cues.api.bossAttack(kind);
+      assert.equal(cueAudio.sources.length, start + count);
+      cueAudio.advance(0.55);
+    }
+    const musicBus = cueAudio.gains[2], duck = cueAudio.gains[3];
+    assert.equal(musicBus.connections[0], duck);
+    assert.notEqual(cueAudio.gains[1].connections[0], duck);
+    assert.ok(duck.gain.events.some(event => event.value < 0.5));
+    assert.equal(duck.gain.events.at(-1).value, 1);
+  });
+  cues.api.destroy();
 
   const cannonWorld = world(FakeContext), cannon = cannonWorld.api;
   cannon.sync(true, true); await cannon.unlock();
@@ -481,12 +505,12 @@ async function run() {
   const dynamicWorld = world(FakeContext), dynamic = dynamicWorld.api;
   dynamic.sync(true, false, false, { combo: 0, overdrive: false });
   await dynamic.unlock(); const dynamicAudio = instances.at(-1);
-  await check("ordinary combat immediately starts original flute and plucked music without a Boss", () => {
+  await check("ordinary combat immediately starts the new bass-and-drum motif without a Boss", () => {
     assert.equal(dynamicWorld.timers.size, 1);
     assert.ok(dynamicAudio.sources.length > 0);
     assert.ok(dynamicAudio.sources.every(node => dynamicAudio.isMusic(node)));
-    assert.ok(dynamicAudio.sources.some(node => node.oscillator && node.frequency.events[0].value > 500));
-    assert.ok(dynamicAudio.sources.some(node => node.oscillator && node.startAt >= 0.1));
+    assert.ok(dynamicAudio.sources.some(node => node.type === "sawtooth" && node.frequency.events[0].value < 90));
+    assert.ok(dynamicAudio.sources.some(node => !node.oscillator));
   });
   count = dynamicAudio.sources.length;
   const musicTimer = [...dynamicWorld.timers.keys()][0];
@@ -567,18 +591,18 @@ async function run() {
     layers.push({ sources: layerAudio.sources.length,
       drums: layerAudio.sources.filter(node => node.oscillator &&
         [91, 168].includes(node.frequency.events[0].value)).length,
-      flute: layerAudio.sources.filter(node => node.oscillator &&
-        node.frequency.events.at(-1).value > node.frequency.events[0].value).length });
+      motif: layerAudio.sources.filter(node => node.type === "sawtooth" &&
+        node.frequency.events[0].value > 150).length });
     assert.equal(layerWorld.timers.size, 1);
     assert.ok(layerAudio.sources.every(node => Number.isFinite(node.startAt) && Number.isFinite(node.stopAt)));
     layerWorld.api.destroy();
   }
-  await check("6, 12 and 20 combo add progressively more drums over an unchanged eight-bar melody", () => {
-    assert.equal(layers[0].drums, 0);
+  await check("6, 12 and 20 combo add drums over the same eight-bar synth motif", () => {
+    assert.ok(layers[0].drums > 0);
     for (let index = 1; index < layers.length; index++) {
       assert.ok(layers[index].drums > layers[index - 1].drums);
       assert.ok(layers[index].sources > layers[index - 1].sources);
-      assert.equal(layers[index].flute, layers[0].flute);
+      assert.equal(layers[index].motif, layers[0].motif);
     }
   });
   const rushWorld = world(FakeContext);
@@ -588,11 +612,11 @@ async function run() {
     rushAudio.advance(0.02); if (frame % 2 === 0) tickScheduler(rushWorld);
     peak = Math.max(peak, rushAudio.living);
   }
-  await check("overdrive adds faster drums and deep pulsing bass while retaining the adventure melody", () => {
+  await check("overdrive adds faster drums and deep pulsing bass while retaining the synth motif", () => {
     const drums = rushAudio.sources.filter(node => node.oscillator && [91, 168].includes(node.frequency.events[0].value));
     assert.ok(drums.length > layers[3].drums);
     assert.ok(rushAudio.sources.some(node => node.type === "triangle" && node.frequency.events[0].value < 45));
-    assert.ok(rushAudio.sources.some(node => node.oscillator && node.frequency.events[0].value > 500));
+    assert.ok(rushAudio.sources.some(node => node.type === "sawtooth" && node.frequency.events[0].value > 150));
     assert.equal(rushWorld.timers.size, 1); assert.ok(peak <= 48, "observed " + peak);
   });
   const beforeExit = rushAudio.sources.length;
@@ -603,8 +627,8 @@ async function run() {
   await check("overdrive exit removes its percussion and bass without replaying the opening bar", () => {
     const calm = rushAudio.sources.slice(beforeExit);
     assert.ok(calm.length > 100);
-    assert.ok(calm.every(node => node.type !== "triangle"));
-    assert.ok(calm.every(node => !node.oscillator || ![91, 168].includes(node.frequency.events[0].value)));
+    assert.ok(calm.some(node => node.type === "sawtooth"));
+    assert.ok(calm.every(node => node.type !== "triangle" || node.frequency.events[0].value >= 45));
     assert.equal(rushWorld.timers.size, 1);
   });
   rushWorld.api.destroy();

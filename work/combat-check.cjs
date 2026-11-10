@@ -39,6 +39,9 @@ function mockNode() {
     focus() { if(document.activeElement && document.activeElement!==this) emit(document.activeElement,'blur'); document.activeElement=this; emit(this,'focus'); emit(document,'focusin',{target:this}); },
   };
 }
+nodes.set('#game-over-title', mockNode());
+const resultIntro = mockNode();
+nodes.get('#game-over-screen').querySelector = selector => selector === '.result-intro' ? resultIntro : undefined;
 const evolutionCards = ['pierce','blast','aegis'].map(kind => {
   const card=mockNode(); card.dataset.choice=kind;
   const children=new Map(['level','title','effect','art','action'].map(name=>['.evolution-card-'+name,mockNode()]));
@@ -688,63 +691,90 @@ check('extremely high tiers remain lethal to finite-health enemies and use a rea
   assert.ok(nodes.get('#weapon-damage').textContent.length<30);
 });
 
-const bossState = () => JSON.parse(execute('JSON.stringify({boss,nextBossTime,bossDefeated,bossBag,lastBossType,pendingBossType,bossHitGrace,bossProjectiles,bossHazards})'));
+const bossState = () => JSON.parse(execute('JSON.stringify({boss,nextBossTime,bossDefeated,pendingBossType,bossHitGrace,bossProjectiles,bossHazards})'));
 function readyBoss(type = 0, extra = '') {
   isolatedBattle();
-  execute(`spawnBoss(${type});Object.assign(boss,bossArena());boss.previousX=boss.x;boss.phase="recover";boss.phaseTime=0;bossHitGrace=0;${extra}`);
+  execute(`spawnBoss(${type});Object.assign(boss,bossArena());boss.previousX=boss.x;boss.previousY=boss.y;boss.phase="recover";boss.phaseTime=0;bossHitGrace=0;${extra}`);
 }
 function bossProjectile(x = 'player.x', y = 'player.y', extra = '') {
   return `addBossProjectile(${x},${y},0,0,{radius:7${extra ? ',' + extra : ''}});`;
 }
 function near(actual, expected, tolerance = 1e-8) { assert.ok(Math.abs(actual-expected)<=tolerance, `${actual} differs from ${expected}`); }
 
-check('boss resets to a ninety-second first arrival with an empty encounter', () => {
+check('boss reset restores the first arrival with an empty encounter', () => {
   isolatedBattle(); execute('resetBossEncounter();');
-  const result=bossState(); assert.equal(result.nextBossTime,90); assert.equal(result.boss,null);
+  const result=bossState(); assert.equal(result.nextBossTime,execute('bossRules.firstArrival')); assert.equal(result.boss,null);
   assert.equal(result.bossDefeated,0); assert.equal(result.pendingBossType,null);
   assert.equal(result.bossProjectiles.length,0); assert.equal(result.bossHazards.length,0);
   assert.equal(nodes.get('#boss-hud').hidden,true);
 });
-check('first boss telegraphs for exactly five seconds, clears waves, then arrives at ninety seconds', () => {
-  isolatedBattle(target()); execute('resetBossEncounter();battleTime=84.999;updateBossEncounter(0);');
+check('first boss telegraphs for the complete warning duration and clears waves before entry', () => {
+  isolatedBattle(target()); execute('resetBossEncounter();battleTime=nextBossTime-bossRules.warning-.001;updateBossEncounter(0);');
   assert.equal(bossState().boss,null); assert.equal(bossState().pendingBossType,null); assert.equal(scene().enemies.length,1);
-  execute('battleTime=85;updateBossEncounter(0);');
+  execute('battleTime=nextBossTime-bossRules.warning;updateBossEncounter(0);');
   const chosen=bossState().pendingBossType;
-  assert.ok(chosen>=0&&chosen<5); assert.equal(scene().enemies.length,0);
-  assert.equal(nodes.get('#boss-hud').hidden,false); assert.match(nodes.get('#boss-action').textContent,/5/);
-  execute('battleTime=89.999;updateBossEncounter(0);'); assert.equal(bossState().boss,null);
-  execute('battleTime=90;updateBossEncounter(0);'); assert.equal(bossState().boss.type,chosen);
+  assert.equal(chosen,0); assert.equal(scene().enemies.length,0);
+  assert.equal(nodes.get('#boss-warning').hidden,false);
+  execute('battleTime=nextBossTime-.001;updateBossEncounter(0);'); assert.equal(bossState().boss,null);
+  execute('battleTime=nextBossTime;updateBossEncounter(0);'); assert.equal(bossState().boss.type,chosen);
   assert.equal(bossState().boss.phase,'enter'); assert.equal(bossState().pendingBossType,null);
 });
-check('shuffle bags contain all five bosses and never repeat across a bag boundary', () => {
+check('ten distinct aliens lead to the fusion boss in a fixed sequence', () => {
   isolatedBattle(); execute('resetBossEncounter();');
-  let last=-1;
-  for(let bag=0;bag<30;bag++) {
-    const types=[];
-    for(let i=0;i<5;i++) { const type=execute('chooseBossType()'); assert.notEqual(type,last); types.push(type); last=type; }
-    assert.deepEqual(types.slice().sort(),[0,1,2,3,4]);
+  const names = new Set();
+  for(let index=0;index<11;index++) {
+    execute(`bossDefeated=${index};`);
+    assert.equal(execute('chooseBossType()'),index);
+    names.add(execute(`bossTypeName(${index})`));
   }
+  assert.equal(names.size,11);
+});
+check('each campaign stage arrives and settles in order, increasing durability until the victory screen', () => {
+  isolatedBattle('resetBossEncounter();');
+  let previousHealth = -Infinity;
+  let previousInterval = Infinity;
+  for(let type=0;type<11;type++) {
+    const arrival = bossState().nextBossTime;
+    execute('battleTime=nextBossTime-bossRules.warning;updateBossEncounter(0);');
+    assert.equal(bossState().pendingBossType,type);
+    execute('battleTime=nextBossTime;updateBossEncounter(0);updateBossEncounter(bossRules.entry);');
+    const stage = bossState().boss;
+    assert.equal(stage.type,type);
+    assert.equal(stage.alienFinal,type===10);
+    assert.ok(stage.healthLog>previousHealth);
+    previousHealth=stage.healthLog;
+    execute('defeatBoss();updateCombatEffects(1.25);');
+    assert.equal(bossState().bossDefeated,type+1);
+    if(type<10) {
+      assert.equal(execute('evolution.pending'),true);
+      assert.equal(execute('chooseEvolution(evolutionChoiceOptions().find(kind=>!evolutionCardDetails(kind).disabled))'),true);
+      const interval=bossState().nextBossTime-arrival;
+      assert.ok(interval<=previousInterval && interval>execute('bossRules.warning'));
+      previousInterval=interval;
+    }
+  }
+  assert.equal(health().state,'over'); assert.equal(health().kills,11);
+  assert.equal(scene().score,26000); assert.equal(execute('nextBossTime'),Infinity);
+  assert.equal(nodes.get('#game-over-screen').dataset.victory,'true');
 });
 check('entry moves each larger boss to the right-center and blocks premature player damage', () => {
-  for(let type=0;type<5;type++) {
+  for(let type=0;type<11;type++) {
     isolatedBattle(); execute(`spawnBoss(${type});`);
     const start=bossState().boss; assert.ok(start.width>execute('player.width'));
     assert.ok(start.x>surface.width); execute('applyBossHit({damage:Infinity});'); assert.equal(bossState().boss.hp,1);
-    execute('updateBossEncounter(1.5);'); const arrived=bossState().boss;
-    near(arrived.x,execute('bossArena().x')); near(arrived.y,surface.height/2);
+    execute('updateBossEncounter(bossRules.entry);'); const arrived=bossState().boss;
+    near(arrived.x,execute('bossArena().x')); assert.ok(Math.abs(arrived.y-surface.height/2)<60);
     assert.equal(arrived.phase,'recover'); assert.ok(arrived.x>surface.width/2);
   }
 });
 check('warning and boss fights suspend ordinary spawns while powerup orbs keep arriving', () => {
-  isolatedBattle(); execute('resetBossEncounter();battleTime=85;enemyCooldown=0;powerupCooldown=0;updateEncounter(0);updateBossEncounter(0);updatePowerups(0);');
+  isolatedBattle(); execute('resetBossEncounter();battleTime=nextBossTime-bossRules.warning;enemyCooldown=0;powerupCooldown=0;updateEncounter(0);updateBossEncounter(0);updatePowerups(0);');
   assert.equal(scene().enemies.length,0); assert.equal(orbScene().powerups.length,1);
-  execute('battleTime=90;updateBossEncounter(0);enemyCooldown=0;powerupCooldown=0;updateEncounter(0);updatePowerups(0);');
+  execute('battleTime=nextBossTime;updateBossEncounter(0);enemyCooldown=0;powerupCooldown=0;updateEncounter(0);updatePowerups(0);');
   assert.equal(scene().enemies.length,0); assert.equal(orbScene().powerups.length,2);
-  execute('summonBossEnemy(0);updateEncounter(.05);'); assert.equal(scene().enemies.length,1);
-  assert.equal(scene().enemies[0].summoned,true);
 });
 check('boss time, projectiles, hazards and immunity all freeze on blur, hidden tabs and control focus', () => {
-  readyBoss(2); execute('boss.attackIndex=1;startBossAttack();'+bossProjectile('800','300')); step();
+  readyBoss(2); execute('prepareAlienAttack(boss);'+bossProjectile('800','300')); step();
   for(const kind of ['blur','hidden','control']) {
     if(kind==='blur') emit(window,'blur');
     else if(kind==='hidden') { document.hidden=true; emit(document,'visibilitychange'); }
@@ -754,65 +784,51 @@ check('boss time, projectiles, hazards and immunity all freeze on blur, hidden t
     if(kind==='blur') emit(window,'focus');
     else if(kind==='hidden') { document.hidden=false; emit(document,'visibilitychange'); }
     else emit(canvas,'pointerdown');
-    step(); assert.deepEqual(bossState(),before);
+    step();
+    const resumed=bossState();
+    assert.equal(scene().battleTime,time);
+    assert.deepEqual({ ...resumed, boss: { ...resumed.boss, previousX:before.boss.previousX, previousY:before.boss.previousY } },before);
   }
 });
-check('resize retains boss identity, health, defeat history and schedule while removing unsafe trajectories', () => {
+check('resize retains boss identity, health, defeat history, schedule and remaps threats', () => {
   readyBoss(3,'boss.hp=.37;boss.displayHp=.42;bossDefeated=2;nextBossTime=400;');
   execute(bossProjectile('800','300')+'addBossHazard("beam",{y:300,thickness:20,warning:1,duration:2});');
   surface={width:640,height:360}; emit(window,'resize'); const resized=bossState();
   assert.equal(resized.boss.type,3); assert.equal(resized.boss.hp,.37); assert.equal(resized.boss.displayHp,.42);
   assert.equal(resized.bossDefeated,2); assert.equal(resized.nextBossTime,400);
-  assert.equal(resized.bossProjectiles.length,0); assert.equal(resized.bossHazards.length,0);
-  near(resized.boss.x,execute('bossArena().x')); near(resized.boss.y,execute('bossArena().y'));
+  assert.equal(resized.bossProjectiles.length,1); assert.equal(resized.bossHazards.length,1);
+  near(resized.bossProjectiles[0].x,400); near(resized.bossProjectiles[0].x,resized.bossProjectiles[0].previousX);
   assert.equal(resized.boss.phase,'recover'); assert.ok(resized.bossHitGrace>0);
   assert.ok(position().x<=execute('bossPlayerRight()'));
 });
 check('menu and game-over restart clean all boss state and restore the original schedule', () => {
   readyBoss(1,'bossDefeated=3;nextBossTime=500;'); execute(bossProjectile());
-  emit(nodes.get('#menu-button'),'click'); assert.equal(bossState().boss,null); assert.equal(bossState().nextBossTime,90);
+  emit(nodes.get('#menu-button'),'click'); assert.equal(bossState().boss,null); assert.equal(bossState().nextBossTime,execute('bossRules.firstArrival'));
   assert.equal(bossState().bossDefeated,0); assert.equal(bossState().bossProjectiles.length,0);
   readyBoss(4,'player.lives=1;'); execute(bossProjectile()+'updateBossDamage();');
   assert.equal(health().state,'over'); const frozen=bossState(); frames(50); assert.deepEqual(bossState(),frozen);
   emit(nodes.get('#restart-button'),'click'); step(); assert.equal(bossState().boss,null);
-  assert.equal(bossState().nextBossTime,90); assert.equal(bossState().bossDefeated,0); assert.equal(health().lives,3);
+  assert.equal(bossState().nextBossTime,execute('bossRules.firstArrival')); assert.equal(bossState().bossDefeated,0); assert.equal(health().lives,3);
 });
-check('all fifteen named attacks produce their intended projectile, hazard or summon', () => {
-  const hazardAttacks=new Set([4,8,14]); const summonAttacks=new Set([2,11]);
-  assert.equal(execute('bossTypes.length'),5); assert.equal(execute('bossTypes.every(type=>type.attacks.length===3)'),true);
-  const names=JSON.parse(execute('JSON.stringify(bossTypes.flatMap(type=>type.attacks))')); assert.equal(new Set(names).size,15);
-  for(let type=0;type<5;type++) for(let attack=0;attack<3;attack++) {
-    readyBoss(type,`boss.attackIndex=${attack-1};startBossAttack();`);
-    assert.equal(bossState().boss.phase,'telegraph'); assert.equal(bossState().bossProjectiles.length,0);
-    assert.ok(nodes.get('#boss-action').textContent.includes(names[type*3+attack]));
-    if(hazardAttacks.has(type*3+attack)) { assert.ok(bossState().bossHazards.length>0); assert.ok(bossState().bossHazards.every(h=>h.age<h.warning)); }
-    execute('boss.phase="attack";boss.phaseTime=0;runBossAttack(.05);');
-    if(summonAttacks.has(type*3+attack)) assert.ok(scene().enemies.length>0);
-    else if(!hazardAttacks.has(type*3+attack)) assert.ok(bossState().bossProjectiles.length>0);
-    if(!(type===0&&attack===1)) near(bossState().boss.y,execute('bossArena().y'));
+check('all thirty-three alien patterns telegraph and generate threats only during their active phase', () => {
+  assert.equal(execute('bossTypes.length'),11);
+  const patterns=JSON.parse(execute('JSON.stringify(bossTypes.flatMap(type=>type.patterns))'));
+  assert.equal(patterns.length,33); assert.equal(new Set(patterns).size,33);
+  for(let type=0;type<11;type++) for(let attack=0;attack<3;attack++) {
+    readyBoss(type, 'boss.attackIndex='+(attack-1)+';prepareAlienAttack(boss);');
+    assert.equal(bossState().boss.phase,'telegraph');
+    assert.equal(bossState().boss.alienAttack,patterns[type*3+attack]);
+    assert.equal(bossState().bossProjectiles.length,0);
+    assert.ok(bossState().bossHazards.every(h=>h.age<h.warning));
+    assert.ok(execute('boss.telegraphDuration>=.8'));
+    execute('updateBossEncounter(boss.telegraphDuration);');
+    assert.equal(bossState().boss.phase,'attack');
+    execute('boss.phaseTime=2.1;runAlienAttack(boss);');
+    const after=bossState();
+    assert.ok(after.bossProjectiles.length>0 || after.bossHazards.length>0);
+    execute('runAlienAttack(boss);');
+    assert.deepEqual(bossState(),after);
   }
-});
-check('each boss cycles through all three attacks with a visible preparation phase', () => {
-  for(let type=0;type<5;type++) {
-    readyBoss(type); const telegraphs=new Set(),attacks=new Set();
-    for(let i=0;i<520;i++) { execute('updateBossEncounter(.05);'); const b=bossState().boss;
-      if(b.phase==='telegraph') telegraphs.add(b.attackIndex); if(b.phase==='attack') attacks.add(b.attackIndex);
-    }
-    assert.deepEqual([...telegraphs].sort(),[0,1,2]); assert.deepEqual([...attacks].sort(),[0,1,2]);
-  }
-});
-check('summoned enemies move in multiple lanes and obey contact rather than breach damage', () => {
-  readyBoss(0,'boss.attackIndex=2;boss.phase="attack";');
-  for(let i=0;i<4;i++) execute(`boss.phaseTime=${i*.7};runBossAttack(.05);`);
-  const summoned=scene().enemies; assert.equal(summoned.length,4); assert.ok(new Set(summoned.map(e=>e.y)).size>=3);
-  assert.equal(summoned.every(e=>e.summoned&&e.speed>0),true);
-  execute('enemies.length=0;'); leak(); step(); assert.equal(health().lives,3);
-  execute('bossHitGrace=0;enemies.length=0;'); collide(); assert.equal(health().lives,2);
-});
-check('gap walls leave a ship-sized opening instead of a solid unavoidable screen', () => {
-  readyBoss(4,'fireBossWall(player.y);'); const shots=bossState().bossProjectiles;
-  assert.ok(shots.length>2); const gap=execute('Math.max(90,player.height*.9)');
-  assert.equal(shots.every(shot=>Math.abs(shot.y-position().y)>=gap/2),true);
 });
 check('bullet swept collision catches a fast crossing but ignores a nearby clear lane', () => {
   readyBoss(1);
@@ -880,26 +896,26 @@ check('aggregated high-rate bullets preserve boss damage and no infinite arithme
   near(1-bossState().boss.hp,Math.exp(execute('weaponDamageLog()')+Math.log(100)-healthLog),1e-9);
   assert.ok(Number.isFinite(bossState().boss.hp));
 });
-check('a boss defeat gives one reward, heals only to three and schedules the next arrival seventy-five seconds later', () => {
-  readyBoss(0,'battleTime=123;player.lives=2;'); execute(bossProjectile()+'addBossHazard("beam",{y:200,warning:1,duration:2});summonBossEnemy(0);boss.hp=.015;applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
+check('a boss defeat awards one reward, restores one missing life and schedules the next arrival', () => {
+  readyBoss(0,'battleTime=123;player.maxLives=4;player.lives=3;'); execute(bossProjectile()+'addBossHazard("beam",{y:200,warning:1,duration:2});spawnEnemy("scout");boss.hp=.015;applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
   assert.equal(bossState().boss,null); assert.equal(bossState().bossDefeated,1); assert.equal(scene().score,2000);
-  assert.equal(health().kills,1); assert.equal(health().lives,3); assert.equal(bossState().nextBossTime,198);
+  assert.equal(health().kills,1); assert.equal(health().lives,4); assert.equal(bossState().nextBossTime,123+execute('bossRules.interval'));
   assert.equal(bossState().bossProjectiles.length,0); assert.equal(bossState().bossHazards.length,0); assert.equal(scene().enemies.length,0);
   assert.deepEqual(orbScene().powerups.map(p=>p.type),['blue','yellow','red']);
   execute('defeatBoss();applyBossHit({damage:Infinity});'); assert.equal(scene().score,2000); assert.equal(health().kills,1);
   assert.equal(orbScene().powerups.length,3); assert.equal(nodes.get('#boss-hud').hidden,true);
-  finishBossPresentation(); execute('chooseEvolution("pierce");spawnBoss(2);boss.phase="recover";boss.hp=.015;applyBossHit({damageLog:boss.healthLog+Math.log(.02)});'); assert.equal(health().lives,3);
+  finishBossPresentation(); execute('chooseEvolution("pierce");spawnBoss(1);boss.phase="recover";boss.hp=.015;applyBossHit({damageLog:boss.healthLog+Math.log(.02)});'); assert.equal(health().lives,4); assert.equal(execute('player.maxLives'),4);
 });
-check('the second boss countdown is based on defeat time with another five-second warning', () => {
-  readyBoss(2,'battleTime=140;defeatBoss();updateCombatEffects(1.25);chooseEvolution("pierce");battleTime=209.999;updateBossEncounter(0);');
-  assert.equal(bossState().pendingBossType,null); assert.equal(bossState().nextBossTime,215);
-  execute('battleTime=210;updateBossEncounter(0);'); assert.notEqual(bossState().pendingBossType,null);
-  execute('battleTime=214.999;updateBossEncounter(0);'); assert.equal(bossState().boss,null);
-  execute('battleTime=215;updateBossEncounter(0);'); assert.ok(bossState().boss); assert.equal(bossState().boss.endurance,60);
+check('the second alien counts down after the first defeat and retains the complete warning', () => {
+  readyBoss(0,'battleTime=140;defeatBoss();updateCombatEffects(1.25);chooseEvolution("pierce");battleTime=nextBossTime-bossRules.warning-.001;updateBossEncounter(0);');
+  assert.equal(bossState().pendingBossType,null); assert.equal(bossState().nextBossTime,140+execute('bossRules.interval'));
+  execute('battleTime=nextBossTime-bossRules.warning;updateBossEncounter(0);'); assert.equal(bossState().pendingBossType,1);
+  execute('battleTime=nextBossTime-.001;updateBossEncounter(0);'); assert.equal(bossState().boss,null);
+  execute('battleTime=nextBossTime;updateBossEncounter(0);'); assert.equal(bossState().boss.type,1);
 });
 check('boss projectile count is bounded and all abandoned projectiles and hazards expire', () => {
   readyBoss(1); execute('for(let i=0;i<1000;i++) addBossProjectile(500,300,0,0);');
-  assert.equal(bossState().bossProjectiles.length,260);
+  assert.equal(bossState().bossProjectiles.length,execute('bossRules.maxProjectiles'));
   execute('updateBossProjectiles(12.1);'); assert.equal(bossState().bossProjectiles.length,0);
   execute('addBossProjectile(-50,300,0,0);addBossProjectile(500,-50,0,0);updateBossProjectiles(0);');
   assert.equal(bossState().bossProjectiles.length,0);
@@ -1014,63 +1030,58 @@ check('resize preserves normalized combat progression and restart restores openi
   emit(nodes.get('#menu-button'),'click'); begin(); assert.equal(scene().battleTime,0);
   execute('spawnEnemy("scout");'); assert.equal(scene().enemies[0].healthLog,0);
 });
-check('stronger semicircle projectiles keep their exact radial geometry at the higher speed', () => {
-  readyBoss(0); execute('fireBossArc();'); const initial=bossState(); const origin={x:initial.boss.x,y:initial.boss.y};
-  assert.ok(initial.bossProjectiles.length>9);
-  const radius=Math.hypot(initial.bossProjectiles[0].x-origin.x,initial.bossProjectiles[0].y-origin.y);
-  const speed=Math.hypot(initial.bossProjectiles[0].vx,initial.bossProjectiles[0].vy); assert.ok(speed>300);
-  for(const shot of initial.bossProjectiles) {
-    near(Math.hypot(shot.x-origin.x,shot.y-origin.y),radius);
-    near((shot.x-origin.x)*shot.vy-(shot.y-origin.y)*shot.vx,0,1e-7);
-    near(Math.hypot(shot.vx,shot.vy),speed); assert.ok(shot.x<=origin.x+1e-8);
+check('the opening alien fires an expanding arc, then unlocks two faster arcs in its second phase', () => {
+  readyBoss(0,'boss.attackIndex=bossTypes[0].patterns.indexOf("broodArc")-1;prepareAlienAttack(boss);boss.phase="attack";runAlienAttack(boss);');
+  const initial=bossState().bossProjectiles;
+  assert.equal(initial.length,7);
+  assert.ok(initial.every(shot=>shot.vx<0 && Math.hypot(shot.vx,shot.vy)>300));
+  for(let index=0;index<3;index++){
+    near(initial[index].vx,initial.at(-1-index).vx);
+    near(initial[index].vy,-initial.at(-1-index).vy);
   }
-  execute('updateBossProjectiles(.15);'); const moved=bossState().bossProjectiles; assert.equal(moved.length,initial.bossProjectiles.length);
-  for(const shot of moved) near(Math.hypot(shot.x-origin.x,shot.y-origin.y),radius+speed*.15);
-});
-check('the sweep attacks from either screen edge in dense rows and finishes centered', () => {
-  for(const edge of ['top','bottom']) {
-    readyBoss(0,`boss.attackIndex=0;startBossAttack();boss.sweepFrom=bossArena().${edge};boss.phase="attack";`);
-    execute('boss.phaseTime=0;runBossAttack(.05);'); near(bossState().boss.y,execute(`bossArena().${edge}`));
-    for(let i=1;i<=90;i++) execute(`boss.phaseTime=${i*.05};runBossAttack(.05);`);
-    near(bossState().boss.y,execute('bossArena().y'));
-    const shots=bossState().bossProjectiles; assert.ok(shots.length>60);
-    assert.ok(shots.filter(s=>s.vy===0&&s.vx<-400).length>60); assert.ok(shots.some(s=>s.vy!==0));
+  execute('updateBossProjectiles(.15);');
+  const moved=bossState().bossProjectiles;
+  assert.equal(moved.length,initial.length);
+  for(let index=0;index<initial.length;index++){
+    near(moved[index].x,initial[index].x+initial[index].vx*.15);
+    near(moved[index].y,initial[index].y+initial[index].vy*.15);
   }
+  readyBoss(0,'boss.enraged=true;boss.attackIndex=bossTypes[0].patterns.indexOf("broodArc")-1;prepareAlienAttack(boss);boss.phase="attack";runAlienAttack(boss);');
+  assert.equal(bossState().bossProjectiles.length,8);
+  assert.ok(bossState().bossProjectiles.every(shot=>Math.hypot(shot.vx,shot.vy)>Math.hypot(initial[0].vx,initial[0].vy)));
+  execute('boss.phaseTime=.63;runAlienAttack(boss);');
+  assert.equal(bossState().bossProjectiles.length,17);
 });
-check('new attack combinations include cover fire, repeatedly warned lasers, and multiple tracked lightning strikes', () => {
-  readyBoss(0,'boss.attackIndex=1;startBossAttack();boss.phase="attack";boss.phaseTime=1.5;runBossAttack(.05);');
-  assert.ok(scene().enemies.length>=2); assert.ok(bossState().bossProjectiles.length>0);
-  readyBoss(1,'boss.attackIndex=0;startBossAttack();boss.phase="attack";boss.phaseTime=2;runBossAttack(.05);');
-  assert.ok(bossState().bossHazards.length>2); assert.ok(bossState().bossProjectiles.length>0);
-  assert.ok(bossState().bossHazards.every(h=>h.age<h.warning));
-  readyBoss(2,'boss.attackIndex=1;startBossAttack();boss.phase="attack";boss.phaseTime=2;runBossAttack(.05);');
-  assert.ok(bossState().bossHazards.length>=3); assert.ok(bossState().bossProjectiles.length>0);
+check('the fusion Boss binds a marked area and later detonates that same location with time to escape', () => {
+  readyBoss(10,'prepareAlienAttack(boss);');
+  const initial=bossState(), bind=initial.bossHazards.find(h=>h.kind==='bind'), blast=initial.bossHazards.find(h=>h.kind==='zone');
+  assert.ok(bind && blast); near(bind.x,blast.x); near(bind.y,blast.y);
+  assert.ok(blast.warning>bind.warning && blast.warning<bind.warning+bind.duration);
+  assert.equal(execute('alienMovementScale()'),1);
+  execute('updateBossProjectiles(boss.telegraphDuration);updateBossDamage();');
+  assert.ok(execute('alienMovementScale()')>0 && execute('alienMovementScale()')<1);
+  assert.equal(health().lives,3);
+  execute('player.y=flightBounds.bottom;updateBossProjectiles(.68);updateBossDamage();');
+  assert.equal(execute('alienMovementScale()'),1); assert.equal(health().lives,3);
 });
-check('split cores, snake shots, and guided bees retain distinct fast motion', () => {
-  readyBoss(1,'boss.attackIndex=2;boss.phase="attack";boss.phaseTime=0;runBossAttack(.05);');
-  const core=bossState().bossProjectiles.find(s=>s.burstAt); assert.ok(core); assert.ok(Math.abs(core.vx)>=300);
-  execute('updateBossProjectiles(.96);'); const fragments=bossState().bossProjectiles;
-  assert.ok(fragments.length>=12); assert.equal(fragments.every(s=>!s.burstAt),true);
-  readyBoss(2,'boss.attackIndex=0;boss.phase="attack";boss.phaseTime=0;runBossAttack(.05);');
-  const first=bossState().bossProjectiles[0]; execute('updateBossProjectiles(.15);'); const snake=bossState().bossProjectiles[0];
-  assert.ok(snake.x<first.x); assert.notEqual(snake.y,first.y); assert.ok(Math.abs(snake.vx)>300);
-  readyBoss(3,'boss.attackIndex=0;boss.phase="attack";boss.phaseTime=0;runBossAttack(.05);player.y=flightBounds.top;');
-  const before=bossState().bossProjectiles[0]; execute('updateBossProjectiles(.2);'); const guided=bossState().bossProjectiles[0];
-  assert.notEqual(guided.vy,before.vy); near(Math.hypot(guided.vx,guided.vy),Math.hypot(before.vx,before.vy),1e-7);
-  execute('bossProjectiles[0].age=2;'); const locked=bossState().bossProjectiles[0];
-  execute('player.y=flightBounds.bottom;updateBossProjectiles(.15);'); assert.equal(bossState().bossProjectiles[0].vy,locked.vy);
-});
-check('each attack event fires only once per due time and keeps projectile objects bounded', () => {
-  for(let type=0;type<5;type++) for(let attack=0;attack<3;attack++) {
-    readyBoss(type,`boss.attackIndex=${attack-1};startBossAttack();boss.phase="attack";boss.phaseTime=2;runBossAttack(.05);`);
-    const before={shots:bossState().bossProjectiles.length,hazards:bossState().bossHazards.length,enemies:scene().enemies.length};
-    execute('runBossAttack(.05);runBossAttack(.05);');
-    assert.deepEqual({shots:bossState().bossProjectiles.length,hazards:bossState().bossHazards.length,enemies:scene().enemies.length},before);
-    execute('boss.phaseTime=100;runBossAttack(.05);'); assert.ok(bossState().bossProjectiles.length<=260);
+check('fusion binding and detonation leave a keyboard escape after the warning at desktop and compact sizes', () => {
+  for(const size of [{width:640,height:360},{width:1280,height:720},{width:1920,height:1080}]) {
+    for(const start of [.05,.5,.95]) {
+      readyBoss(10);
+      surface=size; emit(window,'resize');
+      execute(`player.y=player.previousY=alienLane(${start});prepareAlienAttack(boss);`);
+      const blast=bossState().bossHazards.find(h=>h.kind==='zone');
+      const input=start>.5?'ArrowUp':'ArrowDown';
+      const firstMove=Math.ceil(execute('boss.telegraphDuration')/.05);
+      frames(firstMove);
+      key(input); frames(Math.ceil((blast.warning-firstMove*.05)/.05)+1); key(input,'keyup');
+      assert.equal(health().lives,3,`${size.width}x${size.height}, start ${start}`);
+      assert.ok(Math.abs(position().y-blast.y)>blast.radius+execute('player.height*.16'));
+    }
   }
 });
 check('half health triggers enrage once without healing or restarting an active telegraph', () => {
-  readyBoss(4,'boss.hp=.51;boss.attackIndex=1;startBossAttack();boss.phaseTime=.2;');
+  readyBoss(4,'boss.hp=.51;boss.attackIndex=1;prepareAlienAttack(boss);boss.phaseTime=.2;');
   const phase=bossState().boss.phase; const time=bossState().boss.phaseTime;
   const warning=bossState().boss.telegraphDuration; const hazard=JSON.stringify(bossState().bossHazards);
   execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
@@ -1081,13 +1092,13 @@ check('half health triggers enrage once without healing or restarting an active 
   execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});'); near(bossState().boss.hp,.47);
   assert.equal(nodes.get('#status').textContent,firstStatus);
 });
-check('enrage makes subsequent projectiles faster, patterns denser and preparation shorter', () => {
+check('enrage makes subsequent projectiles faster and preparation shorter while leaving a warning', () => {
   function sample(enraged) {
-    readyBoss(0,`boss.enraged=${enraged};boss.attackIndex=-1;startBossAttack();boss.phase="attack";boss.phaseTime=2;runBossAttack(.05);`);
+    readyBoss(1,`boss.enraged=${enraged};prepareAlienAttack(boss);boss.phase="attack";boss.phaseTime=2;runAlienAttack(boss);`);
     const b=bossState(); return {count:b.bossProjectiles.length,speed:Math.hypot(b.bossProjectiles[0].vx,b.bossProjectiles[0].vy),warning:b.boss.telegraphDuration};
   }
   const calm=sample(false),rage=sample(true);
-  assert.ok(rage.count>calm.count); assert.ok(rage.speed>calm.speed); assert.ok(rage.warning<calm.warning); assert.ok(rage.warning>=.65);
+  assert.ok(rage.count>0 && calm.count>0); assert.ok(rage.speed>calm.speed); assert.ok(rage.warning<calm.warning); assert.ok(rage.warning>=.8);
 });
 check('Boss durability uses a growing time reference and stays finite at extreme tiers', () => {
   let previous=0;
@@ -1095,7 +1106,7 @@ check('Boss durability uses a growing time reference and stays finite at extreme
     isolatedBattle(`battleTime=${time};spawnBoss(0);boss.phase="recover";`);
     const birth=bossState().boss.healthLog;
     assert.ok(Number.isFinite(birth)&&birth>previous);
-    assert.ok(execute('boss.healthLog>=progressionReferenceDpsLog(battleTime)+Math.log(55)-1e-9'));
+    assert.ok(execute('boss.healthLog>=progressionReferenceDpsLog(battleTime)+Math.log(boss.endurance)-1e-9'));
     execute('weapon.tier=10000;weapon.lanes=4;weapon.damage=999;weapon.interval=.025;spawnBoss(0);boss.phase="recover";');
     assert.equal(bossState().boss.healthLog,birth);
     execute('applyBossHit({damageLog:boss.healthLog+Math.log(.02)});');
@@ -1104,22 +1115,23 @@ check('Boss durability uses a growing time reference and stays finite at extreme
   }
 });
 check('full-screen warning shows the selected boss once and clears on spawn, defeat, death and menu', () => {
-  isolatedBattle(); execute('resetBossEncounter();battleTime=85;'); audioCalls.length=0; execute('updateBossEncounter(0);');
+  isolatedBattle(); execute('resetBossEncounter();battleTime=nextBossTime-bossRules.warning;'); audioCalls.length=0; execute('updateBossEncounter(0);');
   assert.equal(nodes.get('#boss-warning').hidden,false); assert.ok(nodes.get('#boss-warning-name').textContent.includes('即将出现'));
   assert.equal(audioCalls.filter(c=>c.name==='warning').length,1);
   execute('updateBossEncounter(.05);updateBossEncounter(.05);'); assert.equal(audioCalls.filter(c=>c.name==='warning').length,1);
-  execute('battleTime=90;updateBossEncounter(0);'); assert.equal(nodes.get('#boss-warning').hidden,true);
+  execute('battleTime=nextBossTime;updateBossEncounter(0);'); assert.equal(nodes.get('#boss-warning').hidden,true);
   execute('setBossWarning("测试");defeatBoss();'); assert.equal(nodes.get('#boss-warning').hidden,true);
   execute('setBossWarning("测试");endGame();'); assert.equal(nodes.get('#boss-warning').hidden,true);
   begin(); execute('setBossWarning("测试");'); emit(nodes.get('#menu-button'),'click'); assert.equal(nodes.get('#boss-warning').hidden,true);
 });
 check('warning countdown freezes while paused and resizing does not consume or replay it', () => {
-  isolatedBattle(); execute('resetBossEncounter();battleTime=85;updateBossEncounter(0);');
+  isolatedBattle(); execute('resetBossEncounter();battleTime=nextBossTime-bossRules.warning;updateBossEncounter(0);');
+  const time=scene().battleTime;
   const selected=bossState().pendingBossType; audioCalls.length=0;
-  emit(window,'blur'); frames(100); assert.equal(scene().battleTime,85); assert.equal(bossState().pendingBossType,selected);
+  emit(window,'blur'); frames(100); assert.equal(scene().battleTime,time); assert.equal(bossState().pendingBossType,selected);
   surface={width:640,height:360}; emit(window,'resize'); assert.equal(bossState().pendingBossType,selected);
   assert.equal(nodes.get('#boss-warning').hidden,false); assert.equal(audioCalls.filter(c=>c.name==='warning').length,0);
-  emit(window,'focus'); step(); assert.equal(scene().battleTime,85);
+  emit(window,'focus'); step(); assert.equal(scene().battleTime,time);
 });
 check('audio lifecycle follows start, pause, resume, boss, enrage, defeat and game over', () => {
   const lastSync=()=>audioCalls.filter(c=>c.name==='sync').at(-1)?.args.slice(0,3);
@@ -1331,16 +1343,28 @@ check('removed or unknown powerups safely preserve stored cannon charges, energy
   assert.deepEqual(ult(),before); assert.deepEqual(weaponState(),weaponBefore); assert.equal(health().lives,2);
   assert.equal(scene().score,0); assert.equal(health().kills,0);
 });
-check('green orb heals precisely one life even late in a round and never exceeds maximum health', () => {
+check('green orb heals one life and raises capacity at full health even late in a round', () => {
   isolatedBattle('battleTime=7200;player.lives=1;'+orb('heal')+shot()); step(); assert.equal(health().lives,2);
   execute(orb('heal')+shot()); step(); assert.equal(health().lives,3);
-  execute(orb('heal')+shot()); step(); assert.equal(health().lives,3);
-  assert.ok(nodes.get('#powerup-notice').textContent.includes('生命已满'));
-  assert.equal(nodes.get('#player-lives').attributes['aria-label'],'3 点生命'); near(ult().energy,0); assert.equal(scene().score,0);
+  assert.equal(execute('player.maxLives'),3);
+  assert.equal(nodes.get('#player-lives').textContent,'♥ ♥ ♥');
+  execute(orb('heal')+shot()); step(); assert.equal(health().lives,4);
+  assert.equal(execute('player.maxLives'),4);
+  assert.equal(nodes.get('#powerup-notice').textContent,'生命上限 +1 · 4 / 4');
+  assert.equal(nodes.get('#player-lives').textContent,'♥ 4 / 4');
+  assert.equal(nodes.get('#player-lives').attributes['aria-label'],'生命 4 / 4');
+  execute('damagePlayer("撞击");'+orb('heal')+shot()); step(); assert.equal(health().lives,4);
+  assert.equal(execute('player.maxLives'),4);
+  assert.equal(nodes.get('#powerup-notice').textContent,'生命 +1 · 剩余 4 / 4');
+  execute(orb('heal')+shot()); step(); assert.equal(health().lives,5);
+  assert.equal(execute('player.maxLives'),5); near(ult().energy,0); assert.equal(scene().score,0);
+  emit(nodes.get('#restart-button'),'click');
+  assert.equal(health().lives,3); assert.equal(execute('player.maxLives'),3);
 });
-check('two bullets cannot restore two lives from a single healing orb', () => {
-  isolatedBattle('player.lives=1;'+orb('heal')+shot()+shot()); step();
-  assert.equal(health().lives,2); assert.equal(orbScene().powerups.length,0); assert.equal(shots().length,1);
+check('two bullets cannot increase capacity twice from a single healing orb', () => {
+  isolatedBattle(orb('heal')+shot()+shot()); step();
+  assert.equal(health().lives,4); assert.equal(execute('player.maxLives'),4);
+  assert.equal(orbScene().powerups.length,0); assert.equal(shots().length,1);
   assert.equal(ult().charges,0); near(ult().energy,0);
 });
 check('healing orbs obey shoot-to-collect, off-axis misses and harmless offscreen expiration', () => {
@@ -1509,10 +1533,9 @@ check('shield drawing is a translucent red enclosing ellipse with finite geometr
   execute('reducedMotion.matches=false;resetShield();'); captureDraws=true; drawOperations.length=0; execute('drawShield();'); captureDraws=false;
   assert.equal(drawOperations.length,0);
 });
-check('Boss attacks trigger volley and summon cues, and warned lasers sound only when they activate', () => {
-  readyBoss(0); audioCalls.length=0; execute('addBossProjectile(800,300,-300,0);summonBossEnemy(0);');
+check('Boss attacks trigger volley cues and warned lasers sound only when they activate', () => {
+  readyBoss(1); audioCalls.length=0; execute('prepareAlienAttack(boss);boss.phase="attack";runAlienAttack(boss);');
   assert.ok(audioCalls.some(c=>c.name==='bossAttack'&&c.args[0]==='volley'));
-  assert.ok(audioCalls.some(c=>c.name==='bossAttack'&&c.args[0]==='summon'));
   readyBoss(4); audioCalls.length=0; execute('addBossHazard("beam",{y:200,thickness:30,warning:1,duration:2});updateBossProjectiles(.99);');
   assert.equal(audioCalls.filter(c=>c.name==='bossAttack'&&c.args[0]==='beam').length,0);
   execute('updateBossProjectiles(.01);updateBossProjectiles(.01);');
@@ -1739,12 +1762,6 @@ check('death, menu and restarting discard ordinary shells and reset type introdu
   assert.equal(enemyCombat().enemyProjectiles.length,0); assert.deepEqual(enemyCombat().introduced,[]);
   begin(); execute('spawnEnemy();'); assert.equal(scene().enemies[0].kind,'scout'); assert.equal(scene().enemies[0].healthLog,0);
 });
-check('Boss summons retain their straight movement and do not acquire gunner AI', () => {
-  readyBoss(0); execute('summonBossEnemy(0);'); const before=scene().enemies[0];
-  execute('updateEnemyMovement(enemies[0],.25);'); const after=scene().enemies[0];
-  assert.equal(after.summoned,true); near(after.y,before.y); near(after.x,before.x-before.speed*.25);
-  assert.equal(enemyCombat().enemyProjectiles.length,0);
-});
 check('gunner audio cues occur on the shot rather than the warning or after destruction', () => {
   readyGunner(); audioCalls.length=0; execute('updateEnemyMovement(enemies[0],.899);');
   assert.equal(audioCalls.filter(c=>c.name==='bossAttack').length,0); execute('updateEnemyMovement(enemies[0],.001);');
@@ -1764,175 +1781,6 @@ check('enemy hulls and telegraphs draw finite geometry, balanced canvas state an
   }
   execute('reducedMotion.matches=false;');
 });
-const duoState = () => JSON.parse(execute('JSON.stringify({boss,wingBoss,pendingBossType,pendingWingType,duoEncounter,bossDefeated,nextBossTime,bossProjectiles,bossHazards})'));
-function readyDuo(extra='') {
-  isolatedBattle('bossDefeated=3;spawnBoss(0,1);updateBossEncounter(1.5);bossHitGrace=0;'+extra);
-}
-check('three defeated flagships unlock a fixed two-type warning and the fourth encounter enters as a pair', () => {
-  isolatedBattle('resetBossEncounter();bossDefeated=2;nextBossTime=100;battleTime=95;updateBossEncounter(0);');
-  assert.equal(duoState().pendingWingType,null);
-  isolatedBattle('resetBossEncounter();bossDefeated=3;nextBossTime=100;battleTime=94.999;updateBossEncounter(0);');
-  assert.equal(duoState().pendingBossType,null); assert.equal(duoState().pendingWingType,null);
-  execute('battleTime=95;updateBossEncounter(0);'); const selected=duoState();
-  assert.notEqual(selected.pendingBossType,null); assert.notEqual(selected.pendingWingType,null);
-  assert.notEqual(selected.pendingBossType,selected.pendingWingType);
-  const names=JSON.parse(execute('JSON.stringify([bossTypes[pendingBossType].name,bossTypes[pendingWingType].name])'));
-  for(const name of names) assert.ok(nodes.get('#boss-warning-name').textContent.includes(name));
-  execute('battleTime=99.999;updateBossEncounter(0);'); assert.equal(duoState().boss,null);
-  assert.equal(duoState().pendingWingType,selected.pendingWingType);
-  execute('battleTime=100;updateBossEncounter(0);'); const arrived=duoState();
-  assert.equal(arrived.boss.type,selected.pendingBossType); assert.equal(arrived.wingBoss.type,selected.pendingWingType);
-  assert.equal(arrived.pendingBossType,null); assert.equal(arrived.pendingWingType,null);
-});
-check('pair selection never chooses two copies and direct single-boss spawning remains single', () => {
-  isolatedBattle();
-  for(let type=0;type<5;type++) for(let i=0;i<12;i++) assert.notEqual(execute(`chooseBossPartner(${type})`),type);
-  execute('bossDefeated=20;spawnBoss(3);'); assert.equal(duoState().wingBoss,null); assert.equal(duoState().duoEncounter,null);
-});
-check('dual bosses split one hundred twenty-four percent of solo durability and preserve finite late-game damage', () => {
-  for(const tier of [1,6,500,10000]) {
-    isolatedBattle(`bossDefeated=3;weapon.tier=${tier};weapon.lanes=4;weapon.damage=999;weapon.interval=.025;spawnBoss(0);`);
-    const soloLog=bossState().boss.healthLog;
-    execute('spawnBoss(0,1);'); const pair=duoState();
-    assert.ok(Number.isFinite(pair.boss.healthLog)); near(Math.exp(pair.boss.healthLog-soloLog),.62,1e-9);
-    near(pair.wingBoss.healthLog,pair.boss.healthLog); near(Math.exp(pair.boss.healthLog-soloLog)*2,1.24,1e-8);
-  }
-});
-check('dual entry supplies one life and at least one shield without exceeding storage or spending partial charge', () => {
-  isolatedBattle('player.lives=1;shield.energy=13;shield.charges=0;spawnBoss(0,1);');
-  assert.equal(health().lives,2); assert.equal(protection().charges,1); near(protection().energy,13);
-  isolatedBattle('player.lives=3;shield.energy=0;shield.charges=2;spawnBoss(0,1);');
-  assert.equal(health().lives,3); assert.equal(protection().charges,2);
-});
-check('both members enter above and below center, block early damage, and keep the player out of their hulls', () => {
-  isolatedBattle('spawnBoss(0,1);');
-  execute('for(const target of activeBosses()) applyBossHit({damageLog:target.healthLog+1},target);');
-  assert.equal(duoState().boss.hp,1); assert.equal(duoState().wingBoss.hp,1);
-  execute('updateBossEncounter(1.5);'); const pair=duoState();
-  assert.ok(pair.boss.y<pair.wingBoss.y); assert.ok(pair.boss.width>execute('player.width'));
-  near(pair.boss.x,pair.wingBoss.x); assert.ok(pair.boss.x<surface.width);
-  assert.equal(pair.duoEncounter.phase,'recover'); assert.ok(position().x<=execute('bossPlayerRight()'));
-});
-check('each coordinated warning clears stale fire, locks a reachable shared opening and never tracks subsequent movement', () => {
-  for(const size of [{width:1280,height:720},{width:640,height:360},{width:390,height:844}]) {
-    for(const edge of ['top','bottom']) {
-      surface=size; emit(window,'resize'); begin(); execute(`player.y=flightBounds.${edge};spawnBoss(0,1);updateBossEncounter(1.5);`);
-      for(let attack=0;attack<3;attack++) {
-        execute('bossProjectiles.push({x:player.x,y:player.y});bossHazards.push({kind:"beam"});beginDuoAttack();');
-        const fight=duoState().duoEncounter;
-        assert.equal(duoState().bossProjectiles.length,0); assert.equal(duoState().bossHazards.length,0);
-        assert.ok(fight.safeWidth>=Math.min(bounds.bottom-bounds.top,120));
-        assert.ok(Math.abs(fight.safeY-position().y)<=execute('player.speed*.55*duoRules.warning')+1e-8);
-        execute('player.y=(flightBounds.top+flightBounds.bottom)/2;updateBossEncounter(.5);');
-        assert.equal(duoState().duoEncounter.safeY,fight.safeY); assert.equal(duoState().bossProjectiles.length,0);
-        assert.equal(duoState().bossHazards.length,0);
-      }
-    }
-  }
-});
-check('all three cooperative patterns leave the marked center safe without shields at multiple screen sizes', () => {
-  for(const size of [{width:1280,height:720},{width:640,height:360},{width:390,height:844}]) {
-    surface=size; emit(window,'resize'); begin(); execute('spawnBoss(0,1);updateBossEncounter(1.5);');
-    for(let attack=0;attack<3;attack++) {
-      execute(`duoEncounter.attackIndex=${attack-1};beginDuoAttack();player.y=duoEncounter.safeY;player.previousY=player.y;player.lives=3;shield.remaining=0;bossHitGrace=0;`);
-      execute('updateBossEncounter(1.349);updateBossDamage();'); assert.equal(duoState().duoEncounter.phase,'telegraph');
-      assert.equal(duoState().bossProjectiles.length,0); assert.equal(duoState().bossHazards.length,0);
-      execute('updateBossEncounter(.001);'); assert.equal(duoState().duoEncounter.phase,'attack');
-      let peakThreats=duoState().bossProjectiles.length+duoState().bossHazards.length;
-      for(let frame=0;frame<53;frame++) {
-        execute('bossHitGrace=0;updateBossDamage();updateBossEncounter(.05);');
-        peakThreats=Math.max(peakThreats,duoState().bossProjectiles.length+duoState().bossHazards.length);
-      }
-      if(size.height>=720) assert.ok(peakThreats>0,`pattern ${attack}, ${size.width}x${size.height}`);
-      assert.equal(health().lives,3); assert.equal(scene().enemies.length,0);
-      assert.equal(duoState().duoEncounter.phase,'recover');
-      assert.equal(duoState().bossProjectiles.length,0); assert.equal(duoState().bossHazards.length,0);
-    }
-  }
-});
-check('dual attacks remain threatening outside the shared corridor and support normal shield protection', () => {
-  readyDuo('duoEncounter.attackIndex=0;beginDuoAttack();updateBossEncounter(1.35);');
-  const hazard=duoState().bossHazards[0]; assert.ok(hazard);
-  execute('player.y=bossHazards[0].y;player.previousY=player.y;bossHitGrace=0;updateBossDamage();');
-  assert.equal(health().lives,2);
-  execute('bossHitGrace=0;shield.charges=1;requestShield();updateBossDamage();'); assert.equal(health().lives,2);
-});
-check('wide-screen cooperative shots reach the far-left flight zone before the counterattack clears them', () => {
-  for(const size of [{width:1920,height:1080},{width:2560,height:1440}]) {
-    surface=size; emit(window,'resize'); begin();
-    execute('spawnBoss(0,1);updateBossEncounter(1.5);beginDuoAttack();updateBossEncounter(1.35);updateBossEncounter(.6);');
-    assert.ok(duoState().bossProjectiles.length>0);
-    execute('player.x=flightBounds.left;player.previousX=player.x;player.y=bossProjectiles[0].y;player.previousY=player.y;player.lives=3;shield.remaining=0;bossHitGrace=0;');
-    for(let frame=0;frame<40 && health().lives===3;frame++) execute('updateBossEncounter(.05);updateBossDamage();');
-    assert.ok(health().lives<3,`left side remained unthreatened at ${size.width}x${size.height}`);
-  }
-});
-check('each cooperative attack gives a clean one-point-six-second counterattack interval', () => {
-  readyDuo('beginDuoAttack();updateBossEncounter(1.35);updateBossEncounter(2.6);');
-  assert.equal(duoState().duoEncounter.phase,'recover'); assert.equal(duoState().bossProjectiles.length,0);
-  execute('updateBossEncounter(1.599);'); assert.equal(duoState().duoEncounter.phase,'recover');
-  execute('updateBossEncounter(.001);'); assert.equal(duoState().duoEncounter.phase,'telegraph');
-});
-check('destroying either dual member rewards once, retains survivor health and gives two clean seconds without evolution', () => {
-  for(const member of ['boss','wingBoss']) {
-    readyDuo('player.lives=1;boss.hp=.61;wingBoss.hp=.37;beginDuoAttack();updateBossEncounter(1.35);');
-    const hp=member==='boss'?.37:.61;
-    execute(`globalThis.deadMember=${member};defeatBoss(${member});`);
-    const after=duoState(); assert.equal(execute('activeBosses().length'),1); assert.equal(after.wingBoss,null);
-    near(after.boss.hp,hp); assert.equal(scene().score,2000); assert.equal(health().lives,2);
-    assert.equal(after.bossDefeated,4); assert.equal(execute('evolution.pending'),false);
-    assert.equal(after.bossProjectiles.length,0); assert.equal(after.bossHazards.length,0);
-    assert.deepEqual(orbScene().powerups.map(p=>p.type),['blue','yellow','red']);
-    execute('defeatBoss(globalThis.deadMember);'); assert.equal(scene().score,2000);
-    execute('updateBossEncounter(1.999);'); assert.equal(duoState().duoEncounter.phase,'recover');
-    execute('updateBossEncounter(.001);'); assert.equal(duoState().duoEncounter.phase,'telegraph');
-  }
-});
-check('defeating the entire pair opens one evolution and starts the next countdown at the last death', () => {
-  readyDuo('battleTime=400;defeatBoss(wingBoss);battleTime=417;defeatBoss();'); const after=duoState();
-  assert.equal(after.boss,null); assert.equal(after.wingBoss,null); assert.equal(after.duoEncounter,null);
-  assert.equal(after.bossDefeated,5); assert.equal(scene().score,4000); assert.equal(health().kills,2);
-  assert.equal(after.nextBossTime,492); assert.equal(execute('evolution.pending'),false); finishBossPresentation(); assert.equal(execute('evolution.pending'),true);
-  execute('defeatBoss();'); assert.equal(scene().score,4000);
-});
-check('ordinary bullets can damage either member while a piercing projectile cannot strike one hull twice', () => {
-  for(const member of ['boss','wingBoss']) {
-    readyDuo(`bullets.push({x:${member}.x,previousX:${member}.x-${member}.width,y:${member}.y,damageLog:${member}.healthLog+Math.log(.02)});resolveProjectileHits();`);
-    near(duoState()[member].hp,.98); near(duoState()[member==='boss'?'wingBoss':'boss'].hp,1);
-  }
-  readyDuo('evolution.pierce=3;resetWeapons();player.y=wingBoss.y;updateShooting(0);bullets[0].x=wingBoss.x;bullets[0].previousX=wingBoss.x-wingBoss.width;bullets[0].damageLog=wingBoss.healthLog+Math.log(.02);resolveProjectileHits();');
-  near(duoState().wingBoss.hp,.98); execute('resolveProjectileHits();'); near(duoState().wingBoss.hp,.98);
-});
-check('one cannon can hit two aligned Boss hulls once each with a separate eighteen-percent ceiling', () => {
-  readyDuo('wingBoss.y=boss.y;wingBoss.previousY=boss.y;player.y=boss.y;weapon.tier=500;'); primeUltimate(); castUltimate();
-  execute('updateUltimate(.5);'); near(duoState().boss.hp,.82); near(duoState().wingBoss.hp,.82);
-  execute('resolveUltimateHits();'); near(duoState().boss.hp,.82); near(duoState().wingBoss.hp,.82);
-  near(ult().energy,0);
-});
-check('pause freezes both ships and shared attack timers; resize keeps both HP values and grants a clean recovery', () => {
-  readyDuo('boss.hp=.61;wingBoss.hp=.37;beginDuoAttack();updateBossEncounter(.5);');
-  emit(window,'blur'); const frozen=duoState(); frames(100); assert.deepEqual(duoState(),frozen);
-  emit(window,'focus'); step(); assert.deepEqual(duoState(),frozen);
-  surface={width:640,height:360}; emit(window,'resize'); const resized=duoState();
-  near(resized.boss.hp,.61); near(resized.wingBoss.hp,.37); assert.equal(resized.duoEncounter.phase,'recover');
-  assert.equal(resized.bossProjectiles.length,0); assert.equal(resized.bossHazards.length,0);
-  assert.ok(resized.boss.y<resized.wingBoss.y); assert.ok(position().x<=execute('bossPlayerRight()'));
-});
-check('pair defeat history, second hull and pending partner reset cleanly on death restart and menu', () => {
-  readyDuo('endGame();'); const dead=duoState(); frames(20); assert.deepEqual(duoState(),dead);
-  emit(nodes.get('#restart-button'),'click'); step(); assert.equal(duoState().wingBoss,null); assert.equal(duoState().duoEncounter,null);
-  assert.equal(duoState().bossDefeated,0); assert.equal(duoState().pendingWingType,null);
-  readyDuo(); emit(nodes.get('#menu-button'),'click'); assert.equal(duoState().boss,null); assert.equal(duoState().wingBoss,null);
-  assert.equal(duoState().duoEncounter,null); assert.equal(duoState().nextBossTime,90);
-});
-check('dual hulls and shared guidance render finite geometry and restore the canvas state', () => {
-  readyDuo('beginDuoAttack();'); captureDraws=true; drawOperations.length=0;
-  execute('drawBossBattle();drawDuoGuidance();'); captureDraws=false;
-  assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
-  assert.ok(drawOperations.some(op=>op.name==='fillText'&&String(op.args[0]).includes('通道')));
-  assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
-});
-
 const evolutionState=()=>JSON.parse(execute('JSON.stringify(evolution)'));
 function evolutionKey(code, extra={}) { return emit(document,'keydown',{code,...extra}); }
 check('a new round has no evolutions and only one pending reward can be collected once', () => {
@@ -1990,7 +1838,14 @@ check('fully evolved ships activate each link once, then gain repeatable refits 
   assert.equal(execute('chooseEvolution("refit-heal")'),false); assert.equal(execute('chooseEvolution("refit-shield")'),false);
   const damage=weaponState().damage; assert.equal(execute('chooseEvolution("refit-fire")'),true); assert.equal(weaponState().damage,damage);
   near(Math.exp(evolutionState().overclock),1.08);
-  execute('player.lives=1;openEvolutionChoice();chooseEvolution("refit-heal");'); assert.equal(health().lives,2);
+  execute('player.lives=7;player.maxLives=8;openEvolutionChoice();');
+  assert.equal(execute('chooseEvolution("refit-heal")'),true);
+  assert.equal(health().lives,8); assert.equal(execute('player.maxLives'),8);
+  captureDraws=true; drawOperations.length=0;
+  execute('player.lives=9999;player.maxLives=10000;previewRefit(context,"refit-heal",true);');
+  captureDraws=false;
+  assert.ok(drawOperations.some(operation=>operation.name==='fillText' && operation.args[0]==='♥ 10000 / 10000'));
+  assert.equal(drawOperations.filter(operation=>operation.name==='fillText').length,2);
   execute('shield.charges=1;shield.energy=15;openEvolutionChoice();chooseEvolution("refit-shield");');
   assert.equal(protection().charges,2); assert.equal(protection().energy,0);
   near(Math.exp(evolutionState().overclock),1.08*1.04**2);
@@ -2113,8 +1968,12 @@ check('Falcon and ultimate kills contribute separately and each Boss hull counts
   execute('updateShooting(.5);resolveProjectileHits();resolveProjectileHits();');
   assert.equal(momentumState().count,1); assert.equal(scene().score,100);
   isolatedBattle(target(400,300,40,1)); execute('defeatEnemy(0,{source:"ultimate",damage:1});'); assert.equal(momentumState().count,1);
-  readyDuo('globalThis.comboDead=boss;defeatBoss();defeatBoss(globalThis.comboDead);'); assert.equal(momentumState().count,1);
-  execute('defeatBoss();'); assert.equal(momentumState().count,2); finishBossPresentation(); assert.equal(execute('evolution.pending'),true);
+  readyBoss(10,'globalThis.comboDead=boss;defeatBoss();defeatBoss(globalThis.comboDead);'); assert.equal(momentumState().count,1);
+  finishBossPresentation();
+  assert.equal(health().state,'over'); assert.equal(execute('evolution.pending'),false);
+  assert.equal(nodes.get('#game-over-screen').dataset.victory,'true');
+  assert.equal(nodes.get('#game-over-title').textContent,'异形战役通关');
+  assert.equal(scene().score,6000);
 });
 check('combo decay has a four-second grace then loses one per .65 seconds and a new kill resets that grace', () => {
   isolatedBattle(); comboKills(3); execute('updateMomentum(4.649);'); assert.equal(momentumState().count,3);
@@ -2133,11 +1992,11 @@ check('combo decay is frame-rate independent and cannot run with zero, negative 
   assert.deepEqual(results,[7,7,7]); const before=momentumState();
   execute('for(const time of [0,-1,NaN,Infinity]) updateMomentum(time);'); assert.deepEqual(momentumState(),before);
 });
-check('Boss warning and both kinds of Boss combat freeze decay without granting permanent rage', () => {
-  for(const kind of ['warning','single','duo']) {
+check('Boss warning and both ordinary and fusion Boss combat freeze combo decay without granting permanent rage', () => {
+  for(const kind of ['warning','ordinary','fusion']) {
     isolatedBattle(); comboKills(20); execute('momentum.idle=3.8;momentum.decay=.2;');
     if(kind==='warning') execute('nextBossTime=90;battleTime=85;');
-    else if(kind==='single') execute('spawnBoss(0);'); else execute('spawnBoss(0,1);');
+    else if(kind==='ordinary') execute('spawnBoss(0);'); else execute('spawnBoss(10);');
     execute('updateMomentum(8);'); assert.equal(momentumState().count,20); near(momentumState().idle,3.8); near(momentumState().decay,.2);
     assert.equal(momentumState().remaining,0); assert.equal(nodes.get('#momentum-hud').dataset.frozen,'true');
     execute('resetBossEncounter();nextBossTime=Infinity;updateMomentum(.65);'); assert.equal(momentumState().count,19);
@@ -2361,15 +2220,14 @@ check('Falcon attack cadence freezes while paused and resumes without a queued v
   assert.equal(execute('bullets.length'),2); near(execute('evolutionWeapons.droneCooldown'),.05);
   execute('updateEvolutionWeapons(.05);'); assert.equal(execute('bullets.length'),4);
 });
-check('a penetrating support shot damages each intersected Boss once without chaining', () => {
-  readyDuo('boss.phase=wingBoss.phase="recover";wingBoss.x=boss.x+40;wingBoss.y=boss.y;boss.previousX=boss.x;wingBoss.previousX=wingBoss.x;for(const hull of activeBosses())for(const part of hull.components)part.destroyed=true;');
+check('a penetrating support shot damages the fusion Boss once without chaining', () => {
+  readyBoss(10);
   execute('spawnEvolutionRound({x:boss.x-boss.width*1.5,y:boss.y},"lance",.65,{pierces:3});');
   const damage=execute('bullets[0].damage');
-  const initial=duoState();
+  const initial=bossState();
   execute('updateShooting(.3);resolveProjectileHits();resolveProjectileHits();');
-  near(duoState().boss.hp,1-damage/Math.exp(initial.boss.healthLog));
-  near(duoState().wingBoss.hp,1-damage/Math.exp(initial.wingBoss.healthLog));
-  assert.equal(execute('bullets[0].hitTargets.size'),2);
+  near(bossState().boss.hp,1-damage/Math.exp(initial.boss.healthLog));
+  assert.equal(execute('bullets[0].hitTargets.size'),1);
   assert.equal(evolutionState().pulses.length,0);
 });
 check('aegis ranks charge in 25, 20, 17 and 14 seconds with frame-independent storage capped at two', () => {
@@ -2407,10 +2265,9 @@ check('aegis counter kills score once without spawning support fire or gaining c
   execute('shield.charges=1;requestShield();requestShield();'); assert.equal(scene().score,100); assert.equal(scene().enemies.length,1);
   assert.equal(momentumState().count,1); near(ult().energy,0); assert.equal(shots().length,0);
   for(let level=1;level<=3;level++) {
-    readyDuo(`evolution.aegis=${level};player.y=boss.y;wingBoss.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();`);
-    const cap=[0,.03,.04,.05][level], pair=duoState();
-    assert.ok(pair.boss.hp>=1-cap&&pair.boss.hp<1);
-    near(pair.wingBoss.hp,pair.boss.hp);
+    readyBoss(10,`evolution.aegis=${level};player.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();`);
+    const cap=[0,.03,.04,.05][level], after=bossState();
+    assert.ok(after.boss.hp>=1-cap&&after.boss.hp<1);
     near(ult().energy,0); assert.equal(evolutionState().pulses.length,2);
   }
 });
@@ -2439,13 +2296,6 @@ check('Boss death cinematic and effects freeze on blur hidden tabs and control f
     if(pause==='hidden') {document.hidden=false;emit(document,'visibilitychange');}
     emit(window,'focus'); canvas.focus(); execute('updateCombatEffects(.05);'); near(effectsState().deathRemaining,1);
   }
-});
-check('first dual death leaves combat running and survivor HP intact while only the final death starts the cinematic', () => {
-  readyDuo('wingBoss.hp=.63;defeatBoss();'); assert.equal(execute('isBossDeathPlaying()'),false); assert.equal(execute('isBattleActive()'),true);
-  near(duoState().boss.hp,.63); const time=scene().battleTime; step(); assert.ok(scene().battleTime>time);
-  assert.equal(effectsState().wrecks.length,1); assert.equal(evolutionState().pending,false);
-  execute('defeatBoss();'); assert.equal(execute('isBossDeathPlaying()'),true); assert.equal(execute('isBattleActive()'),false);
-  finishBossPresentation(); assert.equal(evolutionState().pending,true); assert.equal(scene().score,4000);
 });
 check('resize clears stale effects but preserves and repositions the active Boss death without losing its one choice', () => {
   readyBoss(0,'defeatBoss();updateCombatEffects(.3);'); const before=effectsState();
@@ -2615,13 +2465,13 @@ check('counter kills use normal one-time score and combo settlement without char
   assert.equal(scene().enemies.length,0); near(ult().energy,0); assert.equal(shots().length,0);
   execute(contactShell()+'updateEnemyProjectileDamage();'); assert.equal(scene().score,100); assert.equal(health().kills,1);
 });
-check('perfect counter is capped at three percent for each simultaneous Boss even with unbounded weapon tiers', () => {
-  readyDuo('player.y=boss.y;wingBoss.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();');
+check('perfect counter is capped at three percent against the fusion Boss even with unbounded weapon tiers', () => {
+  readyBoss(10,'player.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();');
   execute(bossProjectile().repeat(5)+'updateBossDamage();');
-  const pair=duoState();
-  assert.ok(pair.boss.hp>=.97&&pair.boss.hp<1);
-  near(pair.wingBoss.hp,pair.boss.hp); near(ult().energy,0);
-  assert.equal(protection().perfectUsed,true); assert.equal(execute('activeBosses().every(target=>target.components.every(part=>!part.destroyed))'),true);
+  const after=bossState();
+  assert.ok(after.boss.hp>=.97&&after.boss.hp<1);
+  near(ult().energy,0);
+  assert.equal(protection().perfectUsed,true);
 });
 check('lethal perfect counters safely finish a Boss after collecting contact bullets and never settle it twice', () => {
   readyBoss(0,'weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
@@ -2769,13 +2619,13 @@ check('death, menu, new rounds, evolution and lethal parry Boss transitions disc
   execute(bossProjectile()+'updateBossDamage();'); assert.equal(execute('isBossDeathPlaying()'),true);near(cannonLinkState().remaining,0);
   finishBossPresentation();assert.equal(execute('evolution.pending'),true);near(cannonLinkState().remaining,0);
 });
-check('linked cannon damage remains unchanged and caps each simultaneous Boss hit at eighteen percent without generating energy', () => {
-  readyDuo('player.y=boss.y;wingBoss.y=boss.y;weapon.tier=10000;ultimate.charges=2;');
+check('linked cannon damage remains unchanged and caps fusion Boss hits at eighteen percent without generating energy', () => {
+  readyBoss(10,'player.y=boss.y;weapon.tier=10000;ultimate.charges=2;');
   const originalDamage=execute('ultimateDamageLog()');execute('armCannonLink();requestUltimate();updateUltimate(.449);');
   assert.equal(ult().phase,'charging');execute('updateUltimate(.001);');assert.equal(ult().phase,'firing');
   near(ult().shot.damageLog,originalDamage);assert.equal(execute('ultimate.shot.linked'),true);
   execute('updateUltimate(.5);resolveUltimateHits();resolveUltimateHits();');
-  near(duoState().boss.hp,.82);near(duoState().wingBoss.hp,.82);near(ult().energy,0);assert.equal(ult().charges,1);
+  near(bossState().boss.hp,.82);near(ult().energy,0);assert.equal(ult().charges,1);
 });
 check('linked cannons spend only one charge and fresh consecutive presses revert to normal charge time without buffered repeats', () => {
   earnCannonLink('ultimate.charges=3;'); key('Space');key('Space','keydown',{repeat:true});

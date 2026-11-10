@@ -93,8 +93,8 @@ const movementKeys = new Set([
 // viewport 使用屏幕像素作为坐标；高清画布另按设备像素密度绘制。
 const viewport = { width: 1280, height: 720 };
 let battlefieldInitialized = false;
-const playerRules = { maxLives: 3 };
-const player = { x: 200, y: 360, width: 180, height: 120, speed: 300, lives: 3, hitFlash: 0 };
+const player = { x: 200, y: 360, width: 180, height: 120, speed: 300,
+  lives: startingPlayerLives, maxLives: startingPlayerLives, hitFlash: 0 };
 const flightBounds = { left: 0, right: 0, top: 0, bottom: 0 };
 const stars = Array.from({ length: 150 }, () => ({
   x: Math.random(), y: Math.random(),
@@ -177,6 +177,10 @@ function resizeBattlefield() {
   cancelUltimate(true);
   resetWeapons();
   resizeEncounter(scaleX, scaleY, resizeY);
+  const previousGrace = bossHitGrace;
+  resizeBossEncounter(oldWidth, oldHeight, oldBounds);
+  // 缩小可飞区域可能暂时挤近机身，给玩家重新走位的时间。
+  bossHitGrace = Math.max(previousGrace, bossHitGrace, bossRules.grace);
   player.previousX = player.x; player.previousY = player.y;
   resizeCombatEffects(oldWidth, oldHeight);
   resizeScenery();
@@ -223,10 +227,6 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
   resizeEvolutionWeapons(scaleX, scaleY, resizeY);
   enemyProjectiles.length = 0;
   explosions.length = 0;
-  const previousGrace = bossHitGrace;
-  resizeBossEncounter();
-  // 缩小可飞区域可能暂时挤近机身，给玩家重新走位的时间。
-  bossHitGrace = Math.max(previousGrace, bossHitGrace, bossRules.grace);
 }
 
 function readyFighter() {
@@ -249,10 +249,11 @@ function showScreen(nextState) {
   resetWeapons(false);
   resetEncounter();
   resetPlayer();
-  player.lives = playerRules.maxLives;
+  resetPlayerLives();
   player.hitFlash = 0;
   updateLifeDisplay();
   gameOverScreen.hidden = true;
+  delete gameOverScreen.dataset.victory;
   menuButton.hidden = false;
   state = nextState;
   const inBattle = state === "battle";
@@ -262,8 +263,8 @@ function showScreen(nextState) {
   canvas.tabIndex = inBattle ? 0 : -1;
   updateGameCanvasLabel();
   statusMessage.textContent = inBattle
-    ? tr("已进入横向战场。上下移动瞄准敌机，机头自动向右射击。突击机波浪飞行，重甲机耐打，炮击机亮出瞄准线后开火。敌机碰撞或炮弹命中扣 1 点生命，飞过战机不会扣血。命中敌军积能，大招最多储存 5 次，按空格蓄力发射红色贯穿炮。护盾每 25 秒充好一次，最多 2 次，按 V 获得 2 秒无敌。生命归零结束。射击蓝、黄、红球增加攻速、弹道、伤害；稀有绿球恢复一点生命。",
-      "Battle started. Move up or down to aim your automatic fire. Scouts weave, armored fighters take more hits, and gunners show an aim line before shooting. A collision or hit costs one life. Enemies that fly past do no damage. Hits charge up to five cannon shots. Press Space to fire one. The shield charges every 25 seconds and stores up to two uses. Press V for two seconds of protection. Shoot blue, yellow, and red orbs to improve fire rate, lanes, and damage. Rare green orbs restore one life.")
+    ? tr("异形战役开始。上下移动瞄准，战机自动射击。空格发射贯星炮，V 开启护盾。射中蓝、黄、红球强化武器；绿球恢复一点生命，满血时增加生命上限。依次击败十只异形，再挑战群渊合生体。",
+      "Alien campaign started. Move up or down to aim your automatic fire. Press Space for the beam and V to shield. Shoot blue, yellow and red orbs to upgrade your weapons. Green orbs restore a life and increase capacity at full health. Defeat ten aliens and then the Abyssal Confluence.")
     : tr("已返回开始画面。", "Returned to the main menu.");
   (inBattle ? canvas : startButton).focus({ preventScroll: true });
   updatePauseHint();
@@ -375,7 +376,7 @@ function updatePlayer(seconds) {
     - Number(pressedKeys.has("ArrowUp") || pressedKeys.has("KeyW"));
   if (horizontal === 0 && vertical === 0) return;
   const length = Math.hypot(horizontal, vertical);
-  const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1);
+  const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * alienMovementScale();
   player.x = clamp(player.x + horizontal / length * speed * seconds, flightBounds.left, bossPlayerRight());
   player.y = clamp(player.y + vertical / length * speed * seconds, flightBounds.top, flightBounds.bottom);
   movementHint.hidden = true;
@@ -421,10 +422,7 @@ function applyPowerup(type) {
   const details = powerupTypes[type];
   if (!details) return false;
   if (type === "heal") {
-    const full = player.lives === playerRules.maxLives;
-    player.lives = Math.min(playerRules.maxLives, player.lives + 1);
-    updateLifeDisplay();
-    powerupNotice.textContent = full ? tr("生命已满 · 3 / 3", "Full lives · 3 / 3") : tr("生命 +1 · 剩余 " + player.lives + " / 3", "Life +1 · " + player.lives + " / 3 remaining");
+    powerupNotice.textContent = collectPlayerLifePowerup();
     powerupNotice.dataset.type = type;
     powerupNotice.hidden = false;
     upgradeNoticeTime = 2;
@@ -719,8 +717,8 @@ function resolveProjectileHits() {
       }
       for (const target of activeBosses()) {
         if (bullet.hitTargets.has(target) || !bossCanTakeDamage(target)) continue;
-        const entry = projectileBossHit(bullet, target);
-        if (entry && (!hit || entry.time < hit.time)) hit = { kind: "boss", target, time: entry.time, component: entry.component };
+        const entry = projectileAlienBossHit(bullet, target);
+        if (entry && (!hit || entry.time < hit.time)) hit = { kind: "boss", target, time: entry.time };
       }
       for (const object of battlefieldEvents.objects) {
         if (bullet.hitTargets.has(object) || object.x - object.width / 2 >= viewport.width) continue;
@@ -731,7 +729,7 @@ function resolveProjectileHits() {
       bullet.hitTargets.add(hit.target);
       if (hit.kind === "orb") {
         powerups.splice(powerups.indexOf(hit.target), 1); applyPowerup(hit.target.type);
-      } else if (hit.kind === "boss") applyBossHit(bullet, hit.target, hit.component);
+      } else if (hit.kind === "boss") applyBossHit(bullet, hit.target);
       else if (hit.kind === "object") hitBattlefieldObject(hit.target, bullet);
       else {
         applyEnemyHit(hit.target, bullet);
@@ -768,11 +766,6 @@ function drawPowerups() {
     context.fillText(tr(details.label, details.english), 0, -orb.radius - 8);
     context.restore();
   }
-}
-function updateLifeDisplay() {
-  lifeDisplay.textContent = Array.from({ length: playerRules.maxLives }, (_, index) =>
-    index < player.lives ? "♥" : "♡").join(" ");
-  lifeDisplay.setAttribute("aria-label", tr(player.lives + " 点生命", player.lives + (player.lives === 1 ? " life" : " lives")));
 }
 function enemyTouchesPlayer(enemy) {
   if (enemy.journeyLaunchUntil > battleTime) return false;
@@ -814,10 +807,18 @@ function updatePlayerDamage(seconds) {
     }
   }
 }
-function endGame() {
+function updateResultCopy(won) {
+  const title = document.querySelector("#game-over-title");
+  const intro = gameOverScreen.querySelector(".result-intro");
+  title.textContent = won ? tr("异形战役通关", "Campaign Cleared") : tr("游戏结束", "Game Over");
+  intro.textContent = won ? tr("群渊合生体已击破。", "The Abyssal Confluence has fallen.")
+    : tr("调整航线，再次突围。", "Plot a new course and try again.");
+}
+function endGame(won = false) {
   state = "over";
+  gameOverScreen.dataset.victory = String(won);
+  updateResultCopy(won);
   resetGravityTide();
-  resetBossComponents();
   resetCombatEffects();
   endMomentumBattle();
   resetEnemyCombat(false);
@@ -844,7 +845,8 @@ function endGame() {
   finalKills.textContent = String(kills);
   document.querySelector("#final-combo").textContent = String(momentum.best);
   gameOverScreen.hidden = false;
-  statusMessage.textContent = tr("游戏结束。本局得分 " + score + "，击毁 " + kills + " 架敌机。", `Game over. Score: ${score}. Enemies destroyed: ${kills}.`);
+  statusMessage.textContent = won ? tr(`异形战役通关。本局得分 ${score}。`, `Campaign cleared. Score: ${score}.`)
+    : tr(`游戏结束。本局得分 ${score}，击毁 ${kills} 架敌机。`, `Game over. Score: ${score}. Enemies destroyed: ${kills}.`);
   restartButton.focus({ preventScroll: true });
 }
 function drawEnemies() {
@@ -958,7 +960,6 @@ function drawFrame(time) {
   updateEvolutionWeapons(seconds);
   updateEncounter(seconds);
   updateBossEncounter(seconds);
-  if (isBattleActive()) updateBossComponents(seconds);
   updateBattlefield(seconds);
   updatePowerups(seconds);
   updateUltimate(seconds);
@@ -1005,6 +1006,7 @@ function updateGameCanvasLabel() {
   canvas.setAttribute("aria-label", label);
 }
 function refreshGameLanguage() {
+  if (state === "over") updateResultCopy(gameOverScreen.dataset.victory === "true");
   updateGameCanvasLabel();
   updateFullscreenDisplay();
   updateSoundButton();

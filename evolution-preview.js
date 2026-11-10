@@ -113,12 +113,17 @@ function previewRefit(ctx, choice, upgraded) {
     return;
   }
   const heal = choice === "refit-heal";
-  const maximum = heal ? playerRules.maxLives : shieldRules.maxCharges;
+  const maximum = heal ? player.maxLives : shieldRules.maxCharges;
   const count = Math.min(maximum, (heal ? player.lives : shield.charges) + Number(upgraded));
   ctx.font = "17px sans-serif";
-  for (let index = 0; index < maximum; index++) {
-    ctx.fillStyle = index < count ? (heal ? "#83e9ad" : "#ffc293") : "#525b70";
-    ctx.fillText(heal ? "♥" : "◆", 89 + index * 18, 61);
+  if (heal && maximum > startingPlayerLives) {
+    ctx.fillStyle = "#83e9ad";
+    ctx.fillText(`♥ ${count} / ${maximum}`, 89, 61, 100);
+  } else {
+    for (let index = 0; index < maximum; index++) {
+      ctx.fillStyle = index < count ? (heal ? "#83e9ad" : "#ffc293") : "#525b70";
+      ctx.fillText(heal ? "♥" : "◆", 89 + index * 18, 61);
+    }
   }
   if (upgraded) {
     ctx.fillStyle = "#bedbff";

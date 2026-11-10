@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080b14">
   <meta name="description" content="星际突围，一款逐步开发的横向飞机射击小游戏。">
-  <title>星际突围 · 深空远征</title>
+  <title>星际突围 · 群渊战役</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff414e' d='M30 16 3 3 9 16 3 29Z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="guide.css">
@@ -13,10 +13,9 @@
   <script src="i18n.js" defer></script>
   <script src="audio.js" defer></script>
   <script src="ship-renderer.js" defer></script>
-  <script src="boss-art.js" defer></script>
-  <script src="boss-components.js" defer></script>
+  <script src="alien-boss-art.js" defer></script>
+  <script src="alien-attacks.js" defer></script>
   <script src="bosses.js" defer></script>
-  <script src="duo-bosses.js" defer></script>
   <script src="ultimate.js" defer></script>
   <script src="shield.js" defer></script>
   <script src="enemy-art.js" defer></script>
@@ -39,6 +38,7 @@
   <script src="evolution-preview.js" defer></script>
   <script src="i18n-static.js" defer></script>
   <script src="guide.js" defer></script>
+  <script src="alien-lives.js" defer></script>
   <script src="game.js" defer></script>
 </head>
 <body>
@@ -181,9 +181,10 @@
             <h3 id="flight-guide-tips-title">战斗与升级</h3>
             <ul class="flight-guide-tips">
               <li><strong>躲开敌机和敌弹。</strong>撞机或中弹会扣生命，打不到的敌机可以放过去。</li>
-              <li><strong>射中能量球升级。</strong><span class="guide-orb-blue">蓝球提攻速</span>、<span class="guide-orb-yellow">黄球加弹道</span>、<span class="guide-orb-red">红球加伤害</span>、<span class="guide-orb-green">绿球回生命</span>。</li>
+              <li><strong>射中能量球升级。</strong><span class="guide-orb-blue">蓝球提攻速</span>、<span class="guide-orb-yellow">黄球加弹道</span>、<span class="guide-orb-red">红球加伤害</span>、<span class="guide-orb-green">绿球回生命，满血时加生命上限</span>。</li>
               <li><strong>弹道超过四条时晋阶。</strong>原四条的总伤害合到一条高阶弹道，再额外提高 12%。</li>
-              <li><strong>击败首领后三选一进化。</strong>破阵翼刃加装翼炮，星隼僚机自动攻击，赤金壁垒吸收敌弹再反击。路线可混搭，每条最多 3 级，三条满级后解锁联动。</li>
+              <li><strong>击败前十只异形后可进化。</strong>破阵翼刃加装翼炮，星隼僚机自动攻击，赤金壁垒吸收敌弹再反击。路线可混搭，每条最多 3 级，三条满级后解锁联动。</li>
+              <li><strong>依序击败十只异形与最终合体。</strong>看见标记先离开危险区。减速时仍能移动和开盾。群渊合生体会用一招限制路线，再用另一招追击。</li>
             </ul>
           </section>
         </div>

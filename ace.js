@@ -24,9 +24,7 @@ function aceBlocksWaves() {
   return aceEncounter.warning > 0 || !!aceEncounter.target && enemies.includes(aceEncounter.target);
 }
 function aceBossIsNear() {
-  return bossBlocksWaves() || (typeof wingBoss !== "undefined" && !!wingBoss)
-    || (typeof duoEncounter !== "undefined" && !!duoEncounter)
-    || battleTime >= nextBossTime - bossRules.warning - aceRules.retreat - 0.25;
+  return bossBlocksWaves() || battleTime >= nextBossTime - bossRules.warning - aceRules.retreat - 0.25;
 }
 function aceHasEncounterConflict() {
   return aceBossIsNear()
