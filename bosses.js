@@ -28,7 +28,11 @@ const bossHazards = [];
 
 function activeBosses() { return boss ? [boss] : []; }
 function bossTypeName(type) { return tr(bossTypes[type].name, bossTypes[type].enName); }
-function chooseBossType() { return bossDefeated < bossTypes.length ? bossDefeated : null; }
+function chooseBossType() {
+  const fixed = typeof sortieStats !== "undefined" ? sortieStats?.bossType : null;
+  if (fixed != null) return bossDefeated ? null : fixed;
+  return bossDefeated < bossTypes.length ? bossDefeated : null;
+}
 
 function bossArena(type = boss?.type ?? 0) {
   const final = type === finalAlienType;
@@ -114,19 +118,20 @@ function clearBossFinaleAttacks() {
   clearAlienThreats();
   enemyProjectiles.length = 0;
   bullets.length = 0;
-  pendingShots = 0;
   muzzleFlash = 0;
   clearEvolutionWeaponTransients();
+  clearFighterCombatTransients();
   if (ultimate.phase !== "idle") cancelUltimate(true);
 }
 
 function resetBossEncounter() {
   boss = null;
-  nextBossTime = bossRules.firstArrival;
+  nextBossTime = typeof sortieAllowsWaves === "function" && !sortieAllowsWaves() ? sortieBossDelay() : bossRules.firstArrival;
   bossDefeated = 0;
   pendingBossType = null;
   prefetchedBossType = null;
   bossHitGrace = 0;
+  if (typeof resetFlightRadio === "function") resetFlightRadio();
   clearAlienThreats();
   setBossMessage("", "", false);
   setBossWarning();
@@ -204,14 +209,16 @@ function spawnBoss(type = chooseBossType()) {
   const arena = bossArena(type);
   const data = bossTypes[type];
   const alienFinal = type === finalAlienType;
-  const endurance = alienFinal ? 124 : 68 + type * 4.2;
-  const healthLog = progressionBossHealthLog(battleTime, endurance);
+  const baseHealth = bossBalanceHealth(type, { level: weapon.damageLevel,
+    difficultyScale: typeof sortieRules === "function" ? sortieRules().bossHealth : 1 });
+  const healthLog = Math.log(baseHealth);
   boss = { ...arena, type, alien: true, alienFinal, color: data.color, name: bossTypeName(type),
-    hp: 1, maxHp: 1, displayHp: 1, healthLog, endurance, fireProtection: bossFireProtectionFor(type),
+    hp: 1, maxHp: 1, displayHp: 1, healthLog, baseHealth, fireProtection: bossFireProtectionFor(type),
     x: viewport.width + arena.width / 2, previousX: viewport.width + arena.width / 2, previousY: arena.y,
     phase: "enter", phaseTime: 0, age: 0, hitFlash: 0, attackIndex: -1,
     alienAttack: null, attackLabel: null, pressureCycle: 0, enraged: false, lockX: player.x, lockY: player.y, gapY: player.y, gapSize: 0,
     lashPulse: 0, lashSide: 1, lashIndex: 0 };
+  if (typeof sortieBossEntered === "function") sortieBossEntered(boss);
   if (typeof preloadAlienBossArt === "function") preloadAlienBossArt(type);
   preloadBossFinaleArt(type);
   enemies.length = 0;
@@ -268,9 +275,10 @@ function updateBossEncounter(seconds) {
   bossHitGrace = Math.max(0, bossHitGrace - seconds);
   updateBossProjectiles(seconds);
   if (!boss) {
+    const upcoming = chooseBossType();
     // Start streaming the upcoming body before the five-second encounter warning.
-    if (battleTime >= nextBossTime - bossRules.artLead && prefetchedBossType !== bossDefeated) {
-      prefetchedBossType = chooseBossType();
+    if (battleTime >= nextBossTime - bossRules.artLead && prefetchedBossType !== upcoming) {
+      prefetchedBossType = upcoming;
       if (prefetchedBossType !== null && typeof preloadStarBreakerModel === "function") {
         preloadStarBreakerModel(prefetchedBossType);
       }
@@ -278,7 +286,7 @@ function updateBossEncounter(seconds) {
     }
     if (battleTime < nextBossTime - bossRules.warning) return;
     if (pendingBossType === null) {
-      pendingBossType = chooseBossType();
+      pendingBossType = upcoming;
       if (pendingBossType === null) return;
       if (typeof preloadAlienBossArt === "function") preloadAlienBossArt(pendingBossType);
       preloadBossFinaleArt(pendingBossType);
@@ -288,6 +296,10 @@ function updateBossEncounter(seconds) {
     }
     const name = bossTypeName(pendingBossType);
     setBossWarning(name);
+    const remaining = nextBossTime - battleTime;
+    if (remaining > 0 && remaining <= 3 && typeof beginFlightRadio === "function") {
+      beginFlightRadio("incoming", pendingBossType, remaining);
+    }
     const eta = Math.max(0, Math.ceil(nextBossTime - battleTime));
     setBossMessage(bossStageTitle({ type: pendingBossType, name }),
       tr("异形接近 · " + eta + " 秒后抵达", "Alien incoming · ETA " + eta + " s"));
@@ -365,7 +377,7 @@ function applyBossHit(shot, target = boss) {
   const special = shot.source === "ultimate";
   const rawFraction = special
     ? Math.exp(Math.min(Math.log(ultimateRules.bossDamageCap), damageLog - target.healthLog))
-    : progressionHitFraction(target, damageLog, target.fireProtection);
+    : progressionHitFraction(target, damageLog, shot.armorPiercing ? fighterHitProtection(target, shot) : target.fireProtection);
   // The attacking shell absorbs part of the incoming damage, but no attack is invulnerable.
   const exposed = target.phase === "recover" && target.alienAttack;
   const attackingShell = exposed ? 1.18 : target.phase !== "attack" ? 1
@@ -392,6 +404,7 @@ function applyBossHit(shot, target = boss) {
 function defeatBoss(target = boss) {
   if (!target || target !== boss) return;
   const fallen = target;
+  if (typeof sortieBossCleared === "function") sortieBossCleared(fallen);
   const motion = fallen.finale ? captureBossPresentationMotion() : null;
   boss = null;
   bossDefeated = Math.max(bossDefeated, fallen.type + 1);
@@ -401,13 +414,17 @@ function defeatBoss(target = boss) {
   registerMomentumKill();
   if (!fallen.finale) createExplosion(fallen, points);
   const recovered = player.lives;
-  if (!fallen.alienFinal && bossDefeated % 3 === 0) grantPlayerLife();
+  const mode = typeof sortieMode === "function" ? sortieMode() : "campaign";
+  if (!fallen.alienFinal && (mode === "campaign" || mode === "rush")) {
+    raiseWeaponFloor(progressionPresetForBoss(bossDefeated));
+  }
+  if (!fallen.alienFinal && (mode === "campaign" || mode === "rush") && bossDefeated % 3 === 0) grantPlayerLife();
   clearAlienThreats();
   enemies.length = 0;
   resetEnemyCombat(false);
   bossHitGrace = 1.5;
   setBossWarning();
-  if (!fallen.alienFinal) {
+  if (!fallen.alienFinal && mode === "campaign") {
     for (const [index, type] of ["blue", "yellow", "red"].entries()) {
       powerups.push({ x: fallen.x, previousX: fallen.x, y: clamp(fallen.y + (index - 1) * 75, flightBounds.top, flightBounds.bottom),
         radius: powerupRules.radius, type });
@@ -417,10 +434,13 @@ function defeatBoss(target = boss) {
   const reward = tr(fallen.name + "已击破 · +" + points + "分" + (healed ? " · 恢复1点生命" : ""),
     fallen.name + " defeated · +" + points + " points" + (healed ? " · +1 life" : ""));
   powerupNotice.hidden = true;
-  nextBossTime = fallen.alienFinal ? Infinity : battleTime + Math.max(18, bossRules.interval - (bossDefeated - 1) * 1.5);
+  const endsRun = fallen.alienFinal || mode === "practice" || mode === "daily";
+  const nextDelay = mode === "rush" ? sortieBossDelay() : Math.max(18, bossRules.interval - (bossDefeated - 1) * 1.5);
+  nextBossTime = endsRun ? Infinity : battleTime + nextDelay;
   enemyCooldown = 2;
   setBossMessage("", "", false);
   startBossDeathPresentation(fallen, reward, motion);
+  if (typeof beginFlightRadio === "function") beginFlightRadio("cleared", fallen.type, 2.75);
 }
 
 function bossShotHitsPlayer(shot) {
@@ -444,7 +464,7 @@ function updateBossDamage() {
   if (contact || hazard || finale) {
     // Lingering areas can hit once each. Repeated, newly telegraphed attacks
     // still damage the player even when they originate from the same move.
-    const damaged = damagePlayer(alienDamageExplanation(contact || hazard || {}, finale));
+    const damaged = damagePlayer(alienDamageExplanation(contact || hazard || {}, finale), contact || hazard || finale);
     if (damaged && hazard && !contact) hazard.hitPlayer = true;
   }
 }

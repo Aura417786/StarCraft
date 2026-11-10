@@ -4,7 +4,7 @@ const shieldRules = { maxCharges: 2, chargeTime: 25, duration: 2, perfectWindow:
   refundFraction: 0.25, counterSeconds: 0.65, bossDamageCap: 0.03, slowDuration: 0.16, slowScale: 0.4 };
 // energy 以有效战斗秒数计量；储满后停止，不能暗中囤积第三次。
 const shield = { charges: 0, energy: 0, remaining: 0, perfectRemaining: 0, perfectUsed: false,
-  flash: 0, slowRemaining: 0, effect: null };
+  duration: shieldRules.duration, flash: 0, slowRemaining: 0, effect: null };
 const shieldPanel = document.querySelector("#shield-hud");
 const shieldCount = document.querySelector("#shield-count");
 const shieldMeter = document.querySelector("#shield-meter");
@@ -14,8 +14,9 @@ const shieldSlots = document.querySelectorAll(".shield-slot");
 let shieldDisplayKey = "";
 
 function shieldIsActive() { return shield.remaining > 0; }
+function shieldDisabledForSortie() { return typeof sortieRules === "function" && sortieRules().noShield; }
 function gainShieldEnergy(amount) {
-  if (shield.charges >= shieldRules.maxCharges || !Number.isFinite(amount) || amount <= 0) return 0;
+  if (shieldDisabledForSortie() || shield.charges >= shieldRules.maxCharges || !Number.isFinite(amount) || amount <= 0) return 0;
   const chargeTime = evolutionShieldChargeTime();
   const total = shield.energy + amount;
   const gained = Math.floor((total + 1e-9) / chargeTime);
@@ -55,6 +56,12 @@ function tryPerfectShield() {
   shield.perfectUsed = true;
   shield.perfectRemaining = 0;
   armCannonLink();
+  const aegisMastery = evolution.aegis >= 3;
+  if (aegisMastery) {
+    restoreUltimateEnergy(ultimateRules.energyPerCharge * .3);
+    shield.remaining += .6;
+    shield.duration += .6;
+  }
   shield.flash = 0.65;
   shield.slowRemaining = reducedMotion.matches ? 0 : shieldRules.slowDuration;
   gainShieldEnergy(evolutionShieldChargeTime() * shieldRules.refundFraction);
@@ -62,7 +69,7 @@ function tryPerfectShield() {
   shield.effect = { x: player.x, y: player.y, halfHeight, length: Math.max(0, viewport.width - player.x) };
   gameAudio.perfectShield();
   addCombatShake(2.5);
-  const counterLog = weaponDamageLog() + Math.log(weapon.lanes / weapon.interval) + Math.log(shieldRules.counterSeconds);
+  const counterLog = weaponDamageLog() + Math.log((1 + .16 * (weapon.lanes - 1)) / weapon.interval) + Math.log(shieldRules.counterSeconds);
   const counter = { source: "blast", damageLog: counterLog, x: player.x, y: player.y };
   const inFront = target => target.x + target.width * 0.4 >= player.x
     && target.x - target.width * 0.4 < viewport.width && target.x > player.x
@@ -77,8 +84,10 @@ function tryPerfectShield() {
       damageLog: Math.min(counterLog, target.healthLog + Math.log(shieldRules.bossDamageCap)) }, target);
   }
   updateShieldDisplay();
-  if (isBattleActive()) statusMessage.textContent = tr("完美格挡！返还 25% 护盾充能，3 秒内释放已储存的大招可加快蓄力。",
-    "Perfect Guard! Restored 25% shield charge. Use a stored special within 3 seconds to charge it faster.");
+  if (isBattleActive()) statusMessage.textContent = aegisMastery
+    ? tr("壁垒完美格挡 · 大招回能 30% · 无敌延长 0.6 秒", "Aegis Perfect Guard · 30% special energy · 0.6s extended protection")
+    : tr("完美格挡！返还 25% 护盾充能，3 秒内释放已储存的大招可加快蓄力。",
+      "Perfect Guard! Restored 25% shield charge. Use a stored special within 3 seconds to charge it faster.");
   else { shield.slowRemaining = 0; resetCannonLink(); }
   return true;
 }
@@ -91,6 +100,7 @@ function shieldFrameSeconds(realSeconds) {
   return realSeconds - slowed + slowed * shieldRules.slowScale;
 }
 function updateShieldDisplay() {
+  const disabled = shieldDisabledForSortie();
   const full = shield.charges === shieldRules.maxCharges;
   const chargeTime = evolutionShieldChargeTime();
   const percent = full ? 100 : clamp(shield.energy / chargeTime * 100, 0, 100);
@@ -99,7 +109,7 @@ function updateShieldDisplay() {
   const ready = shield.perfectRemaining > 1e-9 && !shield.perfectUsed;
   const absorbLimit = evolutionWeaponRules.absorbLimit[evolution.aegis];
   const absorbed = evolutionWeapons.absorbed.length;
-  const key = [gameLanguage, shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed].join("/");
+  const key = [gameLanguage, shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed, disabled, evolution.aegis].join("/");
   if (key === shieldDisplayKey) return;
   shieldDisplayKey = key;
   shieldCount.textContent = shield.charges + " / " + shieldRules.maxCharges;
@@ -108,10 +118,13 @@ function updateShieldDisplay() {
   shieldMeter.setAttribute("aria-valuetext", full ? tr("护盾已储满 2 次", "Both shield charges stored")
     : tr("护盾充能 " + Math.floor(percent) + "%", "Shield charge " + Math.floor(percent) + "%"));
   shieldPanel.dataset.ready = String(shield.charges > 0);
+  shieldPanel.dataset.disabled = String(disabled);
   shieldPanel.dataset.active = String(shieldIsActive());
   shieldPanel.dataset.perfect = String(perfect);
   shieldSlots.forEach((slot, index) => { slot.dataset.filled = String(index < shield.charges); });
-  shieldLabel.textContent = perfect ? tr("完美格挡 · 返还 25% 充能", "Perfect Guard · 25% back")
+  shieldLabel.textContent = disabled ? tr("本局护盾禁用", "Shield disabled for this sortie")
+    : perfect && evolution.aegis >= 3 ? tr("完美格挡 · 大招回能", "Perfect Guard · Special energy")
+    : perfect ? tr("完美格挡 · 返还 25% 充能", "Perfect Guard · 25% back")
     : ready ? tr("完美窗口 · 迎击敌弹", "Perfect Guard window")
     : shieldIsActive() && absorbLimit ? tr("吸收弹药 " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + " 秒",
       "Absorbed " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + "s")
@@ -125,9 +138,10 @@ function updateShieldDisplay() {
       " Your Aegis absorbs up to " + absorbLimit + " shots it blocks and releases them when the shield ends.") : "");
 }
 function requestShield() {
-  if (!isBattleActive() || shield.charges <= 0 || shieldIsActive()) return false;
+  if (shieldDisabledForSortie() || !isBattleActive() || shield.charges <= 0 || shieldIsActive()) return false;
   shield.charges--;
-  shield.remaining = shieldRules.duration;
+  shield.duration = shieldRules.duration;
+  shield.remaining = shield.duration;
   shield.perfectRemaining = shieldRules.perfectWindow;
   shield.perfectUsed = false;
   shield.flash = 0; shield.slowRemaining = 0; shield.effect = null;
@@ -142,7 +156,7 @@ function requestShield() {
   return true;
 }
 function updateShield(seconds) {
-  if (!isBattleActive() || !Number.isFinite(seconds) || seconds <= 0) return;
+  if (shieldDisabledForSortie() || !isBattleActive() || !Number.isFinite(seconds) || seconds <= 0) return;
   const wasActive = shieldIsActive();
   shield.remaining = Math.max(0, shield.remaining - seconds);
   if (shield.remaining < 1e-9) shield.remaining = 0;
@@ -161,6 +175,7 @@ function resetShield() {
   shield.charges = 0;
   shield.energy = 0;
   shield.remaining = 0;
+  shield.duration = shieldRules.duration;
   shield.perfectRemaining = 0; shield.perfectUsed = false;
   shield.flash = 0; shield.slowRemaining = 0; shield.effect = null;
   beginEvolutionShieldCapture();
@@ -170,7 +185,7 @@ function drawShield() {
   if (state !== "battle" || !shieldIsActive()) return;
   const x = player.x, y = player.y;
   const rx = player.width * 0.60, ry = player.height * 0.65;
-  const age = shieldRules.duration - shield.remaining;
+  const age = Math.max(0, shield.duration - shield.remaining);
   const fade = reducedMotion.matches ? 1 : Math.min(1, age / 0.12 + 0.25, shield.remaining / 0.18);
   context.save();
   context.translate(x, y);

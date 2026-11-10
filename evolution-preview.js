@@ -1,7 +1,6 @@
 "use strict";
 
 const evolutionPreview = { elapsed: 0, lastTime: null, lastPaint: -Infinity, signature: "" };
-const evolutionPreviewLinkRoutes = { falcon: "blast", phalanx: "blast", lance: "aegis" };
 
 function previewPulse(ctx, x, y, length, width, color, angle = 0) {
   ctx.save();
@@ -16,53 +15,50 @@ function previewPulse(ctx, x, y, length, width, color, angle = 0) {
 
 function previewWingFire(ctx, ship, level, time, quiet) {
   if (level < 1) return;
-  const age = quiet ? .2 : (time + .06) % evolutionWeaponRules.wingInterval[level];
-  const lanceAge = level >= 2
-    ? (quiet ? evolutionWeaponRules.lanceCharge + .21 : time % evolutionWeaponRules.lanceInterval[level])
-    : Infinity;
-  for (const muzzle of getEvolutionWingMuzzles(ship)) {
-    previewPulse(ctx, muzzle.x + age * 115, muzzle.y, 12, 2.4, "#a3e9ff");
-    if (lanceAge < evolutionWeaponRules.lanceCharge) {
-      const progress = lanceAge / evolutionWeaponRules.lanceCharge;
-      ctx.strokeStyle = "#a0e0ff";
-      ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.arc(muzzle.x, muzzle.y, 4 + progress * 3, -.5 * Math.PI, (2 * progress - .5) * Math.PI);
-      ctx.stroke();
-    } else if (lanceAge < evolutionWeaponRules.lanceCharge + .65) {
-      const x = muzzle.x + (lanceAge - evolutionWeaponRules.lanceCharge) * 143;
-      previewPulse(ctx, x, muzzle.y, level === 3 ? 30 : 23, level === 3 ? 4.7 : 3.4, "#d2f5ff");
-    }
+  const age = quiet ? .45 : (time + .06) % 1.5;
+  const muzzle = { x: ship.x + ship.width * .465, y: ship.y };
+  const impactX = 121;
+  const progress = clamp(age / evolutionWeaponRules.lanceCharge, 0, 1);
+  ctx.strokeStyle = "#81bac970";
+  ctx.strokeRect(impactX, ship.y - 6, 8, 12);
+  if (level === 3 && progress < 1) {
+    ctx.strokeStyle = "#9edfff"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(muzzle.x, muzzle.y, 5 + 5 * progress, -.5 * Math.PI, (2 * progress - .5) * Math.PI); ctx.stroke();
+    return;
+  }
+  const travel = level === 3 ? age - evolutionWeaponRules.lanceCharge : age % .52;
+  const x = muzzle.x + travel * 110;
+  previewPulse(ctx, x, muzzle.y, level === 3 ? 29 : 11, level === 3 ? 4.7 : 2.6, "#d2f5ff");
+  if (level >= 2 && x > impactX) for (const side of [-1, 1]) {
+    const d = x - impactX;
+    previewPulse(ctx, impactX + d * .7, ship.y + side * d * .65, 10, 2, "#9edfff", side * .68);
   }
 }
 
-function previewDroneFire(ctx, ship, level, time, quiet, links, showPhalanx) {
+function previewDroneFire(ctx, ship, level, time, quiet) {
   if (level < 1) return;
   const interval = evolutionWeaponRules.droneInterval[level];
-  const volley = Math.floor(time / interval) + 1;
-  const shieldAge = quiet ? 1.5 : time % 3.35;
-  const linkedSalvo = links.phalanx && shieldAge >= .22 && shieldAge < 2.62;
-  const salvo = (level === 3 && (quiet ? !showPhalanx : volley % 3 === 0)) || linkedSalvo;
   const age = quiet ? .53 : time % interval;
-  const speed = 128;
-  if (links.falcon) {
-    ctx.strokeStyle = "#83b6b96e";
-    ctx.strokeRect(118, ship.y - 8, 8, 16);
-    ctx.strokeRect(142, ship.y - 8, 8, 16);
+  const defending = level === 3 && (quiet || time % 3.6 > 2.8);
+  const focusX = 123;
+  if (level >= 2) {
+    ctx.strokeStyle = "#9ce9e2";
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath(); ctx.arc(focusX, ship.y, defending ? 19 : 11, 0, 2 * Math.PI); ctx.stroke();
+    ctx.setLineDash([]);
   }
   for (const drone of getEvolutionDronePositions(ship, level)) {
     drawEvolutionDroneBody(ctx, drone, level, true);
-    const aim = Math.atan2(ship.y - drone.muzzleY, 122 - drone.muzzleX);
-    for (const offset of salvo ? [-.065, 0, .065] : [0]) {
-      const angle = aim + offset;
-      const x = drone.muzzleX + Math.cos(angle) * speed * age;
-      const y = drone.muzzleY + Math.sin(angle) * speed * age;
-      if (links.falcon || x <= 123) previewPulse(ctx, x, y, links.falcon ? 13 : 8, 2.1, "#a0f3de", angle);
-    }
+    const aim = Math.atan2(ship.y - drone.muzzleY, focusX - drone.muzzleX);
+    const x = drone.muzzleX + Math.cos(aim) * 128 * age;
+    const y = drone.muzzleY + Math.sin(aim) * 128 * age;
+    if (x <= focusX) previewPulse(ctx, x, y, 8, 2.1, "#a0f3de", aim);
   }
 }
 
-function previewShieldFire(ctx, ship, level, time, quiet, lance) {
+function previewShieldFire(ctx, ship, level, time, quiet) {
+  if (level < 1) return;
+  const lance = level === 3;
   const age = quiet ? (lance ? 2.45 : 1.95) : (time + .98) % 3.35;
   const radiusX = ship.width * .6;
   const radiusY = ship.height * .65;
@@ -128,19 +124,16 @@ function previewRefit(ctx, choice, upgraded) {
   if (upgraded) {
     ctx.fillStyle = "#bedbff";
     ctx.font = "11px sans-serif";
-    ctx.fillText(tr("辅助 +4%", "Aux +4%"), 90, 82);
+    ctx.fillText(tr("本局补给", "Sortie supply"), 90, 82);
   }
 }
 
 function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
-  const route = evolutionPreviewLinkRoutes[choice] ?? choice;
+  const route = choice;
   const ranks = { pierce: 0, blast: 0, aegis: 0 };
-  const links = { ...evolution.links };
   const level = Math.min(3, (evolution[route] || 0) + Number(right && route === choice));
   const label = right ? (choice.startsWith("refit-") ? tr("整备后", "Refitted") : tr("升级后", "Upgraded")) : tr("当前", "Current");
   if (Object.hasOwn(ranks, route)) ranks[route] = level;
-  if (choice === "phalanx") ranks.aegis = evolution.aegis;
-  if (right && evolutionPreviewLinkRoutes[choice]) links[choice] = true;
 
   ctx.save();
   ctx.translate(right ? 160 : 0, 0);
@@ -169,8 +162,8 @@ function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
   const ship = { x: 54, y: 55, width: 85, height: 56, visualBank: 0 };
   if (!drawEvolvedPlayer(ctx, ship, ranks, true, 0)) drawFighterVariant(ctx, ship, fighterProfile().id, null, true, 0);
   if (route === "pierce") previewWingFire(ctx, ship, level, time, quiet);
-  if (route === "blast") previewDroneFire(ctx, ship, level, time, quiet, links, choice === "phalanx");
-  if (route === "aegis" || choice === "phalanx") previewShieldFire(ctx, ship, ranks.aegis, time, quiet, links.lance);
+  if (route === "blast") previewDroneFire(ctx, ship, level, time, quiet);
+  if (route === "aegis") previewShieldFire(ctx, ship, ranks.aegis, time, quiet);
   if (choice.startsWith("refit-")) previewRefit(ctx, choice, right);
   else {
     const age = quiet ? .24 : (time + .09) % .48;

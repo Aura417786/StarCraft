@@ -152,7 +152,7 @@ function advanceLivingBossPresentation(seconds) {
   if (!scene.impact && scene.age >= duration * presentationImpactAt[kind]) {
     scene.impact = true;
     if (kind === "rupture") gameAudio.bossEnrage();
-    gameAudio.bossPresentationCue?.(kind, target.type);
+    gameAudio.bossPresentationCue?.(kind, target.type, target.x, target.y);
     addCombatShake(kind === "entry" ? 2 : 4.5);
     if (kind === "rupture") pulseCombatLight(target.x, target.y, target.width * 1.75, profile.ink, "impact");
   }
@@ -175,15 +175,15 @@ function advanceBossDeathPresentation(seconds) {
   scene.age = Math.min(scene.duration, scene.age + seconds);
   if (scene.target.finale && !scene.impact && scene.age >= scene.duration * presentationImpactAt.death) {
     scene.impact = true;
-    gameAudio.explode(true);
-    gameAudio.bossPresentationCue?.("death", scene.target.type);
+    gameAudio.explode(true, scene.target.x, scene.target.y);
+    gameAudio.bossPresentationCue?.("death", scene.target.type, scene.target.x, scene.target.y);
     addCombatShake(scene.target.alienFinal ? 7 : 5.5);
     pulseCombatLight(scene.target.x, scene.target.y, scene.target.width * 2.4, scene.profile.ink, "collapse");
   }
   if (scene.age >= scene.duration - 1e-9) {
     resetBossPresentation();
     scoreDisplay.textContent = String(score).padStart(6, "0");
-    if (scene.target.alienFinal) endGame(true);
+    if (scene.target.alienFinal || (typeof sortiePresentationEndsRun === "function" && sortiePresentationEndsRun(scene.target))) endGame(true);
     else {
       if (scene.reward) {
         powerupNotice.textContent = scene.reward;
@@ -442,6 +442,24 @@ function deathFragmentTravel(type, x, y, depth, t, index) {
   }
 }
 
+const bossDebrisGravity = [1.88, 2.46, 2.27, 3.05, 2.65, 1.53, 2.34, 1.76, 0, 2.18, 2.38];
+
+function presentationDebrisPosition(type, x, y, depth, index, t, lifespan, w, h) {
+  // The singularity pulls its own shell in. Every other collapse releases
+  // chunks at an identity-specific angle, then gravity takes over.
+  if (type === 8) {
+    const [sx, sy] = deathFragmentTravel(type, x, y, depth, t, index);
+    return [w * sx, h * sy];
+  }
+  const [outX, outY] = deathFragmentTravel(type, x, y, depth, .38, index);
+  const seconds = t * lifespan;
+  const mass = .82 + depth * .9 + (index % 4) * .05;
+  const vx = w * ((outX - x) * 1.13 + x * .46) / mass;
+  const vy = h * ((outY - y) * .84 + y * .28 - .24) / mass;
+  const gravity = h * bossDebrisGravity[type] * (.93 + depth * .13);
+  return [w * x + vx * seconds, h * y + vy * seconds + .5 * gravity * seconds * seconds];
+}
+
 function drawPresentationChip(ctx, edge, w, h, thickness, yaw, pitch, frontColor, sideColor, rim) {
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
   const offsetX = sy * thickness * .5, offsetY = -cy * sp * thickness * .5;
@@ -489,25 +507,29 @@ function drawPresentationFragments(ctx, scene, progress, quiet, finale = false) 
     const delay = presentationFragmentDelay(profile.order, x, y);
     const t = clamp((progress - delay) / (1 - delay), 0, 1);
     if (t <= 0) continue;
-    const opacity = presentationEase(t, 0, .11) * (1 - presentationEase(t, .48, 1));
+    const opacity = presentationEase(t, 0, .11) * (1 - presentationEase(t, death ? .57 : .48, 1));
     const yaw = (i % 2 ? -1 : 1) * (.7 + depth * 3.4) * t;
     const pitch = (i % 2 ? 1 : -1) * (.38 + Math.abs(y) * 2.75 + depth) * t;
     const roll = (i % 3 === 0 ? -1 : 1) * (.5 + Math.abs(x) * 2.9) * t;
     const force = t * (.65 + depth * .64);
-    const [travelX, travelY] = death ? deathFragmentTravel(target.type, x, y, depth, t, i)
-      : [x + x * force + profile.drift[0] * t * t * .46,
-        y + y * force + (.28 + profile.drift[1] * .24) * t * t];
+    const lifespan = scene.duration * .60 * (1 - delay);
+    const at = u => death ? presentationDebrisPosition(target.type, x, y, depth, i, u, lifespan, w, h)
+      : [w * (x + x * force + profile.drift[0] * u * u * .46),
+        h * (y + y * force + (.28 + profile.drift[1] * .24) * u * u)];
+    const [travelX, travelY] = at(t);
     const range = quiet ? .25 : death ? 1 : .60;
-    const sx = w * (x + (travelX - x) * range);
-    const freeY = h * (y + (travelY - y) * range);
-    const floor = viewport.height - target.y + h * .07;
+    const sx = w * x + (travelX - w * x) * range;
+    const freeY = h * y + (travelY - h * y) * range;
+    const floor = viewport.height - g.y + h * .055;
     const sy = Math.min(floor, freeY);
-    const landing = 1 - presentationEase(freeY, floor, floor + h * .17);
+    const landing = 1 - presentationEase(freeY, floor - h * .10, floor + h * .11);
+    if (landing <= 0) continue;
     ctx.save();
     ctx.globalAlpha *= opacity * landing * (quiet ? .71 : .94);
     if (!quiet && t > .10) {
-      const tailX = sx - w * (travelX - x) * range * .14;
-      const tailY = sy - h * (travelY - y) * range * .14;
+      const [previousX, previousY] = at(Math.max(0, t - (death ? .061 / lifespan : .09)));
+      const tailX = w * x + (previousX - w * x) * range;
+      const tailY = h * y + (previousY - h * y) * range;
       if (Math.hypot(sx - tailX, sy - tailY) > 2) {
         const tail = ctx.createLinearGradient(tailX, tailY, sx, sy);
         tail.addColorStop(0, profile.ink + "00"); tail.addColorStop(1, profile.ink + (target.type === 5 ? "84" : "35"));

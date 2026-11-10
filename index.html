@@ -10,10 +10,13 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="combat-hud.css">
   <link rel="stylesheet" href="guide.css">
+  <link rel="stylesheet" href="sortie-ui.css">
+  <link rel="stylesheet" href="campaign-victory.css">
   <link rel="preload" as="image" href="assets/scenery/orbit-galaxy.webp" fetchpriority="high">
   <script src="i18n.js" defer></script>
   <script src="render-quality.js" defer></script>
   <script src="audio-bank.js" defer></script>
+  <script src="audio-faction-bank.js" defer></script>
   <script src="audio.js" defer></script>
   <script src="fighter-atlas-data.js" defer></script>
   <script src="ship-renderer.js" defer></script>
@@ -35,6 +38,7 @@
   <script src="shield.js" defer></script>
   <script src="enemy-art.js" defer></script>
   <script src="enemies.js" defer></script>
+  <script src="elite-enemies.js" defer></script>
   <script src="formations.js" defer></script>
   <script src="evolution.js" defer></script>
   <script src="momentum.js" defer></script>
@@ -55,7 +59,12 @@
   <script src="i18n-static.js" defer></script>
   <script src="guide.js" defer></script>
   <script src="alien-lives.js" defer></script>
+  <script src="profile.js" defer></script>
+  <script src="sortie-modes.js" defer></script>
+  <script src="flight-radio.js" defer></script>
   <script src="game.js" defer></script>
+  <script src="sortie-ui.js" defer></script>
+  <script src="campaign-victory.js" defer></script>
 </head>
 <body>
   <main class="app" id="game-app">
@@ -92,6 +101,12 @@
             <button id="guide-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="flight-guide">玩法说明</button>
             <button id="language-button" class="secondary-button" type="button" aria-label="切换游戏语言为英文">English</button>
           </div>
+          <nav class="hangar-console-actions" aria-label="机库终端">
+            <button class="secondary-button" data-sortie-console="challenges" type="button" aria-haspopup="dialog">挑战</button>
+            <button class="secondary-button" data-sortie-console="upgrades" type="button" aria-haspopup="dialog">改装</button>
+            <button class="secondary-button" data-sortie-console="archive" type="button" aria-haspopup="dialog">战役档案</button>
+            <button class="secondary-button" data-sortie-console="settings" type="button" aria-haspopup="dialog">设置</button>
+          </nav>
           <label class="render-quality-control"><span id="render-quality-label">画质</span><select id="render-quality" aria-labelledby="render-quality-label"><option value="low">低</option><option value="medium">中</option><option value="high" selected>高</option></select></label>
           <p class="start-caption">方向键 / WASD 操控 · 空格大招 · V 护盾<br>Shift 切换扩散 / 聚焦 · 连击开启暴走</p>
           <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>
@@ -108,7 +123,7 @@
           <div><span class="hud-label">得分</span><strong id="score">000000</strong></div>
           <div class="life"><span class="hud-label">生命</span><span id="player-lives" class="hearts" aria-label="3 点生命">♥ ♥ ♥</span></div>
         </div>
-        <div class="difficulty-readout" aria-label="战斗时间"><span>战斗 <time id="battle-clock">00:00</time></span></div>
+        <div class="difficulty-readout" aria-label="战斗时间"><span>战斗 <time id="battle-clock">00:00</time></span><span id="sortie-mode-badge"></span></div>
         <div class="weapon-readout" aria-label="当前武器强化">
           <span class="weapon-stat blue">蓝 · 攻速 <strong id="weapon-speed">1级 · 3.6次/秒</strong></span>
           <span class="weapon-stat yellow">黄 · 弹道 <strong id="weapon-lanes">1阶 · 1/4条</strong></span>
@@ -146,6 +161,10 @@
           <p id="boss-action" class="boss-action" role="status"></p>
         </div>
         <div id="boss-warning" class="boss-warning" role="alert" hidden><div class="warning-band"><strong>WARNING</strong><span id="boss-warning-name"></span></div></div>
+        <aside id="flight-radio" class="flight-radio" hidden>
+          <span class="radio-speaker" aria-hidden="true"></span><span class="radio-line" aria-hidden="true"></span>
+          <span class="sr-only radio-announcement" role="status" aria-atomic="true"></span>
+        </aside>
         <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>Shift 切换扩散 / 聚焦 · 20 连击进入暴走<br>空格释放大招 · V 开启护盾</p><span class="flight-direction">蓝攻速 · 黄弹道 · 红伤害<br>绿生命（稀有） <span aria-hidden="true">→</span></span></div>
         <div id="pause-hint" class="pause-message" hidden><strong>已暂停</strong><span>点击战场继续战斗</span></div>
         <div class="battle-actions">
@@ -227,13 +246,44 @@
           </header>
           <div class="result-score"><span>本局得分</span><strong id="final-score">000000</strong></div>
           <div class="result-details"><div><span>存活时间</span><strong id="final-time">00:00</strong></div><div><span>击毁敌机</span><strong id="final-kills">0</strong></div><div><span>最高连击</span><strong id="final-combo">0</strong></div></div>
+          <div id="sortie-result-summary" class="sortie-result-summary" hidden></div>
           <button id="restart-button" class="primary-button" type="button">重新开始 <span aria-hidden="true">↗</span></button>
           <button id="result-menu-button" class="secondary-button" type="button">返回开始画面</button>
           <p class="result-tip">躲开敌机碰撞 · 空格释放大招 · 返回首页可更换战机</p>
         </div>
       </section>
+      <section id="campaign-epilogue" class="campaign-epilogue" aria-labelledby="campaign-epilogue-title" hidden>
+        <div class="campaign-epilogue-copy">
+          <span class="eyebrow"><span></span> SECTOR 05 / HOME VECTOR</span>
+          <h2 id="campaign-epilogue-title">余光归航</h2>
+          <p id="campaign-epilogue-line" aria-live="polite"></p>
+          <progress id="campaign-epilogue-progress" max="15" value="0" aria-label="结局演出进度"></progress>
+        </div>
+        <button id="campaign-epilogue-skip" class="secondary-button" type="button">跳过演出</button>
+      </section>
+      <section id="campaign-victory-report" class="campaign-victory-report" aria-labelledby="campaign-report-title" hidden>
+        <article class="campaign-report-card">
+          <header class="campaign-report-heading">
+            <div><span class="eyebrow"><span></span> STAR BREAKER / AFTER ACTION</span><h2 id="campaign-report-title">异形战役通关</h2></div>
+            <strong id="campaign-report-grade" class="campaign-report-grade"></strong>
+          </header>
+          <div id="campaign-report-content"></div>
+          <footer class="campaign-report-actions">
+            <button id="campaign-report-retry" class="primary-button" type="button">再次出击</button>
+            <button id="campaign-report-challenges" class="secondary-button" type="button">挑战模式</button>
+            <button id="campaign-report-hangar" class="secondary-button" type="button">返回机库</button>
+          </footer>
+        </article>
+      </section>
       <footer class="lesson-note"><span class="lesson-badge">正式出击</span><p id="control-instructions">方向键 / WASD 移动<span class="training-note"> · 自动射击 · Shift 切换姿态 · 空格大招 · V 护盾</span></p></footer>
     </section>
+    <dialog id="sortie-console" class="sortie-console" aria-labelledby="sortie-console-title">
+      <header class="sortie-console-heading">
+        <div><span class="eyebrow"><span></span> STAR BREAKER / FLIGHT SYSTEMS</span><h2 id="sortie-console-title"></h2></div>
+        <button id="sortie-console-close" class="secondary-button" type="button">关闭</button>
+      </header>
+      <div id="sortie-console-body" class="sortie-console-body"></div>
+    </dialog>
     <dialog id="flight-guide" class="flight-guide" aria-labelledby="flight-guide-title" aria-describedby="flight-guide-intro">
       <form class="flight-guide-content" method="dialog">
         <header class="flight-guide-heading">
@@ -241,37 +291,53 @@
           <h2 id="flight-guide-title" tabindex="-1" autofocus>玩法说明</h2>
           <p id="flight-guide-intro">战机自动向右开火。上下移动对准敌机，看到粉色瞄准线就换个高度躲开。</p>
         </header>
-        <div class="flight-guide-columns">
-          <section class="flight-guide-section" aria-labelledby="flight-guide-keys-title">
+        <div class="flight-guide-pages" id="flight-guide-pages" tabindex="0" aria-label="飞行手册内容">
+          <section class="flight-guide-section" data-guide-page aria-labelledby="flight-guide-keys-title">
             <h3 id="flight-guide-keys-title">飞行与按键</h3>
             <dl class="flight-guide-keys">
               <div><dt><kbd>方向键</kbd> <kbd>WASD</kbd></dt><dd>向四个方向移动</dd></div>
-              <div><dt><kbd>Shift</kbd></dt><dd>切换扩散和聚焦射击</dd></div>
+              <div><dt><kbd>Shift</kbd></dt><dd>轻按切换扩散和聚焦射击</dd></div>
               <div><dt><kbd>Esc</kbd></dt><dd>暂停或继续战斗</dd></div>
               <div><dt><kbd>V</kbd></dt><dd>护盾充好后开启，保护战机 2 秒</dd></div>
               <div><dt><kbd>空格</kbd></dt><dd>命中敌军积攒能量，存好一发后释放所选战机的大招</dd></div>
             </dl>
-            <div class="flight-guide-perfect">
-              <h4>完美护盾</h4>
-              <p>等实体敌弹快碰到战机时按 <kbd>V</kbd>。开盾后 0.25 秒内挡住敌弹，即触发「完美格挡」，向前反击并返还 25% 护盾充能。</p>
-              <p>若已存好一次大招，在「完美连携」出现后 3 秒内按 <kbd>空格</kbd>，蓄力缩短至 0.45 秒。</p>
-            </div>
           </section>
-          <section class="flight-guide-section" aria-labelledby="flight-guide-tips-title">
+          <section class="flight-guide-section" data-guide-page aria-labelledby="flight-guide-tips-title" hidden>
             <h3 id="flight-guide-tips-title">战斗与升级</h3>
             <ul class="flight-guide-tips">
-              <li><strong>选一架战机出击。</strong>赤焰集中打击，苍电速射并追踪敌人，曜金用全屏弹幕清理敌群。</li>
+              <li><strong>选一架战机出击。</strong>赤焰稳住高度打穿甲重炮；苍电在中远处用追踪弹标记、连锁；曜金在近中距离铺开压制区，留意电容余量。</li>
               <li><strong>躲开敌机和敌弹。</strong>撞机或中弹会扣生命，打不到的敌机可以放过去。</li>
               <li><strong>留意第二次锁定。</strong>虚线和圆圈标出锁定的路线或位置。躲过第一击后，等追击锁定再换位。</li>
               <li><strong>射中能量球升级。</strong><span class="guide-orb-blue">蓝球提攻速</span>、<span class="guide-orb-yellow">黄球加弹道</span>、<span class="guide-orb-red">红球加伤害</span>、<span class="guide-orb-green">绿球回生命，满血时加生命上限</span>。</li>
-              <li><strong>弹道超过四条时晋阶。</strong>原四条的总伤害合到一条高阶弹道，再额外提高 8%。</li>
-              <li><strong>击败前十只异形后可进化。</strong>破阵翼刃加装翼炮，星隼僚机自动攻击，赤金壁垒吸收敌弹再反击。路线可混搭，每条最多 3 级，三条满级后解锁联动。</li>
+              <li><strong>武器等级有上限。</strong>攻速最多每秒 12 次，弹道最多 5 条。伤害成长有上限，进化会改变战斗方式。</li>
+            </ul>
+          </section>
+          <section class="flight-guide-section" data-guide-page aria-labelledby="flight-guide-defence-title" hidden>
+            <h3 id="flight-guide-defence-title">完美护盾与地形</h3>
+            <ul class="flight-guide-tips">
+              <li><strong>完美护盾。</strong>等实体敌弹快碰到战机时按 <kbd>V</kbd>。开盾后 0.25 秒内挡住敌弹，即触发「完美格挡」，向前反击并返还 25% 护盾充能。</li>
+              <li><strong>完美连携。</strong>若已存好一次大招，在「完美连携」出现后 3 秒内按 <kbd>空格</kbd>，蓄力缩短至 0.45 秒。</li>
+              <li><strong>借地形避险。</strong>残骸能挡住敌弹。击碎陨石可用碎块打敌机，进入裂隙后注意引力箭头。</li>
+              <li><strong>识别精英敌机。</strong>优先击破护盾卫，先清除布雷舰留下的地雷，并给分裂体留下应对空间。</li>
+            </ul>
+          </section>
+          <section class="flight-guide-section" data-guide-page aria-labelledby="flight-guide-boss-title" hidden>
+            <h3 id="flight-guide-boss-title">首领与进化</h3>
+            <ul class="flight-guide-tips">
               <li><strong>依序击败十只异形与最终合体。</strong>看见标记先离开危险区。减速时仍能移动和开盾。群渊合生体会用一招限制路线，再用另一招追击。</li>
               <li><strong>看懂破壳和反击。</strong>首领过半血后会破壳并准备专属连招。先照提示避开危险，核心暴露时再集中开火。</li>
-                <li><strong>留意首领终局。</strong>本体血条耗尽后，首领会改变形态和战斗规则。看上方提示，完成终局才能领取奖励。渊潮母体会蜷成蛋并释放压力波。</li>
+              <li><strong>留意首领终局。</strong>本体血条耗尽后，首领会改变形态和战斗规则。看上方提示，完成终局才能领取奖励。渊潮母体会蜷成蛋并释放压力波。</li>
+              <li><strong>击败前十只异形后可进化。</strong>翼刃三级按住 Shift 蓄力贯穿，星隼二级按 F 指定集火，壁垒三级完美格挡返还大招积能。三条路线可混搭，只能装配一个三级专精。</li>
+              <li><strong>回机库挑战。</strong>战役首领解锁单首领练习并提供改装点，也能在挑战中参加首领连战和每日挑战。</li>
             </ul>
           </section>
         </div>
+        <nav class="flight-guide-navigation" aria-label="飞行手册分页">
+          <button id="guide-previous" class="secondary-button" type="button">上一页</button>
+          <span id="guide-page-count" aria-live="polite"></span>
+          <button id="guide-next" class="secondary-button" type="button">下一页</button>
+        </nav>
+        <p id="guide-scroll-hint" class="guide-scroll-hint" hidden>向下滚动可读完本页</p>
         <footer class="flight-guide-actions">
           <button class="primary-button" type="submit">明白了 <span aria-hidden="true">→</span></button>
         </footer>

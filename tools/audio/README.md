@@ -1,29 +1,32 @@
 # 《星际突围》音频制作
 
-配乐与音效可从可编辑乐谱和音频设计参数重建。配乐的上行三度在巡航时由电钢琴提出，长笛应答。进入 Boss 战后，低弦以 3+3+2 重音接手，同一动机由铜管、合唱和半音低音重组。终局再引入断续弦乐与钟声，保留相同的乐句位置。
+游戏的乐谱、声音设计参数和混音可以重建。巡航仍使用电钢琴提出上行三度，长笛应答。每只 Boss 的入场、破壳、技能和死亡采用独立的材质声与音程。
 
-| 配乐 | 作法 | 循环 |
+| 配乐 | 作法 | 时长 |
 | --- | --- | --- |
-| 巡航和声、巡航节拍 | 暖音垫、电钢琴、长笛，配模拟低音与拨弦。连击或暴走会逐步提亮节拍声部 | 116 BPM，16 小节，约 33.103 秒 |
-| Boss 和声、压迫节拍、终局声部 | 低弦、铜管、合唱、定音鼓和终局钟声。出招、低生命、狂暴与终局改变各轨的音量 | 132 BPM，16 小节，约 29.091 秒 |
-| 舱内底噪 | 低频振动与立体声气流，Boss 战时降低 | 8 秒 |
+| 巡航 | 暖音垫、电钢琴、长笛、模拟低音与拨弦。连击和暴走逐步提亮节拍 | 116 BPM，16 小节，33.103 秒循环 |
+| 机械阵营《Iron Meridian》 | D 小调中插入三全音和低半音，铜管与模拟低音以 3+3+2 交接，终局转为较高的弦与金属打击 | 124 BPM，32 小节，61.935 秒循环 |
+| 生物阵营《Hadal Heart》 | E 小调大提琴与低弦呼吸，圆号和鼓按不对称间距应答，终局加入合唱和钟声 | 112 BPM，32 小节，68.571 秒循环 |
+| 虚空阵营《Event Horizon Choir》 | 降 D 的低管风琴与钟琴以小二度和三全音交错，半拍后突然回声，终局抬高声区 | 104 BPM，32 小节，73.846 秒循环 |
+| 结局《Stargate》 | 圆号接回巡航动机，竖琴与大提琴交替，最后以大三度落到星门 | 128 BPM，8 小节，15 秒一次播放 |
 
-每只异形有独立的节奏、音程、乐器和材质声。渊潮是下潜的圆号和水压气流，星尘镜魟是钢片琴的反射回响，维度噬口是反向吸入的低音管风琴。与敌方开火、大招、破壳和爆炸重叠时，音乐会短暂降低。普通枪声、击中和重大事件有独立的播放间隔，控制高密度火力下的声部数。
+机械主题用于灼核吞星兽、锁脉巨螯、星尘镜魟。生物主题用于渊潮母体、骨冠猎兽、沉渊震鳗、裂梦孢皇。虚空主题用于裂隙织母、维度噬口、无昼神经王、群渊合生体。
+
+各阵营的和声、压迫与终局声部在同一时间起播。Boss 生命降至 66% 或 33% 时，只平滑改变各轨的音量，终局形态直接使用第三层。大型技能加上独立低频冲击，暂时压低音乐。技能按发射位置左右移动，命中与非 Boss 爆炸还根据战机到声音的距离衰减。Esc 暂停降低音乐和音效，静音保留当前播放位置。主音量独立保存在浏览器中。
 
 ## 重建
 
-使用 Python 与 NumPy、[FluidSynth 2.6.2](https://github.com/FluidSynth/fluidsynth/releases/tag/v2.6.2)、[FFmpeg](https://ffmpeg.org/download.html) 和 [MuseScore General SF3](https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/)。已用 FFmpeg 7.1-essentials 验证。MuseScore General SF3 的制作副本 SHA-256 为 `5b85b6c2c61d10b2b91cddd41efcce7b25cd31c8271d511c73afafbef20b6fa3`。音色库的署名和许可见 [随游戏分发的说明](../../assets/audio-LICENSE.md)。
+使用 Python 与 NumPy、[FluidSynth 2.6.2](https://github.com/FluidSynth/fluidsynth/releases/tag/v2.6.2)、[FFmpeg](https://ffmpeg.org/download.html) 和 [MuseScore General SF3](https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/)。制作环境为 FFmpeg 7.1-essentials，音色库 SHA-256 为 `5b85b6c2c61d10b2b91cddd41efcce7b25cd31c8271d511c73afafbef20b6fa3`。乐谱为原创，随游戏附上[音色库来源和许可证](../../assets/audio-LICENSE.md)。
 
 ```powershell
-python tools/audio/render_bank.py --synth "C:/tools/fluidsynth/bin/fluidsynth.exe" --soundfont "C:/tools/MuseScore_General.sf3" --ffmpeg "C:/tools/ffmpeg/bin/ffmpeg.exe" --work "C:/tools/star-breaker-audio"
+python tools/audio/render_bank.py --synth "C:/tools/fluidsynth/bin/fluidsynth.exe" --soundfont "C:/tools/MuseScore_General.sf3" --ffmpeg "C:/tools/ffmpeg/bin/ffmpeg.exe" --work "C:/tools/star-breaker-audio/base"
+python tools/audio/render_factions.py --synth "C:/tools/fluidsynth/bin/fluidsynth.exe" --soundfont "C:/tools/MuseScore_General.sf3" --ffmpeg "C:/tools/ffmpeg/bin/ffmpeg.exe" --work "C:/tools/star-breaker-audio/factions"
 ```
 
-脚本写出五份标准 MIDI，以及由 FluidSynth 渲染的三轮乐句。从中间截取循环以保留前一轮的混响尾音。FFmpeg 对音频进行均衡、限制峰值和 Opus 编码。编辑 `render_bank.py` 中的音符、乐器和事件参数可重新生成浏览器音频库。也可将 `scores` 下的 MIDI 导入支持标准 MIDI 的音序器查看和编辑。
+两套脚本输出可编辑的 MIDI。循环轨连续渲染三次，保留中间一轮和边界处的混响，用短窗衔接后交给 FFmpeg 做均衡、限幅和 Opus 编码。资源内嵌在 JavaScript 中，双击 `index.html` 和在线版均可解码。浏览器一次保留一套已解码的阵营音乐，切换时逐层解码，合成音频在解码不可用时接替战斗配乐。
 
-浏览器在第一次玩家操作后分批解码音频，配乐声部以同一时间起播。静音或窗口暂停时保存进度。网络与本地双击版使用同一音频库。在浏览器缺少解码能力时，原有 Web Audio 合成负责配乐与关键事件。开源 [Compose Game Music Skill](https://github.com/sora16bit/codex-game-music-skill/blob/13e5236615871573f50effd75a24a7c5b5d19271/skills/compose-game-music/SKILL.md) 用于分轨方案、乐句连续性与战斗中的声音优先级。
+分轨创作使用 [Compose Game Music](https://github.com/sora16bit/codex-game-music-skill/blob/13e5236615871573f50effd75a24a7c5b5d19271/skills/compose-game-music/SKILL.md) 的动机变形、分句与打击优先级。混音和验证按 [Audio Design](https://github.com/gamedev-skills/awesome-gamedev-agent-skills/blob/dcf3bbbb83f365632402c086bf595048aa24aaa8/skills/disciplines/audio-design/SKILL.md) 的同一时间轴、分组增益、短时压低音乐与真实输出采样做了调整。
 
 ## 验证
 
-`node work/audio-check.cjs` 运行原有合成回退、重叠声音和暂停检查。安装 Playwright 后用 `node work/audio-bank-browser.cjs` 启动本地文件版，检查实际解码、同刻启动的声部、输出信号、终局混音和静音恢复。可通过 `CHROME_PATH` 指向本机 Chrome。
-
-Chromium 实测以 32 kHz 混音，全部音频解码后的 PCM 数据约 46 MiB。测试确认了十一种首领入场音、终局新增声部、循环接缝和静音前后播放位置。Opus 解码产物的最高采样峰值约为 0.851（满幅为 1）。
+`node work/audio-check.cjs` 检查回退合成、声音并发与暂停。安装 Playwright 后运行 `node work/audio-bank-browser.cjs <证据目录>`，实际打开双击版，记录两声道 PCM、各层起播时间、HP 阈值、循环接缝、左右声像、爆炸远近、暂停与结局恢复。`CHROME_PATH` 可指定本机 Chrome。

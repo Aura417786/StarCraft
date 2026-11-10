@@ -226,7 +226,7 @@ function fireAceVolley(enemy) {
       vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, radius: 5, age: 0 });
     fired = true;
   }
-  if (fired) gameAudio.bossAttack("volley");
+  if (fired) gameAudio.bossAttack("volley", x, y, false);
 }
 function updateAceMovement(enemy, seconds) {
   if (enemy.kind !== "ace") return false;

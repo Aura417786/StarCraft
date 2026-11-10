@@ -10,12 +10,14 @@ const journeyScenes = {
 const journeySceneDuration = 30;
 const journeyActionWindow = 22;
 const journeySceneBeats = { belt: "beltPickup", wreck: "wreckCover", citadel: "hangarLaunch", rift: "tide" };
-const journeyState = { scene: null, waiting: null, seen: new Set() };
+const journeyState = { scene: null, waiting: null, seen: new Set(), catapult: 0, catapultLeg: -1 };
 
 function resetJourneyScenes() {
   journeyState.scene = null;
   journeyState.waiting = null;
   journeyState.seen.clear();
+  journeyState.catapult = 0;
+  journeyState.catapultLeg = -1;
 }
 
 function journeyBlocksNewEncounters() {
@@ -64,6 +66,7 @@ function updateJourneyScene(seconds) {
   if (!isBattleActive() || seconds <= 0) return;
   const location = sceneryJourney(battlefieldState.clock + seconds);
   journeyState.waiting = null;
+  journeyState.catapult = Math.max(0, journeyState.catapult - seconds);
   const scene = journeyState.scene;
   if (scene) {
     if (scene.leg !== location.leg || bossBlocksWaves()) {
@@ -84,6 +87,13 @@ function updateJourneyScene(seconds) {
   }
 
   const id = battlefieldSectors[location.current].id, spec = journeyScenes[id];
+  // Late waves sometimes leave too little time for the full citadel scene.
+  // Its short allied launch can still fit between a cleared Boss and the next tell.
+  if (id === "citadel" && journeyState.catapultLeg !== location.leg && sortieAllowsWaves() && location.phase >= 4 && !formationState.warning
+    && !formationState.active && !aceBlocksWaves() && !battlefieldEventBlocksWaves()
+    && journeyBossFreeFor(3.2) && !journeyBossFreeFor(journeyActionWindow + Math.max(0, spec.earliest - location.phase))) {
+    startJourneyCatapult();
+  }
   const lastStart = sceneryRules.interval - journeyActionWindow;
   if (journeyState.seen.has(id) || location.phase < journeyEarliest(location, id) || location.phase > lastStart
     || !journeyBossFreeFor(journeyActionWindow)) return;

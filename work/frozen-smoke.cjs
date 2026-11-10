@@ -60,6 +60,22 @@ async function run() {
     await page.locator("#start-button").click();
     await page.waitForFunction(() => battleTime > .12);
     await page.evaluate(() => {
+      nextBossTime = enemyCooldown = powerupCooldown = shotCooldown = Infinity;
+      spawnEnemy("scout"); spawnEnemy("gunner");
+      window.fullscreenSample = enemies.slice(-2);
+      for (const [i, enemy] of window.fullscreenSample.entries()) {
+        enemy.x = enemy.previousX = viewport.width * (.70 + i * .08);
+        enemy.y = enemy.previousY = enemy.baseY = viewport.height * (.39 + i * .17);
+      }
+    });
+    const keptEnemies = () => page.evaluate(() => window.fullscreenSample.every(enemy => enemies.includes(enemy)));
+    await page.locator("#fullscreen-button").click();
+    await page.waitForFunction(() => !!document.fullscreenElement, undefined, { timeout: 3000 });
+    assert.ok(await keptEnemies(), "Entering fullscreen removed active enemies");
+    await page.locator("#fullscreen-button").click();
+    await page.waitForFunction(() => !document.fullscreenElement, undefined, { timeout: 3000 });
+    assert.ok(await keptEnemies(), "Exiting fullscreen removed active enemies");
+    await page.evaluate(() => {
       nextBossTime = enemyCooldown = powerupCooldown = Infinity;
       shotCooldown = 1e6;
       spawnBoss(0);
@@ -100,7 +116,7 @@ async function run() {
     }));
     assert.deepEqual(missing.filter(url => !url.endsWith("/favicon.ico")), []);
     assert.deepEqual(errors, []);
-    const result = { compatibility: "file:// boot, keyboard movement, and pause when present",
+    const result = { compatibility: "file:// boot, keyboard movement, and pause when present", fullscreenPreservesEnemies: true,
       renderer, viewport: "1280×720", quality: "high",
       sample: tideProfile ? "Broodmother tide sweep and recovery" : "Broodmother idle in recover", metrics, missing, errors };
     console.log(JSON.stringify(result, null, 2));

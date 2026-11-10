@@ -9,3 +9,4 @@ work/
 previews/
 versions/
 __pycache__/
+.agents/skills/game-balance-analysis/

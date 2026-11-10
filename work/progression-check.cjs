@@ -39,6 +39,7 @@ function mockNode() {
     focus() { if(document.activeElement && document.activeElement!==this) emit(document.activeElement,'blur'); document.activeElement=this; emit(this,'focus'); emit(document,'focusin',{target:this}); },
   };
 }
+document.createElement = () => mockNode();
 nodes.set('#game-over-title', mockNode());
 const resultIntro = mockNode();
 nodes.get('#game-over-screen').querySelector = selector => selector === '.result-intro' ? resultIntro : undefined;
@@ -52,6 +53,7 @@ const evolutionCards = ['pierce','blast','aegis'].map(kind => {
 for(const id of ['evolution-screen','evolution-title','evolution-description','evolution-readout']) nodes.set('#'+id,mockNode());
 for(const id of ['momentum-hud','combo-count','combo-best','combo-fill','rage-label','final-combo','combo-meter','combo-caption','stance-button','shake-button']) nodes.set('#'+id,mockNode());
 nodes.get('#evolution-screen').contains=node=>node===nodes.get('#evolution-screen')||evolutionCards.includes(node);
+nodes.get('#evolution-screen').querySelector = () => undefined;
 const canvas = nodes.get('#game-canvas');
 canvas.width = 1280;
 canvas.height = 720;
@@ -64,6 +66,7 @@ canvas.getContext = () => new Proxy({}, {
     : () => (name==='createLinearGradient'||name==='createRadialGradient') ? {addColorStop(){}} : undefined,
 });
 document.querySelector = (selector) => nodes.get(selector);
+document.getElementById = id => document.querySelector("#" + id);
 const slots = Array.from({length:5},()=>({dataset:{}}));
 const protectionSlots = Array.from({length:2},()=>({dataset:{}}));
 document.querySelectorAll = selector => selector === ".ultimate-slot" ? slots : selector === ".shield-slot" ? protectionSlots : selector === '.evolution-card' ? evolutionCards : [];
@@ -97,7 +100,7 @@ function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
 function begin() {
   emit(window, 'focus');
   emit(nodes.get('#start-button'), 'click');
-  vm.runInContext(`weapon.damage = 1; weapon.interval = 0.2;
+  vm.runInContext(`
     powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity;
     formationState.nextTime = Infinity; battlefieldEvents.nextObject = Infinity;
     battlefieldEvents.nextTransport = Infinity; aceEncounter.nextTime = Infinity;`, sandbox);
@@ -126,7 +129,7 @@ function isolated(extra = '') {
 }
 function activeBoss(type = 0, time = 95) {
   isolated(`battleTime=${time};spawnBoss(${type});Object.assign(boss,bossArena());
-    boss.previousX=boss.x;boss.previousY=boss.y;boss.phase='recover';`);
+    boss.previousX=boss.x;boss.previousY=boss.y;boss.phase='recover';resetBossPresentation();`);
 }
 function setEnemy(x = 800, y = 350, hp = 100) {
   execute(`spawnEnemy('scout');var target=enemies.at(-1);Object.assign(target,{x:${x},previousX:${x},y:${y},previousY:${y},waveAmplitude:0,healthLog:Math.log(${hp})});`);
@@ -140,7 +143,7 @@ function placeWaveTarget(kind, distance = 300) {
   }`);
 }
 function fireSinglePacket() {
-  execute('shotCooldown=renderShotCooldown=0;updateShooting(0);shotCooldown=999;');
+  execute('shotCooldown=0;updateShooting(0);shotCooldown=999;');
   const packet = snapshot('bullets.at(-1)');
   execute('updateShooting(.45);resolveProjectileHits();');
   return packet;
@@ -157,384 +160,189 @@ function shieldContacts(count, family = 'enemyProjectiles') {
   });`);
 }
 
-check('a first red orb adds 0.8 damage without changing an existing enemy’s durability', () => {
+check("red pickup boosts an actual shot without changing the current or next enemy's health", () => {
   isolated('battleTime=96;');
-  placeWaveTarget('armored');
-  const originalHealth = execute('enemies[0].healthLog');
-  const originalPacket = fireSinglePacket();
-  const healthAfterOriginal = execute('enemies[0].hp');
-  assert.ok(healthAfterOriginal < 1 && healthAfterOriginal > 0);
-  execute('powerups.push({type:"red",x:player.x+180,previousX:player.x+180,y:player.y,previousY:player.y,radius:16});');
+  setEnemy(660, 360, 100);
+  execute('enemies[0].y=enemies[0].previousY=player.y;player.x=250;');
+  const before = fireSinglePacket();
+  const afterHit = execute('enemies[0].hp');
+  execute('powerups.push({type:"red",x:player.x+180,previousX:player.x+180,y:player.y,radius:16});');
   fireSinglePacket();
-  assert.equal(execute('powerups.length'),0);
-  assert.equal(execute('enemies[0].hp'), healthAfterOriginal);
-  const upgradedPacket = fireSinglePacket();
-  near(healthAfterOriginal - execute('enemies[0].hp'), 1.8 * (1 - healthAfterOriginal));
-  assert.ok(upgradedPacket.length > originalPacket.length && upgradedPacket.halfHeight > originalPacket.halfHeight);
-  execute('spawnEnemy("armored");');
-  assert.deepEqual(snapshot('enemies.map(enemy=>enemy.healthLog)'), [originalHealth, originalHealth]);
+  assert.equal(execute('powerups.length'), 0);
+  near(execute('enemies[0].hp'), afterHit);
+  const upgraded = fireSinglePacket();
+  assert.ok(upgraded.damage > before.damage, 'the shot after collecting the orb must deal more damage');
+  assert.ok(execute('enemies[0].hp') < afterHit);
+  near(execute('enemies[0].healthLog'), Math.log(100));
+  execute('spawnEnemy("armored");var birth=enemies.at(-1).healthLog;for(let i=0;i<30;i++)applyPowerup("red");spawnEnemy("armored");');
+  near(execute('enemies.at(-1).healthLog'), execute('birth'));
 });
-check('first blue and yellow orbs add real firing cadence and independent symmetric lanes', () => {
-  function fire(type) {
+
+check("blue pickup increases real firing cadence and yellow adds symmetric coverage", () => {
+  function volley(upgrade) {
     isolated();
-    if (type) {
-      execute(`powerups.push({type:${JSON.stringify(type)},x:player.x+180,previousX:player.x+180,y:player.y,previousY:player.y,radius:16});`);
-      fireSinglePacket();
-      assert.equal(execute('powerups.length'), 0);
-    }
+    if (upgrade) execute('applyPowerup(' + JSON.stringify(upgrade) + ')');
     execute('resetWeapons();updateShooting(0);');
-    const lanes = snapshot('bullets.map(shot=>({offset:shot.y-player.y,vy:shot.vy,damage:shot.damage}))');
-    execute('for(let frame=0;frame<50;frame++)updateShooting(.02);');
+    const lanes = snapshot('bullets.map(shot=>({offset:shot.y-player.y,vy:shot.vy}))');
+    execute('for(let frame=0;frame<90;frame++)updateShooting(1/60);');
     return { lanes, rounds: execute('bullets.length'), rate: execute('1/weapon.interval') };
   }
-  const original = fire(), blue = fire('blue'), yellow = fire('yellow');
-  assert.deepEqual(blue.lanes, original.lanes);
-  near(blue.rate - original.rate, 1);
-  assert.ok(blue.rounds > original.rounds);
+  const red = volley(), blue = volley("blue"), yellow = volley("yellow");
+  assert.ok(blue.rate > red.rate && blue.rounds > red.rounds);
+  assert.deepEqual(blue.lanes, red.lanes);
   assert.equal(yellow.lanes.length, 2);
-  assert.equal(yellow.rounds, 2 * original.rounds);
-  assert.ok(yellow.lanes[0].offset < 0 && yellow.lanes[0].vy < 0);
   near(yellow.lanes[0].offset, -yellow.lanes[1].offset);
   near(yellow.lanes[0].vy, -yellow.lanes[1].vy);
-  assert.ok(yellow.lanes.every(lane=>lane.damage === original.lanes[0].damage));
-});
-check('higher firepower growth uses the revised red and blue multiplier floors', () => {
-  isolated('weapon.damage=60;weapon.interval=1/80;applyPowerup("red");applyPowerup("blue");');
-  near(execute('weapon.damage'), 60 * 1.075);
-  near(execute('1/weapon.interval'), 80 * 1.055);
-});
-check('the 2:19 tier-three screenshot loadout damages but does not one-shot ordinary wave fighters', () => {
-  for (const kind of ['scout', 'gunner', 'armored']) {
-    isolated(`battleTime=139;weapon.tier=3;weapon.lanes=1;weapon.speedLevel=12;weapon.interval=1/13.96;
-      weapon.damage=628.34/(maxWeaponLanes*progressionRules.tierBonus)**2;firingStyle.mode="focus";`);
-    placeWaveTarget(kind);
-    const shot = fireSinglePacket();
-    near(shot.damage, 628.34);
-    assert.equal(shot.tier, 3);
-    assert.equal(execute('enemies.length'), 1, kind + ' died to the first shot');
-    assert.ok(execute('enemies[0].hp>0&&enemies[0].hp<1'), kind + ' took no damage');
-  }
-});
-check('reinforced armor absorbs oversized normal shots and can still be finished with follow-up fire', () => {
-  isolated('battleTime=180;weapon.damage=1e10;');
-  placeWaveTarget('armored');
-  const first = fireSinglePacket();
-  assert.ok(Math.log(first.damage) > execute('enemies[0].healthLog') + Math.log(100));
-  assert.equal(execute('enemies[0].fireProtection===enemyFireProtection.armored'), true);
-  near(execute('enemies[0].hp'), .56);
-  fireSinglePacket();
-  near(execute('enemies[0].hp'), .38);
-  execute('battleTime+=.6;');
-  fireSinglePacket();
-  assert.equal(execute('enemies.length'), 0);
-  assert.equal(execute('kills'), 1);
-});
-check('ordinary fighters, ace, transport and Boss births use the same stage after a player upgrades', () => {
-  function sample(gear) {
-    isolated('battleTime=420;'+gear);
-    return snapshot(`(()=>{for(const kind of ["scout","armored","gunner"])spawnEnemy(kind);
-      const ordinaryEnemies=enemies.map(enemy=>enemy.healthLog);
-      const ace=spawnAceEnemy().healthLog;resetAceEncounter();enemies.length=0;
-      const transport=spawnSupplyTransport().healthLog;spawnBoss(0);
-      const ordinary=boss.healthLog;spawnBoss(10);
-      return [...ordinaryEnemies,ace,transport,ordinary,boss.healthLog];})()`);
-  }
-  const baseline=sample('');
-  const reinforced=sample('for(let i=0;i<10;i++){applyPowerup("blue");applyPowerup("yellow");applyPowerup("red");}');
-  assert.ok(baseline.every(Number.isFinite));
-  assert.deepEqual(reinforced,baseline);
-});
-check('all enemy spawn paths receive the independent durability ramp', () => {
-  isolated('battleTime=12;');
-  const durability = 1.14 + .12 * (1 - Math.exp(-12 / 200));
-  near(execute('Math.exp(enemyDurabilityLog(0))'), 1.14);
-  near(execute('Math.exp(enemyDurabilityLog(10000))'), 1.26);
-  assert.ok(execute('enemyDurabilityLog(12)<enemyDurabilityLog(200)&&enemyDurabilityLog(200)<enemyDurabilityLog(1000)'));
-  const stage = execute('Math.exp(progressionReferenceDpsLog())');
-  const ordinary = execute('enemyHealthForTime()');
-  const spawned = snapshot(`(() => {
-    for (const kind of ["scout", "armored", "gunner"]) spawnEnemy(kind);
-    const ships = enemies.map(enemy => Math.exp(enemy.healthLog));
-    const ace = Math.exp(spawnAceEnemy().healthLog);
-    resetAceEncounter();
-    const transport = Math.exp(spawnSupplyTransport().healthLog);
-    spawnBoss(0); const first = { hp: Math.exp(boss.healthLog), endurance: boss.endurance };
-    spawnBoss(10); const final = { hp: Math.exp(boss.healthLog), endurance: boss.endurance };
-    return { ships, ace, transport, first, final };
-  })()`);
-  for (const [index, typeHealth] of [1, 2.8, 1.5].entries()) near(spawned.ships[index], ordinary * typeHealth * durability);
-  near(spawned.ace, Math.max(ordinary * 3, stage * 4.5) * durability);
-  near(spawned.transport, stage * 2.6 * durability);
-  for (const boss of [spawned.first, spawned.final]) near(boss.hp, stage * boss.endurance * durability);
-});
-check('the independent firepower curve grows without a jump at thirty-second boundaries', () => {
-  isolated();
-  let before=execute('progressionReferenceDpsLog(0)');
-  for(let boundary=30;boundary<=1800;boundary+=30) {
-    const left=execute(`progressionReferenceDpsLog(${boundary-.001})`);
-    const right=execute(`progressionReferenceDpsLog(${boundary+.001})`);
-    assert.ok(left>before&&right>left&&right-left<.001);
-    before=right;
-  }
-});
-check('late three-beat fire holds every scheduled shot and bounds visible packets over sustained fire', () => {
-  for(const fps of [20,60,144]) {
-    isolated('battleTime=600;weapon.speedLevel=8;weapon.interval=.01;weapon.lanes=4;resetWeapons();updateShooting(0);');
-    execute(`for(let frame=0;frame<${fps};frame++)updateShooting(1/${fps});`);
-    near(execute('bullets.reduce((damage,shot)=>damage+shot.damage,0)+pendingShots*weapon.lanes*projectileDamage()'),404);
-    assert.ok(execute('bullets.length')<72);
-    assert.ok(execute('bullets.some(shot=>shot.damage>=10)'));
-    const peakVisiblePackets = execute(`(()=>{
-      const seconds = 1/${fps};
-      let peak = 0;
-      for(let frame=0;frame<20*${fps};frame++){
-        updateShooting(seconds);updatePowerups(seconds);
-        peak = Math.max(peak,bullets.length);
-      }
-      return peak;
-    })()`);
-    assert.ok(peakVisiblePackets <= 76, `${fps} FPS retained ${peakVisiblePackets} packets`);
-  }
-});
-check('extreme timed blue, red and yellow upgrades retain finite projectiles and readable indicators', () => {
-  isolated('battleTime=180000000;weapon.lanes=4;applyPowerup("blue");applyPowerup("red");applyPowerup("yellow");resetWeapons();updateShooting(0);');
-  near(execute('1/weapon.interval'),200);
-  assert.ok(execute('weapon.rateOverflow>0&&weapon.damageOverflow>0'));
-  assert.ok(execute('bullets.length>0&&bullets.every(shot=>Number.isFinite(shot.damageLog)&&Number.isFinite(shot.damage))'));
-  for(const id of ['weapon-speed','weapon-damage','weapon-lanes','powerup-notice']) {
-    assert.doesNotMatch(nodes.get('#'+id).textContent,/Infinity|NaN/);
-  }
-  const peak=execute('weaponDamageLog()');
-  execute('applyPowerup("blue");applyPowerup("red");');
-  assert.ok(execute('weaponDamageLog()')>peak);
-});
-check('the first wing upgrade deploys two working mounts and higher ranks charge and fire lance rounds', () => {
-  isolated('openEvolutionChoice();chooseEvolution("pierce");');
-  supportFrames(3);
-  const wing=snapshot('bullets.filter(shot=>shot.visual==="wing").map(({x,y})=>({x,y}))');
-  const muzzles=snapshot('getEvolutionWingMuzzles().map(({x,y})=>({x,y}))');
-  assert.deepEqual(wing,muzzles);
-  assert.equal(execute('bullets.some(shot=>shot.visual==="lance")'),false);
-  execute('openEvolutionChoice();chooseEvolution("pierce");');
-  supportFrames(16);
-  assert.ok(execute('evolutionWeapons.lanceCharging'));
-  supportFrames(10);
-  assert.equal(execute('bullets.filter(shot=>shot.visual==="lance").length'),2);
-  const rank2=execute('bullets.find(shot=>shot.visual==="lance").damageLog');
-  execute('openEvolutionChoice();chooseEvolution("pierce");');
-  supportFrames(26);
-  assert.equal(execute('bullets.filter(shot=>shot.visual==="lance").length'),2);
-  assert.ok(execute('bullets.find(shot=>shot.visual==="lance").damageLog')>rank2);
-});
-check('full frames allow Falcon support during a cannon charge without firing the player mounts', () => {
-  isolated('evolution.pierce=3;evolution.blast=2;ultimate.charges=1;');
-  assert.ok(key('Space').prevented);
-  advanceFrames(9);
-  assert.equal(execute('ultimate.phase'),'charging');
-  assert.equal(execute('bullets.length'),2);
-  assert.ok(execute('bullets.every(shot=>shot.visual==="drone")'));
-  key('Space','keyup');
-});
-check('the support projectile cap leaves room for main fire and resets after restart', () => {
-  isolated('evolution.pierce=evolution.blast=3;');
-  supportFrames(2000);
-  assert.equal(execute('bullets.filter(shot=>shot.auxiliary).length'),96);
-  execute('shotCooldown=renderShotCooldown=0;updateShooting(0);');
-  assert.equal(execute('bullets.filter(shot=>!shot.auxiliary).length'),1);
-  execute('endGame();');
-  emit(nodes.get('#restart-button'),'click'); step();
-  assert.equal(execute('bullets.filter(shot=>shot.auxiliary).length'),0);
-  assert.deepEqual(snapshot('[evolution.pierce,evolution.blast,evolution.aegis,evolution.refits]'),[0,0,0,0]);
-});
-check('an actual wing lance damages an organic appendage once through the Boss hit regions', () => {
-  activeBoss();
-  execute('spawnEvolutionRound({x:boss.x-200,y:boss.y-boss.height*.31},"lance",.8,{pierces:3});');
-  const damage=execute('Math.exp(bullets[0].damageLog-boss.healthLog)');
-  execute('updateShooting(.22);resolveProjectileHits();resolveProjectileHits();');
-  near(execute('boss.hp'),1-damage);
-});
-check('each Aegis rank absorbs only its physical-contact limit and releases once at shield expiry', () => {
-  for(const [rank,limit] of [[1,3],[2,5],[3,8]]) {
-    isolated(`evolution.aegis=${rank};shield.charges=1;requestShield();updateShield(.3);`);
-    shieldContacts(5); shieldContacts(5,'bossProjectiles');
-    execute('updateEnemyProjectileDamage();updateBossDamage();');
-    assert.equal(execute('evolutionWeapons.absorbed.length'),limit);
-    assert.equal(execute('enemyProjectiles.length+bossProjectiles.length'),0);
-    assert.equal(execute('bullets.length'),0);
-    execute('updateShield(1.699);');
-    assert.equal(execute('bullets.length'),0);
-    execute('updateShield(.001);updateShield(.1);');
-    assert.equal(execute('bullets.length'),limit);
-    assert.equal(execute('evolutionWeapons.absorbed.length'),0);
-    assert.ok(execute('bullets.every(shot=>shot.visual==="counter"&&shot.noEnergy)'));
-  }
-});
-check('opening clear radius and beam hazards do not count as extra shield captures', () => {
-  activeBoss();
-  execute(`evolution.aegis=3;shield.charges=1;bossHitGrace=0;
-    enemyProjectiles.push({x:player.x+200,previousX:player.x,y:player.y,previousY:player.y,radius:6,vx:0,vy:0,age:0});`);
-  shieldContacts(1);
-  execute(`requestShield();addBossHazard("beam",{y:player.y,warning:0,duration:2});
-    updateBossDamage();updateEnemyProjectileDamage();`);
-  assert.equal(execute('evolutionWeapons.absorbed.length'),1);
-  assert.equal(execute('enemyProjectiles.length'),0);
-  assert.equal(execute('player.lives'),3);
-  assert.equal(execute('shield.perfectUsed'),true);
-});
-check('paused and resized shields retain stored shots until the resumed shield actually ends', () => {
-  isolated('evolution.aegis=3;shield.charges=1;requestShield();updateShield(.3);');
-  shieldContacts(2);
-  execute('updateEnemyProjectileDamage();');
-  emit(window,'blur'); advanceFrames(12);
-  assert.equal(execute('evolutionWeapons.absorbed.length'),2);
-  near(execute('shield.remaining'),1.7);
-  surface={width:1024,height:640}; emit(window,'resize');
-  assert.equal(execute('evolutionWeapons.absorbed.length'),2);
-  assert.equal(execute('bullets.length'),0);
-  emit(window,'focus'); canvas.focus(); execute('updateShield(1.7);');
-  assert.equal(execute('bullets.length'),2);
-});
-check('Phalanx provides temporary synchronized salvos after shielding and returns to ordinary rounds', () => {
-  isolated('evolution.blast=2;evolution.aegis=3;evolution.links.phalanx=true;shield.charges=1;requestShield();');
-  supportFrames(2);
-  assert.equal(execute('bullets.filter(shot=>shot.visual==="drone").length'),6);
-  supportFrames(50);
-  assert.equal(execute('evolutionWeapons.shieldLinkRemaining'),0);
-  execute('bullets.length=0;');
-  supportFrames(10);
-  assert.equal(execute('bullets.filter(shot=>shot.visual==="drone").length'),2);
-});
-check('Lance link upgrades a stored shield shot and a later fire refit increases the real damage', () => {
-  function attack(linked, refit) {
-    isolated(`evolution.pierce=evolution.blast=evolution.aegis=3;evolution.links.lance=${linked};`);
-    if(refit) execute('evolution.links.falcon=evolution.links.phalanx=true;openEvolutionChoice();chooseEvolution("refit-fire");bossHitGrace=0;');
-    execute('shield.charges=1;requestShield();updateShield(.3);');
-    shieldContacts(1); execute('updateEnemyProjectileDamage();updateShield(1.7);');
-    const projectile=snapshot('bullets[0]');
-    setEnemy(projectile.x+180,projectile.y,100);
-    setEnemy(projectile.x+320,projectile.y,100);
-    execute('updateShooting(.5);resolveProjectileHits();resolveProjectileHits();');
-    near(execute('ultimate.energy'),0);
-    return snapshot('enemies.map(enemy=>1-enemy.hp)');
-  }
-  const regular=attack(false,false), linked=attack(true,false), refit=attack(true,true);
-  near(regular[1],0);
-  near(linked[0]/regular[0],1.5);
-  near(linked[1],linked[0]);
-  near(refit[0]/linked[0],1.08);
-  near(refit[1],refit[0]);
-});
-check('changing tier emits a stronger differently shaped packet without mutating the original shot', () => {
-  isolated('weapon.lanes=4;firingStyle.mode="focus";resetWeapons();updateShooting(0);');
-  const old=snapshot('bullets[0]'), beforeSound=audioCalls.filter(call=>call.name==='shoot').at(-1);
-  execute('applyPowerup("yellow");shotCooldown=0;renderShotCooldown=0;updateShooting(0);');
-  const all=snapshot('bullets'), fresh=all.at(-1);
-  assert.deepEqual(all[0],old);
-  near(fresh.damage/old.damage,1.08);
-  assert.ok(fresh.length>old.length);
-  assert.notEqual(fresh.color,old.color);
-  assert.deepEqual(beforeSound.args,[false,1,'red']);
-  assert.deepEqual(audioCalls.filter(call=>call.name==='shoot').at(-1).args,[false,2,'red']);
 });
 
-
-const extremeLoadout = 'weapon.damage=1e40;weapon.tier=50;weapon.lanes=4;weapon.speedLevel=80;weapon.interval=.005;weapon.rateOverflow=20;'
-  + 'firingStyle.mode="focus";momentum.remaining=10;evolution.pierce=evolution.blast=evolution.aegis=3;';
-
-function fireExtremePacketAt(target) {
-  execute(`{ const hit = ${target}; player.x=player.previousX=hit.x-300; player.y=player.previousY=hit.y;
-    shotCooldown=renderShotCooldown=0; updateShooting(.05); shotCooldown=999; }`);
-  const packet = snapshot('bullets.at(-1)');
-  execute('updateShooting(.45);resolveProjectileHits();');
-  return packet;
-}
-
-check('a maximum-rate focused burst cannot erase a fresh ordinary fighter at mid or late game', () => {
-  for (const time of [139, 300, 600, 1200]) {
-    for (const kind of ['scout', 'gunner', 'armored']) {
-      isolated(`battleTime=${time};${extremeLoadout}`);
-      placeWaveTarget(kind);
-      const healthLog = execute('enemies[0].healthLog');
-      const packet = fireExtremePacketAt('enemies[0]');
-      assert.ok(packet.overdrive && packet.mode === 'focus' && packet.damageLog > healthLog + Math.log(100));
-      assert.equal(execute('enemies.length'), 1, `${kind} was erased at ${time}s`);
-      assert.ok(execute('enemies[0].hp>0&&enemies[0].hp<1'), kind + ' took no damage');
+check("Crimson rank curve is finite, monotone, piecewise linear and capped", () => {
+  const checkpoints = snapshot('[1,3,6,10,15,24,100000].map(rank=>progressionDamageForLevel(rank))');
+  assert.deepEqual(checkpoints, [2.2, 6, 12, 20, 30, 60, 60]);
+  for (const ship of ["red", "blue", "yellow"]) {
+    const stats = snapshot(`Array.from({length:120},(_,i)=>[
+      progressionDamageForLevel(i+1,fighterProfiles["${ship}"].damage),progressionRateForLevel(i+1,fighterProfiles["${ship}"].rate)])`);
+    for (let i = 1; i < stats.length; i++) {
+      assert.ok(stats[i][0] >= stats[i - 1][0] && stats[i][0] <= 60);
+      assert.ok(stats[i][1] >= stats[i - 1][1] && stats[i][1] <= 12);
     }
   }
 });
 
-check('all eleven Boss bodies survive an overpowered focus packet at late game', () => {
-  for (let type=0;type<11;type++) {
-    const time=139+type*105;
-    activeBoss(type,time);
-    execute(extremeLoadout + 'var bossTarget=boss;');
-    const packet = fireExtremePacketAt('bossTarget');
-    assert.ok(packet.overdrive && packet.mode === 'focus');
-    assert.ok(packet.damageLog > execute('bossTarget.healthLog') + Math.log(100));
-    assert.equal(execute('activeBosses().includes(bossTarget)'),true,`Boss ${type} was erased at ${time}s`);
-    assert.ok(execute('bossTarget.hp>0&&bossTarget.hp<1'));
+check("extreme pickups at late-game times stay inside the weapon budget and readable HUD", () => {
+  for (const ship of ["red", "blue", "yellow"]) {
+    isolated(`showScreen("battle",{fighter:"${ship}",seed:8871});battleTime=2400;
+      for(let i=0;i<120;i++)for(const type of ["red","blue","yellow"])applyPowerup(type);
+      momentum.remaining=10;firingStyle.mode="focus";shotCooldown=0;updateShooting(.05);`);
+    const stats = snapshot('({damage:weapon.damage,rate:1/effectiveShotInterval(),lanes:weapon.lanes, tier:weapon.tier, shots:bullets.map(s=>s.damage),text:damageDisplay.textContent})');
+    assert.ok(stats.damage <= 60 && stats.rate <= 12 + 1e-9 && stats.lanes <= 5 && stats.tier <= 6);
+    assert.ok(stats.shots.length >= 1 && stats.shots.every(value => Number.isFinite(value) && value > 0 && value < 1000));
+    assert.doesNotMatch(stats.text, /\d{4,}|10\^/);
   }
 });
 
-check('high-power auxiliary rounds, main packets and beams damage the fusion Boss without erasing it', () => {
-  activeBoss(10,1200);
-  execute(extremeLoadout + 'var fusion=boss;shotCooldown=999;');
-  execute('spawnEvolutionRound({x:fusion.x-260,y:fusion.y},"lance",.8,{pierces:3});updateShooting(.45);resolveProjectileHits();');
-  assert.equal(execute('boss===fusion'),true,'auxiliary round erased the fusion Boss');
-  const afterLance=execute('fusion.hp');
-  assert.ok(afterLance>0 && afterLance<1);
-  execute('battleTime+=.25;');
-  fireExtremePacketAt('fusion');
-  assert.equal(execute('boss===fusion'),true,'main round erased the fusion Boss');
-  const beforeBeam=execute('fusion.hp');
-  assert.ok(beforeBeam<afterLance,'main packet must deal real damage');
-  execute('player.y=player.previousY=fusion.y;player.x=player.previousX=fusion.x-500;ultimate.charges=1;requestUltimate();updateUltimate(.85);updateUltimate(.45);');
-  assert.equal(execute('boss===fusion'),true,'beam erased the fusion Boss');
-  near(beforeBeam-execute('fusion.hp'),.18*.78);
+check("capped pickup converts into special charge without changing the firing curve", () => {
+  isolated('for(let i=0;i<100;i++)applyPowerup("blue");ultimate.charges=0;ultimate.energy=0;');
+  const rate = execute('weapon.interval');
+  execute('applyPowerup("blue")');
+  near(execute('weapon.interval'), rate);
+  assert.ok(execute('ultimate.energy') > 0);
 });
 
+check("advancing a campaign floor helps low stock but never removes a stronger player loadout", () => {
+  isolated();
+  execute('raiseWeaponFloor(progressionPresetForBoss(7))');
+  assert.ok(execute('weapon.damageLevel>=17&&weapon.speedLevel>=9&&weapon.lanes>=3'));
+  execute('for(let i=0;i<100;i++)for(const type of ["red","blue","yellow"])applyPowerup(type)');
+  const previous = snapshot('[weapon.damage, weapon.interval, weapon.lanes, weapon.tier]');
+  execute('raiseWeaponFloor(progressionPresetForBoss(1))');
+  assert.deepEqual(snapshot('[weapon.damage, weapon.interval, weapon.lanes, weapon.tier]'), previous);
+});
 
-check('the recorded 2:48 piercing build cannot erase fresh fighters or a Boss with one packet', () => {
-  const recordedGear = `weapon.tier=6;weapon.lanes=1;weapon.speedLevel=18;weapon.interval=1/26.79;
-    evolution.pierce=1;firingStyle.mode="focus";
-    weapon.damage=24647.46/((maxWeaponLanes*progressionRules.tierBonus)**5*evolutionMainDamageMultiplier());`;
-  for (const kind of ['scout','gunner','armored']) {
-    isolated('battleTime=168;' + recordedGear);
-    placeWaveTarget(kind);
-    near(execute('Math.exp(weaponDamageLog())*evolutionMainDamageMultiplier()'),24647.46);
-    near(execute('1/effectiveShotInterval()'),26.79);
-    fireExtremePacketAt('enemies[0]');
-    assert.equal(execute('enemies.length'),1,kind + ' was erased');
-    assert.ok(execute('enemies[0].hp>0&&enemies[0].hp<1'));
+check("Boss bodies have authored, stage-specific health rather than time or weapon tier multipliers", () => {
+  const health = snapshot('bossTypes.map((_,i)=>bossBalanceHealth(i))');
+  assert.equal(new Set(health).size, 11);
+  assert.ok(health.at(-1) > health[0] * 3);
+  for (const type of [0, 2, 7, 10]) {
+    const hp = [];
+    for (const time of [60, 999, 120000]) {
+      activeBoss(type, time);
+      execute(`raiseWeaponFloor(progressionPresetForBoss(${type}));spawnBoss(${type});`);
+      hp.push(execute('Math.exp(boss.healthLog)'));
+    }
+    near(hp[0], hp[1]); near(hp[0], hp[2]);
   }
-  activeBoss(3,168);
-  execute(recordedGear);
-  fireExtremePacketAt('boss');
-  assert.equal(execute('activeBosses().length'),1);
-  assert.ok(execute('boss.hp>.9&&boss.hp<1'));
 });
 
-check('sustained automatic fire and all support sources give a Boss time to fight back yet still win', () => {
-  activeBoss(4,600);
-  execute(extremeLoadout + 'var sustainedTarget=boss;shotCooldown=renderShotCooldown=0;');
-  function engage(frames) {
-    execute(`for(let frame=0;frame<${frames}&&activeBosses().includes(sustainedTarget);frame++){
-      const dt=.05;
-      battleTime+=dt;updateBossEncounter(dt);
-      player.x=player.previousX=sustainedTarget.x-300;player.y=player.previousY=sustainedTarget.y;
-      updateShooting(dt);updateEvolutionWeapons(dt);resolveProjectileHits();
-    }`);
+check("Boss birth HP cannot increase because a player overlevels; shortage relief is bounded", () => {
+  for (const type of [0, 2, 7, 10]) {
+    const [low, expected, high] = snapshot(`[bossBalanceHealth(${type},{level:1}),bossBalanceHealth(${type}),bossBalanceHealth(${type},{level:24})]`);
+    assert.ok(low <= expected && low >= expected * .879);
+    assert.equal(expected, high);
   }
-  engage(160);
-  assert.equal(execute('activeBosses().includes(sustainedTarget)'),true);
-  assert.ok(execute('sustainedTarget.hp>.1&&sustainedTarget.hp<.8'));
-  assert.ok(execute('sustainedTarget.age>=7.99'));
-  engage(300);
-  assert.equal(execute('sustainedTarget.finale.mode'),'claws');
-  assert.equal(execute('bossDefeated'),0,'the second health pool delays settlement');
-  engage(1000);
-  assert.equal(execute('activeBosses().includes(sustainedTarget)'),false,'continuous accurate hits should still defeat the Boss');
 });
 
-process.stdout.write('\n'+checks+' progression integration checks passed, '+failedChecks+' failed.\n');
-if (failedChecks) process.exitCode=1;
+check("Boss difficulty changes health and warning duration without changing the selected encounter", () => {
+  const difficulties = [];
+  for (const difficulty of ["recruit", "veteran", "abyss"]) {
+    isolated(`showScreen("battle",{difficulty:"${difficulty}",seed:4225});raiseWeaponFloor(progressionPresetForBoss(2));spawnBoss(2);
+      Object.assign(boss,bossArena(2),{phase:"recover"});resetBossPresentation();prepareAlienAttack(boss);`);
+    difficulties.push(snapshot('[boss.type,boss.baseHealth,boss.telegraphDuration]'));
+  }
+  assert.ok(difficulties.every(values => values[0] === 2));
+  assert.ok(difficulties[0][1] < difficulties[1][1] && difficulties[1][1] < difficulties[2][1]);
+  assert.ok(difficulties[0][2] > difficulties[1][2] && difficulties[1][2] > difficulties[2][2]);
+});
+
+check("enemy durability grows through the campaign while early scouts remain easy to kill", () => {
+  isolated();
+  const amounts = snapshot('[0,12,65,145,420,850,15000].map(t=>enemyHealthForTime(t))');
+  assert.equal(amounts[0], 1);
+  assert.ok(amounts.every((value, i) => i === 0 || value >= amounts[i - 1]));
+  const early = execute('enemyHealthForTime(420)');
+  execute('bossDefeated=8;');
+  assert.ok(execute('enemyHealthForTime(420)') > early * 2);
+});
+
+check("late armored units survive the first max rank packet and take follow-up damage", () => {
+  for (const time of [160, 600, 1200]) {
+    isolated(`battleTime=${time};bossDefeated=6;
+      for(let i=0;i<100;i++)for(const type of ["red","blue","yellow"])applyPowerup(type);
+      firingStyle.mode="focus";`);
+    placeWaveTarget("armored", 330);
+    fireSinglePacket();
+    const afterFirst = execute('enemies[0].hp');
+    assert.ok(afterFirst > 0 && afterFirst < 1);
+    execute('battleTime+=.6');
+    fireSinglePacket();
+    assert.ok(execute('enemies[0]?.hp??0') < afterFirst);
+  }
+});
+
+check("Boss burst protection allows damage and prevents one-hit wipes with endgame stock", () => {
+  for (let type = 0; type < 11; type++) {
+    activeBoss(type, 1200);
+    execute('for(let i=0;i<50;i++)for(const type of ["red","blue","yellow"])applyPowerup(type);firingStyle.mode="focus";');
+    execute('player.x=player.previousX=boss.x-330;player.y=player.previousY=boss.y;');
+    const bullet = fireSinglePacket();
+    assert.ok(bullet.damage < 1000);
+    assert.ok(execute('boss?.hp>0.5&&boss.hp<1'), 'Boss ' + type + ' must take damage without skipping shell');
+  }
+});
+
+check("a Broodmother finale keeps its own life pool and cannot be skipped by leftover hits", () => {
+  activeBoss();
+  execute('var shell=boss;var bodyHealth=Math.exp(boss.healthLog);boss.hp=.0001;applyBossHit({damage:10});');
+  assert.equal(execute('boss===shell&&boss.finale.mode==="egg"'), true);
+  near(execute('Math.exp(boss.healthLog)/bodyHealth'), .72);
+  assert.equal(execute('boss.hp'), 1);
+  execute('applyBossHit({damage:999})');
+  assert.equal(execute('boss.hp'), 1);
+});
+
+check("support rounds keep a bounded budget while leaving ordinary fire and clearing on restart", () => {
+  isolated('evolution.blast=2;onEvolutionUpgrade("blast");');
+  supportFrames(1600);
+  assert.equal(execute('bullets.filter(shot=>shot.auxiliary).length'), execute('evolutionWeaponRules.maxAuxiliary'));
+  execute('shotCooldown=0;updateShooting(0);');
+  assert.ok(execute('bullets.some(shot=>!shot.auxiliary)'));
+  execute('showScreen("battle");');
+  assert.equal(execute('bullets.length'), 0);
+  assert.deepEqual(snapshot('[evolution.pierce,evolution.blast,evolution.aegis]'), [0, 0, 0]);
+});
+
+check("an Aegis shield preserves captured shots through pause and fullscreen-style resize", () => {
+  isolated('evolution.aegis=2;shield.charges=1;requestShield();updateShield(.3);');
+  shieldContacts(2);
+  execute('updateEnemyProjectileDamage();');
+  assert.equal(execute('evolutionWeapons.absorbed.length'), 2);
+  emit(window, 'blur'); advanceFrames(12);
+  near(execute('shield.remaining'), 1.7);
+  surface = { width: 1024, height: 640 }; emit(window, 'resize');
+  assert.equal(execute('evolutionWeapons.absorbed.length'), 2);
+  assert.equal(execute('bullets.filter(shot=>shot.visual==="counter").length'), 0);
+  emit(window, 'focus'); canvas.focus(); execute('updateShield(1.7);');
+  assert.equal(execute('bullets.filter(shot=>shot.visual==="counter").length'), 2);
+});
+
+process.stdout.write('\n' + checks + ' progression integration checks passed, ' + failedChecks + ' failed.\n');
+if (failedChecks) process.exitCode = 1;

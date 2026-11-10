@@ -19,7 +19,7 @@ const bossSectorLights = [
   { id: "rift", aim: [-.55, .48, .71], rgb: [215, 179, 253], rim: [110, 131, 219] },
 ];
 const bossEmitterLights = [
-  ["#f75fa5", -.09, .01, .64], ["#cb9bda", -.18, 0, .16], ["#ff6b28", -.22, -.02, 1.27],
+  ["#f75fa5", -.09, .01, .64], ["#cb9bda", -.18, 0, .16], ["#ff7840", -.24, -.025, 4.85],
   ["#b856ea", -.10, .02, .30], ["#7fdf55", -.15, -.03, .20], ["#72dfff", -.05, .04, .24],
   ["#507efa", -.14, .01, .33], ["#b1ed50", -.08, .01, .73], ["#9e66ef", -.22, 0, .58],
   ["#ee669e", -.08, .03, .46], ["#f16ab6", -.05, .05, .81],
@@ -36,7 +36,8 @@ function starBreakerFinaleModelIndex(type) { return 11 + type; }
 
 function releaseStarBreakerModel(entry) {
   entry.evicted = true;
-  if (!entry.model) return;
+  // Three still polls the program object while compileAsync is pending.
+  if (!entry.model || entry.warming) return;
   entry.model.mixer?.stopAllAction();
   entry.model.mixer?.uncacheRoot(entry.model.center);
   const materials = new Set(), textures = new Set(), sources = new Set(), geometry = new Set();
@@ -56,6 +57,26 @@ function releaseStarBreakerModel(entry) {
   }
   for (const source of sources) source?.close?.();
   entry.model.turn.removeFromParent();
+}
+
+function warmStarBreakerModel(entry, stage) {
+  if (entry.evicted || !canUseStarBreakerModels()) return;
+  if (stage.warmEntry) {
+    stage.queuedWarm = entry;
+    return;
+  }
+  stage.warmEntry = entry;
+  entry.warming = true;
+  Promise.resolve().then(() => stage.renderer.compileAsync(entry.model.turn, stage.camera, stage.scene))
+    .catch(() => { /* Draw path remains available. */ })
+    .finally(() => {
+      entry.warming = false;
+      if (entry.evicted) releaseStarBreakerModel(entry);
+      const queued = stage.queuedWarm;
+      stage.queuedWarm = null;
+      stage.warmEntry = null;
+      if (queued) warmStarBreakerModel(queued, stage);
+    });
 }
 
 function preloadStarBreakerModel(index) {
@@ -108,7 +129,7 @@ function preloadStarBreakerModel(index) {
       const journey = sceneryJourney();
       preloadBossEnvironment(stage, journey.current);
       preloadBossEnvironment(stage, journey.next);
-      stage.renderer.compileAsync(turn, stage.camera, stage.scene).catch(() => { /* Draw path remains available. */ });
+      warmStarBreakerModel(entry, stage);
     };
     if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(prepare, { timeout: 1500 });
     else window.setTimeout(prepare, 0);
@@ -255,17 +276,23 @@ function lightBossModel(stage, model, type, pose, x, y, width) {
 
   const [color, px, py, strength] = bossEmitterLights[type % bossEmitterLights.length];
   const unit = model.size.x;
+  const furnace = type % 11 === 2;
   emitter.color.set(color);
-  emitter.position.set(px * unit, py * unit, model.size.z * .48 + unit * .12);
-  emitter.distance = unit * .68;
+  emitter.position.set(px * unit, py * unit, model.size.z * .48 + unit * (furnace ? .21 : .12));
+  emitter.distance = unit * (furnace ? .93 : .68);
   emitter.intensity = strength * unit * unit * (.11 + pose.charge * .074 + pose.ruptured * .042
     + (type >= 11 ? .028 : 0)) * (pose.cooling ? .45 : 1);
 
   const pulse = typeof activeCombatLight === "function" ? activeCombatLight() : null;
-  const worldX = type >= 11 ? boss?.x ?? x : x, worldY = type >= 11 ? boss?.y ?? y : y;
+  const subject = typeof bossPresentation !== "undefined" && bossPresentation?.target?.type === type % 11
+    ? bossPresentation.target : boss;
+  // Presentation shells render at a translated local origin, but the flash
+  // remains in battlefield space. Sample both lights in the same space.
+  const worldX = x === 0 && y === 0 ? subject?.x ?? x : x;
+  const worldY = x === 0 && y === 0 ? subject?.y ?? y : y;
   const dx = pulse ? pulse.x - worldX : 0, dy = pulse ? pulse.y - worldY : 0;
   const falloff = pulse ? Math.max(0, 1 - Math.hypot(dx, dy) / Math.max(1, pulse.radius + width * .4)) : 0;
-  spill.intensity = falloff * falloff * (pulse?.strength ?? 0) * unit * unit * .19;
+  spill.intensity = falloff * falloff * (pulse?.strength ?? 0) * unit * unit * .28;
   if (falloff > 0) {
     spill.color.set(pulse.color);
     spill.position.set(clamp(dx / width, -.78, .78) * unit, clamp(-dy / width, -.68, .68) * unit, unit * .44);
@@ -274,15 +301,23 @@ function lightBossModel(stage, model, type, pose, x, y, width) {
 
 function drawBossContactShadow(ctx, x, y, width, height) {
   ctx.save();
-  ctx.translate(x - width * .055, y + height * .18);
-  ctx.scale(1, height / width * .69);
-  const radius = width * .53;
-  const shade = ctx.createRadialGradient(0, 0, radius * .08, 0, 0, radius);
-  shade.addColorStop(0, "#01030caa");
-  shade.addColorStop(.52, "#02050c65");
-  shade.addColorStop(1, "#03061100");
-  ctx.fillStyle = shade;
-  ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+  // Tight occlusion beneath the shell and a separate, softer shadow displaced
+  // away from the key. Both affect the scenery beneath the opaque model only.
+  const { current, next, blend } = sceneryJourney();
+  const key = bossSectorLights[blend < .5 ? current : next].aim;
+  ctx.translate(x - key[0] * width * .095, y + height * (.24 + key[1] * .075));
+  ctx.rotate(key[0] * -.10);
+  ctx.scale(1, height / width * .64);
+  const layer = (cy, radius, opacity) => {
+    const shade = ctx.createRadialGradient(0, cy, radius * .08, 0, cy, radius);
+    shade.addColorStop(0, "rgba(1, 2, 7, " + opacity + ")");
+    shade.addColorStop(.54, "rgba(2, 4, 11, " + opacity * .53 + ")");
+    shade.addColorStop(1, "rgba(4, 8, 18, 0)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(-radius, cy - radius, radius * 2, radius * 2);
+  };
+  layer(width * .08, width * .69, .75);
+  layer(-width * .075, width * .43, .78);
   ctx.restore();
 }
 

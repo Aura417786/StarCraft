@@ -1,10 +1,11 @@
 "use strict";
 
 // 中立物件和运输舰使用有效战斗时钟；暂停、首领预警和进化不会偷走反应时间。
-const battlefieldEvents = { objects: [], nextObject: 16, nextTransport: 52,
+const battlefieldEvents = { objects: [], fragments: [], nextObject: 16, nextTransport: 52,
   objectCount: 0, transport: null, notice: "", noticeTime: 0, clock: 0 };
 function resetBattlefieldEvents(resetProgress = true) {
   battlefieldEvents.objects.length = 0;
+  battlefieldEvents.fragments.length = 0;
   battlefieldEvents.transport = null;
   battlefieldEvents.notice = ""; battlefieldEvents.noticeTime = 0;
   if (resetProgress) {
@@ -24,20 +25,25 @@ function announceBattlefieldEvent(text, duration = 4) {
 }
 function spawnBattlefieldObject(kind, journeyCover = false) {
   if (battlefieldEvents.objects.length >= 3 || viewport.width < 420 || viewport.height < 360) return null;
-  kind = kind || (battlefieldEvents.objectCount % 3 === 1 ? "wreck" : "cell");
-  const width = kind === "wreck" ? Math.min(112, player.width * 0.72) : Math.min(62, player.width * 0.43);
+  if (!kind) {
+    const sector = battlefieldSectors[battlefieldState.sector]?.id;
+    kind = sector === "belt" ? "asteroid" : sector === "wreck" || battlefieldEvents.objectCount % 3 === 1 ? "wreck" : "cell";
+  }
+  const width = kind !== "cell" ? Math.min(112, player.width * 0.72) : Math.min(62, player.width * 0.43);
   const lane = [0.3, 0.68, 0.48][battlefieldEvents.objectCount % 3];
   const y = flightBounds.top + (flightBounds.bottom - flightBounds.top) * lane;
   const x = viewport.width + width;
   const object = { kind, x, previousX: x, y, previousY: y, width, height: width * (kind === "wreck" ? 0.65 : 0.72),
-    hp: 1, maxHp: 1, healthLog: progressionReferenceDpsLog(battleTime) + Math.log(kind === "wreck" ? 1.3 : .45),
-    speed: kind === "wreck" ? 62 : 86, hitFlash: 0, phase: battlefieldEvents.objectCount * 1.7, age: 0 };
+    hp: 1, maxHp: 1, healthLog: progressionReferenceDpsLog(battleTime) + Math.log(kind === "cell" ? .45 : 1.3),
+    speed: kind === "cell" ? 86 : kind === "asteroid" ? 93 : 62, hitFlash: 0, phase: battlefieldEvents.objectCount * 1.7, age: 0 };
   battlefieldEvents.objects.push(object);
   if (journeyCover) return object;
   battlefieldEvents.objectCount++;
-  if (battlefieldEvents.objectCount <= 2) announceBattlefieldEvent(kind === "cell"
+  if (battlefieldEvents.objectCount <= 2 || kind === "asteroid") announceBattlefieldEvent(kind === "cell"
     ? tr("能源罐 · 射爆可清除附近敌弹，并炸伤敌军", "Energy canister · Shoot to clear nearby bullets and damage enemies")
-    : tr("漂浮残骸 · 可挡普通敌弹，也会挡住主炮", "Drifting wreckage · Blocks enemy shots and your main gun"));
+    : kind === "asteroid"
+      ? tr("可击碎陨石 · 碎石会飞向敌机", "Fracturable asteroid · Shards can strike enemies")
+      : tr("漂浮残骸 · 可挡普通敌弹，也会挡住主炮", "Drifting wreckage · Blocks enemy shots and your main gun"));
   return object;
 }
 function spawnSupplyTransport() {
@@ -82,12 +88,14 @@ function updateBattlefieldEvents(seconds) {
   battlefieldEvents.clock += seconds;
   battlefieldEvents.noticeTime = Math.max(0, battlefieldEvents.noticeTime - seconds);
   if (bossBlocksWaves()) {
-    if (battlefieldEvents.objects.length || battlefieldEvents.transport) resetBattlefieldEvents(false);
+    if (battlefieldEvents.objects.length || battlefieldEvents.transport || battlefieldEvents.fragments.length)
+      resetBattlefieldEvents(false);
     battlefieldEvents.nextObject = Math.max(battlefieldEvents.nextObject, battleTime + 8);
     battlefieldEvents.nextTransport = Math.max(battlefieldEvents.nextTransport, battleTime + 25);
     return;
   }
   if (battlefieldEvents.transport && !enemies.includes(battlefieldEvents.transport)) battlefieldEvents.transport = null;
+  updateFieldFragments(seconds);
   for (let i = battlefieldEvents.objects.length - 1; i >= 0; i--) {
     const object = battlefieldEvents.objects[i];
     object.previousX = object.x; object.previousY = object.y;
@@ -105,12 +113,18 @@ function updateBattlefieldEvents(seconds) {
     else battlefieldEvents.nextTransport = battleTime + 3;
   }
 }
-function destroyBattlefieldObject(object) {
+function destroyBattlefieldObject(object, source) {
   const index = battlefieldEvents.objects.indexOf(object);
   if (index < 0) return;
   battlefieldEvents.objects.splice(index, 1);
-  combatBurst(object.x, object.y, object.kind === "cell" ? 2.6 : 1.25, object.kind === "cell" ? "#8effe5" : "#ffca91", true);
-  gameAudio.explode(false);
+  const rock = isFieldAsteroid(object);
+  const color = object.kind === "cell" ? "#8effe5" : rock ? "#ffcc8c" : "#ffad79";
+  combatBurst(object.x, object.y, object.kind === "cell" ? 2.6 : 1.25, color, true);
+  if (object.kind !== "cell") {
+    spawnFieldFragments(object, source, rock);
+    gameAudio.fieldCue?.(rock ? "rock-shatter" : "cover-hit", object.x, object.y);
+  }
+  gameAudio.explode(false, object.x, object.y);
   if (object.kind !== "cell") return;
   const radius = Math.min(230, viewport.height * 0.38);
   addEvolutionPulse(object.x, object.y, radius, "#8effe5", 0.5);
@@ -130,7 +144,7 @@ function hitBattlefieldObject(object, shot) {
   if (!battlefieldEvents.objects.includes(object)) return;
   object.hp = Math.max(0, object.hp - Math.exp(Math.min(0, (shot.damageLog ?? Math.log(shot.damage ?? 1)) - object.healthLog)));
   object.hitFlash = 0.12; recordCombatImpact(object, shot);
-  if (object.hp < 1e-10) destroyBattlefieldObject(object);
+  if (object.hp < 1e-10) destroyBattlefieldObject(object, shot);
 }
 function resolveBattlefieldCover() {
   if (!isBattleActive()) return;
@@ -142,7 +156,7 @@ function resolveBattlefieldCover() {
       const sy=(shot.previousY ?? shot.y)-(player.previousY ?? player.y);
       const playerTime=projectileCircleEntry(sx,sy,shot.x-player.x-sx,shot.y-player.y-sy,0,0,player.height*.16+shot.radius);
       for (const object of battlefieldEvents.objects) {
-        if (object.kind !== "wreck") continue;
+        if (object.kind !== "wreck" && object.kind !== "asteroid") continue;
         const ox = (shot.previousX ?? shot.x) - object.previousX;
         const oy = (shot.previousY ?? shot.y) - object.previousY;
         const t = projectileBoxEntry(ox, oy, shot.x - object.x - ox, shot.y - object.y - oy,
@@ -151,7 +165,13 @@ function resolveBattlefieldCover() {
         if (Number.isFinite(t) && t < firstTime && t < playerTime) { firstTime=t; cover=object; }
       }
       if (!cover) continue;
-      list.splice(i,1);cover.hp=Math.max(0,cover.hp-.085);cover.hitFlash=.1;
+      list.splice(i, 1);
+      cover.hp = Math.max(0, cover.hp - (isFieldAsteroid(cover) ? .13 : .105));
+      if (cover.hitFlash <= 0) {
+        gameAudio.fieldCue?.("cover-hit", cover.x, cover.y);
+        combatBurst(shot.x, shot.y, .2, "#ffb287");
+      }
+      cover.hitFlash = .10;
       if(cover.hp<1e-10)destroyBattlefieldObject(cover);
     }
   }
@@ -159,7 +179,7 @@ function resolveBattlefieldCover() {
 function resolveUltimateBattlefieldObjects(shot) {
   for (const object of [...battlefieldEvents.objects]) {
     if (shot.hitTargets.has(object) || !ultimateHitsTarget(shot, object)) continue;
-    shot.hitTargets.add(object); destroyBattlefieldObject(object);
+    shot.hitTargets.add(object); destroyBattlefieldObject(object, shot);
   }
 }
 function drawSupplyTransport(enemy) {
@@ -170,12 +190,101 @@ function drawSupplyTransport(enemy) {
     roll: Math.sin(age * .65) * .06, flash: Math.min(.8, enemy.hitFlash * 6), alpha: 1,
   });
 }
+function isFieldAsteroid(object) {
+  return object.kind === "asteroid" || object.journeyCover === "asteroid";
+}
+
+function spawnFieldFragments(object, source, rock) {
+  const particles = battlefieldEvents.fragments;
+  const phase = object.phase || 0;
+  const baseDamage = Math.min(180, 10 + Math.exp(Math.min(5.3, object.healthLog)) * .44);
+  for (let i = 0; i < (rock ? 7 : 6); i++) {
+    const x = object.x + Math.cos(phase + i) * object.width * .17;
+    const y = object.y + Math.sin(phase + i) * object.height * .28;
+    const angle = rock ? (i - 3) * .22 : i * Math.PI / 3 + phase;
+    const speed = rock ? 225 + i * 28 : 74 + i * 13;
+    if (particles.length >= 28) particles.shift();
+    particles.push({ x, y, age: 0, life: rock ? 1.52 : 1.14, spin: (i % 2 ? -1 : 1) * (2.7 + i * .55),
+      angle: phase + i, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      size: 4 + (i % 4) * 2.8, damage: rock && source ? baseDamage * (i === 3 ? 1.25 : 1) : 0, rock });
+  }
+}
+
+function updateFieldFragments(seconds) {
+  const particles = battlefieldEvents.fragments;
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const part = particles[i];
+    const previousX = part.x, previousY = part.y;
+    part.age += seconds;
+    part.x += part.vx * seconds;
+    part.y += part.vy * seconds;
+    part.vy += (part.rock ? 27 : 42) * seconds;
+    if (part.age >= part.life || part.x > viewport.width + 36 || part.x < -36) {
+      particles.splice(i, 1);
+      continue;
+    }
+    if (!part.damage) continue;
+    let target = null, first = Infinity;
+    for (const enemy of enemies) {
+      if (enemy.hp <= 0 || enemy.x - enemy.width / 2 > viewport.width) continue;
+      const x = previousX - (enemy.previousX ?? enemy.x);
+      const y = previousY - (enemy.previousY ?? enemy.y);
+      const time = projectileCircleEntry(x, y, part.x - enemy.x - x, part.y - enemy.y - y,
+        0, 0, part.size * .6 + enemy.height * .4);
+      if (time < first) { first = time; target = enemy; }
+    }
+    if (!target) continue;
+    const hit = { source: "terrain-shard", noEnergy: true, damage: part.damage,
+      damageLog: Math.log(part.damage), x: part.x, y: part.y };
+    applyEnemyHit(target, hit);
+    if (target.hp <= 0) defeatEnemy(enemies.indexOf(target), hit);
+    part.damage = 0;
+    part.vx *= .28;
+    part.life = Math.min(part.life, part.age + .16);
+  }
+}
+
+function resizeFieldFragments(scaleX, scaleY, mapY) {
+  for (const part of battlefieldEvents.fragments) {
+    part.x *= scaleX;
+    part.y = mapY(part.y);
+    part.vx *= scaleX;
+    part.vy *= scaleY;
+  }
+}
+
+function drawFieldFragments() {
+  for (const part of battlefieldEvents.fragments) {
+    const age = part.age / part.life;
+    const angle = part.angle + part.age * part.spin;
+    const size = part.size * (.64 + .36 * Math.abs(Math.cos(part.age * 8 + part.angle)));
+    context.save();
+    context.globalAlpha = Math.min(1, (1 - age) * 3);
+    if (part.damage && !quietCombatMotion()) {
+      context.strokeStyle = "#ffbc6a85"; context.lineWidth = 1.4;
+      context.beginPath(); context.moveTo(part.x, part.y);
+      context.lineTo(part.x - part.vx * .056, part.y - part.vy * .056); context.stroke();
+    }
+    context.translate(part.x, part.y);
+    context.rotate(angle);
+    context.fillStyle = part.rock ? "#a98b73" : "#8f9ca7";
+    context.beginPath();
+    context.moveTo(size, -size * .12); context.lineTo(0, -size * .55);
+    context.lineTo(-size * .77, -size * .1); context.lineTo(-size * .47, size * .58);
+    context.lineTo(size * .46, size * .52); context.closePath(); context.fill();
+    context.fillStyle = part.rock ? "#554032" : "#293d50";
+    context.beginPath(); context.moveTo(size, -size * .12); context.lineTo(-size * .77, -size * .1);
+    context.lineTo(-size * .47, size * .58); context.lineTo(size * .46, size * .52); context.closePath(); context.fill();
+    context.restore();
+  }
+}
+
 function drawBattlefieldObjects() {
   for (const object of battlefieldEvents.objects) {
     if (object.x + object.width < 0 || object.x - object.width > viewport.width) continue;
     const age = reducedMotion.matches ? 0 : object.age;
     const seed = object.phase ?? 0;
-    const kind = object.journeyCover === "asteroid" ? "rock" : object.kind;
+    const kind = isFieldAsteroid(object) ? "rock" : object.kind;
     const side = object.journeySide || 1;
     drawSpaceProp(context, kind, {
       x: object.x, y: object.y, width: object.width * 1.25, height: object.height * (kind === "rock" ? 1.56 : 1.88),
@@ -183,11 +292,17 @@ function drawBattlefieldObjects() {
       roll: side * .16 + Math.sin(age * .52 + seed) * .19, flash: Math.min(.8, object.hitFlash * 6),
       variant: Math.floor(seed * 2 + side + 1), alpha: 1,
     });
-    if (object.hp < 1) {
-      context.fillStyle = "#0b1526"; context.fillRect(object.x-24,object.y-object.height*0.5-8,48,3);
-      context.fillStyle = "#9caeae"; context.fillRect(object.x-24,object.y-object.height*0.5-8,48*object.hp,3);
+    if (object.hp < 1 || object.kind !== "cell") {
+      const y = object.y - object.height * .67 - 8;
+      const color = kind === "rock" ? "#e3aa70" : "#a0c9dd";
+      for (let segment = 0; segment < 3; segment++) {
+        const x = object.x - 26 + segment * 18;
+        context.fillStyle = "#101c28"; context.fillRect(x, y, 16, 3);
+        context.fillStyle = color; context.fillRect(x, y, 16 * clamp(object.hp * 3 - segment, 0, 1), 3);
+      }
     }
   }
+  drawFieldFragments();
 }
 function drawBattlefieldEventNotice() {
   if (state !== "battle" || battlefieldEvents.noticeTime <= 0 || bossBlocksWaves() || viewport.width < 620 || viewport.height < 560) return;

@@ -1,113 +1,86 @@
 "use strict";
 
-// Player gains and the enemy schedule are deliberately independent. Extra pickups
-// and evolution can put the player ahead of this fixed, time-based reference.
-const progressionRules = { tierBonus: 1.08, redIncrement: 0.8, redMultiplier: 1.075, blueMultiplier: 1.055,
-  rateOverflowWeight: 0.35, maxPhysicalRate: 200, stageSeconds: 30 };
-const referenceGrowth = { tierBonus: 1.12, redMultiplier: 1.09, blueMultiplier: 1.065, blueIncrement: 1.25 };
-function progressionLogSum(a, b) {
-  const high = Math.max(a, b), low = Math.min(a, b);
-  return high + Math.log1p(Math.exp(low - high));
+const progressionRules = Object.freeze({ maxDamage: 60, maxRate: 12, maxLanes: 5, maxDamageLevel: 24, maxRateLevel: 11 });
+const damageBreakpoints = [[1, 2.2], [3, 6], [6, 12], [10, 20], [15, 30], [24, 60]];
+const campaignWeaponFloors = [
+  [3, 2, 1], [5, 3, 1], [7, 4, 1], [9, 5, 2], [11, 6, 2], [13, 7, 2],
+  [15, 8, 3], [17, 9, 3], [19, 10, 3], [21, 10, 3], [23, 11, 3],
+];
+// Body HP only. The separate finale HP/defences remain specific to each encounter.
+const bossBalanceBodies = [690, 1070, 1550, 2130, 2320, 2760, 3790, 4340, 4650, 5650, 6450];
+
+function progressionRank(level, max) {
+  return Math.min(max, Math.max(1, Math.floor(Number(level) || 1)));
 }
-function progressionBaseDamageLog() { return Math.log(weapon.damage) + (weapon.damageOverflow || 0); }
-function progressionPacketDamageLog() {
-  return progressionBaseDamageLog() + (weapon.tier - 1) * Math.log(maxWeaponLanes * progressionRules.tierBonus)
-    + (weapon.rateOverflow || 0) * progressionRules.rateOverflowWeight;
+function progressionDamageForLevel(level, base = 2.2) {
+  const rank = progressionRank(level, progressionRules.maxDamageLevel);
+  for (let index = 1; index < damageBreakpoints.length; index++) {
+    const [end, value] = damageBreakpoints[index];
+    if (rank > end) continue;
+    const [start, previous] = damageBreakpoints[index - 1];
+    const delta = (rank - start) * (value - previous) / (end - start);
+    // Rapid-fire and area fighters share upgrade thresholds, but not heavy-cannon damage.
+    const scale = base >= 2 ? 1 : .68;
+    return Math.min(progressionRules.maxDamage, base + (previous - 2.2 + delta) * scale);
+  }
+  return progressionRules.maxDamage;
+}
+function progressionRateForLevel(level, base = 3.6) {
+  const rank = progressionRank(level, progressionRules.maxRateLevel);
+  return Math.min(progressionRules.maxRate, base + (12 - base) * (rank - 1) / 10);
+}
+function progressionPresetForBoss(type) {
+  const [damageLevel, rateLevel, laneLevel] = campaignWeaponFloors[Math.max(0, Math.min(campaignWeaponFloors.length - 1, type | 0))];
+  return { damageLevel, rateLevel, laneLevel };
+}
+function bossBalanceHealth(type, { level, difficultyScale = 1 } = {}) {
+  const index = Math.max(0, Math.min(bossBalanceBodies.length - 1, type | 0));
+  const preset = progressionPresetForBoss(index);
+  // Lock at spawn; skilled upgrade collection never increases the boss's life.
+  // Modest grace keeps a missed stretch of pickups from turning into a health wall.
+  const shortage = Math.max(0, preset.damageLevel - progressionRank(level ?? preset.damageLevel, progressionRules.maxDamageLevel));
+  return Math.round(bossBalanceBodies[index] * (1 - Math.min(.12, shortage * .025)) * difficultyScale);
 }
 function progressionGrowDamage(gain) {
-  const before = progressionBaseDamageLog();
-  const next = Math.max(progressionLogSum(before, Math.log(gain * progressionRules.redIncrement)),
-    before + gain * Math.log(progressionRules.redMultiplier));
-  const stored = Math.min(next, Math.log(1e100));
-  weapon.damage = Math.exp(stored); weapon.damageOverflow = Math.max(0, next - stored);
-  return { before, after: next };
+  const before = weapon.damage;
+  weapon.damageLevel = progressionRank((weapon.damageLevel ?? 1) + gain, progressionRules.maxDamageLevel);
+  weapon.damage = progressionDamageForLevel(weapon.damageLevel, fighterProfile().damage);
+  return { before, after: weapon.damage };
 }
 function progressionGrowRate(gain) {
-  const before = -Math.log(weapon.interval) + (weapon.rateOverflow || 0);
-  const next = Math.max(progressionLogSum(before, Math.log(firingRules.ratePerLevel * gain)),
-    before + gain * Math.log(progressionRules.blueMultiplier));
-  const physical = Math.min(next, Math.log(progressionRules.maxPhysicalRate));
-  weapon.interval = Math.exp(-physical); weapon.rateOverflow = Math.max(0, next - physical);
-  return { before, after: next };
+  const before = 1 / weapon.interval;
+  weapon.speedLevel = progressionRank(weapon.speedLevel + gain, progressionRules.maxRateLevel);
+  const after = progressionRateForLevel(weapon.speedLevel, fighterProfile().rate);
+  weapon.interval = 1 / after;
+  return { before, after };
 }
-function progressionFormatLog(logarithm) {
-  if (logarithm < Math.log(1e6)) return String(Number(Math.exp(logarithm).toFixed(2)));
-  const exponent = Math.floor(logarithm / Math.LN10);
-  return Number(Math.exp(logarithm - exponent * Math.LN10).toFixed(2)) + "×10^" + exponent;
+function raiseWeaponFloor(preset) {
+  const fighter = fighterProfile();
+  progressionGrowDamage(Math.max(0, preset.damageLevel - (weapon.damageLevel ?? 1)));
+  progressionGrowRate(Math.max(0, preset.rateLevel - weapon.speedLevel));
+  weapon.tier = Math.min(6, Math.max(weapon.tier, preset.laneLevel));
+  weapon.lanes = Math.min(progressionRules.maxLanes, Math.max(weapon.lanes, fighter.lanes + preset.laneLevel - 1));
+  reconcileShotCadence();
+  updateWeaponDisplay();
 }
-function progressionExpectedGain(time, step) {
-  const t = Math.max(0, time - 12), periods = Math.floor(t / step), remainder = t % step;
-  // Average one pickup of each color every 27 seconds, with the same time gains.
-  return (step * periods * (periods + 1) / 2 + remainder * (periods + 1)) / 27;
-}
-function progressionLaneLog(gain) {
-  const whole = Math.floor(gain), fraction = gain - whole;
-  const laneLog = level => Math.floor(level / maxWeaponLanes) * Math.log(maxWeaponLanes * referenceGrowth.tierBonus)
-    + Math.log(level % maxWeaponLanes + 1);
-  return laneLog(whole) * (1 - fraction) + laneLog(whole + 1) * fraction;
-}
-function progressionEffectiveRateLog(rateLog) {
-  const physicalLimit = Math.log(progressionRules.maxPhysicalRate);
-  return Math.min(rateLog, physicalLimit) + Math.max(0, rateLog - physicalLimit) * progressionRules.rateOverflowWeight;
-}
-function progressionReferenceAt(time) {
-  // Bosses, the ace and transports retain their existing encounter reference.
-  const red = progressionExpectedGain(time, 180), blue = red;
-  const yellow = progressionExpectedGain(time, 360);
-  const damageLog = Math.log(1 + Math.min(9, red)) + Math.max(0, red - 9) * Math.log(1.12);
-  const rateLog = Math.log(5 + .75 * Math.min(10, blue)) + Math.max(0, blue - 10) * Math.log(1.08);
-  return damageLog + progressionEffectiveRateLog(rateLog) + progressionLaneLog(yellow);
-}
+// Keep log encoding at the collision boundary: legacy attackers compare against
+// normalized HP pools. No time or weapon tier exponent feeds the health curve.
+function progressionBaseDamageLog() { return Math.log(weapon.damage); }
+function progressionPacketDamageLog() { return progressionBaseDamageLog(); }
+function progressionFormatLog(logarithm) { return String(Number(Math.exp(logarithm).toFixed(2))); }
 function progressionReferenceDpsLog(time = battleTime) {
-  const t = Math.max(0, Number.isFinite(time) ? time : 0), period = progressionRules.stageSeconds;
-  const start = Math.floor(t / period) * period, mix = (t - start) / period;
-  return progressionReferenceAt(start) * (1 - mix) + progressionReferenceAt(start + period) * mix;
+  return Math.log(10 + Math.min(1200, Math.max(0, time)) * .18);
 }
-function progressionWaveReferenceAt(time) {
-  // Account for the extra RGB orbs supplied by combos, transports and Boss clears.
-  const extraGain = step => Math.max(0, progressionExpectedGain(time, step) - progressionExpectedGain(45, step)) * 27 / 145;
-  const red = progressionExpectedGain(time, 180) + extraGain(180);
-  const yellow = progressionExpectedGain(time, 360) + extraGain(360);
-  const weaponLog = (gain, base, increment, multiplier) => {
-    const additiveLevels = Math.floor(1 / (multiplier - 1) - base / increment) + 1;
-    return Math.log(base + increment * Math.min(gain, additiveLevels))
-      + Math.max(0, gain - additiveLevels) * Math.log(multiplier);
-  };
-  const rateLog = weaponLog(red, 5, referenceGrowth.blueIncrement, referenceGrowth.blueMultiplier);
-  return weaponLog(red, 1, 1, referenceGrowth.redMultiplier) + progressionEffectiveRateLog(rateLog) + progressionLaneLog(yellow);
-}
-function enemyDurabilityLog(time) {
-  return Math.log(1.14 - 0.12 * Math.expm1(-Math.max(0, time) / 200));
-}
+function enemyDurabilityLog() { return 0; }
 function progressionEnemyHealthLog(time = battleTime) {
-  const t = Math.max(0, time), baseline = Math.log(enemyHealthForTime(t));
-  const durability = enemyDurabilityLog(t);
-  if (t < 20) return baseline + durability;
-  const endurance = .47 + Math.min(.42, t / 1040);
-  const reference = progressionReferenceDpsLog(t);
-  if (t <= 55) return Math.max(baseline, reference + Math.log(endurance)) + durability;
-  const period = progressionRules.stageSeconds;
-  const start = Math.floor(t / period) * period, mix = (t - start) / period;
-  const waveReference = progressionWaveReferenceAt(start) * (1 - mix) + progressionWaveReferenceAt(start + period) * mix;
-  const ramp = 1 - Math.exp(-(t - 55) / 70);
-  return Math.max(baseline, reference + Math.log(endurance),
-    reference + (waveReference - reference) * Math.min(1, (t - 55) / 35) + Math.log(endurance + 1.06 * ramp)) + durability;
+  return Math.log(enemyHealthForTime(time));
 }
-function progressionBossHealthLog(time, endurance, healthShare = 1) {
-  const growth = -Math.expm1(-Math.max(0, time - 90) / 90);
-  const baseline = progressionReferenceDpsLog(time) + Math.log(endurance * (1 + 0.55 * growth)) + enemyDurabilityLog(time);
-  if (growth === 0) return baseline;
-  return Math.max(baseline, progressionEnemyHealthLog(time) + Math.log(9 * growth * healthShare));
-}
-
 function progressionHitFraction(target, damageLog, protection) {
   const relative = damageLog - target.healthLog;
   if (!protection) return Math.exp(Math.min(0, relative));
   const knee = protection.hit / 2;
   const raw = Math.exp(Math.min(12, relative));
-  // Below the knee the full hit counts. Overkill tapers smoothly toward the per-hit limit.
   const hit = raw <= knee ? raw : knee - knee * Math.expm1(-(raw - knee) / knee);
-  // One shared budget per target covers grouped rounds, extra lanes and auxiliary fire.
   const elapsed = Math.max(0, battleTime - (target.damageBudgetAt ?? battleTime));
   const available = Math.min(protection.burst, (target.damageBudget ?? protection.burst) + elapsed * protection.refill);
   const applied = Math.min(available, hit);

@@ -83,6 +83,10 @@ function updateCannonLink(seconds) {
 function gainUltimateEnergy(fraction, kind = "enemy") {
   if (state !== "battle" || !Number.isFinite(fraction) || fraction <= 0 || ultimate.charges >= ultimateRules.maxCharges) return;
   const amount = clamp(fraction, 0, 1) * (kind === "boss" ? ultimateRules.bossEnergy : ultimateRules.enemyEnergy);
+  restoreUltimateEnergy(amount);
+}
+function restoreUltimateEnergy(amount) {
+  if (state !== "battle" || !Number.isFinite(amount) || amount <= 0 || ultimate.charges >= ultimateRules.maxCharges) return;
   const total = ultimate.energy + amount;
   const gained = Math.floor((total + 1e-9) / ultimateRules.energyPerCharge);
   ultimate.charges = Math.min(ultimateRules.maxCharges, ultimate.charges + gained);
@@ -92,14 +96,18 @@ function gainUltimateEnergy(fraction, kind = "enemy") {
     ultimateName() + " ready. Uses stored: " + ultimate.charges + ". Press Space to charge and fire.");
 }
 function ultimateDamageLog() {
-  // 相当于数秒完整火力，并保证能贯穿同期小怪。对数计算兼容无上限的武器阶数。
-  const equivalentSeconds = 8 + 4 * Math.log1p(battleTime / 90);
-  return Math.max(weaponDamageLog() + Math.log(weapon.lanes / weapon.interval) + Math.log(equivalentSeconds),
-    enemyHealthLogForTime() + Math.log(enemyTypes.armored.health));
+  const kind = currentUltimateId();
+  const classSeconds = kind === "red" ? 7.1 : kind === "blue" ? 5.5 : 6.0;
+  const equivalentSeconds = classSeconds * (1 + .20 * clamp(battleTime / 660, 0, 1));
+  const focusPower = 1 + .16 * (weapon.lanes - 1);
+  const armorFloor = kind === "red" ? 1.005 : .72;
+  return Math.max(weaponDamageLog() + Math.log(focusPower * equivalentSeconds / weapon.interval),
+    enemyHealthLogForTime() + Math.log(enemyTypes.armored.health * armorFloor));
 }
 function ultimateSuppressesFire() { return ultimate.phase === "charging" || ultimate.phase === "firing"; }
 function requestUltimate() {
   if (!isBattleActive() || ultimate.phase !== "idle" || ultimate.charges <= 0) return false;
+  if (typeof cancelEvolutionLance === "function") cancelEvolutionLance();
   cannonLink.chargingLinked = cannonLink.remaining > 1e-9;
   cannonLink.chargeDuration = cannonLink.chargingLinked ? cannonLinkRules.chargeTime : ultimateRules.chargeTime;
   if (cannonLink.chargingLinked) cannonLink.remaining = 0;
@@ -108,7 +116,6 @@ function requestUltimate() {
   ultimate.kind = currentUltimateId();
   ultimate.elapsed = 0;
   ultimate.shot = null;
-  pendingShots = 0;
   muzzleFlash = 0;
   movementHint.hidden = true;
   gameAudio.chargeUltimate(cannonLink.chargeDuration, ultimate.kind);
@@ -222,6 +229,7 @@ function markCrimsonContact(shot, target) {
 function resolveUltimateHits(shot = ultimate.shot, bossCap) {
   if (!shot) return;
   resolveUltimateBattlefieldObjects(shot);
+  if (typeof resolveUltimateMines === "function") resolveUltimateMines(shot);
   for (let index = enemies.length - 1; index >= 0; index--) {
     const enemy = enemies[index];
     if (shot.hitTargets.has(enemy) || !ultimateHitsTarget(shot, enemy)) continue;

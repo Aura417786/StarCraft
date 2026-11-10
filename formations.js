@@ -281,7 +281,7 @@ function updateFormationTactics(group, members, seconds) {
       travel = Math.max(travel, (x - flightBounds.left) / -vx);
       fired = true;
     }
-    if (fired) gameAudio.bossAttack("volley");
+    if (fired) gameAudio.bossAttack("volley", cue.shots[0].x, cue.shots[0].y, false);
     rhythm.beat++;
     rhythm.wait = Math.max(.28, travel - .23);
     rhythm.passage = fired ? cue.gap : null;

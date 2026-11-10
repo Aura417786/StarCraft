@@ -4,7 +4,10 @@ const firingStyle = { mode: "spread", lastInterval: 0.2 };
 const stanceButton = document.querySelector("#stance-button");
 function updateFiringStyleDisplay() {
   const focus = firingStyle.mode === "focus";
+  const lance = typeof evolution !== "undefined" && evolution.pierce >= 3;
   stanceButton.textContent = (focus ? tr("聚焦 · 集中火力", "Focused fire") : tr("扩散 · 覆盖射击", "Spread fire")) + "  ⇧ Shift";
+  if (lance) stanceButton.title = tr("轻按 Shift 切换，长按并松开 Shift 发射翼刃", "Tap Shift to switch. Hold and release for a lance.");
+  else stanceButton.removeAttribute("title");
   stanceButton.dataset.mode = firingStyle.mode;
   stanceButton.setAttribute("aria-pressed", String(focus));
   stanceButton.setAttribute("aria-label", focus ? tr("当前聚焦射击，切换为扩散，快捷键 Shift", "Focused fire active. Press Shift to switch to spread fire.")
@@ -29,15 +32,18 @@ stanceButton.addEventListener("click", () => {
 });
 function firingLanes() {
   const count = weapon.lanes;
-  if (firingStyle.mode === "focus") return [{ offset: 0, angle: 0, weight: count }];
+  if (firingStyle.mode === "focus") return [{ offset: 0, angle: 0, weight: 1 + .16 * (count - 1) }];
   const spacing = Math.min(player.height * 0.18, player.height * 0.9 / Math.max(1, count - 1));
+  const yellow = typeof fighterProfile === "function" && fighterProfile().id === "yellow";
+  const fan = yellow ? .32 : .24;
+  const weight = (1 + (yellow ? .42 : .22) * (count - 1)) / count;
   return Array.from({ length: count }, (_, index) => ({
     offset: (index - (count - 1) / 2) * spacing,
-    angle: count === 1 ? 0 : (index / (count - 1) - 0.5) * 0.24,
-    weight: 1,
+    angle: count === 1 ? 0 : (index / (count - 1) - 0.5) * fan,
+    weight,
   }));
 }
-function effectiveShotInterval() { return weapon.interval / shotRateMultiplier(); }
+function effectiveShotInterval() { return Math.max(1 / 12, weapon.interval / shotRateMultiplier()); }
 function reconcileShotCadence() {
   const interval = effectiveShotInterval();
   if (interval !== firingStyle.lastInterval) {

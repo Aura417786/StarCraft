@@ -47,6 +47,7 @@ const damageDisplay = document.querySelector("#weapon-damage");
 const powerupNotice = document.querySelector("#powerup-notice");
 const assetStatus = document.querySelector("#asset-status");
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+reducedMotion.addEventListener?.("change", () => syncSortieEligibility());
 
 let state = "menu";
 let previousTime = 0;
@@ -57,10 +58,10 @@ const fighterProfiles = {
   red: { id: "red", rate: 3.6, lanes: 1, damage: 2.2,
     label: ["赤焰 · 重装突击型", "Crimson · Heavy assault"], code: "CRIMSON / ASSAULT FIGHTER",
     special: ["蓄力发射高伤害贯穿炮，适合集中打击。", "Fire a high-damage piercing beam for concentrated strikes."] },
-  blue: { id: "blue", rate: 8, lanes: 2, damage: 0.48,
+  blue: { id: "blue", rate: 7.4, lanes: 1, damage: .96,
     label: ["苍电 · 高速截击型", "Azure · Rapid interceptor"], code: "AZURE / INTERCEPTOR",
     special: ["发射五枚追踪离子弹，优先集火瞄准方向的强敌。", "Launch five homing ion shots that concentrate on threats in your line of fire."] },
-  yellow: { id: "yellow", rate: 4, lanes: 3, damage: 0.65,
+  yellow: { id: "yellow", rate: 3.8, lanes: 3, damage: 1.27,
     label: ["曜金 · 广域压制型", "Auric · Area suppression"], code: "AURIC / AREA SUPPRESSION",
     special: ["三轮弹幕横扫全屏，连机身后方的敌机也能打到。", "Send three waves across the entire screen, hitting enemies even behind your ship."] },
 };
@@ -74,11 +75,8 @@ function fighterProfile() { return fighterProfiles[sortieFighter]; }
 
 // interval 是发射间隔（秒），speed 是子弹每秒前进的距离。
 const weapon = { interval: 1 / fighterProfiles.red.rate, speed: 720, length: 26,
-  damage: fighterProfiles.red.damage, speedLevel: 1, lanes: fighterProfiles.red.lanes, tier: 1, damageOverflow: 0, rateOverflow: 0 };
-// 攻速仍持续成长；过密的连续射击合并伤害，每轮最多绘制 4 条弹道。
-const firingRules = { ratePerLevel: 1, renderInterval: 0.05 };
-const maxWeaponLanes = 4;
-// 第四阶再次使用绿色；红色之后从黄色继续循环，阶数不封顶。
+  damage: fighterProfiles.red.damage, damageLevel: 1, speedLevel: 1, lanes: fighterProfiles.red.lanes, tier: 1 };
+const maxWeaponLanes = 5;
 const weaponPalettes = [
   { name: "黄色", english: "Yellow", color: "#ffe16a", core: "#fff8d4" },
   { name: "绿色", english: "Green", color: "#6df59b", core: "#e3ffea" },
@@ -87,10 +85,6 @@ const weaponPalettes = [
   { name: "蓝色", english: "Blue", color: "#55bdff", core: "#e2f5ff" },
   { name: "红色", english: "Red", color: "#ff6676", core: "#ffe4e8" },
 ];
-let pendingShots = 0;
-let renderShotCooldown = 0;
-let burstStep = 0;
-const highRateBurstSpacing = [0.055, 0.055, 0.115];
 const powerupRules = { interval: 7, speed: 110, radius: 18, maxOnScreen: 7 };
 const powerups = [];
 let powerupCooldown = 3;
@@ -103,7 +97,7 @@ const powerupTypes = {
   heal: { color: "#70f0b0", label: "生命", english: "Life", symbol: "♥" },
 };
 const powerupWeights = [ ["blue", 32], ["yellow", 32], ["red", 32], ["heal", 4] ];
-function choosePowerupType(roll = Math.random()) {
+function choosePowerupType(roll = combatRandom()) {
   let remaining = roll * 100;
   for (const [type, weight] of powerupWeights) {
     remaining -= weight;
@@ -111,6 +105,7 @@ function choosePowerupType(roll = Math.random()) {
   }
   return "heal";
 }
+function combatRandom() { return typeof sortieRandom === "function" ? sortieRandom() : Math.random(); }
 const bullets = [];
 let shotCooldown = 0;
 let muzzleFlash = 0;
@@ -154,7 +149,11 @@ function syncGameAudio() {
   const cinematic = isBossPresentationPlaying();
   gameAudio.sync(active || (cinematic && canAnimateCombatEffects()), !!boss, activeBosses().some(target => target.enraged),
     { paused: !!pauseView && windowActive && !document.hidden, combo: momentum.count, overdrive: isOverdriveActive(), warning: pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning), cinematic,
-      bossType: boss?.type ?? pendingBossType ?? bossPresentation?.target.type, bossPhase: boss?.phase, lives: player.lives });
+      bossType: boss?.type ?? pendingBossType ?? bossPresentation?.target.type,
+      bossPhase: boss?.finale ? "finale" : boss?.phase, bossHealth: boss?.hp, lives: player.lives,
+      width: viewport.width, height: viewport.height, listenerX: player.x, listenerY: player.y,
+      bossX: boss?.x ?? bossPresentation?.target.x, bossY: boss?.y ?? bossPresentation?.target.y,
+      visible: windowActive && !document.hidden });
   syncUltimateAudio(active);
 }
 function updateSoundButton() {
@@ -268,6 +267,8 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
   // 重建尺寸后重新预警，避免旧弹道或激光在新位置立即命中玩家。
   resizeAceEncounter(scaleX, scaleY, resizeY);
   resizeGravityTide(scaleX, resizeY);
+  resizeFieldFragments(scaleX, scaleY, resizeY);
+  resizeEliteMines(scaleX, scaleY, resizeY);
   resizeEvolutionWeapons(scaleX, scaleY, resizeY);
   enemyProjectiles.length = 0;
   explosions.length = 0;
@@ -295,7 +296,7 @@ function updateFighterSelection() {
   document.querySelector("#fighter-lanes").textContent = String(fighter.lanes);
   document.querySelector("#fighter-damage").textContent = String(fighter.damage);
   document.querySelector("#fighter-ultimate").textContent = ultimateName(fighter.id);
-  document.querySelector("#fighter-ultimate-detail").textContent = tr(...fighter.special);
+  document.querySelector("#fighter-ultimate-detail").textContent = fighterWeaponCopy(fighter.id) + " · " + tr(...fighter.special);
   readyFighter();
 }
 for (const option of fighterOptions) option.addEventListener("change", () => {
@@ -311,15 +312,19 @@ hangarVariantImage?.addEventListener("error", readyFighter);
 if (fighterImage.complete) readyFighter();
 updateFighterSelection();
 
-function showScreen(nextState) {
+function showScreen(nextState, options = {}) {
+  if (state === "battle") completeSortie({ abandoned: true });
+  if (typeof resetCampaignVictory === "function") resetCampaignVictory();
   clearPause();
-  if (nextState === "battle") sortieFighter = selectedFighter;
+  if (nextState === "battle") sortieFighter = newSortie(options).fighter;
+  else sortieStats = null;
   lastDamageMessage = "";
   resetShipVisuals();
   resetBattlefield();
   resetJourneyScenes();
   resetCombatEffects();
   resetEvolution();
+  resetFighterCombat();
   resetMomentum();
   resetFiringStyle();
   clearMovement();
@@ -327,6 +332,7 @@ function showScreen(nextState) {
   resetEncounter();
   resetPlayer();
   resetPlayerLives();
+  applySortieStartingEquipment();
   player.hitFlash = 0;
   updateLifeDisplay();
   gameOverScreen.hidden = true;
@@ -340,14 +346,14 @@ function showScreen(nextState) {
   canvas.tabIndex = inBattle ? 0 : -1;
   updateGameCanvasLabel();
   statusMessage.textContent = inBattle
-    ? tr(`${tr(...fighterProfile().label)}出击。上下移动瞄准，空格释放${ultimateName()}，V 开盾。绿球恢复生命，满血时增加生命上限。依次击败十只异形，再挑战群渊合生体。`,
-      `${tr(...fighterProfile().label)} launched. Move up or down to aim. Space uses ${ultimateName()}; V shields. Green orbs restore a life or raise capacity at full health. Defeat ten aliens, then face the Abyssal Confluence.`)
+    ? sortieLaunchHint()
     : tr("已返回开始画面。", "Returned to the main menu.");
   (inBattle ? canvas : startButton).focus({ preventScroll: true });
+  if (typeof refreshSortieHud === "function") refreshSortieHud();
   updatePauseHint();
 }
-function startBattleWithSound() { gameAudio.unlock(); showScreen("battle"); }
-startButton.addEventListener("click", startBattleWithSound);
+function startBattleWithSound(options = {}) { gameAudio.unlock(); showScreen("battle", options); }
+startButton.addEventListener("click", () => startBattleWithSound());
 for (const control of [pauseButton, menuButton, hangarLink]) {
   control?.addEventListener("mousedown", (event) => {
     if (event.button === 0 && battleHasFocus()) event.preventDefault();
@@ -362,7 +368,7 @@ menuButton.addEventListener("click", () => {
   if (state === "battle") pauseGame("exit");
   else showScreen("menu");
 });
-restartButton.addEventListener("click", startBattleWithSound);
+restartButton.addEventListener("click", () => startBattleWithSound(sortieReplayOptions()));
 resultMenuButton.addEventListener("click", () => showScreen("menu"));
 
 // 浏览器要求由用户点击按钮才能进入真正的全屏；默认已铺满页面。
@@ -403,8 +409,14 @@ window.addEventListener("keydown", (event) => {
   if (!isBattleActive()) return;
   if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
     event.preventDefault();
-    if (!event.repeat && !pressedKeys.has("ShiftLeft") && !pressedKeys.has("ShiftRight")) toggleFiringStyle();
+    if (!event.repeat && !pressedKeys.has("ShiftLeft") && !pressedKeys.has("ShiftRight") && !beginEvolutionLance()) toggleFiringStyle();
     pressedKeys.add(event.code);
+    return;
+  }
+  if (event.code === "KeyF") {
+    event.preventDefault();
+    if (!event.repeat && !pressedKeys.has("KeyF")) evolutionTryIntercept();
+    pressedKeys.add("KeyF");
     return;
   }
   if (event.code === "KeyV") {
@@ -426,10 +438,13 @@ window.addEventListener("keydown", (event) => {
 });
 window.addEventListener("keyup", (event) => {
   pressedKeys.delete(event.code);
+  if ((event.code === "ShiftLeft" || event.code === "ShiftRight")
+    && !pressedKeys.has("ShiftLeft") && !pressedKeys.has("ShiftRight")) releaseEvolutionLance();
   if (state === "battle" && document.activeElement === canvas && (movementKeys.has(event.code) || event.code === "Space" || event.code === "KeyV" || event.code === "ShiftLeft" || event.code === "ShiftRight")) event.preventDefault();
 });
 function clearMovement() {
   pressedKeys.clear();
+  cancelEvolutionLance();
   previousTime = 0;
 }
 // 主动暂停由菜单控制。切走窗口时也会冻结，只有焦点回到战场才恢复。
@@ -498,6 +513,7 @@ function clearPause() {
   pauseBackground.clear();
 }
 function resumeGame() {
+  syncSortieEligibility();
   clearPause();
   clearMovement();
   canvas.focus({ preventScroll: true });
@@ -512,7 +528,7 @@ document.querySelector("#pause-restart")?.addEventListener("click", () => pauseG
 document.querySelector("#pause-exit")?.addEventListener("click", () => pauseGame("exit"));
 pauseConfirmButton?.addEventListener("click", () => {
   if (pauseView === "exit") showScreen("menu");
-  else if (pauseView === "restart") startBattleWithSound();
+  else if (pauseView === "restart") startBattleWithSound(sortieReplayOptions());
 });
 pauseSoundButton?.addEventListener("click", () => { toggleGameSound(); refreshPauseCopy(); });
 pauseShakeButton?.addEventListener("click", () => { cycleShakePreference(); refreshPauseCopy(); });
@@ -565,9 +581,12 @@ function updatePlayer(seconds) {
   const vertical = Number(pressedKeys.has("ArrowDown") || pressedKeys.has("KeyS"))
     - Number(pressedKeys.has("ArrowUp") || pressedKeys.has("KeyW"));
   const current = alienCurrentVector();
+  const gravity = gravityPlayerVector();
+  current.x += gravity.x + journeyCatapultVector();
+  current.y += gravity.y + sortieDrift();
   if (!(horizontal || vertical || current.x || current.y)) return;
   const length = Math.hypot(horizontal, vertical) || 1;
-  const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * alienMovementScale();
+  const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * alienMovementScale() * sortiePlayerSpeed() * fighterMovementScale();
   player.x = clamp(player.x + (horizontal / length * speed + current.x) * seconds, flightBounds.left, bossPlayerRight());
   player.y = clamp(player.y + (vertical / length * speed + current.y) * seconds, flightBounds.top, flightBounds.bottom);
   movementHint.hidden = true;
@@ -576,39 +595,34 @@ function resetWeapons(preserveUpgrades = true) {
   bullets.length = 0;
   shotCooldown = 0;
   muzzleFlash = 0;
-  pendingShots = 0;
-  renderShotCooldown = 0;
-  burstStep = 0;
   if (!preserveUpgrades) {
     const fighter = fighterProfile();
-    weapon.speedLevel = 1;
-    weapon.lanes = fighter.lanes;
-    weapon.tier = 1;
-    weapon.damage = fighter.damage;
-    weapon.damageOverflow = 0; weapon.rateOverflow = 0;
-    weapon.interval = 1 / fighter.rate;
+    const preset = typeof sortieStartingUpgrades === "function" ? sortieStartingUpgrades() : {};
+    weapon.speedLevel = progressionRank(preset.rateLevel, progressionRules.maxRateLevel);
+    weapon.damageLevel = progressionRank(preset.damageLevel, progressionRules.maxDamageLevel);
+    weapon.lanes = Math.min(maxWeaponLanes, fighter.lanes + Math.max(0, (preset.laneLevel ?? 1) - 1));
+    weapon.tier = Math.min(6, preset.laneLevel ?? 1);
+    weapon.damage = progressionDamageForLevel(weapon.damageLevel, fighter.damage);
+    weapon.interval = 1 / progressionRateForLevel(weapon.speedLevel, fighter.rate);
   }
   firingStyle.lastInterval = effectiveShotInterval();
   updateWeaponDisplay();
 }
 function updateWeaponDisplay() {
-  const rate = progressionFormatLog(-Math.log(effectiveShotInterval()) + (weapon.rateOverflow || 0));
+  const rate = progressionFormatLog(-Math.log(effectiveShotInterval()));
   const lanes = weapon.lanes + "/" + maxWeaponLanes;
   speedDisplay.textContent = tr(weapon.speedLevel + "级 · " + rate + "次/秒", "Lv " + weapon.speedLevel + " · " + rate + "/s") + (isOverdriveActive() ? tr(" · 暴走", " · Overdrive") : "");
   lanesDisplay.textContent = tr(weapon.tier + "阶 · " + lanes + "条", "T" + weapon.tier + " · " + lanes);
-  damageDisplay.textContent = formattedProjectileDamage(firingStyle.mode === "focus" ? weapon.lanes : 1) + tr("点/发", "/shot");
+  damageDisplay.textContent = tr(`Lv ${weapon.damageLevel} · ${formattedProjectileDamage()} 点`,
+    `Lv ${weapon.damageLevel} · ${formattedProjectileDamage()} dmg`);
 }
 function weaponPalette() { return weaponPalettes[(weapon.tier - 1) % weaponPalettes.length]; }
 function projectileDamage() { return Math.exp(Math.min(690, weaponDamageLog())); }
-function formattedProjectileDamage(weight = 1) {
-  weight *= evolutionMainDamageMultiplier();
-  return progressionFormatLog(weaponDamageLog() + Math.log(weight));
-}
+function formattedProjectileDamage() { return progressionFormatLog(weaponDamageLog()); }
 function shotLanes() { return firingLanes(); }
 function shotOffsets() { return shotLanes().map(lane => lane.offset); }
 function powerupGainForTime(type = "red") {
-  // 黄色球影响指数倍率，因此比攻速和基础伤害更慢成长，仍然没有等级上限。
-  return 1 + Math.floor((battleTime + 0.00000001) / (type === "yellow" ? 360 : 180));
+  return type === "red" && battleTime >= 360 ? 2 : 1;
 }
 function applyPowerup(type) {
   const details = powerupTypes[type];
@@ -623,35 +637,33 @@ function applyPowerup(type) {
   }
   const gain = powerupGainForTime(type);
   const previousTier = weapon.tier, previousLanes = weapon.lanes;
-  let boost = 0;
+  let capped = false;
   if (type === "blue") {
-    weapon.speedLevel += gain;
     const growth = progressionGrowRate(gain);
-    boost = growth.after - growth.before;
+    capped = growth.after === growth.before;
     reconcileShotCadence();
   } else if (type === "yellow") {
-    // 按单次 +1 依次进位：4 条再加一次变为下一阶 1 条，不丢弃批量增益的余数。
-    const progress = weapon.lanes - 1 + gain;
-    weapon.tier += Math.floor(progress / maxWeaponLanes);
-    weapon.lanes = progress % maxWeaponLanes + 1;
+    if (weapon.lanes < maxWeaponLanes) weapon.lanes++;
+    else if (weapon.tier < weaponPalettes.length) weapon.tier++;
+    else capped = true;
   } else if (type === "red") {
     const growth = progressionGrowDamage(gain);
-    boost = growth.after - growth.before;
+    capped = growth.after === growth.before;
   }
   updateWeaponDisplay();
   const palette = weaponPalette();
-  const multiplier = progressionFormatLog(boost);
-  if (type === "yellow" && weapon.tier > previousTier) {
-    const extra = progressionFormatLog(Math.log(weapon.lanes / previousLanes)
-      + (weapon.tier - previousTier) * Math.log(maxWeaponLanes * progressionRules.tierBonus));
-    powerupNotice.textContent = tr(`弹幕晋升 · ${palette.name} · 火力 ×${extra} · ${lanesDisplay.textContent}`,
-      `Tier up · ${palette.english} · Power ×${extra} · ${lanesDisplay.textContent}`);
+  if (capped) {
+    gainUltimateEnergy(.15, "enemy");
+    powerupNotice.textContent = tr("已达上限 · 转为少量大招能量", "Upgrade capped · Converted to a little ultimate energy");
+  } else if (type === "yellow" && weapon.tier > previousTier) {
+    powerupNotice.textContent = tr(`弹道校准 · ${palette.name} · ${lanesDisplay.textContent}`,
+      `Lane calibration · ${palette.english} · ${lanesDisplay.textContent}`);
   } else if (type === "yellow") {
     powerupNotice.textContent = tr(`弹道 ${previousLanes} → ${weapon.lanes} 条`, `Lanes ${previousLanes} → ${weapon.lanes}`);
   } else if (type === "blue") {
-    powerupNotice.textContent = tr("攻速 ×", "Fire rate ×") + multiplier + " · " + speedDisplay.textContent;
+    powerupNotice.textContent = tr("攻速提升 · ", "Fire rate up · ") + speedDisplay.textContent;
   } else {
-    powerupNotice.textContent = tr("单发伤害 ×", "Damage per shot ×") + multiplier + " · " + damageDisplay.textContent;
+    powerupNotice.textContent = tr("武器升级 · ", "Weapon upgraded · ") + damageDisplay.textContent;
   }
   const muzzle = muzzlePosition();
   combatBurst(muzzle.x, muzzle.y, .65, details.color);
@@ -670,46 +682,37 @@ function updateShooting(seconds) {
   for (let index = bullets.length - 1; index >= 0; index--) {
     const bullet = bullets[index];
     bullet.previousX = bullet.x; bullet.previousY = bullet.y;
+    steerFighterRound(bullet, seconds);
     applyGravityTide(bullet, seconds, "player");
     bullet.x += (bullet.vx ?? weapon.speed) * seconds;
     bullet.y += (bullet.vy ?? 0) * seconds;
   }
   const interval = reconcileShotCadence();
   muzzleFlash = Math.max(0, muzzleFlash - seconds);
-  // 聚能时暂停普通发射，已在飞行的子弹继续前进；不积压射击次数。
-  if (ultimateSuppressesFire()) { pendingShots = 0; shotCooldown = interval; return; }
+  if (ultimateSuppressesFire() || evolutionLanceActive()) { shotCooldown = interval; return; }
   shotCooldown -= seconds;
-  renderShotCooldown -= seconds;
-  if (shotCooldown <= 0.00000001) {
-    const due = 1 + Math.floor(Math.max(0, -shotCooldown + 0.00000001) / interval);
-    pendingShots += due;
-    shotCooldown += due * interval;
+  if (shotCooldown > 1e-8) return;
+  shotCooldown += interval;
+  const muzzle = muzzlePosition();
+  const palette = weaponPalette();
+  const volley = prepareFighterVolley();
+  const lanes = shotLanes();
+  const overdrive = isOverdriveActive();
+  const tierShape = Math.min(4, weapon.tier - 1);
+  const halfHeight = (firingStyle.mode === "focus" ? 2.5 + Math.log2(weapon.lanes) * .65 : 2.5)
+    * (1 + tierShape * .12) * (overdrive ? 1.5 : 1);
+  for (const [index, lane] of lanes.entries()) {
+    const angle = lane.angle;
+    const y = muzzle.y + lane.offset;
+    const bullet = { x: muzzle.x + 3, previousX: muzzle.x + 3, y, previousY: y,
+      angle, vx: Math.cos(angle) * weapon.speed, vy: Math.sin(angle) * weapon.speed,
+      halfHeight, length: weapon.length + tierShape * 3, overdrive, mode: firingStyle.mode, tier: weapon.tier,
+      piercesLeft: evolutionPierceCount(), hitTargets: new Set(), damage: projectileDamage() * lane.weight,
+      color: palette.color, core: palette.core };
+    bullets.push(spawnFighterRound(bullet, volley, index === Math.floor((lanes.length - 1) / 2)));
   }
-  if (pendingShots > 0 && renderShotCooldown <= 0.00000001) {
-    const muzzle = muzzlePosition();
-    const palette = weaponPalette();
-    // High rates group visible volleys. Damage held during each gap goes into the next packet.
-    const grouped = weapon.speedLevel >= 8 && interval <= .10;
-    const packetStrength = grouped ? Math.min(0.22, Math.log2(pendingShots) * .05) : 0;
-    const damageStrength = .26 * (1 - Math.exp(-progressionBaseDamageLog() / 2));
-    for (const lane of shotLanes()) {
-      const angle = lane.angle, overdrive = isOverdriveActive();
-      const tierShape = Math.min(4, weapon.tier - 1);
-      const halfHeight = (firingStyle.mode === "focus" ? 2.5 + Math.log2(weapon.lanes) * 0.65 : 2.5) * (1 + tierShape * .12) * (overdrive ? 1.5 : 1) * (1 + packetStrength + damageStrength);
-      bullets.push({ x: muzzle.x + 3, previousX: muzzle.x + 3, y: muzzle.y + lane.offset, previousY: muzzle.y + lane.offset,
-        angle, vx: Math.cos(angle) * weapon.speed, vy: Math.sin(angle) * weapon.speed,
-        halfHeight, length: weapon.length * (1 + packetStrength + damageStrength) + tierShape * 5, overdrive, mode: firingStyle.mode, tier: weapon.tier,
-        piercesLeft: evolutionPierceCount(), hitTargets: new Set(),
-        damage: projectileDamage() * pendingShots * lane.weight * evolutionMainDamageMultiplier(),
-        damageLog: weaponDamageLog() + Math.log(pendingShots) + Math.log(lane.weight) + Math.log(evolutionMainDamageMultiplier()), color: palette.color, core: palette.core });
-    }
-    pendingShots = 0;
-    const burstTempo = 0.92 + 0.8 * interval;
-    renderShotCooldown = grouped ? highRateBurstSpacing[burstStep] * burstTempo : firingRules.renderInterval;
-    burstStep = grouped ? (burstStep + 1) % highRateBurstSpacing.length : 0;
-    muzzleFlash = 0.055;
-    gameAudio.shoot(isOverdriveActive(), weapon.tier, sortieFighter);
-  }
+  muzzleFlash = volley === "crimson-heavy" ? .065 : .055;
+  gameAudio.shoot(overdrive || volley === "crimson-heavy", weapon.tier, sortieFighter);
 }
 function resetEncounter(resetScore = true) {
   if (resetScore) resetAceEncounter();
@@ -740,8 +743,10 @@ function resetEncounter(resetScore = true) {
 }
 function enemyStage(time = battleTime) { return Math.floor((time + 0.00000001) / enemyRules.healthStep); }
 function enemyHealthForTime(time = battleTime) {
-  const stage = enemyStage(time);
-  return stage === 0 ? 1 : Math.ceil(1 + 1.7 * stage + 1.6 * stage * stage + 0.12 * stage * stage * stage);
+  const t = Math.max(0, time);
+  if (t < 12) return 1;
+  const tier = Math.max(0, Math.min(11, typeof bossDefeated === "number" ? bossDefeated : 0));
+  return Math.round(3 + tier * 14 + Math.min(80, (t - 12) * .07));
 }
 function enemyHealthLogForTime() {
   return progressionEnemyHealthLog(battleTime);
@@ -750,10 +755,12 @@ function enemySpeedForTime() {
   return enemyRules.speed + 235 * (1 - Math.exp(-battleTime / 300)) + Math.sqrt(battleTime) * 1.8;
 }
 function applyEnemyHit(enemy, bullet) {
+  bullet = absorbEliteEscortShield(enemy, bullet);
+  if (!bullet) return;
   const before = enemy.hp;
   if (enemy.healthLog !== undefined) {
     const damageLog = bullet.damageLog ?? Math.log(bullet.damage ?? weapon.damage);
-    const protection = bullet.source === "ultimate" ? undefined : enemy.fireProtection;
+    const protection = bullet.source === "ultimate" ? undefined : fighterHitProtection(enemy, bullet);
     enemy.hp = Math.max(0, enemy.hp - progressionHitFraction(enemy, damageLog, protection));
     if (enemy.hp < 1e-12) enemy.hp = 0;
   } else {
@@ -775,6 +782,7 @@ function defeatEnemy(index) {
   onAceDefeated(enemy);
   createExplosion(enemy);
   enemies.splice(index, 1);
+  onEliteEnemyDefeated(enemy);
   score += enemy.points ?? enemyRules.points;
   kills++;
   registerMomentumKill();
@@ -793,7 +801,7 @@ function spawnEnemy(kind = chooseEnemyKind()) {
   const width = Math.min(100, player.width * 0.65) * type.width;
   const lanes = [0.5, 0.22, 0.78, 0.36, 0.64];
   const lane = lanes[enemySpawnCount % lanes.length];
-  const jitter = enemySpawnCount === 0 ? 0 : (Math.random() - 0.5) * 24;
+  const jitter = enemySpawnCount === 0 ? 0 : (combatRandom() - 0.5) * 24;
   const waveAmplitude = kind === "scout" && enemySpawnCount > 0
     ? Math.min(38, (flightBounds.bottom - flightBounds.top) * 0.13) : 0;
   const y = clamp(flightBounds.top + (flightBounds.bottom - flightBounds.top) * lane + jitter,
@@ -801,16 +809,18 @@ function spawnEnemy(kind = chooseEnemyKind()) {
   const x = viewport.width + width / 2 + 4;
   const healthLog = enemyHealthLogForTime() + Math.log(type.health);
   // 第一架突击机居中直飞，方便新手体验命中；后续同类开始波浪飞行。
-  enemies.push({ kind, x, previousX: x, y, previousY: y, baseY: y, waveAmplitude, age: 0,
+  const enemy = { kind, x, previousX: x, y, previousY: y, baseY: y, waveAmplitude, age: 0,
     width, height: width * type.height, hp: 1, maxHp: 1, displayHp: 1, healthLog, hitFlash: 0,
     fireProtection: enemyProtectionAtBirth(kind),
-    points: type.points, speed: enemySpeedForTime() * type.speed * (0.9 + Math.random() * 0.2),
-    gunPhase: "entry", gunTime: 0, gunShots: 0, holdX: viewport.width * (0.72 + lane * 0.1) });
+    points: type.points, speed: enemySpeedForTime() * type.speed * (0.9 + combatRandom() * 0.2),
+    gunPhase: "entry", gunTime: 0, gunShots: 0, holdX: viewport.width * (0.72 + lane * 0.1) };
+  enemies.push(enemy);
+  beginEliteEnemy(enemy);
   enemyIntroduced.add(kind);
   enemySpawnCount++;
 }
 function createExplosion(enemy, points = enemy.points ?? enemyRules.points) {
-  gameAudio.explode(points >= 2000);
+  gameAudio.explode(points >= 2000, enemy.x, enemy.y);
   recordCombatDestruction(enemy, points >= 2000);
   explosions.push({ x: enemy.x, y: enemy.y, age: 0, points,
     duration: reducedMotion.matches ? 0.2 : 0.55,
@@ -827,11 +837,14 @@ function updateEncounter(seconds) {
   battleTime += seconds;
   updateJourneyScene(seconds);
   updateDifficultyDisplay();
-  updateAceEncounter(seconds);
-  updateBattlefieldEvents(seconds);
-  updateFormations(seconds);
-  const scene = journeyState.scene;
-  if (scene && seconds > 0) updateJourneyEncounter(scene, scene.previousElapsed);
+  const waves = sortieAllowsWaves();
+  if (waves) {
+    updateAceEncounter(seconds);
+    updateBattlefieldEvents(seconds);
+    updateFormations(seconds);
+    const scene = journeyState.scene;
+    if (scene && seconds > 0) updateJourneyEncounter(scene, scene.previousElapsed);
+  }
   updateEnemyProjectiles(seconds);
   for (let index = explosions.length - 1; index >= 0; index--) {
     explosions[index].age += seconds;
@@ -845,11 +858,13 @@ function updateEncounter(seconds) {
     const displayed = enemy.displayHp ?? enemy.hp;
     enemy.displayHp = reducedMotion.matches ? enemy.hp : displayed + (enemy.hp - displayed) * (1 - Math.exp(-seconds * 14));
   }
-  if (!bossBlocksWaves() && !formationsBlockWaves() && !battlefieldEventBlocksWaves()
+  if (waves) refreshEliteEscortShields(seconds);
+  if (waves && !bossBlocksWaves() && !formationsBlockWaves() && !battlefieldEventBlocksWaves()
     && !aceBlocksWaves() && !journeyBlocksWaves()) {
     enemyCooldown -= seconds;
     if (enemyCooldown <= 0.00000001) {
-      if (enemies.length < enemyRules.maxOnScreen) spawnEnemy();
+      const reserve = Number(enemies.some(enemy => enemy.kind === "splitter"));
+      if (enemies.length < enemyRules.maxOnScreen - reserve) spawnEnemy(eliteWaveKind() ?? undefined);
       enemyCooldown += enemyIntervalForTime();
     }
   }
@@ -878,11 +893,13 @@ function updatePowerups(seconds) {
     orb.x -= powerupRules.speed * seconds;
     if (orb.x + orb.radius < 0) powerups.splice(index, 1);
   }
-  powerupCooldown -= seconds;
-  if (powerupCooldown <= 0.00000001) {
-    const limit = powerupRules.maxOnScreen - (journeyReservesPickup() ? 1 : 0);
-    if (powerups.length < limit) spawnPowerup();
-    powerupCooldown += powerupRules.interval;
+  if (sortieAllowsPickups()) {
+    powerupCooldown -= seconds;
+    if (powerupCooldown <= 0.00000001) {
+      const limit = powerupRules.maxOnScreen - (journeyReservesPickup() ? 1 : 0);
+      if (powerups.length < limit) spawnPowerup();
+      powerupCooldown += powerupRules.interval;
+    }
   }
   resolveProjectileHits();
   for (let index = bullets.length - 1; index >= 0; index--) {
@@ -907,6 +924,11 @@ function resolveProjectileHits() {
         const time = projectileOrbEntry(bullet, orb);
         if (Number.isFinite(time) && (!hit || time < hit.time)) hit = { kind: "orb", target: orb, time };
       }
+      for (const mine of eliteDirector.mines) {
+        if (bullet.hitTargets.has(mine)) continue;
+        const time = projectileOrbEntry(bullet, mine);
+        if (Number.isFinite(time) && (!hit || time < hit.time)) hit = { kind: "mine", target: mine, time };
+      }
       for (const target of activeBosses()) {
         if (bullet.hitTargets.has(target) || !bossCanTakeDamage(target)) continue;
         const entry = projectileAlienBossHit(bullet, target);
@@ -921,15 +943,21 @@ function resolveProjectileHits() {
       bullet.hitTargets.add(hit.target);
       if (hit.kind === "orb") {
         powerups.splice(powerups.indexOf(hit.target), 1); applyPowerup(hit.target.type);
-      } else if (hit.kind === "boss") applyBossHit(bullet, hit.target);
+      } else if (hit.kind === "mine") {
+        defuseEliteMine(hit.target, bullet);
+      } else if (hit.kind === "boss") {
+        applyBossHit(bullet, hit.target);
+        onFighterProjectileImpact(bullet, hit.target);
+      }
       else if (hit.kind === "object") hitBattlefieldObject(hit.target, bullet);
       else {
         applyEnemyHit(hit.target, bullet);
         if (hit.target.hp === 0) defeatEnemy(enemies.indexOf(hit.target), bullet);
+        onFighterProjectileImpact(bullet, hit.target);
       }
       movementHint.hidden = true;
       if (!isBattleActive() || bullets[bulletIndex] !== bullet) return;
-      if (hit.kind === "orb" || hit.kind === "object" || !(bullet.piercesLeft > 0)) {
+      if (hit.kind === "orb" || hit.kind === "object" || hit.kind === "mine" || !(bullet.piercesLeft > 0)) {
         bullets.splice(bulletIndex, 1); consumed = true;
       } else bullet.piercesLeft--;
     }
@@ -971,18 +999,23 @@ function enemyTouchesPlayer(enemy) {
   const along = length ? clamp(-(x0 * dx + y0 * dy) / length, 0, 1) : 0;
   return Math.hypot(x0 + dx * along, y0 + dy * along) <= 1;
 }
-function damagePlayer(message) {
+function damagePlayer(message, origin = null) {
   // 小怪碰撞与 Boss 弹幕共享受伤保护，避免同帧连续扣命。
   if (!isBattleActive() || bossHitGrace > 0 || shieldIsActive()) return false;
   lastDamageMessage = message;
   gameAudio.hurt?.();
-  player.lives = Math.max(0, player.lives - 1);
+  const lost = sortieDamageTaken();
+  player.lives = Math.max(0, player.lives - lost);
+  if (lost) onEvolutionDamaged(origin);
   player.hitFlash = 0.35;
   pulseCombatLight(player.x, player.y, player.width * 1.7, "#ff6984", "hit");
   bossHitGrace = bossRules.grace;
   movementHint.hidden = true;
   updateLifeDisplay();
-  statusMessage.textContent = tr(message + "，剩余 " + player.lives + " 点生命。", message + ". Lives remaining: " + player.lives + ".");
+  if (typeof refreshSortieHud === "function") refreshSortieHud();
+  statusMessage.textContent = !lost
+    ? tr(message + "。机体承受了冲击，未损失生命。", message + ". The hull absorbed the hit.")
+    : tr(message + "，剩余 " + player.lives + " 点生命。", message + ". Lives remaining: " + player.lives + ".");
   if (!player.lives) endGame();
   return true;
 }
@@ -996,7 +1029,7 @@ function updatePlayerDamage(seconds) {
       createExplosion(enemy, 0);
       damagePlayer(enemy.scoutIntercept?.start !== undefined
         ? tr("被突击机拦截 · 看见橙色航线后换高度", "Intercepted by a scout · Change altitude when the orange route appears")
-        : tr("撞到敌机", "Crashed into an enemy"));
+        : tr("撞到敌机", "Crashed into an enemy"), enemy);
       if (state !== "battle") break;
     } else if (enemy.x + enemy.width / 2 < 0) {
       // 安全飞过玩家的敌机继续向左飞，离屏再清理，不扣血也不计分。
@@ -1007,11 +1040,20 @@ function updatePlayerDamage(seconds) {
 function updateResultCopy(won) {
   const title = document.querySelector("#game-over-title");
   const intro = gameOverScreen.querySelector(".result-intro");
-  title.textContent = won ? tr("异形战役通关", "Campaign Cleared") : tr("游戏结束", "Game Over");
-  intro.textContent = won ? tr("群渊合生体已击破。", "The Abyssal Confluence has fallen.")
+  const mode = sortieMode();
+  const victory = {
+    campaign: tr("异形战役通关", "Campaign Cleared"),
+    rush: tr("首领连战通关", "Boss Rush Cleared"),
+    practice: tr("练习完成", "Practice Complete"),
+    daily: tr("每日挑战完成", "Daily Challenge Complete")
+  };
+  title.textContent = won ? victory[mode] : tr("游戏结束", "Game Over");
+  intro.textContent = won ? (mode === "campaign" || mode === "rush" ? tr("群渊合生体已击破。", "The Abyssal Confluence has fallen.")
+    : tr("目标已击破。", "Target defeated."))
     : (lastDamageMessage || tr("调整航线，再次突围。", "Plot a new course and try again."));
 }
 function endGame(won = false) {
+  completeSortie({ won, died: !won && player.lives === 0 });
   clearPause();
   state = "over";
   battleScreen.hidden = true;
@@ -1044,14 +1086,20 @@ function endGame(won = false) {
   finalKills.textContent = String(kills);
   document.querySelector("#final-combo").textContent = String(momentum.best);
   gameOverScreen.hidden = false;
+  if (typeof refreshSortieResult === "function") refreshSortieResult();
+  const epilogue = won && sortieMode() === "campaign" && typeof startCampaignVictory === "function"
+    && startCampaignVictory(sortieStats?.result);
   statusMessage.textContent = won ? tr(`异形战役通关。本局得分 ${score}。`, `Campaign cleared. Score: ${score}.`)
     : tr(`游戏结束。本局得分 ${score}，击毁 ${kills} 架敌机。`, `Game over. Score: ${score}. Enemies destroyed: ${kills}.`);
-  restartButton.focus({ preventScroll: true });
+  if (!epilogue) restartButton.focus({ preventScroll: true });
 }
 function drawEnemies() {
   for (const enemy of enemies) {
     if (enemy.kind === "transport") drawSupplyTransport(enemy);
-    else drawEnemyHull(enemy);
+    else if (!drawEliteHull(enemy)) {
+      drawEnemyHull(enemy);
+      drawEliteEscortShield(enemy);
+    }
     context.save();
     context.translate(enemy.x, enemy.y);
     const w = enemy.width, h = enemy.height;
@@ -1179,6 +1227,10 @@ function drawFrame(time) {
   const realSeconds = previousTime ? Math.min((time - previousTime) / 1000, 0.05) : 0;
   previousTime = time;
   syncGameAudio();
+  if (typeof drawCampaignVictoryFrame === "function" && drawCampaignVictoryFrame(realSeconds)) {
+    window.requestAnimationFrame(drawFrame);
+    return;
+  }
   const cinematic = activeBossPresentation();
   if (cinematic) {
     const seconds = bossPresentationFrameSeconds(cinematic, realSeconds);
@@ -1196,6 +1248,7 @@ function drawFrame(time) {
     updateShield(seconds);
     updateCannonLink(seconds);
     updatePlayer(seconds);
+    updateFighterCombat(seconds);
     updateShipVisuals(seconds);
     updateGravityTide(seconds);
     updateShooting(seconds);
@@ -1206,6 +1259,7 @@ function drawFrame(time) {
     updatePowerups(seconds);
     updateUltimate(seconds);
     resolveBattlefieldCover();
+    updateEliteMines(seconds);
     updatePlayerDamage(seconds);
     updateEnemyProjectileDamage();
     updateBossDamage();
@@ -1226,6 +1280,7 @@ function drawFrame(time) {
     drawGravityTide();
     drawFormationSignals();
     drawBattlefieldObjects();
+    drawEliteMines();
     if (presentation?.motion) drawBossPresentationMotion(context, presentation);
     else drawEnemies();
     drawAceThreats(context);
@@ -1234,8 +1289,10 @@ function drawFrame(time) {
     if (!isBossDeathPlaying()) drawPowerups();
     drawBullets();
     drawOverdrive();
+    drawJourneyCatapult();
     drawPlayer();
     drawEvolutionWeapons(context);
+    drawFighterCombat(context);
     drawEvolution();
     drawShield();
     drawMuzzleFlash();
@@ -1249,6 +1306,7 @@ function drawFrame(time) {
     drawBossPresentationOverlay(context);
   }
   drawEvolutionChoicePreviews(time);
+  if (typeof drawFlightRadio === "function") drawFlightRadio(realSeconds);
   window.requestAnimationFrame(drawFrame);
 }
 function updateGameCanvasLabel() {
@@ -1275,6 +1333,9 @@ function refreshGameLanguage() {
   updateEvolutionDisplay();
   refreshEvolutionChoice();
   refreshPauseCopy();
+  if (typeof refreshFlightGuideNavigation === "function") refreshFlightGuideNavigation();
+  if (typeof refreshSortieUI === "function") refreshSortieUI();
+  if (typeof refreshCampaignVictory === "function") refreshCampaignVictory();
   if (state === "menu") statusMessage.textContent = tr("开始画面已就绪。", "Ready to start.");
 }
 updateLifeDisplay();

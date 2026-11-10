@@ -147,7 +147,8 @@ function beginAlienRecovery(target) {
 function alienRecoveryDuration(target) {
   const pressure = target.alienAttack === "pressure";
   const recovery = bossRules.recovery + (pressure ? .28 : 0);
-  return Math.max(.42, recovery - target.type * .029 - (target.enraged && !pressure ? .16 : 0));
+  const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
+  return Math.max(.35, Math.max(.42, recovery - target.type * .029 - (target.enraged && !pressure ? .16 : 0)) / tempo);
 }
 
 function alienDamageExplanation(hit, finalStage) {

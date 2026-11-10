@@ -18,6 +18,7 @@ function toggleCombatMotion() {
   reduceCombatMotion = !reduceCombatMotion;
   try { window.localStorage.setItem("star-breaker-reduce-combat-motion", String(reduceCombatMotion)); }
   catch { /* 当前会话仍有效。 */ }
+  if (typeof syncSortieEligibility === "function") syncSortieEligibility();
 }
 
 function pulseCombatLight(x, y, radius, color, kind) {
@@ -127,6 +128,7 @@ function cycleShakePreference() {
   shakePreference = choices[(choices.indexOf(shakePreference) + 1) % choices.length];
   try { window.localStorage.setItem("star-breaker-shake", shakePreference); } catch { /* 不影响本次选择。 */ }
   updateShakeButton();
+  if (typeof syncSortieEligibility === "function") syncSortieEligibility();
 }
 if (shakeButton) shakeButton.addEventListener("click", () => {
   cycleShakePreference();
@@ -194,7 +196,7 @@ function recordCombatImpact(target, bullet, bossHit = false) {
   const ultimateHit = bullet.source === "ultimate";
   if (!ultimateHit && (target.fxNextImpact ?? -1) > combatEffects.clock) return;
   target.fxNextImpact = combatEffects.clock + 0.07;
-  gameAudio.hit?.(bossHit, bullet.source);
+  gameAudio.hit?.(bossHit, bullet.source, target.x, target.y);
   const x = target.x - (target.width || 80) * 0.31;
   const y = Number.isFinite(bullet.y) ? clamp(bullet.y, target.y - target.height * 0.3, target.y + target.height * 0.3) : target.y;
   pushCombatEffect(combatEffects.impacts, { x, y, age: 0, duration: ultimateHit ? 0.3 : 0.13,
@@ -260,7 +262,7 @@ function updateCombatEffects(seconds) {
       const offset = final ? 0 : (wreck.stage % 2 ? 1 : -1);
       const x = wreck.x + offset * wreck.width * 0.22, y = wreck.y + offset * wreck.height * 0.23;
       combatBurst(x, y, final ? (wreck.isBoss ? 2.4 : 1.4) : 0.65, "#ffb56a", final);
-      if (wreck.isBoss && !reducedMotion.matches) gameAudio.explode(final);
+      if (wreck.isBoss && !reducedMotion.matches) gameAudio.explode(final, x, y);
       if (final && wreck.isBoss) addCombatShake(6);
       wreck.stage++;
     }

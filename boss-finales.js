@@ -82,7 +82,8 @@ function finaleHazard(target, type, values) {
   f.warningBeats ??= Object.create(null);
   const first = (f.warningBeats[type] ??= f.beat) === f.beat;
   const broad = ["tide", "vent", "pincer", "well"].includes(type);
-  const warning = Math.max(broad ? 1.64 : 1.4, (values.warning ?? 1.03) + .4) + (first ? .4 : 0);
+  const bonus = typeof sortieWarningBonus === "function" ? sortieWarningBonus() : 0;
+  const warning = Math.max(broad ? 1.64 : 1.4, (values.warning ?? 1.03) + .4) + (first ? .4 : 0) + bonus;
   const hazard = { type, age: 0, duration: .36, color: target.color, ...values, warning };
   if (f.hazards.length < 12) f.hazards.push(hazard);
   return hazard;
@@ -267,7 +268,7 @@ function updateBossFinale(target, seconds) {
     && Math.hypot(player.x - f.gate.x, player.y - f.gate.y) <= f.gate.radius) {
     f.gate.cut = true;
     f.openUntil = f.age + 2.0;
-    gameAudio.bossAttack("hatch");
+    gameAudio.bossAttack("hatch", f.gate.x, f.gate.y);
     combatBurst(f.gate.x, f.gate.y, .62, "#a5f4ff");
   }
   if (f.gate && f.age > f.gate.until) f.gate = null;
@@ -285,7 +286,8 @@ function updateBossFinale(target, seconds) {
     }
     if (crossed) {
       if (hazard.purge) clearBossFinaleAttacks();
-      gameAudio.bossAttack(hazard.type === "tide" ? "surge" : hazard.type === "well" ? "burst" : "beam");
+      gameAudio.bossAttack(hazard.type === "tide" ? "surge" : hazard.type === "well" ? "burst" : "beam",
+        target.x, target.y);
       if (hazard.purge || hazard.type === "well") addCombatShake(hazard.purge ? 6.7 : 4.5);
     }
   }
@@ -300,7 +302,7 @@ function updateBossFinale(target, seconds) {
     (latest, hazard) => Math.max(latest, hazard.warning + hazard.duration - hazard.age), 0);
   const cadence = bossFinaleStages[target.type].interval - (target.hp < .4 ? .24 : 0);
   f.next = Math.max(f.age + cadence, f.age + lastImpact + .12, f.openUntil + .12);
-  gameAudio.bossAttack("coil");
+  gameAudio.bossAttack("coil", target.x, target.y);
 }
 
 function resizeBossFinale(target) {
@@ -409,7 +411,7 @@ function bossFinaleDamageMultiplier(target, shot) {
     if (!node.hp) {
       const g = finaleNodeGeometry(target, node);
       combatBurst(g.x, g.y, .82, target.color, true);
-      gameAudio.bossAttack("burst");
+      gameAudio.bossAttack("burst", g.x, g.y);
       if (mode === "synapse") f.activeNode = f.nodes.find(part => part.hp > 0)?.index ?? -1;
     }
     return .18;

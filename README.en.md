@@ -1,39 +1,31 @@
 # Star Breaker · 星际突围
 
-Pick Crimson, Azure, or Auric, then fly through five sectors and defeat ten alien bosses and their final fusion. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. The **v20** test build brings textured 3D bosses, sector lighting, slow-motion ruptures, and a phase meter to the campaign.
+Pick a fighter, cross five sectors, and survive eleven alien boss finales. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. **v21** is the combined Round 5–6 test build. It adds persistent campaign refits, Boss Rush, single-boss practice, and a seeded daily challenge.
 
-[Play in your browser](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Watch the previous version's trailer](media/trailer.mp4) · [中文说明](README.md)
+[Public browser demo](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Previous trailer](media/trailer.mp4) · [中文说明](README.md)
 
-[Fullscreen bug fix comparison video](media/fullscreen-compare.mp4) · [Development write-up in Chinese](promotion/全屏敌机消失复盘.md)
+For v21 playtesting, use the standalone test ZIP. The public demos may be on a different version.
 
-![Star Breaker gameplay](media/gameplay.gif)
-
-- **Choose a fighter before each sortie.** Crimson fires a translucent piercing beam that leaves enemy shots visible. Azure shoots fastest and launches five homing ion shots. Auric spreads three lanes with a three-wave screen-wide barrage.
-- **Pause with Esc.** Resume, change settings, restart, or return to the hangar. Restarting or leaving a run asks for confirmation. The combat HUD recedes during evolution selection and on the results screen.
-- **Break coordinated attacks.** Gunships aim from different heights, while the ace fires, changes flanks and locks on again. The final fusion attacks along both axes.
-- **Fight eleven alien bosses.** Each boss has an entrance, a shell rupture, a finale transformation, and a defeat sequence. Read the attack warnings, then break the Marrow Reliquary’s anchors, pick out the real mirror image, or cut the Neural Crown’s nodes in order.
-- **Read a hazard by its shape.** Curling surf, bone cages, strands of silk, and torn seams telegraph different attacks. Move into the open lane before the Broodmother's wave reaches you.
-- **Read the shell and core meters.** The top-center meter marks the break point and switches to the finale. Circular shots, reflective diamonds, capsules, beams, and rings have distinct damage boundaries.
-- **Grow your life capacity.** Green orbs heal a life. When you're already full, they add one to both your current life and your capacity.
-- **Upgrade your main gun.** Shoot power-up orbs to fire faster, add firing lanes, or launch harder-hitting rounds. Later orbs can grant several levels at once. Each boost is smaller and enemies have more endurance as the campaign advances. Green orbs are rarer, and only bosses 3, 6 and 9 restore a missing life.
-- **Hold off growing enemy waves.** Ordinary fighters get tougher and arrive faster as the run goes on. Sustain focused fire against late armored fighters and gunships, or clear a lane with the Crimson Beam.
-- **Evolve after boss victories.** Choose wing guns, an AI wingman, or a shield that absorbs enemy shots and fires them back.
-- **Time your shield.** A perfect block gives you three seconds to trigger a faster charge for a cannon shot you already have stored.
-- **Fly through five distinct encounters.** Follow the sunrise along a planet’s rim, shoot a yellow orb through an asteroid gap, and time your fire through a drifting wreck. A capital ship eclipses the stars as fighters leave its hangar. At the black hole, distorted starlight signals a tide that bends ordinary shots.
+- **Three fighters, three ways to aim.** Crimson builds up a piercing shot by holding altitude. Azure chains homing hits into nearby targets. Auric controls close range with a suppression field. Each ship has a different special.
+- **Evolve during a run.** Mix Wing Blades, a Falcon Wingman, and a return-fire shield. Only one branch can reach its final rank. Campaign merit buys persistent refits; practice and daily runs use fixed equipment.
+- **Use the terrain.** Break rocks to send fragments through enemy formations, take cover behind destructible wrecks, and steer against the gravity tide. Watch for mines, shield escorts, and splitters.
+- **Read the fight.** Each boss has a radio call and a playable finale. Music gains or loses layers as the fight changes. A clear shows your times and performance across the campaign.
 
 ## Quick start
 
-Use a desktop browser and keyboard. On your first visit, select **明白了** (Got it) to close the guide. Select **English** on the main menu to switch the whole game to English, then select **Start Game**. You can reopen the guide with **How to Play**. Pick your ship in the hangar. Your main gun fires automatically. A dashed line or circle marks the locked position. Watch for a second lock before choosing your next move.
+Choose **English** on the main menu. The guide opens on your first visit and can be reopened via **How to Play**. Pick a fighter and a mode. Your main gun fires automatically.
 
 | Key | Action |
 | --- | --- |
 | Arrow keys or WASD | Move and aim |
-| Shift | Switch between spread and focused fire |
-| Space | Charge and use your fighter’s stored special |
-| V | Use a stored shield charge for two seconds of protection |
+| Shift | Switch fire modes; hold and release for Wing Blades III |
+| F | Command an upgraded Falcon Wingman |
+| Space | Use your fighter's stored special |
+| V | Shield for two seconds; activate close to a projectile for a perfect block |
+| Esc | Pause |
 
-After one run, I’d love to know where you first died and which moment made you want to play again. [Share playtest feedback](https://github.com/Aura417786/StarCraft/issues/new?title=Star%20Breaker%20playtest%20feedback)
+Shoot blue orbs for fire rate, yellow for firing lanes, and red for damage. Rare green orbs restore life, or raise your life capacity if you're full. Firepower has ceilings; use the gaps in each boss's attack cycle to sustain damage.
 
-## About the project
+[Share playtest feedback](https://github.com/Aura417786/StarCraft/issues/new?title=Star%20Breaker%20playtest%20feedback) · [Fullscreen bug comparison](media/fullscreen-compare.mp4)
 
-I began with movement, autofire, and scoring, then built the game through AI-assisted development and playtesting. It uses HTML, CSS, JavaScript, Canvas 2D, and browser-synthesized audio via Web Audio. Blender-authored boss and finale meshes render with Three.js in the same Canvas scene as the rolling debris. The fighter bank poses were rendered in Blender. FluidSynth and FFmpeg produce the authored sound bank, which Web Audio mixes in real time.
+The game uses HTML, CSS, JavaScript, Canvas, Three.js, and Web Audio. Serve the folder over local HTTP for live 3D rendering. Opening `index.html` directly also works with the compatible renderer.

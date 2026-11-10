@@ -61,6 +61,8 @@ let captureDraws = false;
 const drawOperations = [];
 canvas.getContext = () => new Proxy({}, { get: (target,name) => name in target ? target[name] : (...args) => { if(captureDraws) drawOperations.push({name,args}); if(name==='createLinearGradient'||name==='createRadialGradient') return {addColorStop(){}}; }, set(target,name,value) { target[name]=value; if(captureDraws) drawOperations.push({name:'set:'+String(name),args:[value]}); return true; } });
 document.querySelector = (selector) => nodes.get(selector);
+nodes.get('#evolution-screen').querySelector = () => undefined;
+document.createElement = mockNode;
 const slots = Array.from({length:5},()=>({dataset:{}}));
 const protectionSlots = Array.from({length:2},()=>({dataset:{}}));
 document.querySelectorAll = selector => selector === ".ultimate-slot" ? slots : selector === ".shield-slot" ? protectionSlots : selector === '.evolution-card' ? evolutionCards : [];
@@ -88,7 +90,7 @@ const gameAudio={ muted:false,
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
 const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
-for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js' && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
+for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => !['audio.js', 'sortie-ui.js'].includes(file) && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox, { filename: file });
 const position = () => vm.runInContext('({ x: player.x, y: player.y })', sandbox);
 const bounds = vm.runInContext('flightBounds', sandbox);
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
@@ -335,7 +337,7 @@ check('blur and visibility pause gravity clocks and affected bullet positions to
   emit(window,'blur');step(.05);step(.05);document.hidden=true;emit(window,'focus');step(.05);
   assert.deepEqual(snapshot('({gravityTide,enemyProjectiles,battleTime,scenery:battlefieldState.clock})'),before);
 });
-check('gravity leaves the player, energy orbs, ultimate beam, Boss projectiles and hazards on their own motion rules', () => {
+check('projectile curvature leaves the ship, orbs, ultimate beam and Boss attacks to their dedicated motion rules', () => {
   gravityScene(); execute(`spawnPowerup();Object.assign(powerups[0],{x:800,y:250,previousX:800,previousY:250});
     bossProjectiles.push({x:850,y:250,previousX:850,previousY:250,vx:-180,vy:40,radius:7,age:0});
     bossHazards.push({kind:'beam',x:700,y:280,age:0,warning:1,duration:2});

@@ -7,6 +7,7 @@ const gravityTide = { phase: "idle", elapsed: 0, strength: 0, centerX: 0, center
 function gravityTideBusy() { return gravityTide.phase === "warning" || gravityTide.phase === "active"; }
 function gravityTideEligible() {
   return state === "battle" && !evolution.pending && !isBossDeathPlaying()
+    && (typeof sortieAllowsWaves !== "function" || sortieAllowsWaves())
     && battlefieldState.sector === 4 && !battlefieldState.transition && !bossBlocksWaves()
     && !formationState.active && !formationState.warning && !battlefieldEventBlocksWaves()
     && !(typeof aceBlocksWaves === "function" && aceBlocksWaves())
@@ -33,8 +34,8 @@ function startGravityWarning() {
   gravityTide.radiusX = viewport.width * 0.32;
   gravityTide.radiusY = Math.max(75, span * 0.48);
   gravityTide.phase = "warning"; gravityTide.elapsed = 0; gravityTide.strength = 0;
-  statusMessage.textContent = tr("引力潮汐预警，2.4 秒后区域内双方普通子弹将弯向引力核心。",
-    "Gravity tide warning. In 2.4 seconds, standard shots from both sides will bend toward the core.");
+  statusMessage.textContent = tr("引力潮汐预警。箭头指向引力核心，2.4 秒后战机和普通弹道将被牵引。",
+    "Gravity tide warning. Arrows point to the core. In 2.4 seconds, it pulls ships and standard shots.");
 }
 function updateGravityTide(seconds) {
   if (state !== "battle" || evolution.pending || isBossDeathPlaying()) { suspendGravityTide(); return; }
@@ -46,8 +47,9 @@ function updateGravityTide(seconds) {
   else if (gravityTide.phase === "warning" && t + 1e-9 >= gravityRules.warning) {
     // 保留完整的生效时长，长帧不会跳过预警或直接结算整次潮汐。
     gravityTide.phase = "active"; gravityTide.elapsed = 0;
-    statusMessage.textContent = tr("引力潮汐生效，双方普通弹道向紫色核心弯曲；可调整位置借势射击。",
-      "Gravity tide active. Standard shots bend toward the purple core. Reposition to use the curve.");
+    gameAudio.fieldCue?.("gravity-tide", gravityTide.centerX, gravityTide.centerY);
+    statusMessage.textContent = tr("引力潮汐生效。顺势加速，或按反方向抵消牵引。",
+      "Gravity tide active. Ride the pull or steer against it.");
   } else if (gravityTide.phase === "active") {
     gravityTide.strength = Math.max(0, Math.min(1, t / 0.55, (gravityRules.duration - t) / 0.55));
     if (t + 1e-9 >= gravityRules.duration) {
@@ -55,6 +57,17 @@ function updateGravityTide(seconds) {
       statusMessage.textContent = tr("引力潮汐平息。", "The gravity tide has subsided.");
     }
   } else if (gravityTide.phase === "rest" && t + 1e-9 >= gravityRules.cooldown && journeyGravityCanWarn()) startGravityWarning();
+}
+function gravityPlayerVector() {
+  const g = gravityTide;
+  if (g.phase !== "active" || !g.strength || !gravityTideEligible()) return { x: 0, y: 0 };
+  const dx = g.centerX - player.x, dy = g.centerY - player.y;
+  const distance = Math.hypot(dx, dy);
+  const ellipse = Math.hypot(dx / g.radiusX, dy / g.radiusY);
+  if (distance < 1 || ellipse >= 1) return { x: 0, y: 0 };
+  // Leave most of the ship's steering speed available even at peak pull.
+  const drift = Math.min(72, player.speed * .24) * g.strength * Math.sin(Math.PI * ellipse);
+  return { x: dx / distance * drift, y: dy / distance * drift };
 }
 function applyGravityTide(shot, seconds, kind = "player") {
   if (!isBattleActive() || gravityTide.phase !== "active" || !gravityTideEligible()
@@ -91,7 +104,7 @@ function resizeGravityTide(scaleX, mapY) {
 }
 function drawGravityTide() {
   if (state !== "battle" || !gravityTideBusy()) return;
-  const g = gravityTide, warning = g.phase === "warning", quiet = reducedMotion.matches;
+  const g = gravityTide, warning = g.phase === "warning", quiet = quietCombatMotion();
   const color = warning ? "#d0b2ff" : "#b7a0ff";
   context.save();
   const field = context.createRadialGradient(g.centerX, g.centerY, 0, g.centerX, g.centerY, g.radiusX);
@@ -111,13 +124,43 @@ function drawGravityTide() {
       context.quadraticCurveTo(g.centerX, g.centerY, g.centerX + g.radiusX * 0.78, y - side * g.radiusY * 0.2); context.stroke();
     }
   }
+  const arrowCount = 10;
+  for (let index = 0; index < arrowCount; index++) {
+    const angle = index * Math.PI * 2 / arrowCount;
+    const reach = index % 2 ? .77 : .52;
+    const x = g.centerX + Math.cos(angle) * g.radiusX * reach;
+    const y = g.centerY + Math.sin(angle) * g.radiusY * reach;
+    const aim = Math.atan2(g.centerY - y, g.centerX - x);
+    const length = warning ? 15 : 20 + g.strength * 5;
+    context.save();
+    context.translate(x, y); context.rotate(aim);
+    context.globalAlpha = warning ? .54 : .32 + g.strength * .33;
+    context.lineWidth = 1.5; context.beginPath();
+    context.moveTo(-length / 2, 0); context.lineTo(length / 2, 0);
+    context.lineTo(length / 2 - 5, -4); context.moveTo(length / 2, 0);
+    context.lineTo(length / 2 - 5, 4); context.stroke();
+    context.restore();
+  }
+  if (!warning && !quiet) {
+    const count = visualQuality.id === "low" ? 14 : 24;
+    context.fillStyle = "#dccaff";
+    for (let index = 0; index < count; index++) {
+      const angle = index * 2.39996;
+      const progress = (index * .471 + g.elapsed * (.23 + (index % 3) * .065)) % 1;
+      const distance = 1 - progress;
+      const x = g.centerX + Math.cos(angle) * g.radiusX * distance;
+      const y = g.centerY + Math.sin(angle) * g.radiusY * distance;
+      context.globalAlpha = .13 + Math.sin(progress * Math.PI) * .42 * g.strength;
+      context.fillRect(x, y, index % 5 === 0 ? 2.5 : 1.5, 1.5);
+    }
+  }
   context.globalAlpha = 0.6;
   const pulse = quiet ? 1 : 1 + Math.sin(g.elapsed * 3) * 0.08;
   context.beginPath(); context.ellipse(g.centerX, g.centerY, 12 * pulse, 6 * pulse, -0.35, 0, Math.PI * 2); context.stroke();
   context.globalAlpha = 0.9; context.fillStyle = "#0b1220e8";
   const seconds = Math.max(1, Math.ceil(gravityRules.warning - g.elapsed));
   const label = warning ? tr("引力潮汐预警 · " + seconds + " 秒", "Gravity tide warning · " + seconds + " s")
-    : tr("引力潮汐 · 双方普通弹道弯曲", "Gravity tide · Standard shots bend");
+    : tr("引力潮汐 · 战机与弹道向核心偏移", "Gravity tide · Ships and shots pulled inward");
   const y = Math.min(150, viewport.height * 0.22);
   context.beginPath(); context.roundRect(viewport.width / 2 - 154, y - 16, 308, 31, 6); context.fill();
   context.fillStyle = color; context.textAlign = "center"; context.font = "12px Microsoft YaHei,sans-serif";

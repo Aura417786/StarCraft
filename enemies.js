@@ -25,10 +25,11 @@ const enemyIntroduced = new Set();
 
 function enemyIntervalForTime() {
   const minimum = enemyCombatRules.minSpawnInterval;
-  return minimum + (enemyRules.interval - minimum) * Math.exp(-battleTime / enemyCombatRules.spawnRampSeconds);
+  const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
+  return (minimum + (enemyRules.interval - minimum) * Math.exp(-battleTime / enemyCombatRules.spawnRampSeconds)) / tempo;
 }
 
-function chooseEnemyKind(roll = Math.random()) {
+function chooseEnemyKind(roll = typeof combatRandom === "function" ? combatRandom() : Math.random()) {
   const gunnerAvailable = battleTime >= enemyCombatRules.gunnerArrival
     && enemies.filter(enemy => enemy.kind === "gunner").length < enemyCombatRules.maxGunners;
   if (gunnerAvailable && !enemyIntroduced.has("gunner")) return "gunner";
@@ -39,6 +40,7 @@ function chooseEnemyKind(roll = Math.random()) {
   return roll < .43 ? "scout" : roll < gunnerCutoff ? "armored" : gunnerAvailable ? "gunner" : "scout";
 }
 function resetEnemyCombat(resetIntroductions = true) {
+  if (typeof resetEliteEncounters === "function") resetEliteEncounters(resetIntroductions);
   if (typeof resetFormations === "function") resetFormations(resetIntroductions);
   enemyProjectiles.length = 0;
   for (const enemy of enemies) {
@@ -61,6 +63,7 @@ function beginEnemyAim(enemy, relay = false) {
   if (!enemyCanLockOn(enemyGunMuzzle(enemy))) { enemy.gunPhase = "retreat"; return; }
   enemy.gunPhase = "warning";
   enemy.gunTime = 0;
+  enemy.gunWarning = enemyCombatRules.warning + (typeof sortieWarningBonus === "function" ? sortieWarningBonus() * .55 : 0);
   enemy.aimX = player.x;
   enemy.aimY = player.y;
   enemy.gunAimKind = "direct";
@@ -110,14 +113,15 @@ function fireEnemyGun(enemy) {
   if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) return;
   const muzzle = enemyGunMuzzle(enemy);
   const heading = Math.atan2(enemy.aimY - muzzle.y, enemy.aimX - muzzle.x);
-  const speed = Math.min(625, 335 + battleTime * .42 + (enemy.gunAimKind === "relay" ? 75 : 0));
+  const speed = Math.min(625, 335 + battleTime * .42 + (enemy.gunAimKind === "relay" ? 75 : 0))
+    * (typeof sortieRules === "function" ? sortieRules().projectileSpeed : 1);
   for (const spread of enemyGunAngles(enemy)) {
     if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) break;
     enemyProjectiles.push({ x: muzzle.x, y: muzzle.y, previousX: muzzle.x, previousY: muzzle.y,
       vx: Math.cos(heading + spread) * speed, vy: Math.sin(heading + spread) * speed,
       radius: 6, age: 0, aimKind: enemy.gunAimKind, tint: gunnerAimTint(enemy.gunAimKind) });
   }
-  gameAudio.bossAttack(enemy.gunAimKind === "relay" ? "burst" : "volley");
+  gameAudio.bossAttack(enemy.gunAimKind === "relay" ? "burst" : "volley", enemy.x, enemy.y, false);
   queueGunnerRelay(enemy);
 }
 function scoutInterceptRoute(enemy) {
@@ -141,7 +145,7 @@ function updateScoutIntercept(enemy, seconds) {
     enemy.scoutIntercepted = true;
     enemy.scoutIntercept = { time: 0, start: null,
       endX: landingX / viewport.width, endY: clamp((aimY - flightBounds.top) / span, 0, 1) };
-    gameAudio.bossAttack("coil");
+    gameAudio.bossAttack("coil", enemy.x, enemy.y, false);
     return false;
   }
   if (!cue.start && !gunnerTacticsOpen()) {
@@ -157,7 +161,7 @@ function updateScoutIntercept(enemy, seconds) {
   const span = flightBounds.bottom - flightBounds.top;
   if (!cue.start) {
     cue.start = { x: enemy.x / viewport.width, y: clamp((enemy.y - flightBounds.top) / Math.max(1, span), 0, 1) };
-    gameAudio.bossAttack("volley");
+    gameAudio.bossAttack("volley", enemy.x, enemy.y, false);
   }
   const progress = clamp((cue.time - scoutTactics.windup) / scoutTactics.dive, 0, 1);
   const ease = progress * progress * (3 - 2 * progress);
@@ -177,6 +181,7 @@ function updateEnemyMovement(enemy, seconds) {
   if (updateAceMovement(enemy, seconds)) return;
   if (!enemy.kind || enemy.summoned) { enemy.x -= enemy.speed * seconds; return; }
   if (typeof formationControlsEnemy === "function" && formationControlsEnemy(enemy, seconds)) return;
+  if (typeof updateEliteEnemy === "function" && updateEliteEnemy(enemy, seconds)) return;
   enemy.age = (enemy.age ?? 0) + seconds;
   if (enemy.kind === "scout") {
     if (updateScoutIntercept(enemy, seconds)) return;
@@ -192,14 +197,15 @@ function updateEnemyMovement(enemy, seconds) {
       if (enemy.gunTime + 1e-9 >= gunnerTactics.relayDelay && enemy.x <= enemy.holdX)
         beginEnemyAim(enemy, gunnerTacticsOpen());
     } else if (enemy.gunPhase === "warning") {
-      if (enemy.gunTime + 1e-9 >= enemyCombatRules.warning) {
+      if (enemy.gunTime + 1e-9 >= (enemy.gunWarning ?? enemyCombatRules.warning)) {
         fireEnemyGun(enemy);
         enemy.gunShots++;
         enemy.gunPhase = "recover";
         enemy.gunTime = 0;
       }
     } else if (enemy.gunPhase === "recover") {
-      if (enemy.gunTime + 1e-9 >= enemyCombatRules.recovery) {
+      const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
+      if (enemy.gunTime + 1e-9 >= enemyCombatRules.recovery / tempo) {
         if (enemy.gunShots >= enemyCombatRules.shotsPerGunner) enemy.gunPhase = "retreat";
         else beginEnemyAim(enemy);
       }
@@ -232,7 +238,7 @@ function updateEnemyProjectileDamage() {
   const message = contact.source === "ace" ? tr("被王牌炮火命中 · 第二次锁定后再变向", "Hit by the ace · Turn after the second lock")
     : contact.aimKind === "relay" ? tr("被接力炮火命中 · 躲开第二条橙色射线", "Hit by relay fire · Leave the second orange line")
     : tr("被炮击机命中", "Hit by a gunship");
-  damagePlayer(message);
+  damagePlayer(message, contact);
 }
 function drawEnemyThreats() {
   context.save();
@@ -270,7 +276,8 @@ function drawEnemyThreats() {
     const heading = Math.atan2(enemy.aimY - muzzle.y, enemy.aimX - muzzle.x);
     const tint = gunnerAimTint(enemy.gunAimKind);
     context.strokeStyle = tint || "#ff9bc9";
-    context.globalAlpha = 0.45 + Math.min(1, enemy.gunTime / enemyCombatRules.warning) * 0.35;
+    const warningProgress = Math.min(1, enemy.gunTime / (enemy.gunWarning ?? enemyCombatRules.warning));
+    context.globalAlpha = 0.45 + warningProgress * 0.35;
     context.lineWidth = tint ? 2 : 1.5;
     context.setLineDash(enemy.gunAimKind === "relay" ? [14, 4, 3, 4] : [7, 7]);
     context.beginPath();
@@ -283,7 +290,7 @@ function drawEnemyThreats() {
     context.setLineDash([]);
     context.beginPath(); context.arc(enemy.aimX, enemy.aimY, 13, 0, Math.PI * 2); context.stroke();
     context.fillStyle = tint || "#ffd7e7";
-    context.beginPath(); context.arc(muzzle.x, muzzle.y, 4 + 4 * Math.min(1, enemy.gunTime / enemyCombatRules.warning), 0, Math.PI * 2); context.fill();
+    context.beginPath(); context.arc(muzzle.x, muzzle.y, 4 + 4 * warningProgress, 0, Math.PI * 2); context.fill();
   }
   context.globalAlpha = 1;
   for (const shot of enemyProjectiles) {

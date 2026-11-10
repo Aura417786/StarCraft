@@ -61,6 +61,8 @@ let captureDraws = false;
 const drawOperations = [];
 canvas.getContext = () => new Proxy({}, { get: (target,name) => name in target ? target[name] : (...args) => { if(captureDraws) drawOperations.push({name,args}); if(name==='createLinearGradient'||name==='createRadialGradient') return {addColorStop(){}}; }, set(target,name,value) { target[name]=value; if(captureDraws) drawOperations.push({name:'set:'+String(name),args:[value]}); return true; } });
 document.querySelector = (selector) => nodes.get(selector);
+nodes.get('#evolution-screen').querySelector = () => undefined;
+document.createElement = tag => tag === 'canvas' ? { getContext: () => canvas.getContext() } : mockNode();
 const slots = Array.from({length:5},()=>({dataset:{}}));
 const protectionSlots = Array.from({length:2},()=>({dataset:{}}));
 document.querySelectorAll = selector => selector === ".ultimate-slot" ? slots : selector === ".shield-slot" ? protectionSlots : selector === '.evolution-card' ? evolutionCards : [];
@@ -88,7 +90,7 @@ const gameAudio={ muted:false,
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
 const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
-for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js' && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
+for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => !['audio.js', 'sortie-ui.js'].includes(file) && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox, { filename: file });
 const position = () => vm.runInContext('({ x: player.x, y: player.y })', sandbox);
 const bounds = vm.runInContext('flightBounds', sandbox);
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
@@ -349,12 +351,12 @@ check('ordinary shot used to explode a cell cannot also strike behind it', () =>
 });
 check('wreck absorbs swept enemy shots and loses durability per impact', () => {
   isolated();setObject();execute(`enemyProjectiles.push({x:100,previousX:900,y:350,previousY:350,radius:6});resolveBattlefieldCover();`);
-  assert.equal(execute('enemyProjectiles.length'),0);near(execute('prop.hp'),.915);
+  assert.equal(execute('enemyProjectiles.length'),0);near(execute('prop.hp'),.895);
 });
 check('enemy shot hits nearest cover first regardless of array order', () => {
   isolated();setObject('wreck',400);execute('var farWreck=prop;');setObject('wreck',700);
   execute('enemyProjectiles.push({x:100,previousX:1000,y:350,previousY:350,radius:6});resolveBattlefieldCover();');
-  near(execute('prop.hp'),.915);near(execute('farWreck.hp'),1);
+  near(execute('prop.hp'),.895);near(execute('farWreck.hp'),1);
 });
 check('cover behind aircraft cannot erase a shot that has already reached the aircraft', () => {
   isolated();setObject('wreck',100);execute(`player.x=player.previousX=400;player.y=player.previousY=350;
