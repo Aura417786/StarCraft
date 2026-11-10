@@ -47,8 +47,14 @@ let hadalWaterImage;
 let hadalWaterDevice;
 let hadalWaterUnavailable = false;
 
+function canUseHadalWater() {
+  return typeof visualQuality !== "undefined" && visualQuality.modelScale > 0
+    && typeof location !== "undefined" && /^https?:$/.test(location.protocol);
+}
+
 function hadalWaterSetup() {
-  if (hadalWaterDevice || hadalWaterUnavailable) return hadalWaterDevice;
+  if (!canUseHadalWater() || hadalWaterUnavailable) return null;
+  if (hadalWaterDevice) return hadalWaterDevice;
   const canvas = document.createElement("canvas");
   canvas.width = 256;
   canvas.height = 512;
@@ -98,17 +104,16 @@ function hadalWaterSetup() {
 }
 
 function preloadHadalSurface() {
-  if (hadalWaterImage || typeof Image !== "function") return;
+  if (!canUseHadalWater() || hadalWaterImage || typeof Image !== "function") return;
   hadalWaterImage = new Image();
   hadalWaterImage.onload = () => {
-    if (typeof visualQuality !== "undefined" && visualQuality.modelScale > 0)
-      window.requestIdleCallback?.(hadalWaterSetup, { timeout: 1500 });
+    window.requestIdleCallback?.(hadalWaterSetup, { timeout: 1500 });
   };
   hadalWaterImage.src = "assets/models/hadal-surface.png";
 }
 
 function drawHadalSurface(ctx, x, y, width, height, age, reverse = false) {
-  if (typeof visualQuality === "undefined" || visualQuality.modelScale === 0) return;
+  if (!canUseHadalWater()) return;
   preloadHadalSurface();
   if (!hadalWaterImage?.complete || !hadalWaterImage.naturalWidth || height <= 0 || width <= 0) return;
   const device = hadalWaterSetup();
