@@ -424,189 +424,65 @@ function finaleEllipse(ctx, x, y, rx, ry, rotation = 0) {
   ctx.ellipse(x, y, Math.max(.5, rx), Math.max(.5, ry), rotation, 0, Math.PI * 2);
 }
 
-function finaleGuide(ctx, gap) {
-  const top = gap.center - gap.half, bottom = gap.center + gap.half;
-  ctx.fillStyle = "#43d7c526";
-  ctx.fillRect(0, top, viewport.width, bottom - top);
-  ctx.strokeStyle = "#a0fae6aa";
-  ctx.lineWidth = 1.7;
-  ctx.setLineDash([10, 9]);
-  ctx.beginPath();
-  ctx.moveTo(0, top); ctx.lineTo(viewport.width, top);
-  ctx.moveTo(0, bottom); ctx.lineTo(viewport.width, bottom);
-  ctx.stroke();
-  ctx.setLineDash([]);
-}
-
-function finaleCrestPath(ctx, hazard, top, bottom, width) {
-  const edge = y => finaleTideX(hazard, y, hazard.age);
-  const lanes = Math.max(2, Math.ceil((bottom - top) / 10));
-  ctx.beginPath();
-  for (let i = 0; i <= lanes; i++) {
-    const y = top + (bottom - top) * i / lanes;
-    if (!i) ctx.moveTo(edge(y), y);
-    else ctx.lineTo(edge(y), y);
-  }
-  if (width) {
-    for (let i = lanes; i >= 0; i--) {
-      const y = top + (bottom - top) * i / lanes;
-      ctx.lineTo(edge(y) + width * (.89 + .11 * Math.sin(y * .016 - hazard.age * 5)), y);
-    }
-    ctx.closePath();
-  }
-}
-
 function drawFinaleTide(ctx, hazard, quiet) {
-  finaleGuide(ctx, hazard.gap);
-  const bounds = [[0, Math.max(0, hazard.gap.center - hazard.gap.half)],
-    [Math.min(viewport.height, hazard.gap.center + hazard.gap.half), viewport.height]];
-  if (hazard.age < hazard.warning) {
-    const p = hazard.age / hazard.warning;
-    const mist = ctx.createLinearGradient(viewport.width, 0, viewport.width * .73, 0);
-    mist.addColorStop(0, "#35bbffa6"); mist.addColorStop(.45, "#266cac30"); mist.addColorStop(1, "#101a3400");
-    ctx.save();
-    ctx.globalAlpha *= .24 + .76 * p * p;
-    for (const [top, bottom] of bounds) {
-      ctx.fillStyle = mist;
-      ctx.fillRect(viewport.width * .73, top, viewport.width * .27, bottom - top);
-      ctx.strokeStyle = "#adfaffbb";
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([8, 7]);
-      finaleCrestPath(ctx, hazard, top, bottom, 0);
-      ctx.stroke();
-    }
-    ctx.restore();
-    return;
-  }
-  const edge = finaleTideX(hazard, viewport.height / 2, hazard.age);
-  const width = hazard.width * (quiet ? 2 : 3.6);
-  const liquid = ctx.createLinearGradient(edge - 42, 0, edge + width, 0);
-  liquid.addColorStop(0, "#f0ffffe6");
-  liquid.addColorStop(.12, "#a6fbfff2");
-  liquid.addColorStop(.33, hazard.color + "a6");
-  liquid.addColorStop(.56, "#1766a381");
-  liquid.addColorStop(.77, "#3584b93a");
-  liquid.addColorStop(1, "#07527b00");
-  for (const [top, bottom] of bounds) {
-    if (bottom <= top) continue;
-    finaleCrestPath(ctx, hazard, top, bottom, width);
-    ctx.fillStyle = liquid;
-    ctx.fill();
-    finaleCrestPath(ctx, hazard, top, bottom, 0);
-    ctx.lineWidth = quiet ? 1.7 : 2.4;
-    ctx.strokeStyle = "#dcffffed";
-    if (!quiet) { ctx.shadowColor = "#79eaff"; ctx.shadowBlur = 11; }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    if (!quiet) {
-      ctx.save();
-      finaleCrestPath(ctx, hazard, top, bottom, width);
-      ctx.clip();
-      if (typeof drawHadalSurface === "function")
-        drawHadalSurface(ctx, edge - hazard.width * .58, top, width + hazard.width, bottom - top, hazard.age);
-      const flows = ["#c8fcffc7", "#75d6f17d", "#b6e1f543"];
-      for (const [layer, color] of flows.entries()) {
-        ctx.beginPath();
-        for (let y = top + 6 + layer * 5; y < bottom; y += 18) {
-          const x = finaleTideX(hazard, y, hazard.age) + layer * width * .19;
-          const roll = Math.sin(y * .081 + hazard.age * 17 + layer);
-          const length = width * (.19 + layer * .095 + .10 * roll);
-          ctx.moveTo(x + 2, y);
-          ctx.bezierCurveTo(x + length * .25, y - 19 * roll, x + length * .60, y + 15 * roll, x + length, y - 5 * roll);
-          if (layer === 0) {
-            ctx.moveTo(x + 7, y - 3);
-            ctx.bezierCurveTo(x + 15, y - 11 - 6 * roll, x + 26, y + 8, x + 17, y + 9 * roll);
-          }
-        }
-        ctx.lineWidth = layer ? 1.2 : 1.65;
-        ctx.strokeStyle = color;
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
+  const warning = hazard.age < hazard.warning;
+  const halfWidth = hazard.width * .42;
+  const crestAt = warning
+    ? y => hazard.x + hazard.width - halfWidth * waveRoll(y, hazard.age) * .29
+    : y => finaleTideX(hazard, y, hazard.age);
+  const material = hazard.purge ? signatureMaterials.water : signatureMaterials.fusion;
+  drawWaterWall(ctx, { crestAt, gap: hazard.gap.center, size: hazard.gap.half * 2,
+    direction: -1, halfWidth, age: hazard.age, warning, material }, quiet);
 }
 
 function drawFinaleVent(ctx, hazard, active, progress, quiet) {
-  finaleGuide(ctx, hazard.gap);
   const closing = hazard.type === "pincer"
     ? viewport.height * .43 * (active ? 1 - progress : 0) : 0;
   const top = clamp(hazard.gap.center - hazard.gap.half - closing, 0, viewport.height);
   const bottom = clamp(hazard.gap.center + hazard.gap.half + closing, 0, viewport.height);
-  const heat = ctx.createLinearGradient(viewport.width, 0, 0, 0);
-  heat.addColorStop(0, hazard.color + (active ? "ad" : "35"));
-  heat.addColorStop(.47, hazard.color + (active ? "66" : "22"));
-  heat.addColorStop(1, hazard.color + (active ? "36" : "10"));
-  ctx.fillStyle = heat;
-  ctx.fillRect(0, 0, viewport.width, top);
-  ctx.fillRect(0, bottom, viewport.width, viewport.height - bottom);
-  if (!active) return;
+  signatureGuide(ctx, (top + bottom) / 2, bottom - top, active);
   const serrated = hazard.type === "pincer";
-  ctx.lineWidth = quiet ? 2 : 4;
-  ctx.strokeStyle = hazard.color;
-  for (const [y, side] of [[top, -1], [bottom, 1]]) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    for (let x = 0; x <= viewport.width; x += 28) {
-      const offset = quiet ? 0 : (serrated ? x % 56 === 0 ? 0 : 10 : Math.sin(x * .031 + progress * 26) * 5 + 6) * side;
-      ctx.lineTo(x, y + offset);
+  const material = signatureMaterials[serrated ? "chitin" : "magma"];
+  const charge = active ? 1 : .45 + progress * .33;
+  for (const [edge, height, side] of [[top, top, -1], [bottom, viewport.height - bottom, 1]]) {
+    if (height < 1) continue;
+    const depth = Math.min(height, quiet ? 78 : 142);
+    const heat = ctx.createLinearGradient(0, edge, 0, edge + side * depth);
+    heat.addColorStop(0, material.rim);
+    heat.addColorStop(.22, material.mid);
+    heat.addColorStop(.61, material.dark);
+    heat.addColorStop(1, "transparent");
+    ctx.globalAlpha = charge * .64;
+    ctx.fillStyle = heat;
+    ctx.fillRect(0, edge + (side < 0 ? -depth : 0), viewport.width, depth);
+    ctx.globalAlpha = charge;
+    ctx.strokeStyle = material.rim;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(0, edge); ctx.lineTo(viewport.width, edge); ctx.stroke();
+    ctx.lineWidth = quiet ? 1.35 : 2.15;
+    const points = quiet ? 18 : 30;
+    ctx.beginPath(); ctx.moveTo(0, edge);
+    for (let i = 1; i <= points; i++) {
+      const x = viewport.width * i / points;
+      const step = viewport.width / points;
+      const curl = quiet ? .34 : .34 + .34 * Math.sin(i * 1.58 - hazard.age * 13);
+      if (serrated) {
+        ctx.quadraticCurveTo(x - step * .82, edge + side * depth * curl, x - step * .24, edge);
+        ctx.lineTo(x, edge + side * depth * .12);
+      } else {
+        ctx.bezierCurveTo(x - step * .81, edge + side * depth * .72,
+          x - step * .43, edge + side * depth * curl, x, edge + side * depth * .04);
+      }
     }
     ctx.stroke();
   }
 }
 
 function drawFinaleWire(ctx, hazard, active, progress, quiet) {
-  const dx = hazard.bx - hazard.ax, dy = hazard.by - hazard.ay;
-  const length = Math.hypot(dx, dy);
-  const half = hazard.width * .5;
-  ctx.translate(hazard.ax, hazard.ay);
-  ctx.rotate(Math.atan2(dy, dx));
-  ctx.beginPath();
-  ctx.moveTo(0, 0); ctx.lineTo(length, 0);
-  if (!active) {
-    ctx.stroke();
-    return;
-  }
-  const layer = ctx.createLinearGradient(0, -half, 0, half);
-  layer.addColorStop(0, hazard.color + "00"); layer.addColorStop(.29, hazard.color + "88");
-  layer.addColorStop(.5, hazard.color + "cb"); layer.addColorStop(.71, hazard.color + "88");
-  layer.addColorStop(1, hazard.color + "00");
-  ctx.fillStyle = layer;
-  ctx.fillRect(0, -half, length, hazard.width);
-  ctx.strokeStyle = "#fff5f5";
-  ctx.lineWidth = 1.55;
-  if (quiet || !hazard.material) {
-    ctx.stroke();
-    return;
-  }
-  ctx.beginPath();
-  const steps = Math.max(2, Math.min(80, Math.ceil(length / 16)));
-  if (hazard.material === "silk") {
-    for (const sign of [-1, 1]) {
-      for (let i = 0; i <= steps; i++) {
-        const x = i * length / steps;
-        const y = sign * (half * .35 + Math.sin(x * .063 - progress * 20) * half * .29);
-        if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-    }
-  } else {
-    const amplitude = half * (hazard.material === "nerve" ? .71 : .56);
-    ctx.moveTo(0, 0);
-    for (let i = 1; i <= steps; i++) {
-      const x = i * length / steps;
-      if (hazard.material === "bone") {
-        ctx.lineTo(x - 5, i % 2 ? amplitude : -amplitude);
-        ctx.lineTo(x, 0);
-      } else if (hazard.material === "prism") {
-        ctx.lineTo(x, i % 4 < 2 ? -amplitude : amplitude);
-      } else {
-        const shock = Math.sin(i * 4.7 - progress * 26) * amplitude;
-        ctx.lineTo(x, shock);
-        if (i % 5 === 0 && i < steps) { ctx.lineTo(x + 8, -shock); ctx.moveTo(x, shock); }
-      }
-    }
-  }
-  ctx.stroke();
+  const half = hazard.width / 2;
+  drawMaterialRay(ctx, { x1: hazard.ax, y1: hazard.ay, x2: hazard.bx, y2: hazard.by,
+    left: half, right: half, kind: hazard.material === "prism" ? "glass" : hazard.material,
+    active, phase: progress, age: hazard.age }, quiet);
 }
 
 function drawFinaleHazard(ctx, hazard, quiet) {
@@ -617,7 +493,6 @@ function drawFinaleHazard(ctx, hazard, quiet) {
   ctx.lineWidth = active ? 2.7 : 1.7;
   ctx.strokeStyle = hazard.color;
   ctx.fillStyle = hazard.color + (active ? "55" : "1b");
-  if (!active) ctx.setLineDash([8, 7]);
   switch (hazard.type) {
     case "tide":
       drawFinaleTide(ctx, hazard, quiet);
@@ -629,52 +504,28 @@ function drawFinaleHazard(ctx, hazard, quiet) {
     case "blast":
     case "well":
     case "ring": {
-      const ring = hazard.type === "ring";
-      const well = hazard.type === "well";
-      const radius = ring && active ? hazard.radius * progress : hazard.radius;
-      if (!ring) {
-        const glow = ctx.createRadialGradient(hazard.x, hazard.y, 0, hazard.x, hazard.y, Math.max(2, radius));
-        glow.addColorStop(0, well ? "#040412ef" : hazard.color + (active ? "d9" : "16"));
-        glow.addColorStop(.7, well ? "#131022bf" : hazard.color + (active ? "4f" : "10"));
-        glow.addColorStop(1, hazard.color + (active ? "ba" : "50"));
-        ctx.fillStyle = glow;
-      } else ctx.lineWidth = active ? Math.max(3, hazard.width) : 2;
-      finaleEllipse(ctx, hazard.x, hazard.y, radius, radius);
-      if (!ring) ctx.fill();
-      ctx.stroke();
-      if (well && !quiet) {
-        ctx.setLineDash([]);
-        ctx.globalAlpha = .55;
-        for (let i = 0; i < 4; i++) {
-          const turn = i * Math.PI / 2 + hazard.age * 1.9;
-          ctx.beginPath();
-          ctx.arc(hazard.x, hazard.y, radius * (.57 + i * .11), turn, turn + Math.PI * .69);
-          ctx.stroke();
-        }
+      const material = signatureMaterials[hazard.type === "well" ? "void"
+        : hazard.type === "ring" ? "plasma" : hazard.node === undefined ? "fusion" : "spore"];
+      if (hazard.type === "ring") {
+        const radius = active ? hazard.radius * progress : hazard.radius;
+        ctx.globalAlpha = active ? .40 : .57;
+        ctx.strokeStyle = material.rim;
+        ctx.lineWidth = active ? Math.max(1.5, hazard.width * 2) : 1.5;
+        ctx.beginPath(); ctx.arc(hazard.x, hazard.y, Math.max(1, radius), 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = .92;
+        ctx.strokeStyle = material.spark;
+        const pulse = active ? radius : radius * (.12 + progress * .83);
+        ctx.beginPath(); ctx.arc(hazard.x, hazard.y, Math.max(1, pulse), 0, Math.PI * 2); ctx.stroke();
+      } else {
+        drawSignatureImpact(ctx, hazard, material, active, active ? progress : 0, quiet);
       }
       break;
     }
     case "seam": {
-      const left = hazard.x - hazard.width / 2, right = hazard.x + hazard.width / 2;
-      const light = ctx.createLinearGradient(left, 0, right, 0);
-      light.addColorStop(0, "#00000000");
-      light.addColorStop(.5, hazard.color + (active ? "b4" : "25"));
-      light.addColorStop(1, "#00000000");
-      ctx.fillStyle = light;
-      ctx.fillRect(left, 0, hazard.width, viewport.height);
-      ctx.beginPath();
-      ctx.moveTo(left, 0); ctx.lineTo(left, viewport.height);
-      ctx.moveTo(right, 0); ctx.lineTo(right, viewport.height);
-      ctx.stroke();
-      if (active) {
-        ctx.beginPath();
-        ctx.moveTo(hazard.x, 0);
-        for (let y = 0; y <= viewport.height; y += 20) {
-          ctx.lineTo(hazard.x + (quiet ? 0 : Math.sin(y * .13 + progress * 20) * hazard.width * .27), y);
-        }
-        ctx.strokeStyle = "#fff5e0";
-        ctx.stroke();
-      }
+      const half = hazard.width / 2;
+      drawMaterialRay(ctx, { x1: hazard.x, y1: 0, x2: hazard.x, y2: viewport.height,
+        left: half, right: half, kind: "void", active, phase: progress, age: hazard.age }, quiet);
       break;
     }
     default:

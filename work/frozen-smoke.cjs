@@ -6,6 +6,7 @@ const { chromium } = require("playwright");
 
 const root = path.resolve(process.argv[2]);
 const resultPath = process.argv[3];
+const tideProfile = process.argv[4] === "tide";
 const mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
   ".svg": "image/svg+xml", ".webp": "image/webp", ".png": "image/png", ".jpg": "image/jpeg",
   ".glb": "model/gltf-binary", ".mp3": "audio/mpeg", ".ogg": "audio/ogg" };
@@ -74,6 +75,16 @@ async function run() {
       await page.waitForFunction(() => starBreakerModelCache.get(0)?.model && starBreakerModelStage.current === starBreakerModelCache.get(0).model);
     }
     await page.waitForTimeout(700);
+    if (tideProfile) {
+      await page.evaluate(() => {
+        boss.attackIndex = 0;
+        prepareAlienAttack(boss);
+        const tide = bossHazards.find(hazard => hazard.kind === "tide");
+        if (!tide) throw new Error("Tide fixture did not arm");
+        tide.age = tide.warning + tide.duration * .12;
+        player.invulnerable = 8;
+      });
+    }
     const metrics = await page.evaluate(() => new Promise(resolve => {
       const samples = [];
       let previous;
@@ -90,7 +101,8 @@ async function run() {
     assert.deepEqual(missing.filter(url => !url.endsWith("/favicon.ico")), []);
     assert.deepEqual(errors, []);
     const result = { compatibility: "file:// boot, keyboard movement, and pause when present",
-      renderer, viewport: "1280×720", quality: "high", sample: "Broodmother idle in recover", metrics, missing, errors };
+      renderer, viewport: "1280×720", quality: "high",
+      sample: tideProfile ? "Broodmother tide sweep and recovery" : "Broodmother idle in recover", metrics, missing, errors };
     console.log(JSON.stringify(result, null, 2));
     if (resultPath) fs.writeFileSync(resultPath, JSON.stringify(result, null, 2));
   } finally {
