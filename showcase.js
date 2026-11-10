@@ -47,7 +47,7 @@ if (window.AudioNode && window.AudioContext) {
 const showcaseOriginalActive = isBattleActive;
 isBattleActive = function () {
   if (!showcase.running) return showcaseOriginalActive();
-  return state === "battle" && !evolution.pending && !isBossDeathPlaying() && !document.hidden;
+  return state === "battle" && !pauseView && !evolution.pending && !isBossDeathPlaying() && !document.hidden;
 };
 const showcaseOriginalPlayerUpdate = updatePlayer;
 updatePlayer = function (seconds) {

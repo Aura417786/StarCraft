@@ -112,17 +112,50 @@
         <div id="boss-warning" class="boss-warning" role="alert" hidden><div class="warning-band"><strong>WARNING</strong><span id="boss-warning-name"></span></div></div>
         <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>Shift 切换扩散 / 聚焦 · 20 连击进入暴走<br>空格释放大招 · V 开启护盾</p><span class="flight-direction">蓝攻速 · 黄弹道 · 红伤害<br>绿生命（稀有） <span aria-hidden="true">→</span></span></div>
         <div id="pause-hint" class="pause-message" hidden><strong>已暂停</strong><span>点击战场继续战斗</span></div>
-        <button id="menu-button" class="secondary-button menu-button" type="button">返回开始画面</button>
+        <div class="battle-actions">
+          <button id="pause-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="pause-screen">暂停 <kbd>Esc</kbd></button>
+          <button id="menu-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="pause-screen">返回机库</button>
+        </div>
       </div>
+      <section id="pause-screen" class="pause-screen" role="dialog" aria-modal="true" aria-labelledby="pause-title" aria-describedby="pause-description" hidden>
+        <div class="pause-card">
+          <header class="pause-heading">
+            <span class="eyebrow">✦ &nbsp; STAR BREAKER / FLIGHT CONTROL</span>
+            <h2 id="pause-title"></h2>
+            <p id="pause-description"></p>
+          </header>
+          <div id="pause-menu" class="pause-options" hidden>
+            <button id="pause-resume" class="primary-button" type="button">继续战斗</button>
+            <button id="pause-restart" class="secondary-button" type="button">重新开始</button>
+            <button id="pause-settings" class="secondary-button" type="button">设置</button>
+            <button id="pause-exit" class="secondary-button" type="button">返回机库</button>
+          </div>
+          <div id="pause-settings-panel" class="pause-options" hidden>
+            <div class="pause-settings-row">
+              <button id="pause-sound" class="secondary-button" type="button" aria-pressed="true">声音：开</button>
+              <button id="pause-shake" class="secondary-button" type="button">震动：轻</button>
+              <label for="pause-quality">画质</label>
+              <select id="pause-quality" class="secondary-button"><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select>
+            </div>
+            <button id="pause-back" class="secondary-button" type="button">返回暂停菜单</button>
+          </div>
+          <div id="pause-confirm-panel" class="pause-options" hidden>
+            <button id="pause-cancel" class="primary-button" type="button">继续战斗</button>
+            <button id="pause-confirm" class="secondary-button danger-button" type="button">确认退出</button>
+          </div>
+        </div>
+      </section>
       <section id="evolution-screen" class="evolution-screen" role="dialog" aria-modal="true" aria-labelledby="evolution-title" aria-describedby="evolution-description" tabindex="-1" hidden>
         <div class="evolution-panel">
-          <span class="evolution-eyebrow">CRIMSON / EVOLUTION</span>
-          <h2 id="evolution-title">首领击破，选择战机进化</h2>
-          <p id="evolution-description">本局效果可以叠加，每条路线最多 3 级。战斗已暂停，选好再出发。</p>
+          <header class="evolution-heading">
+            <span class="evolution-eyebrow">CRIMSON / EVOLUTION</span>
+            <h2 id="evolution-title">首领击破，选择战机进化</h2>
+            <p id="evolution-description">本局效果可以叠加，每条路线最多 3 级。战斗已暂停，选好再出发。</p>
+          </header>
           <div class="evolution-cards">
             <button id="evolution-card-pierce" class="evolution-card" type="button" data-choice="pierce" data-tone="pierce">
               <span class="evolution-card-top"><span class="evolution-card-level">0级 → 1级</span><kbd>1</kbd></span>
-              <svg class="evolution-card-icon" viewBox="0 0 200 80" aria-hidden="true"><path class="evolution-icon-glow" d="M47 12 125 30 180 40 125 50 47 68 76 42Z"/><path d="m37 21 74 11 37 8-37 8-74 11 18-19Z"/><path class="evolution-icon-core" d="m82 35 62 5-62 5 13-5Z"/><path class="evolution-icon-line" d="m101 24 46 7m-46 25 46-7m6-12 30 3-30 3"/></svg>
+              <canvas class="evolution-card-preview" width="520" height="240" aria-hidden="true"></canvas>
               <strong class="evolution-card-title">破阵翼刃</strong>
               <span class="evolution-card-effect">普通子弹额外穿透 1 个敌人，沿途伤害不衰减。</span>
               <span class="evolution-card-art">青白翼刃与双侧炮管逐级展开。</span>
@@ -130,7 +163,7 @@
             </button>
             <button id="evolution-card-blast" class="evolution-card" type="button" data-choice="blast" data-tone="blast">
               <span class="evolution-card-top"><span class="evolution-card-level">0级 → 1级</span><kbd>2</kbd></span>
-              <svg class="evolution-card-icon" viewBox="0 0 200 80" aria-hidden="true"><path class="evolution-icon-glow" d="m137 7 8 20 25-12-14 23 26 12-29 2-9 21-13-21-25 9 13-20-17-19 27 5Z"/><path d="m32 18 60 11 31 11-31 11-60 11 18-22Z"/><path class="evolution-icon-core" d="m72 34 45 6-45 6 8-6Z"/><path class="evolution-icon-line" d="m55 30 20 3m-20 17 20-3m65-17 6 10-6 10"/></svg>
+              <canvas class="evolution-card-preview" width="520" height="240" aria-hidden="true"></canvas>
               <strong class="evolution-card-title">星隼僚机</strong>
               <span class="evolution-card-effect">一架星隼伴飞，自动瞄准前方敌人。</span>
               <span class="evolution-card-art">继续升级可展开双机编队和协同齐射。</span>
@@ -138,7 +171,7 @@
             </button>
             <button id="evolution-card-aegis" class="evolution-card" type="button" data-choice="aegis" data-tone="aegis">
               <span class="evolution-card-top"><span class="evolution-card-level">0级 → 1级</span><kbd>3</kbd></span>
-              <svg class="evolution-card-icon" viewBox="0 0 200 80" aria-hidden="true"><ellipse class="evolution-icon-glow" cx="103" cy="40" rx="72" ry="32"/><path d="m44 20 62 11 39 9-39 9-62 11 18-20Z"/><path class="evolution-icon-core" d="m83 35 54 5-54 5 11-5Z"/><path class="evolution-icon-line" d="M165 24q13 16 0 32M28 25q-10 15 0 30m48-40 4 50"/></svg>
+              <canvas class="evolution-card-preview" width="520" height="240" aria-hidden="true"></canvas>
               <strong class="evolution-card-title">赤金壁垒</strong>
               <span class="evolution-card-effect">开启护盾时，清除周围 180 范围的敌方炮弹。</span>
               <span class="evolution-card-art">红金侧甲与能量环逐级展开；激光和雷区仍需躲避。</span>
@@ -150,9 +183,11 @@
       </section>
       <section id="game-over-screen" class="game-over-screen" aria-labelledby="game-over-title" hidden>
         <div class="result-card">
-          <span class="eyebrow">MISSION REPORT</span>
-          <h2 id="game-over-title">游戏结束</h2>
-          <p class="result-intro">调整航线，再次突围。</p>
+          <header class="result-heading">
+            <span class="eyebrow">MISSION REPORT</span>
+            <h2 id="game-over-title">游戏结束</h2>
+            <p class="result-intro">调整航线，再次突围。</p>
+          </header>
           <div class="result-score"><span>本局得分</span><strong id="final-score">000000</strong></div>
           <div class="result-details"><div><span>存活时间</span><strong id="final-time">00:00</strong></div><div><span>击毁敌机</span><strong id="final-kills">0</strong></div><div><span>最高连击</span><strong id="final-combo">0</strong></div></div>
           <button id="restart-button" class="primary-button" type="button">重新开始 <span aria-hidden="true">↗</span></button>

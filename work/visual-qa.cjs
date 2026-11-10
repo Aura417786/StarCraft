@@ -109,6 +109,7 @@ async function sampleFrames(page, setting) {
     await page.setViewportSize({ width: 840, height: 410 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.locator('#menu-button').click();
+    await page.locator('#pause-confirm').click();
     await page.locator('.start-screen').waitFor({ state: 'visible' });
     const rect = await quality.boundingBox();
     assert.ok(rect && rect.y >= 0 && rect.y + rect.height <= 410, JSON.stringify(rect));

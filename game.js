@@ -8,12 +8,25 @@ const startScreen = document.querySelector("#start-screen");
 const battleScreen = document.querySelector("#battle-screen");
 const startButton = document.querySelector("#start-button");
 const menuButton = document.querySelector("#menu-button");
+const pauseButton = document.querySelector("#pause-button");
+const hangarLink = document.querySelector(".masthead .brand");
 const fullscreenButton = document.querySelector("#fullscreen-button");
 const soundButton = document.querySelector("#sound-button");
 const bossWarning = document.querySelector("#boss-warning");
 const bossWarningName = document.querySelector("#boss-warning-name");
 const movementHint = document.querySelector("#movement-hint");
 const pauseHint = document.querySelector("#pause-hint");
+const pauseScreen = document.querySelector("#pause-screen");
+const pauseMenu = document.querySelector("#pause-menu");
+const pauseSettings = document.querySelector("#pause-settings-panel");
+const pauseConfirmPanel = document.querySelector("#pause-confirm-panel");
+const pauseResumeButton = document.querySelector("#pause-resume");
+const pauseCancelButton = document.querySelector("#pause-cancel");
+const pauseConfirmButton = document.querySelector("#pause-confirm");
+const pauseSoundButton = document.querySelector("#pause-sound");
+const pauseShakeButton = document.querySelector("#pause-shake");
+const pauseQualityControl = document.querySelector("#pause-quality");
+const pauseBackground = new Map();
 const statusMessage = document.querySelector("#status");
 const fighterImage = document.querySelector("#fighter-art");
 const hangarVariantImage = document.querySelector("#hangar-variant-art");
@@ -37,6 +50,8 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let state = "menu";
 let previousTime = 0;
 let windowActive = true;
+let pauseView = "";
+let pauseConfirmFromMenu = false;
 const fighterProfiles = {
   red: { id: "red", rate: 3.6, lanes: 1, damage: 2.2,
     label: ["赤焰 · 重装突击型", "Crimson · Heavy assault"], code: "CRIMSON / ASSAULT FIGHTER",
@@ -137,7 +152,7 @@ function syncGameAudio() {
   const active = isBattleActive();
   const cinematic = isBossDeathPlaying();
   gameAudio.sync(active || (cinematic && canAnimateCombatEffects()), !!boss, activeBosses().some(target => target.enraged),
-    { combo: momentum.count, overdrive: isOverdriveActive(), warning: pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning), cinematic,
+    { paused: !!pauseView && windowActive && !document.hidden, combo: momentum.count, overdrive: isOverdriveActive(), warning: pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning), cinematic,
       bossType: boss?.type ?? pendingBossType ?? combatEffects.choiceTarget?.type, bossPhase: boss?.phase, lives: player.lives });
   syncUltimateAudio(active);
 }
@@ -147,13 +162,16 @@ function updateSoundButton() {
 }
 try { gameAudio.setMuted(window.localStorage.getItem("star-breaker-muted") === "true"); } catch { /* 本地文件也能使用声音，无法记忆设置时忽略。 */ }
 updateSoundButton();
-soundButton.addEventListener("click", () => {
+function toggleGameSound() {
   gameAudio.unlock();
   gameAudio.setMuted(!gameAudio.muted);
   updateSoundButton();
   try { window.localStorage.setItem("star-breaker-muted", String(gameAudio.muted)); } catch { /* 不影响本次设置。 */ }
-  if (state === "battle") canvas.focus({ preventScroll: true });
   syncGameAudio();
+}
+soundButton.addEventListener("click", () => {
+  toggleGameSound();
+  if (state === "battle" && !pauseView && !evolution.pending) canvas.focus({ preventScroll: true });
 });
 function resetPlayer() {
   player.x = clamp(viewport.width * 0.17, flightBounds.left, flightBounds.right);
@@ -293,6 +311,7 @@ if (fighterImage.complete) readyFighter();
 updateFighterSelection();
 
 function showScreen(nextState) {
+  clearPause();
   if (nextState === "battle") sortieFighter = selectedFighter;
   lastDamageMessage = "";
   resetShipVisuals();
@@ -328,7 +347,20 @@ function showScreen(nextState) {
 }
 function startBattleWithSound() { gameAudio.unlock(); showScreen("battle"); }
 startButton.addEventListener("click", startBattleWithSound);
-menuButton.addEventListener("click", () => showScreen("menu"));
+for (const control of [pauseButton, menuButton, hangarLink]) {
+  control?.addEventListener("mousedown", (event) => {
+    if (event.button === 0 && battleHasFocus()) event.preventDefault();
+  });
+}
+hangarLink?.addEventListener("click", (event) => {
+  if (state !== "battle" || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  pauseGame("exit");
+});
+menuButton.addEventListener("click", () => {
+  if (state === "battle") pauseGame("exit");
+  else showScreen("menu");
+});
 restartButton.addEventListener("click", startBattleWithSound);
 resultMenuButton.addEventListener("click", () => showScreen("menu"));
 
@@ -343,7 +375,7 @@ fullscreenButton.addEventListener("click", async () => {
     statusMessage.textContent = tr("浏览器未允许全屏。战场仍铺满当前窗口，也可以使用 F11。", "Fullscreen is unavailable. The game still fills this window, or you can press F11.");
   }
   if (evolution.pending) refreshEvolutionChoice();
-  else if (state === "battle") canvas.focus({ preventScroll: true });
+  else if (state === "battle" && !pauseView) canvas.focus({ preventScroll: true });
 });
 function updateFullscreenDisplay() {
   const isFullscreen = document.fullscreenElement === app;
@@ -354,12 +386,20 @@ document.addEventListener("fullscreenchange", () => {
   updateFullscreenDisplay();
   resizeBattlefield();
   if (evolution.pending) refreshEvolutionChoice();
-  else if (state === "battle") canvas.focus({ preventScroll: true });
+  else if (state === "battle" && !pauseView) canvas.focus({ preventScroll: true });
 });
 window.addEventListener("resize", resizeBattlefield);
 window.addEventListener("keydown", (event) => {
-  if (!isBattleActive()) return;
   if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.code === "Escape" && state === "battle" && !evolution.pending && windowActive && !document.hidden) {
+    event.preventDefault();
+    if (event.repeat) return;
+    if (pauseView === "settings" || (pauseConfirmFromMenu && pauseView)) pauseGame("menu");
+    else if (pauseView) resumeGame();
+    else pauseGame();
+    return;
+  }
+  if (!isBattleActive()) return;
   if (event.code === "ShiftLeft" || event.code === "ShiftRight") {
     event.preventDefault();
     if (!event.repeat && !pressedKeys.has("ShiftLeft") && !pressedKeys.has("ShiftRight")) toggleFiringStyle();
@@ -391,12 +431,97 @@ function clearMovement() {
   pressedKeys.clear();
   previousTime = 0;
 }
-// 切走窗口、切到其他按钮时，暂停整个战场，恢复后不补发积压子弹。
-function isBattleActive() {
-  return state === "battle" && !evolution.pending && !isBossDeathPlaying() && windowActive && !document.hidden && document.activeElement === canvas;
+// 主动暂停由菜单控制。切走窗口时也会冻结，只有焦点回到战场才恢复。
+function battleHasFocus() {
+  return state === "battle" && !pauseView && !evolution.pending && windowActive && !document.hidden && document.activeElement === canvas;
 }
+function isBattleActive() {
+  return battleHasFocus() && !isBossDeathPlaying();
+}
+function refreshPauseCopy() {
+  if (!pauseScreen || !pauseView) return;
+  const copy = {
+    menu: [tr("战斗暂停", "Combat paused"), tr("本局已暂停。准备好后可继续战斗。", "Your sortie is on hold. Resume when ready.")],
+    settings: [tr("战斗设置", "Combat settings"), tr("设置会立即保存，战斗保持暂停。", "Settings save immediately. Combat remains paused.")],
+    exit: [tr("返回机库？", "Return to hangar?"), tr("退出会结束本局，得分和战斗进度将丢失。", "Leaving ends this sortie. Its score and progress will be lost.")],
+    restart: [tr("重新开始？", "Restart sortie?"), tr("重新开始会放弃本局得分和战斗进度。", "Restarting discards this sortie's score and progress.")],
+  };
+  const [title, description] = copy[pauseView];
+  document.querySelector("#pause-title").textContent = title;
+  document.querySelector("#pause-description").textContent = description;
+  pauseConfirmButton.textContent = pauseView === "restart" ? tr("确认重开", "Confirm restart") : tr("确认退出", "Confirm exit");
+  pauseSoundButton.textContent = soundButton.textContent;
+  pauseSoundButton.setAttribute("aria-pressed", String(!gameAudio.muted));
+  pauseShakeButton.textContent = shakeButton?.textContent ?? "";
+  pauseQualityControl.value = visualQuality.id;
+  if (pauseQualityControl.options) {
+    const labels = { low: tr("低", "Low"), medium: tr("中", "Medium"), high: tr("高", "High") };
+    for (const option of pauseQualityControl.options) option.textContent = labels[option.value];
+  }
+}
+function pauseGame(view = "menu") {
+  if (state !== "battle" || evolution.pending) return;
+  const wasPaused = !!pauseView;
+  pauseConfirmFromMenu = (view === "exit" || view === "restart") && pauseView === "menu";
+  pauseView = view;
+  if (!wasPaused) {
+    for (const element of [canvas, battleScreen, document.querySelector(".masthead")]) {
+      if (!element) continue;
+      pauseBackground.set(element, element.inert);
+      element.inert = true;
+    }
+  }
+  clearMovement();
+  if (pauseScreen) {
+    pauseMenu.hidden = view !== "menu";
+    pauseSettings.hidden = view !== "settings";
+    pauseConfirmPanel.hidden = view !== "exit" && view !== "restart";
+    refreshPauseCopy();
+    pauseScreen.hidden = false;
+    const focusTarget = view === "menu" ? pauseResumeButton : view === "settings" ? pauseSoundButton : pauseCancelButton;
+    focusTarget.focus({ preventScroll: true });
+  }
+  updatePauseHint();
+}
+function clearPause() {
+  pauseView = "";
+  pauseConfirmFromMenu = false;
+  if (pauseScreen) pauseScreen.hidden = true;
+  for (const [element, previous] of pauseBackground) element.inert = previous;
+  pauseBackground.clear();
+}
+function resumeGame() {
+  clearPause();
+  clearMovement();
+  canvas.focus({ preventScroll: true });
+  updatePauseHint();
+}
+pauseButton?.addEventListener("click", () => pauseGame());
+pauseResumeButton?.addEventListener("click", resumeGame);
+pauseCancelButton?.addEventListener("click", resumeGame);
+document.querySelector("#pause-settings")?.addEventListener("click", () => pauseGame("settings"));
+document.querySelector("#pause-back")?.addEventListener("click", () => pauseGame());
+document.querySelector("#pause-restart")?.addEventListener("click", () => pauseGame("restart"));
+document.querySelector("#pause-exit")?.addEventListener("click", () => pauseGame("exit"));
+pauseConfirmButton?.addEventListener("click", () => {
+  if (pauseView === "exit") showScreen("menu");
+  else if (pauseView === "restart") startBattleWithSound();
+});
+pauseSoundButton?.addEventListener("click", () => { toggleGameSound(); refreshPauseCopy(); });
+pauseShakeButton?.addEventListener("click", () => { cycleShakePreference(); refreshPauseCopy(); });
+pauseQualityControl?.addEventListener("change", () => setVisualQuality(pauseQualityControl.value));
+pauseScreen?.addEventListener("keydown", (event) => {
+  if (event.code !== "Tab") return;
+  const panel = pauseView === "menu" ? pauseMenu : pauseView === "settings" ? pauseSettings : pauseConfirmPanel;
+  const controls = panel.querySelectorAll("button, select");
+  const first = controls[0], last = controls[controls.length - 1];
+  if (event.shiftKey ? document.activeElement !== first : document.activeElement !== last) return;
+  event.preventDefault();
+  (event.shiftKey ? last : first).focus({ preventScroll: true });
+});
 function updatePauseHint() {
-  pauseHint.hidden = state !== "battle" || evolution.pending || isBattleActive() || (isBossDeathPlaying() && canAnimateCombatEffects());
+  app.dataset.overlay = state === "over" ? "result" : evolution.pending ? "evolution" : pauseView ? "pause" : "";
+  pauseHint.hidden = state !== "battle" || !!pauseView || evolution.pending || battleHasFocus();
   syncGameAudio();
 }
 window.addEventListener("blur", () => {
@@ -422,7 +547,7 @@ canvas.addEventListener("focus", () => {
   updatePauseHint();
 });
 canvas.addEventListener("pointerdown", () => {
-  if (state === "battle") { gameAudio.unlock(); canvas.focus({ preventScroll: true }); syncGameAudio(); }
+  if (state === "battle" && !pauseView) { gameAudio.unlock(); canvas.focus({ preventScroll: true }); syncGameAudio(); }
 });
 function updatePlayer(seconds) {
   player.previousX = player.x; player.previousY = player.y;
@@ -878,7 +1003,9 @@ function updateResultCopy(won) {
     : (lastDamageMessage || tr("调整航线，再次突围。", "Plot a new course and try again."));
 }
 function endGame(won = false) {
+  clearPause();
   state = "over";
+  battleScreen.hidden = true;
   gameOverScreen.dataset.victory = String(won);
   updateResultCopy(won);
   resetGravityTide();
@@ -892,7 +1019,7 @@ function endGame(won = false) {
   shield.flash = 0; shield.slowRemaining = 0; shield.effect = null;
   updateShieldDisplay();
   setBossWarning();
-  syncGameAudio();
+  updatePauseHint();
   clearMovement();
   resetWeapons();
   player.hitFlash = 0;
@@ -1042,55 +1169,60 @@ function drawPlayer() {
 function drawFrame(time) {
   const realSeconds = previousTime ? Math.min((time - previousTime) / 1000, 0.05) : 0;
   previousTime = time;
-  const seconds = shieldFrameSeconds(realSeconds);
   syncGameAudio();
-  updateCombatEffects(seconds);
-  updateMomentum(seconds);
-  updateEvolution(seconds);
-  updateShield(seconds);
-  updateCannonLink(seconds);
-  updatePlayer(seconds);
-  updateShipVisuals(seconds);
-  updateGravityTide(seconds);
-  updateShooting(seconds);
-  updateEvolutionWeapons(seconds);
-  updateEncounter(seconds);
-  updateBossEncounter(seconds);
-  updateBattlefield(seconds);
-  updatePowerups(seconds);
-  updateUltimate(seconds);
-  resolveBattlefieldCover();
-  updatePlayerDamage(seconds);
-  updateEnemyProjectileDamage();
-  updateBossDamage();
+  if (!pauseView) {
+    const seconds = shieldFrameSeconds(realSeconds);
+    updateCombatEffects(seconds);
+    updateMomentum(seconds);
+    updateEvolution(seconds);
+    updateShield(seconds);
+    updateCannonLink(seconds);
+    updatePlayer(seconds);
+    updateShipVisuals(seconds);
+    updateGravityTide(seconds);
+    updateShooting(seconds);
+    updateEvolutionWeapons(seconds);
+    updateEncounter(seconds);
+    updateBossEncounter(seconds);
+    updateBattlefield(seconds);
+    updatePowerups(seconds);
+    updateUltimate(seconds);
+    resolveBattlefieldCover();
+    updatePlayerDamage(seconds);
+    updateEnemyProjectileDamage();
+    updateBossDamage();
+  }
+  const showCombat = state !== "over" && !evolution.pending;
   context.clearRect(0, 0, viewport.width, viewport.height);
   context.save();
   applyBossCollapseCamera(context);
-  drawBattlefield();
+  drawBattlefield(showCombat);
   drawActiveJourney("front");
   context.globalAlpha = 1;
-  const cameraOffset = combatShakeOffset();
-  context.translate(cameraOffset.x, cameraOffset.y);
-  drawGravityTide();
-  drawFormationSignals();
-  drawBattlefieldObjects();
-  drawEnemies();
-  drawAceThreats(context);
-  drawEnemyThreats();
-  drawBossBattle();
-  if (!isBossDeathPlaying()) drawPowerups();
-  drawBullets();
-  drawOverdrive();
-  drawPlayer();
-  drawEvolutionWeapons(context);
-  drawEvolution();
-  drawShield();
-  drawMuzzleFlash();
-  drawUltimate();
-  drawCombatEffects();
-  drawExplosions();
+  if (showCombat) {
+    const cameraOffset = combatShakeOffset();
+    context.translate(cameraOffset.x, cameraOffset.y);
+    drawGravityTide();
+    drawFormationSignals();
+    drawBattlefieldObjects();
+    drawEnemies();
+    drawAceThreats(context);
+    drawEnemyThreats();
+    drawBossBattle();
+    if (!isBossDeathPlaying()) drawPowerups();
+    drawBullets();
+    drawOverdrive();
+    drawPlayer();
+    drawEvolutionWeapons(context);
+    drawEvolution();
+    drawShield();
+    drawMuzzleFlash();
+    drawUltimate();
+    drawCombatEffects();
+    drawExplosions();
+  }
   context.restore();
-  drawBattlefieldEventNotice();
+  if (showCombat) drawBattlefieldEventNotice();
   drawEvolutionChoicePreviews(time);
   window.requestAnimationFrame(drawFrame);
 }
@@ -1098,7 +1230,7 @@ function updateGameCanvasLabel() {
   const label = state === "over"
     ? tr("本局已结束，战场已停止。选择重新开始可再玩一局。", "The run is over. Select Restart to play again.")
     : state === "battle"
-    ? tr("可操作的横向星空战场。战机自动向右射击，方向键或 WASD 移动，空格蓄力大招，V 开启护盾，Shift 切换射击姿态。", "Playable space battlefield. The fighter fires automatically. Move with arrows or WASD, use Space for your charged special, V to shield, and Shift to switch firing modes.")
+    ? tr("可操作的横向星空战场。战机自动向右射击，方向键或 WASD 移动，空格蓄力大招，V 开启护盾，Shift 切换射击姿态，Esc 暂停。", "Playable space battlefield. The fighter fires automatically. Move with arrows or WASD, use Space for your charged special, V to shield, Shift to switch firing modes, and Esc to pause.")
     : tr("横向星空战场。先在机库选择战机，再开始游戏。", "Side-scrolling space battlefield. Choose a fighter in the hangar and start the game.");
   canvas.setAttribute("aria-label", label);
 }
@@ -1117,6 +1249,7 @@ function refreshGameLanguage() {
   updateUltimateDisplay();
   updateEvolutionDisplay();
   refreshEvolutionChoice();
+  refreshPauseCopy();
   if (state === "menu") statusMessage.textContent = tr("开始画面已就绪。", "Ready to start.");
 }
 updateLifeDisplay();

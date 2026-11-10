@@ -50,14 +50,15 @@ h1 > span { color: var(--red); }
 .ready-message p { font-size: 13px; color: #8793a8; letter-spacing: .12em; }
 .flight-direction { color: #ab6973; font-size: 11px; letter-spacing: .2em; margin-top: 20px; }
 .flight-direction span { margin-left: 15px; font-size: 18px; }
-.menu-button { position: absolute; bottom: 22px; right: 3.4vw; }
+.battle-actions { position: absolute; bottom: 22px; right: 3.4vw; display: flex; gap: 8px; }
+.battle-actions kbd { margin-left: 5px; color: #99a8bb; font: 11px Consolas, monospace; }
 .lesson-note { position: absolute; bottom: 25px; left: 3.4vw; display: flex; align-items: center; gap: 14px; pointer-events: none; }
 .lesson-badge { font-size: 10px; color: #b87780; padding-right: 14px; border-right: 1px solid #3a2c38; letter-spacing: .15em; }
 .lesson-note p { margin: 0; color: #778198; font-size: 11px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 800px) { .edition { display: none; } .start-screen { padding: 0 5vw; grid-template-columns: 45% 55%; } h1 { font-size: clamp(34px, 7vw, 60px); } .hud { left: 35%; gap: 14px; } .training-note { display: none; } .ship-label { left: 12%; } }
-@media (max-width: 520px) { .masthead { padding: 16px 20px; height: 74px; } .start-screen { inset: 75px 0 65px; grid-template-columns: 1fr; align-content: center; text-align: center; } .start-copy .eyebrow, .primary-button { margin-left: auto; margin-right: auto; justify-content: center; } .primary-button { gap: 35px; } .hangar-art { height: 26vh; grid-row: 1; } .hangar-art img { width: min(65vw, 34vh); } .orbit, .ship-label { display: none; } h1 { margin: 10px 0; font-size: 44px; } .intro { margin-bottom: 20px; } .brand { font-size: 13px; } .hud { left: 20px; top: 80px; right: 20px; } .hud strong { font-size: 20px; } .lesson-note { bottom: 24px; gap: 8px; } .lesson-badge { display: none; } .lesson-note p { font-size: 9px; } .menu-button { padding: 7px 10px; font-size: 11px; } }
-@media (max-height: 450px) and (min-width: 521px) { .start-screen { inset: 64px 0 42px; } .masthead { height: 64px; padding-top: 12px; padding-bottom: 12px; } h1 { margin: 10px 0; font-size: 48px; } .intro { margin-bottom: 18px; } .primary-button { min-height: 44px; padding-top: 6px; padding-bottom: 6px; } .start-caption { margin: 8px 0; } .ship-label { display: none; } .hud { top: 12px; } .lesson-note { bottom: 14px; } .menu-button { bottom: 12px; } }
+@media (max-width: 520px) { .masthead { padding: 16px 20px; height: 74px; } .start-screen { inset: 75px 0 65px; grid-template-columns: 1fr; align-content: center; text-align: center; } .start-copy .eyebrow, .primary-button { margin-left: auto; margin-right: auto; justify-content: center; } .primary-button { gap: 35px; } .hangar-art { height: 26vh; grid-row: 1; } .hangar-art img { width: min(65vw, 34vh); } .orbit, .ship-label { display: none; } h1 { margin: 10px 0; font-size: 44px; } .intro { margin-bottom: 20px; } .brand { font-size: 13px; } .hud { left: 20px; top: 80px; right: 20px; } .hud strong { font-size: 20px; } .lesson-note { bottom: 24px; gap: 8px; } .lesson-badge { display: none; } .lesson-note p { font-size: 9px; } .battle-actions .secondary-button { padding: 7px 10px; font-size: 11px; } }
+@media (max-height: 450px) and (min-width: 521px) { .start-screen { inset: 64px 0 42px; } .masthead { height: 64px; padding-top: 12px; padding-bottom: 12px; } h1 { margin: 10px 0; font-size: 48px; } .intro { margin-bottom: 18px; } .primary-button { min-height: 44px; padding-top: 6px; padding-bottom: 6px; } .start-caption { margin: 8px 0; } .ship-label { display: none; } .hud { top: 12px; } .lesson-note { bottom: 14px; } .battle-actions { bottom: 12px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 .pause-message { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; background: #080b14b8; }
 .pause-message strong { color: #f1d5d7; font-size: 26px; font-weight: 500; letter-spacing: .2em; }
@@ -71,30 +72,68 @@ h1 > span { color: var(--red); }
 @media (max-width: 520px) { .difficulty-readout { top: 140px; left: 20px; gap: 16px; font-size: 10px; } }
 @media (max-height: 450px) and (min-width: 521px) { .difficulty-readout { top: 70px; } }
 
-.game-over-screen { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; background: #060913e8; padding: 24px; overflow: auto; }
-.result-card { width: min(100%, 380px); text-align: center; }
-.result-card > .eyebrow { justify-content: center; color: #be7c85; font: 10px Consolas, monospace; letter-spacing: .25em; }
-.result-card h2 { margin: 12px 0 8px; font-size: clamp(30px, 5vw, 46px); letter-spacing: .12em; }
-.result-intro { margin: 0 0 28px; color: #8d99ad; font-size: 13px; letter-spacing: .1em; }
-.result-score > span, .result-details span { display: block; color: #909eb2; font-size: 11px; letter-spacing: .1em; }
-.result-score > strong { color: #ffc4a4; font: 500 44px/1.5 Consolas, monospace; letter-spacing: .12em; }
-.result-details { display: flex; justify-content: center; gap: 38px; margin: 18px 0 32px; }
-.result-details strong { display: block; color: #d7e0ee; font: 22px/1.8 Consolas, monospace; }
-.result-card .primary-button { width: 100%; margin-bottom: 12px; }
+/* Only the foreground panel receives input during a modal battle interruption. */
+.app[data-overlay="evolution"] :is(.masthead, .lesson-note, .battle-screen),
+.app[data-overlay="result"] :is(.masthead, .lesson-note, .battle-screen) { display: none; }
+.battle-screen:has(.pause-message:not([hidden])) .ready-message,
+.app[data-overlay="pause"] .ready-message { visibility: hidden; }
+.app[data-overlay="pause"] .battle-screen * { animation-play-state: paused; }
+
+.pause-screen, .game-over-screen {
+  position: absolute; inset: 0; display: grid; place-items: center; overflow: auto;
+  padding: clamp(14px, 4vh, 30px) clamp(14px, 4vw, 32px);
+}
+.pause-screen {
+  z-index: 22;
+  background: radial-gradient(ellipse at 50% 22%, #54253558, transparent 60%), #070b15d9;
+}
+.pause-card, .result-card {
+  width: min(100%, 460px); margin: auto; padding: clamp(18px, 4vw, 34px);
+  border: 1px solid #645467; border-top-color: #d97984; border-radius: 12px;
+  background: linear-gradient(146deg, #24202e, #111725 58%, #0c101c);
+  box-shadow: 0 22px 80px #02030a9c;
+}
+.pause-heading, .result-heading, .evolution-heading {
+  display: grid; gap: 18px; justify-items: center; text-align: center;
+}
+.pause-heading .eyebrow, .result-heading .eyebrow {
+  color: #eea0a7; font: 10px/1.5 Consolas, monospace; letter-spacing: .2em;
+}
+.pause-heading h2, .result-heading h2, .evolution-heading h2 {
+  margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.2; letter-spacing: .08em;
+}
+.pause-heading p, .result-heading p, .evolution-heading p {
+  margin: 0; color: #b3bed0; font-size: 13px; line-height: 1.6;
+}
+.pause-options { display: grid; gap: 9px; margin-top: 22px; }
+.pause-options .primary-button { width: 100%; min-height: 46px; justify-content: center; padding: 8px 12px; }
+.pause-options .danger-button { border-color: #a85a67; color: #ffc6c9; }
+.pause-settings-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 9px; }
+.pause-settings-row label { padding: 0 12px; color: #c4ccda; font-size: 13px; }
+.pause-settings-row select { width: 100%; }
+.game-over-screen { z-index: 20; background: radial-gradient(ellipse at 50% 22%, #4d263346, transparent 64%), #060913e8; }
+.result-card { text-align: center; }
+.result-score { margin-top: 20px; }
+.result-score > span, .result-details span { display: block; color: #a7b5c8; font-size: 11px; letter-spacing: .1em; }
+.result-score > strong { color: #ffc4a4; font: 500 clamp(30px, 5vw, 44px)/1.3 Consolas, monospace; letter-spacing: .12em; }
+.result-details { display: flex; justify-content: space-around; gap: 12px; margin: 15px 0 24px; }
+.result-details strong { display: block; color: #d7e0ee; font: 22px/1.5 Consolas, monospace; }
+.result-card .primary-button { width: 100%; margin-bottom: 9px; }
 .result-card > .secondary-button { width: 100%; }
-.result-tip { color: #65738a; font-size: 10px; margin-top: 20px; }
-@media (max-height: 550px) { .game-over-screen { padding: 16px; } .result-card { width: min(100%, 460px); } .result-card h2 { font-size: 28px; margin: 7px 0; } .result-intro { margin-bottom: 8px; } .result-score > strong { font-size: 30px; } .result-details { margin: 8px 0 12px; } .result-details strong { font-size: 17px; } .result-card .primary-button { min-height: 42px; padding: 5px 20px; } .result-tip { margin: 10px 0 0; } }
+.result-tip { color: #a4afc2; font-size: 11px; margin: 14px 0 0; }
 @media (max-height: 550px) {
-  .result-card > .eyebrow { font-size: 9px; line-height: 1.2; }
-  .result-card h2 { font-size: 25px; line-height: 1.3; margin: 7px 0; }
-  .result-intro { display: none; }
-  .result-score > span, .result-details span { font-size: 10px; line-height: 1.4; }
-  .result-score > strong { font-size: 28px; line-height: 1.3; }
-  .result-details { margin: 10px 0 14px; }
-  .result-details strong { font-size: 17px; line-height: 1.4; }
-  .result-card .primary-button { font-size: 15px; line-height: 1.4; margin-bottom: 8px; }
-  .result-card > .secondary-button { min-height: 34px; padding: 5px 14px; }
-  .result-tip { font-size: 9px; line-height: 1.4; margin: 10px 0 0; }
+  .pause-heading h2, .result-heading h2, .evolution-heading h2 { font-size: 26px; }
+  .result-score { margin-top: 12px; }
+  .result-details { margin: 8px 0 14px; }
+  .result-details strong { font-size: 17px; }
+  .result-card .primary-button { min-height: 42px; padding: 6px 20px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :is(.pause-card, .result-card, .evolution-panel) { animation: battle-panel-arrival .2s ease-out both; }
+}
+@keyframes battle-panel-arrival {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* 三色球同时用文字和颜色区分效果。 */
@@ -175,11 +214,10 @@ h1 > span { color: var(--red); }
 
 /* 进化选择独立于战斗层，停止战斗后再作出选择。 */
 .evolution-readout { position: absolute; left: 3.4vw; bottom: 194px; max-width: min(450px, 90%); color: #a8bbc9; font-size: 10px; letter-spacing: .06em; padding: 3px 8px; border-left: 2px solid #b76d7a; background: #0b1322c9; }
-.evolution-screen { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; overflow: auto; padding: 30px 4vw; background: radial-gradient(ellipse at 50% 22%, #362236bd, #080c17f2 64%); backdrop-filter: blur(7px); }
-.evolution-panel { width: min(960px, 100%); margin: auto; }
+.evolution-screen { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; overflow: auto; padding: 30px 4vw; background: radial-gradient(ellipse at 50% 20%, #51324c50, transparent 66%), #080c17eb; }
+.evolution-panel { width: min(980px, 100%); margin: auto; text-align: center; }
+.evolution-heading { margin-bottom: 24px; }
 .evolution-eyebrow { display: block; color: #dc9495; text-align: center; font: 10px/1.6 Consolas, monospace; letter-spacing: .25em; }
-.evolution-panel h2 { text-align: center; margin: 10px 0 8px; font-size: clamp(23px, 3vw, 34px); letter-spacing: .08em; line-height: 1.35; }
-.evolution-panel > p { color: #a4adbe; text-align: center; font-size: 12px; margin: 0 0 25px; }
 .evolution-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .evolution-card { --evolution-color: #88dfef; --evolution-dim: #204757; display: flex; flex-direction: column; align-items: stretch; min-width: 0; padding: 20px; text-align: left; color: #e6eef6; background: linear-gradient(145deg, #1a2739ed, #101422f5); border: 1px solid #465367; border-radius: 12px; transition: transform .15s, border-color .15s; }
 .evolution-card[data-tone="blast"] { --evolution-color: #91e6d5; --evolution-dim: #245554; background: linear-gradient(145deg, #193638ed, #101721f5); }
@@ -191,15 +229,15 @@ h1 > span { color: var(--red); }
 .evolution-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .evolution-card-level { color: var(--evolution-color); font-size: 11px; letter-spacing: .04em; }
 .evolution-card kbd { width: 22px; line-height: 23px; color: #d8dbe5; border: 1px solid #596174; border-radius: 4px; text-align: center; font: 12px/23px Consolas, monospace; }
-.evolution-card-preview { display: block; width: 100%; height: auto; aspect-ratio: 20 / 7; margin: 14px 0 13px; object-fit: contain; border: 1px solid #a5c0df25; border-radius: 7px; background: #080e19; }
+.evolution-card-preview { display: block; width: min(100%, 260px); height: auto; aspect-ratio: 13 / 6; margin: 13px auto; border: 1px solid #a5c0df25; border-radius: 7px; background: #080e19; }
 .evolution-card-title { color: #fbede8; font-size: 21px; letter-spacing: .09em; font-weight: 700; }
 .evolution-card-effect { color: #e0dce0; font-size: 12px; line-height: 1.9; margin-top: 12px; min-height: 69px; }
 .evolution-card-art { color: #97a1b4; font-size: 11px; line-height: 1.8; margin: 13px 0 22px; }
 .evolution-card-action { display: block; margin-top: auto; padding-top: 12px; border-top: 1px solid #a4a0bd2c; color: var(--evolution-color); font-size: 12px; text-align: right; letter-spacing: .18em; }
 .evolution-panel > .evolution-controls { margin: 20px 0 0; color: #8e99af; font-size: 11px; }
-@media (max-width: 650px) { .evolution-screen { padding: 20px; } .evolution-cards { grid-template-columns: 1fr; gap: 12px; } .evolution-card { padding: 14px 16px; } .evolution-card-preview { max-height: 105px; margin: 9px 0; } .evolution-card-title { font-size: 19px; } .evolution-card-effect { min-height: 0; margin-top: 5px; font-size: 11px; } .evolution-card-art { margin: 7px 0 10px; } .evolution-card-action { padding-top: 7px; } .evolution-panel > p { margin-bottom: 16px; font-size: 11px; } .evolution-panel h2 { font-size: 22px; } }
+@media (max-width: 650px) { .evolution-screen { padding: 20px; } .evolution-cards { grid-template-columns: 1fr; gap: 12px; } .evolution-card { padding: 14px 16px; } .evolution-card-preview { margin: 9px auto; } .evolution-card-title { font-size: 19px; } .evolution-card-effect { min-height: 0; margin-top: 5px; font-size: 11px; } .evolution-card-art { margin: 7px 0 10px; } .evolution-card-action { padding-top: 7px; } .evolution-heading { margin-bottom: 16px; } }
 @media (max-width: 520px) { .evolution-readout { bottom: 178px; left: 14px; max-width: calc(100% - 28px); font-size: 9px; } }
-@media (max-height: 600px) and (min-width: 651px) { .evolution-screen { padding: 18px 4vw; } .evolution-panel h2 { font-size: 25px; margin: 5px 0; } .evolution-panel > p { margin-bottom: 14px; font-size: 11px; } .evolution-card { padding: 12px 17px; } .evolution-card-preview { max-height: 76px; margin: 8px 0; } .evolution-card-title { font-size: 18px; } .evolution-card-effect { margin-top: 7px; min-height: 63px; font-size: 11px; } .evolution-card-art { margin: 7px 0 13px; font-size: 10px; } .evolution-card-action { padding-top: 7px; } .evolution-panel > .evolution-controls { margin-top: 12px; } }
+@media (max-height: 600px) and (min-width: 651px) { .evolution-screen { padding: 18px 4vw; } .evolution-heading { margin-bottom: 14px; } .evolution-card { padding: 12px 17px; } .evolution-card-preview { margin: 8px auto; } .evolution-card-title { font-size: 18px; } .evolution-card-effect { margin-top: 7px; min-height: 63px; font-size: 11px; } .evolution-card-art { margin: 7px 0 13px; font-size: 10px; } .evolution-card-action { padding-top: 7px; } .evolution-panel > .evolution-controls { margin-top: 12px; } }
 @media (max-height: 450px) and (min-width: 521px) { .evolution-readout { bottom: 151px; font-size: 9px; } }
 
 /* 右下连击面板与左侧技能分开；不盖住上方首领提示。 */

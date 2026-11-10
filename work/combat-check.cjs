@@ -40,6 +40,11 @@ function mockNode() {
   };
 }
 nodes.set('#game-over-title', mockNode());
+for (const id of ['pause-button', 'pause-screen', 'pause-menu', 'pause-settings-panel', 'pause-confirm-panel',
+  'pause-title', 'pause-description', 'pause-resume', 'pause-cancel', 'pause-confirm', 'pause-sound',
+  'pause-shake', 'pause-quality', 'pause-restart', 'pause-settings', 'pause-back', 'pause-exit']) {
+  nodes.set('#' + id, mockNode());
+}
 const resultIntro = mockNode();
 nodes.get('#game-over-screen').querySelector = selector => selector === '.result-intro' ? resultIntro : undefined;
 const evolutionCards = ['pierce','blast','aegis'].map(kind => {
@@ -104,6 +109,10 @@ function begin() {
     battlefieldEvents.nextObject = Infinity; battlefieldEvents.nextTransport = Infinity;`, sandbox);
   step();
 }
+function leaveBattle() {
+  emit(nodes.get('#menu-button'), 'click');
+  if (!nodes.get('#pause-screen').hidden) emit(nodes.get('#pause-confirm'), 'click');
+}
 function key(code, type = 'keydown', extra) { return emit(window, type, { code, ...extra }); }
 function samePosition(a, b) { assert.equal(a.x, b.x); assert.equal(a.y, b.y); }
 let checks = 0;
@@ -158,12 +167,12 @@ check('hidden tab stops movement and returning does not retain keys', () => {
   document.hidden = false; emit(document, 'visibilitychange'); step(); step(); samePosition(position(), before);
 });
 check('returning and re-entering resets position, focus, and held keys', () => {
-  begin(); const initial = position(); key('KeyD'); step(); emit(nodes.get('#menu-button'), 'click');
+  begin(); const initial = position(); key('KeyD'); step(); leaveBattle();
   assert.equal(nodes.get('#battle-screen').hidden, true); begin(); step(); samePosition(position(), initial);
   assert.equal(document.activeElement, canvas); assert.equal(nodes.get('#movement-hint').hidden, false);
 });
 check('menu ignores movement; shortcuts do not move the ship', () => {
-  emit(nodes.get('#menu-button'), 'click'); const before = position();
+  leaveBattle(); const before = position();
   assert.equal(key('ArrowUp').prevented, false); step(); samePosition(position(), before);
   begin(); const inBattle = position(); key('KeyD', 'keydown', { ctrlKey: true }); step(); samePosition(position(), inBattle);
 });
@@ -233,7 +242,7 @@ check('window blur, hidden tabs and control focus pause shooting without catch-u
 });
 check('menu clears all bullets and re-entering starts a fresh firing cycle', () => {
   begin(); key('KeyW'); frames(4); key('KeyW', 'keyup');
-  assert.ok(shots().length > 0); emit(nodes.get('#menu-button'), 'click');
+  assert.ok(shots().length > 0); leaveBattle();
   assert.equal(shots().length, 0); frames(100); assert.equal(shots().length, 0);
   assert.equal(nodes.get('#pause-hint').hidden, true);
   begin(); assert.equal(shots().length, 1); assert.equal(shots()[0].y, position().y);
@@ -313,7 +322,7 @@ check('resize keeps points; returning to menu resets the entire encounter', () =
   surface = {width:640,height:360}; emit(window, 'resize');
   assert.equal(scene().score, 100); assert.equal(scene().enemies.length, 0);
   assert.equal(scene().explosions.length, 0);
-  emit(nodes.get('#menu-button'), 'click');
+  leaveBattle();
   assert.equal(scene().score, 0); assert.equal(nodes.get('#score').textContent, '000000');
   frames(100); assert.equal(scene().enemies.length, 0); begin();
   assert.equal(scene().score, 0); assert.equal(scene().enemies.length, 0);
@@ -485,7 +494,7 @@ check('game over freezes orbs; restart and menu restore all initial upgrades', (
   assert.equal(orbScene().powerups.length,0); assert.equal(orbScene().powerupSpawnCount,0);
   assert.equal(orbScene().powerupCooldown,3); assert.equal(nodes.get('#powerup-notice').hidden,true);
   execute('applyPowerup("blue");applyPowerup("yellow");applyPowerup("red");');
-  emit(nodes.get('#menu-button'),'click');
+  leaveBattle();
   near(weaponState().interval,1/3.6); assert.equal(weaponState().lanes,1); near(weaponState().damage,2.2);
 });
 check('escaped orbs are removed and spawn count is bounded on screen', () => {
@@ -682,7 +691,7 @@ check('resize preserves the current tier, color and lanes, while restart restore
   emit(nodes.get('#restart-button'),'click'); step();
   assert.equal(weaponState().tier,1); assert.equal(weaponState().lanes,1); near(weaponState().damage,2.2);
   assert.equal(palette().name,'黄色'); near(emitted()[0].damage,2.2);
-  execute('weapon.tier=6;'); emit(nodes.get('#menu-button'),'click');
+  execute('weapon.tier=6;'); leaveBattle();
   assert.equal(weaponState().tier,1); assert.equal(palette().name,'黄色');
 });
 check('high-rate four-lane fire preserves total damage across frame rates with bounded visual objects', () => {
@@ -830,7 +839,7 @@ check('resize retains boss identity, health, defeat history, schedule and remaps
 });
 check('menu and game-over restart clean all boss state and restore the original schedule', () => {
   readyBoss(1,'bossDefeated=3;nextBossTime=500;'); execute(bossProjectile());
-  emit(nodes.get('#menu-button'),'click'); assert.equal(bossState().boss,null); assert.equal(bossState().nextBossTime,execute('bossRules.firstArrival'));
+  leaveBattle(); assert.equal(bossState().boss,null); assert.equal(bossState().nextBossTime,execute('bossRules.firstArrival'));
   assert.equal(bossState().bossDefeated,0); assert.equal(bossState().bossProjectiles.length,0);
   readyBoss(4,'player.lives=1;'); execute(bossProjectile()+'updateBossDamage();');
   assert.equal(health().state,'over'); const frozen=bossState(); frames(50); assert.deepEqual(bossState(),frozen);
@@ -1061,7 +1070,7 @@ check('resize preserves normalized combat progression and restart restores openi
   isolatedBattle('battleTime=300;weapon.tier=4;spawnEnemy("scout");'); const log=execute('enemyHealthLogForTime()');
   surface={width:640,height:360}; emit(window,'resize'); assert.equal(scene().battleTime,300);
   assert.equal(execute('enemyHealthLogForTime()'),log); execute('spawnEnemy("scout");'); assert.equal(scene().enemies[0].healthLog,log);
-  emit(nodes.get('#menu-button'),'click'); begin(); assert.equal(scene().battleTime,0);
+  leaveBattle(); begin(); assert.equal(scene().battleTime,0);
   execute('spawnEnemy("scout");'); near(scene().enemies[0].healthLog,Math.log(1.14));
 });
 check('the opening alien follows its crescent with another and uses a third aimed arc when enraged', () => {
@@ -1111,7 +1120,9 @@ check('the fusion corridor is reachable from either edge while charging in a tal
     const guide=bossState().bossHazards.find(hazard=>hazard.kind==='guide');
     const move=edge<.5?'ArrowDown':'ArrowUp';
     key(move);
-    execute('updatePlayer(boss.telegraphDuration-.24);');
+    const seconds = Math.abs(position().y - guide.y) / execute('player.speed * .65');
+    assert.ok(seconds <= bossState().boss.telegraphDuration - .24);
+    execute(`updatePlayer(${seconds});`);
     key(move,'keyup');
     assert.ok(Math.abs(position().y-guide.y)<guide.thickness/2-execute('player.height*.16'));
   }
@@ -1121,7 +1132,7 @@ check('the first lash follow-up locks the player after the initial dodge and rew
     readyBoss(0, 'prepareAlienAttack(boss);');
     const firstY = bossState().bossHazards[0].y;
     key('ArrowUp'); frames(7); key('ArrowUp', 'keyup');
-    frames(37);
+    for (let i = 0; i < 80 && !bossState().bossHazards.some(hazard => hazard.kind === 'zone'); i++) step();
     const follow = bossState().bossHazards.find(hazard => hazard.kind === 'zone');
     assert.ok(follow && follow.age < follow.warning);
     near(follow.y, position().y);
@@ -1131,8 +1142,8 @@ check('the first lash follow-up locks the player after the initial dodge and rew
       key('ArrowUp'); key('ArrowLeft'); frames(11);
       key('ArrowUp', 'keyup'); key('ArrowLeft', 'keyup');
       near(bossState().bossHazards.find(hazard => hazard.kind === 'zone').y, follow.y);
-    } else frames(11);
-    frames(9);
+    }
+    frames(Math.ceil((follow.warning - follow.age - (escape ? .55 : 0)) / .05) + 1);
     assert.equal(health().lives, escape ? 3 : 2);
   }
 });
@@ -1146,8 +1157,12 @@ check('mirror pincer locks separate lines and sends real projectiles from both s
   frames(6);
   const front = bossState().bossHazards.find(hazard => hazard.kind === 'portal' && hazard.originX > hazard.x);
   assert.ok(front && front.y < rear.y - 120);
+  key('ArrowDown'); frames(5); key('ArrowDown', 'keyup');
+  frames(Math.ceil((rear.warning - rear.age) / .05) - 20);
   assert.ok(bossState().bossProjectiles.some(shot => shot.vx > 0));
-  key('ArrowDown'); frames(18); key('ArrowDown', 'keyup');
+  const currentFront = bossState().bossHazards.find(hazard => hazard.kind === 'portal' && hazard.originX > hazard.x);
+  assert.ok(currentFront);
+  frames(Math.ceil((currentFront.warning - currentFront.age) / .05) + 1);
   assert.ok(bossState().bossProjectiles.some(shot => shot.vx < 0));
   assert.equal(health().lives, 3);
 });
@@ -1161,14 +1176,14 @@ check('a sideways dodge solves the rift inside the final cyan corridor in compac
       key('ArrowDown');
       for (let frame = 0; frame < 30 && position().y < guide.y - 8; frame++) step();
       key('ArrowDown', 'keyup');
-      while (!bossState().bossHazards.some(hazard => hazard.kind === 'seam') && scene().battleTime < 3) step();
+      while (!bossState().bossHazards.some(hazard => hazard.kind === 'seam') && scene().battleTime < 4) step();
       const seam = bossState().bossHazards.find(hazard => hazard.kind === 'seam');
       assert.ok(seam && seam.age < seam.warning);
       const start = position();
       if (escape) key('ArrowRight');
       frames(9);
       key('ArrowRight', 'keyup');
-      frames(13);
+      frames(Math.ceil((seam.warning - seam.age) / .05) - 8);
       assert.equal(position().y, start.y);
       assert.equal(health().lives, escape ? 3 : 2, `${size.width}x${size.height}, escape ${escape}`);
     }
@@ -1241,13 +1256,13 @@ check('half health ruptures armor, replaces old threats, and announces a stronge
   execute('updateBossEncounter(boss.telegraphDuration);');
   assert.equal(execute('bossCanTakeDamage()'),true);
 });
-check('enrage makes subsequent projectiles faster and preparation shorter while leaving a warning', () => {
+check('enrage makes projectiles faster while retaining time to read the warning', () => {
   function sample(enraged) {
     readyBoss(1,`boss.enraged=${enraged};prepareAlienAttack(boss);boss.phase="attack";boss.phaseTime=2;runAlienAttack(boss);`);
     const b=bossState(); return {count:b.bossProjectiles.length,speed:Math.hypot(b.bossProjectiles[0].vx,b.bossProjectiles[0].vy),warning:b.boss.telegraphDuration};
   }
   const calm=sample(false),rage=sample(true);
-  assert.ok(rage.count>0 && calm.count>0); assert.ok(rage.speed>calm.speed); assert.ok(rage.warning<calm.warning); assert.ok(rage.warning>=.8);
+  assert.ok(rage.count>0 && calm.count>0); assert.ok(rage.speed>calm.speed); assert.equal(rage.warning,calm.warning); assert.ok(rage.warning>=1.4);
 });
 check('Boss durability uses a growing time reference and stays finite at extreme tiers', () => {
   let previous=0;
@@ -1271,7 +1286,7 @@ check('full-screen warning shows the selected boss once and clears on spawn, def
   execute('battleTime=nextBossTime;updateBossEncounter(0);'); assert.equal(nodes.get('#boss-warning').hidden,true);
   execute('setBossWarning("测试");defeatBoss();'); assert.equal(nodes.get('#boss-warning').hidden,true);
   execute('setBossWarning("测试");endGame();'); assert.equal(nodes.get('#boss-warning').hidden,true);
-  begin(); execute('setBossWarning("测试");'); emit(nodes.get('#menu-button'),'click'); assert.equal(nodes.get('#boss-warning').hidden,true);
+  begin(); execute('setBossWarning("测试");'); leaveBattle(); assert.equal(nodes.get('#boss-warning').hidden,true);
 });
 check('warning countdown freezes while paused and resizing does not consume or replay it', () => {
   isolatedBattle(); execute('resetBossEncounter();battleTime=nextBossTime-bossRules.warning;updateBossEncounter(0);');
@@ -1296,7 +1311,7 @@ check('audio lifecycle follows start, pause, resume, boss, enrage, defeat and ga
   finishBossPresentation(); execute('chooseEvolution("pierce");'); step(); assert.deepEqual(lastSync(),[true,false,false]);
   execute('endGame();'); assert.equal(lastSync()[0],false);
   emit(nodes.get('#restart-button'),'click'); step(); assert.deepEqual(lastSync(),[true,false,false]);
-  emit(nodes.get('#menu-button'),'click'); assert.equal(lastSync()[0],false);
+  leaveBattle(); assert.equal(lastSync()[0],false);
 });
 check('shooting sound is emitted per visible volley, explosion sound only on destruction, and mute restores focus', () => {
   isolatedBattle('weapon.interval=.001;weapon.lanes=4;resetWeapons();'); audioCalls.length=0;
@@ -1360,7 +1375,7 @@ check('space shortcuts, menus and unfocused or paused battles do not cast', () =
   for(const modifier of ['altKey','ctrlKey','metaKey']) assert.equal(key('Space','keydown',{[modifier]:true}).prevented,false);
   assert.equal(ult().charges,2); nodes.get('#sound-button').focus(); key('Space'); assert.equal(ult().charges,2);
   emit(canvas,'pointerdown'); emit(window,'blur'); key('Space'); assert.equal(ult().charges,2);
-  emit(window,'focus'); emit(nodes.get('#menu-button'),'click'); key('Space'); assert.equal(ult().phase,'idle');
+  emit(window,'focus'); leaveBattle(); key('Space'); assert.equal(ult().phase,'idle');
 });
 check('charge lasts exactly 0.85 seconds and emits one charge and one launch sound', () => {
   isolatedBattle(); primeUltimate(); audioCalls.length=0;
@@ -1458,7 +1473,7 @@ check('death stops a charging cannon and restart or menu removes stored energy a
   isolatedBattle('ultimate.energy=51;player.lives=1;'); primeUltimate(3); execute('requestUltimate();'); collide();
   assert.equal(health().state,'over'); assert.equal(ult().phase,'idle'); assert.equal(ult().shot,null);
   emit(nodes.get('#restart-button'),'click'); assert.equal(ult().charges,0); near(ult().energy,0);
-  primeUltimate(2); castUltimate(); emit(nodes.get('#menu-button'),'click'); assert.equal(ult().charges,0); assert.equal(ult().phase,'idle'); assert.equal(ult().shot,null);
+  primeUltimate(2); castUltimate(); leaveBattle(); assert.equal(ult().charges,0); assert.equal(ult().phase,'idle'); assert.equal(ult().shot,null);
 });
 check('energy cannon drawings balance context state and never draw nonfinite coordinates', () => {
   for(const reduced of [false,true]) for(const phase of ['charging','firing']) {
@@ -1466,7 +1481,9 @@ check('energy cannon drawings balance context state and never draw nonfinite coo
     captureDraws=true; drawOperations.length=0; execute('drawUltimate();'); captureDraws=false;
     assert.equal(drawOperations.filter(d=>d.name==='save').length,drawOperations.filter(d=>d.name==='restore').length);
     assert.ok(drawOperations.flatMap(d=>d.args).filter(v=>typeof v==='number').every(Number.isFinite));
-    assert.ok(drawOperations.some(d=>d.name==='ellipse')); if(phase==='firing') assert.ok(drawOperations.some(d=>d.name==='fillRect'));
+    assert.ok(drawOperations.some(d=>d.name==='ellipse'));
+    assert.ok(drawOperations.some(d=>d.name==='set:globalCompositeOperation'&&d.args[0]==='screen'));
+    assert.equal(drawOperations.some(d=>d.name==='fillRect'),false);
   }
   execute('reducedMotion.matches=false;');
 });
@@ -1608,7 +1625,7 @@ check('V respects modifier keys, control focus, window pause and the menu', () =
   for(const modifier of ['altKey','ctrlKey','metaKey']) assert.equal(key('KeyV','keydown',{[modifier]:true}).prevented,false);
   assert.equal(protection().charges,2); nodes.get('#sound-button').focus(); assert.equal(key('KeyV').prevented,false);
   emit(canvas,'pointerdown'); emit(window,'blur'); assert.equal(key('KeyV').prevented,false); assert.equal(execute('requestShield()'),false);
-  emit(window,'focus'); assert.equal(protection().charges,2); emit(nodes.get('#menu-button'),'click');
+  emit(window,'focus'); assert.equal(protection().charges,2); leaveBattle();
   assert.equal(key('KeyV').prevented,false); assert.equal(execute('requestShield()'),false);
 });
 check('shield energy and remaining duration freeze on every pause route and resume without catch-up', () => {
@@ -1664,7 +1681,7 @@ check('death ends active protection and restart or returning to menu clears all 
   near(protection().remaining,0); assert.equal(execute('shieldIsActive()'),false); const ended=protection();
   frames(100); execute('updateShield(100);'); assert.deepEqual(protection(),ended);
   emit(nodes.get('#restart-button'),'click'); assert.deepEqual(protection(),{charges:0,energy:0,remaining:0,perfectRemaining:0,perfectUsed:false,flash:0,slowRemaining:0,effect:null});
-  execute('updateShield(31);requestShield();'); emit(nodes.get('#menu-button'),'click'); assert.deepEqual(protection(),{charges:0,energy:0,remaining:0,perfectRemaining:0,perfectUsed:false,flash:0,slowRemaining:0,effect:null});
+  execute('updateShield(31);requestShield();'); leaveBattle(); assert.deepEqual(protection(),{charges:0,energy:0,remaining:0,perfectRemaining:0,perfectUsed:false,flash:0,slowRemaining:0,effect:null});
 });
 check('shield drawing is a translucent red enclosing ellipse with finite geometry and balanced canvas state', () => {
   for(const reduced of [false,true]) for(const size of [{width:390,height:844},{width:1280,height:720}]) {
@@ -1926,7 +1943,7 @@ check('Boss warning, entry and defeat clear all ordinary bullets and retain enem
 check('death, menu and restarting discard ordinary shells and reset type introductions for a fresh round', () => {
   readyGunner(enemyShot('600','200')); execute('endGame();'); assert.equal(enemyCombat().enemyProjectiles.length,0);
   emit(nodes.get('#restart-button'),'click'); assert.equal(enemyCombat().enemyProjectiles.length,0); assert.deepEqual(enemyCombat().introduced,[]);
-  execute('spawnEnemy("gunner");'+enemyShot('600','200')); emit(nodes.get('#menu-button'),'click');
+  execute('spawnEnemy("gunner");'+enemyShot('600','200')); leaveBattle();
   assert.equal(enemyCombat().enemyProjectiles.length,0); assert.deepEqual(enemyCombat().introduced,[]);
   begin(); execute('spawnEnemy();'); assert.equal(scene().enemies[0].kind,'scout'); near(scene().enemies[0].healthLog,Math.log(1.14));
 });
@@ -1960,7 +1977,7 @@ check('a new round has no evolutions and only one pending reward can be collecte
   assert.equal(execute('chooseEvolution("pierce")'),true); assert.equal(execute('chooseEvolution("pierce")'),false);
   assert.equal(evolutionState().pierce,1); assert.equal(evolutionState().pending,false);
   assert.equal(nodes.get('#evolution-screen').hidden,true); assert.equal(document.activeElement,canvas);
-  emit(nodes.get('#menu-button'),'click'); assert.equal(execute('openEvolutionChoice()'),false);
+  leaveBattle(); assert.equal(execute('openEvolutionChoice()'),false);
 });
 check('reward choice freezes combat and sound, clears hazards and refunds an unfinished cannon exactly once', () => {
   isolatedBattle('shield.energy=13;shield.charges=1;requestShield();ultimate.charges=2;requestUltimate();updateUltimate(.2);');
@@ -2039,7 +2056,7 @@ check('resize preserves pending choice and its focus while restart or menu clear
   execute('chooseEvolution("blast");endGame();'); emit(nodes.get('#restart-button'),'click'); step();
   assert.equal(evolutionState().pierce,0); assert.equal(evolutionState().blast,0); assert.equal(evolutionState().aegis,0);
   assert.equal(canvas.inert,false); assert.equal(nodes.get('#evolution-screen').hidden,true);
-  execute('openEvolutionChoice();'); emit(nodes.get('#menu-button'),'click'); assert.equal(evolutionState().pending,false);
+  execute('openEvolutionChoice(); showScreen("menu");'); assert.equal(evolutionState().pending,false);
   assert.equal(canvas.inert,false);
 });
 check('piercing upgrades hit exactly one plus their level distinct enemies with no damage loss or repeat hits', () => {
@@ -2256,7 +2273,7 @@ check('menu, hidden tabs and evolution dialog reject stance changes, and resize 
   execute('openEvolutionChoice();'); key('ShiftLeft'); emit(nodes.get('#stance-button'),'click'); assert.equal(execute('firingStyle.mode'),'focus');
   execute('chooseEvolution("pierce");'); document.hidden=true; emit(document,'visibilitychange');
   assert.equal(execute('toggleFiringStyle()'),false); document.hidden=false; emit(document,'visibilitychange');
-  emit(nodes.get('#menu-button'),'click'); assert.equal(execute('toggleFiringStyle()'),false); assert.equal(execute('firingStyle.mode'),'spread');
+  leaveBattle(); assert.equal(execute('toggleFiringStyle()'),false); assert.equal(execute('firingStyle.mode'),'spread');
   begin(); assert.equal(execute('firingStyle.mode'),'spread');
 });
 check('bullets snapshot mode, angle, thickness, damage and color across stance switches, upgrades and rage expiry', () => {
@@ -2483,7 +2500,7 @@ check('resize clears stale effects but preserves and repositions the active Boss
 check('menu game over and restart discard death callbacks wrecks particles and accumulated shake', () => {
   for(const action of ['menu','death','restart']) {
     readyBoss(0,'defeatBoss();updateCombatEffects(.3);'); assert.ok(effectsState().particles.length>0);
-    if(action==='menu') emit(nodes.get('#menu-button'),'click');
+    if(action==='menu') leaveBattle();
     else {execute('endGame();'); if(action==='restart') {emit(nodes.get('#restart-button'),'click');step();}}
     const fx=effectsState(); assert.equal(fx.deathRemaining,0); assert.equal(fx.choiceTarget,null);
     assert.equal(fx.wrecks.length+fx.particles.length+fx.impacts.length+fx.shockwaves.length,0); assert.equal(fx.shake,0);
@@ -2814,7 +2831,11 @@ check('linked charge and red cannon show a small ice-blue signature with finite 
     assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
     assert.ok(drawOperations.some(op=>op.name==='set:strokeStyle'&&op.args[0]==='#c1f4ff'));
     assert.ok(drawOperations.some(op=>op.name==='ellipse'));
-    if(phase==='firing') {assert.ok(drawOperations.some(op=>op.name==='fillRect'));assert.ok(drawOperations.some(op=>op.name==='set:shadowColor'&&op.args[0]==='#ff172a'));}
+    if(phase==='firing') {
+      assert.equal(drawOperations.filter(op=>op.name==='createLinearGradient').length,4);
+      assert.ok(drawOperations.filter(op=>op.name==='lineTo').length>20);
+      assert.equal(drawOperations.some(op=>op.name==='fillRect'),false);
+    }
   }
   execute('reducedMotion.matches=false;');
 });

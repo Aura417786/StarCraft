@@ -63,16 +63,16 @@ function previewDroneFire(ctx, ship, level, time, quiet, links, showPhalanx) {
 }
 
 function previewShieldFire(ctx, ship, level, time, quiet, lance) {
-  const age = quiet ? (lance ? 2.45 : 1.95) : time % 3.35;
+  const age = quiet ? (lance ? 2.45 : 1.95) : (time + .98) % 3.35;
   const radiusX = ship.width * .6;
   const radiusY = ship.height * .65;
   const capacity = evolutionWeaponRules.absorbLimit[level];
   let absorbed = 0;
   const active = age >= .22 && age < 2.22;
   if (active) {
-    ctx.fillStyle = "#e8554a1f";
-    ctx.strokeStyle = "#fa8c7a";
-    ctx.lineWidth = 1.3;
+    ctx.fillStyle = level ? "#ee935837" : "#e8554a1f";
+    ctx.strokeStyle = level ? "#ffc08d" : "#fa8c7a";
+    ctx.lineWidth = level ? 1.8 : 1.3;
     ctx.beginPath();
     ctx.ellipse(ship.x, ship.y, radiusX, radiusY, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -145,10 +145,20 @@ function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
   ctx.save();
   ctx.translate(right ? 160 : 0, 0);
   ctx.beginPath();
-  ctx.rect(0, 0, 160, 112);
+  ctx.rect(0, 0, 160, 148);
   ctx.clip();
-  ctx.fillStyle = right ? "#101e2c" : "#0b1220";
-  ctx.fillRect(0, 0, 160, 112);
+  const background = ctx.createLinearGradient(0, 0, 160, 148);
+  background.addColorStop(0, right ? "#173145" : "#141c2b");
+  background.addColorStop(1, "#080f1a");
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, 160, 148);
+  if (right) {
+    ctx.fillStyle = "#b1e2ff";
+    ctx.globalAlpha = quiet ? .34 : .25 + .09 * Math.sin(time * 3);
+    ctx.fillRect(0, 0, 160, 2);
+    ctx.globalAlpha = 1;
+  }
+  ctx.translate(0, 16);
   ctx.strokeStyle = "#89b5d217";
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -156,7 +166,7 @@ function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
   ctx.moveTo(8, 91); ctx.lineTo(151, 91);
   ctx.stroke();
 
-  const ship = { x: 49, y: 55, width: 70, height: 46, visualBank: 0 };
+  const ship = { x: 54, y: 55, width: 85, height: 56, visualBank: 0 };
   if (!drawEvolvedPlayer(ctx, ship, ranks, true, 0)) drawFighterVariant(ctx, ship, fighterProfile().id, null, true, 0);
   if (route === "pierce") previewWingFire(ctx, ship, level, time, quiet);
   if (route === "blast") previewDroneFire(ctx, ship, level, time, quiet, links, choice === "phalanx");
@@ -167,8 +177,8 @@ function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
     previewPulse(ctx, ship.x + ship.width * .465 + age * 131, ship.y, 9, 2, "#ffd5aa");
   }
   ctx.fillStyle = right ? "#c4e5f8" : "#9cacbf";
-  ctx.font = "11px system-ui, sans-serif";
-  ctx.fillText(label, 9, 105);
+  ctx.font = "600 12px system-ui, sans-serif";
+  ctx.fillText(label, 10, 119);
   ctx.restore();
 }
 
@@ -200,9 +210,15 @@ function drawEvolutionChoicePreviews(now) {
     const ctx = preview?.getContext?.("2d");
     if (!ctx) continue;
     const choice = card.dataset.choice;
+    ctx.setTransform(preview.width / 320, 0, 0, preview.height / 148, 0, 0);
     paintEvolutionPreviewPane(ctx, choice, false, evolutionPreview.elapsed, quiet);
     paintEvolutionPreviewPane(ctx, choice, true, evolutionPreview.elapsed, quiet);
     ctx.fillStyle = "#80a9c43d";
-    ctx.fillRect(159.5, 0, 1, 112);
+    ctx.fillRect(159.5, 0, 1, 148);
+    ctx.fillStyle = "#cde9f9";
+    ctx.font = "600 13px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("›", 160, 77);
+    ctx.textAlign = "start";
   }
 }

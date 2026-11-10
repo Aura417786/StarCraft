@@ -15,6 +15,7 @@ const gameAudio = (() => {
   let noiseBuffer = null;
   let muted = false;
   let active = false;
+  let paused = false;
   let bossActive = false;
   let enraged = false;
   let warningActive = false;
@@ -56,8 +57,8 @@ const gameAudio = (() => {
   function disconnect(node) {
     try { node.disconnect(); } catch { /* 已断开的节点无需再处理。 */ }
   }
-  function canPlay() {
-    return !!audio && audio.state === "running" && active && !muted && !disposed;
+  function canPlay(bus = "sfx") {
+    return !!audio && audio.state === "running" && (active || (paused && bus === "music")) && !muted && !disposed;
   }
   function smoothGain(node, value, duration = 0.035) {
     if (!audio || !node) return;
@@ -115,7 +116,7 @@ const gameAudio = (() => {
     return true;
   }
   function note(options) {
-    if (!canPlay()) return;
+    if (!canPlay(options.bus)) return;
     const { bus = "sfx", time = audio.currentTime, duration = 0.1, volume = 0.08,
       frequency = 440, endFrequency = frequency, type = "triangle", noise = false,
       attack = 0.004, filterType = "lowpass", cutoff = 5000, pan = 0, sustain = false,
@@ -391,7 +392,7 @@ const gameAudio = (() => {
   }
   function scheduleMusic() {
     scheduler = null;
-    if (!musicPlaying || !canPlay() || warningActive || cinematicActive) return;
+    if (!musicPlaying || !canPlay("music") || warningActive || cinematicActive) return;
     const now = audio.currentTime;
     // 电脑卡顿或恢复后从当前时刻接着演奏，绝不追补积压的鼓点。
     if (nextStepTime < now - 0.04) nextStepTime = now + 0.02;
@@ -419,13 +420,15 @@ const gameAudio = (() => {
   }
   function reconcile() {
     if (!audio) return;
-    if (!canPlay()) {
+    smoothGain(sfxBus, paused ? .16 : .65, .12);
+    if (!canPlay("music")) {
       stopMusic();
       stopVoices();
       return;
     }
     if (warningActive || cinematicActive) { stopMusic(); return; }
     const theme = bossActive ? "boss" : "adventure";
+    const musicLevel = paused ? .25 : 1;
     if (theme !== musicTheme) {
       stopMusic();
       musicTheme = theme;
@@ -434,12 +437,12 @@ const gameAudio = (() => {
     }
     if (authoredStems[theme].every(name => buffers.has(name))) {
       if (musicPlaying) stopMusic();
-      smoothGain(musicBus, bossActive ? .59 : .52, .2);
+      smoothGain(musicBus, (bossActive ? .59 : .52) * musicLevel, .2);
       if (!liveScore) startScore(theme);
       updateScoreMix();
       return;
     }
-    smoothGain(musicBus, bossActive ? 0.3 : overdriveMusic ? 0.29 : comboLayer ? 0.245 : 0.22, 0.14);
+    smoothGain(musicBus, (bossActive ? .3 : overdriveMusic ? .29 : comboLayer ? .245 : .22) * musicLevel, .14);
     if (musicPlaying) return;
     musicPlaying = true;
     nextStepTime = audio.currentTime + 0.025;
@@ -506,6 +509,7 @@ const gameAudio = (() => {
     const nextComboLayer = combo >= 20 ? 3 : combo >= 12 ? 2 : combo >= 6 ? 1 : 0;
     const nextWarning = !!context?.warning;
     const nextCinematic = !!context?.cinematic;
+    const nextPaused = !!context?.paused;
     const nextOverdrive = !!context?.overdrive;
     const nextType = Number.isInteger(context?.bossType) ? context.bossType : null;
     const nextPhase = context?.bossPhase ?? null;
@@ -513,11 +517,12 @@ const gameAudio = (() => {
       + (Number.isFinite(context?.lives) && context.lives <= 1 ? 1 : 0);
     const entering = nextPhase === "enter" && (bossPhase !== nextPhase || bossType !== nextType);
     const transforming = nextPhase === "finale" && bossPhase !== nextPhase;
-    const changed = active !== !!nextActive || bossActive !== !!nextBossActive || enraged !== !!nextEnraged ||
+    const changed = active !== !!nextActive || paused !== nextPaused || bossActive !== !!nextBossActive || enraged !== !!nextEnraged ||
       comboLayer !== nextComboLayer || warningActive !== nextWarning || cinematicActive !== nextCinematic ||
       overdriveMusic !== nextOverdrive || bossType !== nextType || bossPhase !== nextPhase || threat !== nextThreat;
     const wasActive = active;
     active = !!nextActive;
+    paused = nextPaused;
     bossActive = !!nextBossActive;
     enraged = !!nextEnraged;
     comboLayer = nextComboLayer;

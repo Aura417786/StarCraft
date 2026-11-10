@@ -31,7 +31,7 @@ function signatureArena() {
       let threatensStationary = false;
       let readable = true;
       const kinds = new Set(bossHazards.map(hazard => hazard.kind));
-      for (let time = 0; time <= 7; time += 1 / 60) {
+      for (let time = 0; time <= 9; time += 1 / 60) {
         const dt = 1 / 60;
         if (time >= boss.telegraphDuration) {
           boss.phase = "attack";
@@ -41,7 +41,7 @@ function signatureArena() {
         updateBossProjectiles(dt);
         for (const hazard of bossHazards) {
           kinds.add(hazard.kind);
-          if (pressure) readable &&= hazard.warning >= .79;
+          readable &&= hazard.warning >= (hazard.kind === "tide" ? 1.6 : 1.4);
           threatensStationary ||= alienHazardHitsPlayer(hazard);
         }
         threatensStationary ||= bossProjectiles.some(bossShotHitsPlayer);
@@ -50,7 +50,7 @@ function signatureArena() {
       return { peak, kinds: [...kinds], threatensStationary, readable, name: boss.attackLabel[1] };
     }
   `);
-  for (const file of ["bosses.js", "alien-attacks.js", "alien-pressure.js"]) {
+  for (const file of ["bosses.js", "alien-attacks.js", "alien-pressure.js", "boss-finales.js"]) {
     run(fs.readFileSync(path.join(__dirname, "..", file), "utf8"));
   }
   // The production HUD writes to DOM. These checks only exercise the simulation.
@@ -72,6 +72,38 @@ test("all eleven identities can execute every regular and enraged attack timelin
       }
     }
     assert.ok(bodyKinds.size >= 2, `type ${type} distinct threat shapes`);
+  }
+});
+
+test("each new attack has a teaching window and a single concise action", () => {
+  const run = signatureArena();
+  const result = run(`(() => {
+    const warnings = [];
+    for (let type = 0; type < bossTypes.length; type++) {
+      for (const pressure of [false, true]) {
+        for (const pattern of pressure ? [0] : [0, 1, 2]) {
+          const target = positionBoss(type, pressure, pattern, pressure);
+          const first = target.telegraphDuration;
+          const [name, enName, hint, enHint] = target.attackLabel;
+          const wide = pressure ? widePressureMaterials.has(alienPressurePlans[type].material)
+            : wideAlienPatterns.has(target.alienAttack);
+          target.attackIndex = pattern - 1;
+          target.pressureCycle = 0;
+          prepareAlienAttack(target, pressure);
+          warnings.push({ first, repeat: target.telegraphDuration, hint, enHint, wide });
+        }
+      }
+    }
+    return { warnings, finales: bossFinaleStages.map(stage => stage.hint) };
+  })()`);
+  assert.equal(result.warnings.length, 44);
+  for (const { first, repeat, hint, enHint, wide } of result.warnings) {
+    assert.ok(Math.abs(first - repeat - .4) < 1e-8);
+    assert.ok(repeat >= (wide ? 1.6 : 1.4) && first <= 2.2);
+    assert.ok(hint.length >= 8 && hint.length <= 14 && enHint.length < 52, hint);
+  }
+  for (const [hint, enHint] of result.finales) {
+    assert.ok(hint.length >= 8 && hint.length <= 14 && enHint.length < 52, hint);
   }
 });
 
@@ -201,5 +233,5 @@ test("the reverse tide leaves the same reachable escape corridor and remaps it a
   })()`);
   assert.equal(result.firstDirection, -1);
   assert.equal(result.lastDirection, 1);
-  assert.ok(result.safe && result.warning >= .79 && result.centerTravel <= result.reach);
+  assert.ok(result.safe && result.warning >= 1.6 && result.centerTravel <= result.reach);
 });

@@ -2,17 +2,17 @@
 
 // Identity, second health pool, recovery cadence and the counter visible in the HUD.
 const bossFinaleStages = [
-  { mode: "egg", hp: .72, interval: 4.40, name: ["深渊胚卵", "Abyssal Egg"], hint: ["进入青色泄压带，浪峰过后打击卵壳", "Enter the cyan relief lane, then fire after the crest"] },
-  { mode: "bones", hp: .48, interval: 3.40, name: ["髓骨祭骸", "Marrow Reliquary"], hint: ["打断上下两根发光骨柱，削弱骨矛齐射", "Break both marrow anchors to reduce the spear volleys"] },
-  { mode: "furnace", hp: .53, interval: 3.55, name: ["无壳炉心", "Uncased Furnace"], hint: ["躲过熔炉喷口，趁蓝色冷却裂纹亮起集火", "Escape the vents and strike during blue cooldown"] },
-  { mode: "web", hp: .46, interval: 3.60, name: ["断弦织心", "Unstrung Heart"], hint: ["穿过青色断弦结，打开织心外壳", "Cross the cyan knot to unravel the heart's armor"] },
-  { mode: "claws", hp: .52, interval: 3.70, name: ["双螯断锁", "Double Lock"], hint: ["螯壁从上下合拢，沿中间缺口突入反击", "Meet the two claws at their gap, then counter"] },
-  { mode: "mirror", hp: .44, interval: 3.45, name: ["镜棺回照", "Mirror Sepulcher"], hint: ["瞄准带菱形标记的真像，留意诱饵反射", "Aim at the marked reflection and watch decoy rebounds"] },
-  { mode: "coil", hp: .57, interval: 3.52, name: ["沉雷断尾", "Severed Thunder"], hint: ["绕过扩张的电环，追打游走的断尾", "Clear the expanding electrical ring and track the tail"] },
-  { mode: "spores", hp: .52, interval: 3.74, name: ["临终孢巢", "Last Spore Nest"], hint: ["打掉孢囊可阻止下一轮定点萌爆", "Pop the sacs to prevent their next germination blast"] },
-  { mode: "void", hp: .58, interval: 3.65, name: ["噬界奇点", "World-Eater Singularity"], hint: ["逆着吸力离开黑洞边界，塌缩后反击", "Escape against the pull and counter after implosion"] },
-  { mode: "synapse", hp: .53, interval: 3.58, name: ["神经王冠断路", "Broken Neural Crown"], hint: ["按点亮顺序打断三个神经结，躲开折线放电", "Sever the lit synapses in order and dodge the discharge"] },
-  { mode: "fusion", hp: .66, interval: 3.74, name: ["群渊末日核", "Confluence Extinction Core"], hint: ["预读横纵封锁，抓住三重防线交替的空档", "Read both axes and strike between the three defenses"] },
+  { mode: "egg", hp: .72, interval: 4.40, name: ["深渊胚卵", "Abyssal Egg"], hint: ["进入泄压缺口避开浪峰", "Hold in the relief gap"] },
+  { mode: "bones", hp: .48, interval: 3.40, name: ["髓骨祭骸", "Marrow Reliquary"], hint: ["击破上下两根发光骨柱", "Break both glowing bone anchors"] },
+  { mode: "furnace", hp: .53, interval: 3.55, name: ["无壳炉心", "Uncased Furnace"], hint: ["躲开喷发再攻击炉心", "Dodge the vents, then strike"] },
+  { mode: "web", hp: .46, interval: 3.60, name: ["断弦织心", "Unstrung Heart"], hint: ["飞过亮点解开保护壳", "Cross the glowing knot to expose the heart"] },
+  { mode: "claws", hp: .52, interval: 3.70, name: ["双螯断锁", "Double Lock"], hint: ["飞入双螯之间的缺口", "Fly into the gap between the claws"] },
+  { mode: "mirror", hp: .44, interval: 3.45, name: ["镜棺回照", "Mirror Sepulcher"], hint: ["瞄准菱形标出的真像", "Aim at the diamond-marked reflection"] },
+  { mode: "coil", hp: .57, interval: 3.52, name: ["沉雷断尾", "Severed Thunder"], hint: ["避开扩张电环再反击", "Clear the expanding ring, then strike"] },
+  { mode: "spores", hp: .52, interval: 3.74, name: ["临终孢巢", "Last Spore Nest"], hint: ["先击破孢囊阻止爆炸", "Break the sacs to stop their blasts"] },
+  { mode: "void", hp: .58, interval: 3.65, name: ["噬界奇点", "World-Eater Singularity"], hint: ["向外飞离黑洞的引力", "Fly out against the pull"] },
+  { mode: "synapse", hp: .53, interval: 3.58, name: ["神经王冠断路", "Broken Neural Crown"], hint: ["按亮起的次序击断节点", "Break the nodes in lit order"] },
+  { mode: "fusion", hp: .66, interval: 3.74, name: ["群渊末日核", "Confluence Extinction Core"], hint: ["沿缺口躲开横竖封锁", "Follow the gap through both axes"] },
 ];
 
 let bossFinaleEggImage;
@@ -55,7 +55,7 @@ function beginBossFinale(target) {
   gameAudio.bossAttack("surge");
   addCombatShake(4.5);
   preloadBossFinaleArt(target.type);
-  setBossMessage(bossStageTitle(target), bossFinaleStageLabel(target.type) + " · " + bossFinaleHint(target.type));
+  setBossMessage(bossStageTitle(target), bossFinaleHint(target.type));
   statusMessage.textContent = bossFinaleStageLabel(target.type) + " · " + bossFinaleHint(target.type);
 }
 
@@ -79,8 +79,13 @@ function finaleGap(bounds, side, min = 32) {
 }
 
 function finaleHazard(target, type, values) {
-  const hazard = { type, age: 0, warning: 1.03, duration: .36, color: target.color, ...values };
-  if (target.finale.hazards.length < 12) target.finale.hazards.push(hazard);
+  const f = target.finale;
+  f.warningBeats ??= Object.create(null);
+  const first = (f.warningBeats[type] ??= f.beat) === f.beat;
+  const broad = ["tide", "vent", "pincer", "well"].includes(type);
+  const warning = Math.max(broad ? 1.64 : 1.4, (values.warning ?? 1.03) + .4) + (first ? .4 : 0);
+  const hazard = { type, age: 0, duration: .36, color: target.color, ...values, warning };
+  if (f.hazards.length < 12) f.hazards.push(hazard);
   return hazard;
 }
 
@@ -122,8 +127,8 @@ function finaleBones(target, bounds, side) {
 
 function finaleFurnace(target, bounds, side) {
   const gap = finaleGap(bounds, side);
-  finaleHazard(target, "vent", { gap, warning: 1.05, duration: .57, color: "#ffa456" });
-  target.finale.ventOpenAt = target.finale.age + 1.62;
+  const hazard = finaleHazard(target, "vent", { gap, warning: 1.05, duration: .57, color: "#ffa456" });
+  target.finale.ventOpenAt = target.finale.age + hazard.warning + hazard.duration;
   target.finale.openUntil = target.finale.ventOpenAt + 1.17;
 }
 
@@ -147,8 +152,8 @@ function finaleWeb(target, bounds, side) {
 
 function finaleClaws(target, bounds, side) {
   const gap = finaleGap(bounds, side);
-  finaleHazard(target, "pincer", { gap, warning: 1.16, duration: .66, color: "#a5e991" });
-  target.finale.ventOpenAt = target.finale.age + 1.82;
+  const hazard = finaleHazard(target, "pincer", { gap, warning: 1.16, duration: .66, color: "#a5e991" });
+  target.finale.ventOpenAt = target.finale.age + hazard.warning + hazard.duration;
   target.finale.openUntil = target.finale.ventOpenAt + 1.03;
 }
 
@@ -168,10 +173,10 @@ function finaleCoil(target, bounds, side) {
   const x = clamp(player.x + side * Math.min(90, bounds.width * .19), bounds.left, bounds.right);
   const y = player.y;
   const radius = Math.min(210, Math.max(43, Math.hypot(bounds.width, bounds.height) * .31));
-  finaleHazard(target, "ring", { x, y, radius, width: Math.max(10, player.width * .095),
+  const hazard = finaleHazard(target, "ring", { x, y, radius, width: Math.max(10, player.width * .095),
     warning: 1.0, duration: .92, color: "#77d7ff" });
-  target.finale.ventOpenAt = target.finale.age + 1.0;
-  target.finale.openUntil = target.finale.age + 2.7;
+  target.finale.ventOpenAt = target.finale.age + hazard.warning;
+  target.finale.openUntil = target.finale.ventOpenAt + 1.7;
 }
 
 function finaleSpores(target, bounds, side) {
@@ -190,9 +195,9 @@ function finaleSpores(target, bounds, side) {
 
 function finaleVoid(target, bounds) {
   const radius = Math.min(155, Math.max(23, Math.hypot(bounds.width, bounds.height) * .19));
-  finaleHazard(target, "well", { x: player.x, y: player.y, radius, warning: 1.42,
+  const hazard = finaleHazard(target, "well", { x: player.x, y: player.y, radius, warning: 1.42,
     duration: .40, color: "#f49372" });
-  target.finale.ventOpenAt = target.finale.age + 1.82;
+  target.finale.ventOpenAt = target.finale.age + hazard.warning + hazard.duration;
   target.finale.openUntil = target.finale.ventOpenAt + 1.05;
 }
 
@@ -219,6 +224,7 @@ function finaleFusion(target, bounds, side) {
   const gap = finaleGap(bounds, side, 37);
   const horizontalRoom = bounds.width > Math.max(66, player.width * .62);
   const form = (f.beat - 1) % 3;
+  const firstHazard = f.hazards.length;
   if (form === 0) {
     finaleHazard(target, "vent", { gap, warning: 1.10, duration: 1.05, color: "#bca5fa" });
     if (horizontalRoom) finaleHazard(target, "seam", { x: player.x,
@@ -234,7 +240,9 @@ function finaleFusion(target, bounds, side) {
     finaleHazard(target, "blast", { x: player.x, y: player.y, radius: Math.max(16, Math.min(57, bounds.height * .17)),
       warning: 2.55, color: "#ff8e9c" });
   }
-  f.ventOpenAt = f.age + 2.38;
+  const lastImpact = f.hazards.slice(firstHazard).reduce(
+    (latest, hazard) => Math.max(latest, hazard.warning + hazard.duration), 0);
+  f.ventOpenAt = f.age + lastImpact;
   f.openUntil = f.ventOpenAt + .89;
 }
 
@@ -289,7 +297,10 @@ function updateBossFinale(target, seconds) {
   const side = f.beat % 2 ? (player.y < (flightBounds.top + flightBounds.bottom) / 2 ? 1 : -1)
     : (player.y > (flightBounds.top + flightBounds.bottom) / 2 ? -1 : 1);
   bossFinalePlans[f.mode](target, finaleBounds(), side);
-  f.next = f.age + bossFinaleStages[target.type].interval - (target.hp < .4 ? .24 : 0);
+  const lastImpact = f.hazards.reduce(
+    (latest, hazard) => Math.max(latest, hazard.warning + hazard.duration - hazard.age), 0);
+  const cadence = bossFinaleStages[target.type].interval - (target.hp < .4 ? .24 : 0);
+  f.next = Math.max(f.age + cadence, f.age + lastImpact + .12, f.openUntil + .12);
   gameAudio.bossAttack("coil");
 }
 

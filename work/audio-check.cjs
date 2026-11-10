@@ -134,9 +134,27 @@ async function run() {
   await check("twenty seconds of layered audio keep bounded voices and one scheduler", () => {
     assert.equal(testWorld.timers.size, 1); assert.ok(peak <= 48, "observed " + peak);
   });
+  await check("active pause ducks music and effects without restarting the score", () => {
+    const [ , effectGain, musicGain] = audio.gains;
+    const originalGain = musicGain.gain.value;
+    const timer = [...testWorld.timers.keys()][0];
+    api.sync(false, true, false, { paused: true });
+    assert.equal(musicGain.gain.value, originalGain * .25);
+    assert.equal(effectGain.gain.value, .16);
+    assert.equal([...testWorld.timers.keys()][0], timer);
+    const sources = audio.sources.length;
+    api.shoot(); api.explode(true); api.warning();
+    assert.equal(audio.sources.length, sources);
+    audio.advance(.2); tickScheduler(testWorld);
+    onlyNewMusic(audio, sources);
+    api.sync(true, true);
+    assert.equal(musicGain.gain.value, originalGain);
+    assert.equal(effectGain.gain.value, .65);
+    assert.equal(testWorld.timers.size, 1);
+  });
   count = audio.sources.length;
   api.sync(false, true); audio.advance(0.1);
-  await check("pause clears the scheduler and stops all live or scheduled sounds", () => {
+  await check("passive pause clears the scheduler and stops all live or scheduled sounds", () => {
     assert.equal(testWorld.timers.size, 0); assert.equal(audio.living, 0);
     api.shoot(); api.explode(true); api.warning(); assert.equal(audio.sources.length, count);
   });

@@ -17,12 +17,15 @@ function updateShakeButton() {
   shakeButton.title = tr("切换画面震动：关闭 / 轻微 / 较强；系统减少动态效果时始终关闭",
     "Cycle screen shake through Off, Low, and High. Reduced motion always disables shake.");
 }
-if (shakeButton) shakeButton.addEventListener("click", () => {
+function cycleShakePreference() {
   const choices = ["off", "low", "full"];
   shakePreference = choices[(choices.indexOf(shakePreference) + 1) % choices.length];
   try { window.localStorage.setItem("star-breaker-shake", shakePreference); } catch { /* 不影响本次选择。 */ }
   updateShakeButton();
-  if (state === "battle" && !evolution.pending) canvas.focus({ preventScroll: true });
+}
+if (shakeButton) shakeButton.addEventListener("click", () => {
+  cycleShakePreference();
+  if (state === "battle" && !pauseView && !evolution.pending) canvas.focus({ preventScroll: true });
 });
 updateShakeButton();
 function isBossDeathPlaying() { return combatEffects.deathRemaining > 0; }
@@ -38,7 +41,7 @@ function applyBossCollapseCamera(ctx) {
   ctx.scale(zoom, zoom);
 }
 function canAnimateCombatEffects() {
-  return state === "battle" && !evolution.pending && windowActive && !document.hidden && document.activeElement === canvas;
+  return battleHasFocus();
 }
 function resetCombatEffects() {
   for (const name of ["particles", "impacts", "wrecks", "shockwaves"]) combatEffects[name].length = 0;

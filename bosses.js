@@ -265,10 +265,6 @@ function updateBossEncounter(seconds) {
   } else if (boss.phase === "telegraph" && boss.phaseTime >= boss.telegraphDuration) {
     boss.phase = "attack";
     boss.phaseTime -= boss.telegraphDuration;
-    if (boss.alienAttack === "pressure" && boss.pressureCycle === 1) {
-      const [name, enName, hint, enHint] = boss.attackLabel;
-      setBossMessage(bossStageTitle(boss), tr("狂暴 · " + name + " · " + hint, "Enraged · " + enName + " · " + enHint));
-    }
     runAlienAttack(boss);
   } else if (boss.phase === "attack") {
     runAlienAttack(boss);

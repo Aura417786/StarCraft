@@ -156,7 +156,7 @@ function sceneryDrawParticles() {
     }
   }
 }
-function drawBattlefield() {
+function drawBattlefield(showHud = true) {
   const ctx = context, w = viewport.width, h = viewport.height, journey = sceneryJourney();
   ctx.save(); ctx.fillStyle = "#03060c"; ctx.fillRect(0, 0, w, h);
   sceneryDrawSector(journey.current, 1, journey.currentAge);
@@ -172,7 +172,7 @@ function drawBattlefield() {
   vignette.addColorStop(0, "#02040b40"); vignette.addColorStop(0.12, "#02040b18"); vignette.addColorStop(0.24, "#02040b00");
   vignette.addColorStop(0.78, "#02040b00"); vignette.addColorStop(1, "#02040b24");
   ctx.fillStyle = vignette; ctx.fillRect(0, 0, w, h);
-  if (state === "battle" && w > 740 && h > 460) {
+  if (showHud && state === "battle" && w > 740 && h > 460) {
     const theme = battlefieldSectors[battlefieldState.sector], x = Math.round(w * 0.034), y = w <= 1000 ? 160 : 132;
     const emphasis = battlefieldState.titleTime > 0 ? Math.min(1, battlefieldState.titleTime / 1.2) : 0;
     ctx.globalAlpha = 0.55 + emphasis * 0.3; ctx.fillStyle = theme.color;

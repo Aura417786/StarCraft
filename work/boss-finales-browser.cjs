@@ -125,7 +125,11 @@ const types = { '.js':'text/javascript', '.html':'text/html', '.css':'text/css',
       const keyboardSafe = Math.abs(player.y - initial.y) < 12 && player.lives === initial.lives;
       finaleFixture(0);
       const lives = player.lives;
-      for (let step = 0; step < 226; step++) { updatePlayer(.02); updateBossEncounter(.02); updateBossDamage(); }
+      while (!boss.finale.hazards.length) updateBossEncounter(.02);
+      const impact = boss.finale.hazards[0];
+      while (impact.age < impact.warning + impact.duration) {
+        updatePlayer(.02); updateBossEncounter(.02); updateBossDamage();
+      }
       const carelessDamage = lives - player.lives === 1;
       return { keyboardSafe, carelessDamage };
     }, exit);
