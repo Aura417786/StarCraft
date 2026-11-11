@@ -75,13 +75,13 @@ function beginAlienRecovery(target) {
 function alienRecoveryDuration(target) {
   if (target.ruptureWindow) return bossRules.exposedWindow;
   const pressure = target.alienAttack === "pressure";
-  const recovery = .58 + (pressure ? .28 : 0);
+  const recovery = bossRules.recovery + (pressure ? .28 : 0);
   const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
   const authored = Math.max(.42, recovery - target.type * .029 - (target.enraged && !pressure ? .16 : 0)) / tempo;
-  // 战力越高，收招硬直越短（反击窗口仍在，只是不再宽裕）。
+  // 战力越高，收招硬直越短；但契约要求反击窗口不短于 0.8 秒，这里只压缩到该下限。
   const density = Math.max(1, target.scaling?.hpMul ?? 1);
   const squeeze = 1 + (density - 1) * .26;
-  const floor = target.alienAttack ? .8 - Math.min(.18, (density - 1) * .11) : .35;
+  const floor = target.alienAttack ? .8 : .35;
   return Math.max(floor, authored / squeeze);
 }
 
