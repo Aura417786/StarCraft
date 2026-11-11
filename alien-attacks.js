@@ -195,6 +195,7 @@ const complexAlienPatterns = new Set([
   "neuralSynapse", "neuralRupture", "fusionBind",
 ]);
 const widePressureMaterials = new Set(["water", "silk", "void", "fusion"]);
+const movingAlienHazards = new Set(["tide", "ring", "ribCage", "pincerLock", "tailConduit"]);
 
 function alienWarningLead(target, key, pressure) {
   const wide = pressure ? widePressureMaterials.has(pressure.material) : wideAlienPatterns.has(key);
@@ -214,9 +215,15 @@ function queueAlienHazard(target, kind, requestedWarning, options) {
   const minimum = kind === "tide" || kind === "band" ? 1.62 : 1.4;
   const adjustment = typeof sortieWarningBonus === "function" ? sortieWarningBonus() : 0;
   const warning = followup ? Math.max(minimum, requestedWarning) + adjustment : requestedWarning;
-  addBossHazard(kind, { ...options, warning });
+  const travels = movingAlienHazards.has(kind) || kind === "filament" && options.swingY
+    || kind === "vortex" && options.grow;
+  const duration = travels ? options.duration / (target.scaling?.speedMul ?? 1) : options.duration;
+  addBossHazard(kind, { ...options, warning, duration });
   const attackStart = followup ? target.phaseTime : -target.telegraphDuration;
-  target.attackDuration = Math.max(target.attackDuration, attackStart + warning + options.duration + .12);
+  const hazardEnd = attackStart + warning + duration + .12;
+  target.attackEndFloor = Math.max(target.attackEndFloor ?? 0, hazardEnd);
+  target.attackDuration = Math.max(target.attackDuration, hazardEnd);
+  if (followup) updateAlienAttackInterval(target);
 }
 
 function scheduleSignature(target, kind, options) {
@@ -350,7 +357,8 @@ function addBossHazard(kind, options) {
 
 function addBossProjectile(x, y, vx, vy, options = {}) {
   if (bossProjectiles.length >= bossRules.maxProjectiles) return;
-  const speed = typeof sortieRules === "function" ? sortieRules().projectileSpeed : 1;
+  const difficulty = typeof sortieRules === "function" ? sortieRules().projectileSpeed : 1;
+  const speed = difficulty * (boss?.scaling?.speedMul ?? 1);
   bossProjectiles.push({ x, y, previousX: x, previousY: y, vx: vx * speed, vy: vy * speed, age: 0, radius: 7,
     color: boss ? boss.color : "#ffb66f", attackLabel: boss?.attackLabel, ...options });
 }
@@ -465,6 +473,10 @@ function alienMovementScale() {
   return scale;
 }
 
+function updateAlienAttackInterval(target) {
+  target.attackInterval = target.telegraphDuration + target.attackDuration + alienRecoveryDuration(target);
+}
+
 function prepareAlienAttack(target, allowPressure = false) {
   target.ruptureWindow = false;
   target.counterTriggered = false;
@@ -479,6 +491,7 @@ function prepareAlienAttack(target, allowPressure = false) {
   target.phase = "telegraph";
   target.phaseTime = 0;
   target.telegraphDuration = alienWarningLead(target, key, pressure);
+  target.attackEndFloor = .4;
   target.attackDuration = duration - .11 - target.type * .011 - (target.enraged ? .11 : 0);
   target.attackMotion = pressure?.motion ?? null;
   target.lockX = player.x;
@@ -492,6 +505,13 @@ function prepareAlienAttack(target, allowPressure = false) {
   target.gapSize = Math.min(span * .76, Math.max(75, player.height * (1.22 - target.type * .017)));
   bossHazards.length = 0;
   target.attackEvents = plan(target).filter(Boolean).sort((a, b) => a.at - b.at);
+  // Only the time around the authored actions is adjustable. Every tell,
+  // scheduled volley, active hazard and recovery still has time to finish.
+  const protectedTime = target.telegraphDuration + alienRecoveryDuration(target);
+  const baseInterval = protectedTime + target.attackDuration;
+  const requestedDuration = baseInterval / (target.scaling?.tempoMul ?? 1) - protectedTime;
+  target.attackDuration = Math.max(requestedDuration, target.attackEndFloor, target.attackEvents.at(-1)?.at ?? 0);
+  updateAlienAttackInterval(target);
   // Clear old projectiles before a marked corridor. Any follow-up inside it
   // is announced separately, with enough horizontal room to move.
   if (bossHazards.some(hazard => hazard.kind === "guide" || isWaterTide(hazard))) bossProjectiles.length = 0;

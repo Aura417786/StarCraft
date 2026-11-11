@@ -20,6 +20,21 @@ node tools/testkit/balance.cjs 'D:/星际争霸/Game' 'D:/星际争霸/AI_Develo
 
 击杀时间从 Boss 本体可伤害时开始，含本体和终局的有效战斗秒数。过场暂停不计入。每个场景输出失败原因和首个受击信息，防止只看成功样本。工具用相同种子复跑第一个场景，逐字段检查再现性。Boss 自身动作固定时，三个种子可产生相同的定点成绩。自然战役的补给、编队和出怪提供种子变化。自动走位属于测试策略，独立试玩需评估手操难度和躲避可读性。
 
+## Boss 缩放验收
+
+```powershell
+node tools/testkit/boss-scaling.cjs . ../boss-scaling-fixture.json
+node tools/testkit/boss-scaling-overlay.cjs . ../boss-scaling-overlay
+```
+
+夹具使用种子 4225、赤焰、老兵难度和同一套自动驾驶，分别挑战第 1、6、10 只 Boss。低配取该关的战役武器下限，中配取下限与满级的等级中点并四舍五入，满配用 24 级伤害、11 级射速和 5 道弹道。每场从 14 条生命和零进化开始，伤害、碰撞和阶段切换照常结算。九场各复跑一次并逐字段比较。
+
+`ttk_seconds` 来自正式战斗记录，与 `?qa=1` 的 TTK 使用同一时钟。`active_ttk_seconds` 从本体首次可受伤开始计算。`health` 记录本体和终局各自的血量。`attack_interval_seconds` 是相邻本体预警起点或相邻终局出招起点之间实测间隔的中位数，`timing` 保存原始时间和生产调度值。`contract` 检查拾取后的锁定、`k` 边界、100 次读取的纯函数行为，以及难度血量乘子。
+
+JSON 总会保留实测 TTK 和验收结果。加 `--strict` 时，未满足规格的项目会使进程退出码为 1，已写出的 JSON 可用于定位差距。
+
+网址追加 `?qa=1` 即可查看单行叠层。战力和倍率取入场快照，击破后显示结算记录。TEMPO 是请求倍率，实际出招间隔还受预警、活跃判定和恢复窗口限制。
+
 所用流程来自仓库内的 [Headless Game Balance](../../.agents/skills/headless-game-balance/SKILL.md)，对应 [GitHub 固定版本](https://github.com/nitzangames/headless-game-balance/tree/0b0a759c5ad446d5d677da52721d2ce6203b503d)。可以直接用其中的统计工具读取 JSONL。
 
 ```powershell

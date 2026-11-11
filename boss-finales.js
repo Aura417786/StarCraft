@@ -85,7 +85,9 @@ function finaleHazard(target, type, values) {
   const broad = ["tide", "vent", "pincer", "well"].includes(type);
   const bonus = typeof sortieWarningBonus === "function" ? sortieWarningBonus() : 0;
   const warning = Math.max(broad ? 1.64 : 1.4, (values.warning ?? 1.03) + .4) + (first ? .4 : 0) + bonus;
-  const hazard = { type, age: 0, duration: .36, color: target.color, ...values, warning };
+  const travels = type === "tide" || type === "ring" || type === "pincer";
+  const duration = (values.duration ?? .36) / (travels ? target.scaling?.speedMul ?? 1 : 1);
+  const hazard = { type, age: 0, color: target.color, ...values, warning, duration };
   if (f.hazards.length < 12) f.hazards.push(hazard);
   return hazard;
 }
@@ -302,7 +304,8 @@ function updateBossFinale(target, seconds) {
   const lastImpact = f.hazards.reduce(
     (latest, hazard) => Math.max(latest, hazard.warning + hazard.duration - hazard.age), 0);
   const cadence = bossFinaleStages[target.type].interval - (target.hp < .4 ? .24 : 0);
-  f.next = Math.max(f.age + cadence, f.age + lastImpact + .12, f.openUntil + .12);
+  f.attackInterval = Math.max(cadence / (target.scaling?.tempoMul ?? 1), lastImpact + .8, f.openUntil - f.age + .12);
+  f.next = f.age + f.attackInterval;
   gameAudio.bossAttack("coil", target.x, target.y);
 }
 

@@ -66,6 +66,7 @@
   <script src="flight-radio.js" defer></script>
   <script src="tutorial.js" defer></script>
   <script src="controls.js" defer></script>
+  <script src="qa-mode.js" defer></script>
   <script src="game.js" defer></script>
   <script src="awards-ui.js" defer></script>
   <script src="sortie-ui.js" defer></script>
@@ -73,6 +74,7 @@
 </head>
 <body>
   <main class="app" id="game-app">
+    <output id="boss-scaling-qa" class="boss-scaling-qa" aria-label="Boss scaling QA" aria-live="off" hidden></output>
     <section class="battlefield" aria-label="横向星空战场">
       <canvas id="game-canvas" width="1280" height="720" tabindex="-1" aria-describedby="control-instructions" aria-label="横向星空战场"></canvas>
       <div class="field-edge" aria-hidden="true"></div>

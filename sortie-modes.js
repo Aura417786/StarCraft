@@ -209,7 +209,9 @@ function sortieBossCleared(target) {
   if (run.bossRecords.some(record => record.type === target.type)) return;
   const start = target.sortieStart ?? { time: battleTime, hits: run.hitsTaken };
   const builds = typeof StarBreakerAwards === "undefined" ? [] : StarBreakerAwards.buildsFor(evolution.pierce, evolution.blast, evolution.aegis);
-  run.bossRecords.push({ type: target.type, seconds: Math.max(.001, battleTime - start.time), hitCount: run.hitsTaken - start.hits, builds });
+  const seconds = Math.max(.001, battleTime - start.time);
+  run.bossRecords.push({ type: target.type, seconds, hitCount: run.hitsTaken - start.hits, builds });
+  if (typeof captureBossScalingQaResult === "function") captureBossScalingQaResult(target, seconds);
   if (run.mode === "campaign") {
     const award = sortieProfile.awardBoss(target.type, run.difficulty);
     if (award?.unlocked) run.unlocks.push(target.type);

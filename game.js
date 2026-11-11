@@ -1302,6 +1302,7 @@ function drawFrame(time) {
   if (resuming) combatStepRemainder = 0;
   previousTime = time;
   if (typeof pollFlightGamepad === "function") pollFlightGamepad();
+  if (typeof updateBossScalingQa === "function") updateBossScalingQa();
   syncGameAudio();
   if (typeof drawCampaignVictoryFrame === "function" && drawCampaignVictoryFrame(realSeconds)) {
     combatStepRemainder = 0;

@@ -29,7 +29,9 @@ function balanceStart(fixture) {
   // Compare firepower across the entire fight, including for a pilot who
   // would run out of hull in an ordinary sortie. Hits still resolve normally.
   if (fixture.fixture === "timing") while (player.maxLives < 14) grantPlayerLife(true);
-  if (typeof progressionPresetForBoss === "function") {
+  if (fixture.weaponPreset) {
+    raiseWeaponFloor(fixture.weaponPreset);
+  } else if (typeof progressionPresetForBoss === "function") {
     raiseWeaponFloor(progressionPresetForBoss(type));
   } else {
     for (let index = 0; index < 2 + type; index++) applyPowerup("red");

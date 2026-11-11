@@ -1170,14 +1170,17 @@ check('attacking shells reduce damage but leave an opening after each attack', (
     }
   }
 });
-check('late hulls progressively cap saturated ordinary fire while remaining vulnerable', () => {
-  const saturated=[];
-  for (const type of [0,4,9,10]) {
+check('default hulls tighten the sustained-fire cap and tuned hulls still take damage', () => {
+  function damageUnderSustainedFire(type) {
     readyBoss(type);
-    saturated.push(execute('var armouredAlien=boss; for(let i=0;i<60;i++){battleTime+=1/60;applyBossHit({damageLog:boss.healthLog+8});} 1-armouredAlien.hp;'));
+    return execute('var armouredAlien=boss; for(let i=0;i<60;i++){battleTime+=1/60;applyBossHit({damageLog:boss.healthLog+8});} 1-armouredAlien.hp;');
   }
-  assert.ok(saturated.every((damage,index)=>damage>0&&(index===0||damage<saturated[index-1])));
-  assert.ok(saturated[3]<=.09);
+  const [early, middle, late, fusion] = [1, 4, 9, 10].map(damageUnderSustainedFire);
+  assert.ok(early > middle && middle > late && late > fusion && fusion > 0 && fusion <= .09);
+  const broodmother = damageUnderSustainedFire(0);
+  const mirrorRay = damageUnderSustainedFire(5);
+  assert.ok(broodmother > 0 && broodmother < early);
+  assert.ok(mirrorRay > 0 && mirrorRay < middle);
 });
 check('fusion limbs independently project force, aim a lance and burst after the core phase starts', () => {
   readyBoss(10,'prepareAlienAttack(boss);');

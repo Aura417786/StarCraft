@@ -241,7 +241,7 @@ check("advancing a campaign floor helps low stock but never removes a stronger p
   assert.deepEqual(snapshot('[weapon.damage, weapon.interval, weapon.lanes, weapon.tier]'), previous);
 });
 
-check("Boss bodies have authored, stage-specific health rather than time or weapon tier multipliers", () => {
+check("Boss health retains stage-specific base values independently of elapsed time", () => {
   const health = snapshot('bossTypes.map((_,i)=>bossBalanceHealth(i))');
   assert.equal(new Set(health).size, 11);
   assert.ok(health.at(-1) > health[0] * 3);
@@ -256,12 +256,61 @@ check("Boss bodies have authored, stage-specific health rather than time or weap
   }
 });
 
-check("Boss birth HP cannot increase because a player overlevels; shortage relief is bounded", () => {
-  for (const type of [0, 2, 7, 10]) {
-    const [low, expected, high] = snapshot(`[bossBalanceHealth(${type},{level:1}),bossBalanceHealth(${type}),bossBalanceHealth(${type},{level:24})]`);
-    assert.ok(low <= expected && low >= expected * .879);
-    assert.equal(expected, high);
+check("Each fighter's own design floor yields k=1, with bounded scaling and no side effects", () => {
+  for (const fighter of ["red", "blue", "yellow"]) {
+    for (const type of [0, 5, 9]) {
+      isolated(`sortieFighter="${fighter}";resetWeapons(false);raiseWeaponFloor(progressionPresetForBoss(${type}));spawnBoss(${type});`);
+      const config = snapshot('[weapon,boss.hp,boss.baseHealth,boss.scaling,battleTime]');
+      const [floor, ceiling, times] = snapshot(`[bossPowerIndex(${type},0),bossPowerIndex(${type},baselinePowerForBoss(${type})*10),
+        Array.from({length:100},()=>bossPowerIndex(${type}))]`);
+      assert.equal(floor, .85);
+      assert.equal(ceiling, 3.2);
+      assert.ok(times.every(k => k === 1));
+      assert.deepEqual(snapshot('[weapon,boss.hp,boss.baseHealth,boss.scaling,battleTime]'), config);
+      assert.equal(execute('Object.isFrozen(boss.scaling)'), true);
+    }
   }
+});
+
+check("Boss loadout and health lock through pickups and apply once to the finale pool", () => {
+  activeBoss(5);
+  const initial = snapshot('[boss.hp,boss.baseHealth,boss.healthLog,boss.scaling]');
+  execute('raiseWeaponFloor({damageLevel:24,rateLevel:11,laneLevel:5});');
+  assert.deepEqual(snapshot('[boss.hp,boss.baseHealth,boss.healthLog,boss.scaling]'), initial);
+  assert.ok(execute('sortieCombatPower() > boss.scaling.power'));
+  assert.ok(execute('bossPowerIndex(5) > boss.scaling.k'));
+  execute('beginBossFinale(boss);');
+  near(execute('Math.exp(boss.healthLog)'), initial[1] * execute('bossFinaleStages[5].hp'));
+  assert.deepEqual(snapshot('boss.scaling'), initial[3]);
+  execute('spawnBoss(5);');
+  const next = snapshot('[boss.baseHealth,boss.scaling]');
+  assert.equal(next[1].k, 3.2);
+  assert.equal(next[0], Math.round(execute('bossBalanceBodies[5]') * 3.2 ** .85));
+});
+
+check("Equipment tightens actual attack cadence and speeds projectiles with fixed warning and recovery", () => {
+  const sample = [];
+  for (const high of [false, true]) {
+    isolated(`showScreen("battle",{difficulty:"veteran",seed:4225});${high
+      ? "raiseWeaponFloor({damageLevel:24,rateLevel:11,laneLevel:5});"
+      : "raiseWeaponFloor(progressionPresetForBoss(1));"}spawnBoss(1);
+      resetBossPresentation();Object.assign(boss,bossArena(1),{phase:"recover"});
+      prepareAlienAttack(boss);boss.phase="attack";
+      for(const at of [0,.38,1.32]){boss.phaseTime=at;runAlienAttack(boss)}`);
+    sample.push(snapshot(`({ warning: boss.telegraphDuration, recovery: alienRecoveryDuration(boss),
+      interval: boss.attackInterval, speed: Math.hypot(bossProjectiles[0].vx,bossProjectiles[0].vy),
+      radius: bossProjectiles[0].radius, speedMul: boss.scaling.speedMul, end: boss.attackDuration,
+      required: boss.attackEndFloor })`));
+  }
+  const [base, upgraded] = sample;
+  assert.equal(base.warning, upgraded.warning);
+  assert.ok(upgraded.warning >= .9 && upgraded.recovery >= .8);
+  assert.equal(base.recovery, upgraded.recovery);
+  assert.equal(base.radius, upgraded.radius);
+  assert.ok(upgraded.interval < base.interval, JSON.stringify(sample));
+  assert.ok(upgraded.interval >= upgraded.warning + .4);
+  assert.ok(upgraded.end >= upgraded.required);
+  near(upgraded.speed / base.speed, upgraded.speedMul);
 });
 
 check("Boss difficulty changes health and warning duration without changing the selected encounter", () => {

@@ -33,13 +33,31 @@ function progressionPresetForBoss(type) {
   const [damageLevel, rateLevel, laneLevel] = campaignWeaponFloors[Math.max(0, Math.min(campaignWeaponFloors.length - 1, type | 0))];
   return { damageLevel, rateLevel, laneLevel };
 }
-function bossBalanceHealth(type, { level, difficultyScale = 1 } = {}) {
+function combatPowerForLoadout(damage, rate, lanes) {
+  return damage * rate * (1 + .35 * (lanes - 1));
+}
+function sortieCombatPower() {
+  const rate = progressionRateForLevel(weapon.speedLevel, fighterProfile().rate);
+  return combatPowerForLoadout(weapon.damage, rate, weapon.lanes);
+}
+function baselinePowerForBoss(type) {
+  const fighter = fighterProfile();
+  const preset = progressionPresetForBoss(type);
+  const lanes = Math.min(progressionRules.maxLanes, fighter.lanes + preset.laneLevel - 1);
+  return combatPowerForLoadout(progressionDamageForLevel(preset.damageLevel, fighter.damage),
+    progressionRateForLevel(preset.rateLevel, fighter.rate), lanes);
+}
+function bossPowerIndex(type, power = sortieCombatPower()) {
+  return Math.min(3.2, Math.max(.85, power / baselinePowerForBoss(type)));
+}
+function bossScaling(type) {
+  const power = sortieCombatPower();
+  const k = bossPowerIndex(type, power);
+  return Object.freeze({ power, k, hpMul: k ** .85, tempoMul: k ** .35, speedMul: k ** .22 });
+}
+function bossBalanceHealth(type, { scaling = bossScaling(type), difficultyScale = 1 } = {}) {
   const index = Math.max(0, Math.min(bossBalanceBodies.length - 1, type | 0));
-  const preset = progressionPresetForBoss(index);
-  // Lock at spawn; skilled upgrade collection never increases the boss's life.
-  // Modest grace keeps a missed stretch of pickups from turning into a health wall.
-  const shortage = Math.max(0, preset.damageLevel - progressionRank(level ?? preset.damageLevel, progressionRules.maxDamageLevel));
-  return Math.round(bossBalanceBodies[index] * (1 - Math.min(.12, shortage * .025)) * difficultyScale);
+  return Math.round(bossBalanceBodies[index] * scaling.hpMul * difficultyScale);
 }
 function progressionGrowDamage(gain) {
   const before = weapon.damage;

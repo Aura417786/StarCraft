@@ -28,6 +28,25 @@
   background-repeat: no-repeat;
 }
 .masthead { border-bottom: 1px solid #7f99b02b; }
+.boss-scaling-qa {
+  position: absolute;
+  z-index: 24;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: #07121af2;
+  color: #d7f3ff;
+  white-space: nowrap;
+  font: 600 clamp(7px, 1.55vw, 12px)/1.25 Consolas, monospace;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 740px) {
+  .boss-scaling-qa { top: auto; bottom: 1px; }
+  .app[data-boss-active="true"]:has(.boss-scaling-qa:not([hidden])) .momentum-hud { margin-bottom: 16px; }
+}
 .brand-mark { color: var(--hud-accent); }
 .edition { color: #9aafc8; }
 .start-copy .eyebrow { color: #b6c9d9; }

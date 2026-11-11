@@ -4,12 +4,14 @@ const bossRules = { firstArrival: 65, interval: 31, warning: 5, artLead: 20,
   recovery: .78, grace: 1.1, maxProjectiles: 240, fusionSpecialMultiplier: .78, shellThreshold: .5,
   armoredMinimum: 0, exposedWindow: 2.4, coreMinimum: 0, finaleMinimum: 0, counterWindow: 1.5 };
 const bossTypes = [
-  { name: "渊潮母体", enName: "Abyssal Broodmother", color: "#79e7f3", patterns: ["broodSweep", "broodArc", "broodSpawn"] },
+  { name: "渊潮母体", enName: "Abyssal Broodmother", color: "#79e7f3", fireRefill: .042,
+    patterns: ["broodSweep", "broodArc", "broodSpawn"] },
   { name: "骨冠猎兽", enName: "Ossuary Stalker", color: "#dfa5e6", patterns: ["boneSpears", "boneRibs", "bonePounce"] },
   { name: "灼核吞星兽", enName: "Cinder Maw", color: "#ffc279", patterns: ["cinderLava", "cinderHeart", "cinderFurnace"] },
   { name: "裂隙织母", enName: "Rift Weaver", color: "#b99bff", patterns: ["weaverCross", "weaverWeb", "weaverSnare"] },
   { name: "锁脉巨螯", enName: "Synapse Binder", color: "#90e5bc", patterns: ["binderClaw", "binderPin", "binderSpines"] },
-  { name: "星尘镜魟", enName: "Mirror Ray", color: "#9db8ff", patterns: ["mirrorPrism", "mirrorBlades", "mirrorDecoy"] },
+  { name: "星尘镜魟", enName: "Mirror Ray", color: "#9db8ff", fireRefill: .058,
+    patterns: ["mirrorPrism", "mirrorBlades", "mirrorDecoy"] },
   { name: "沉渊震鳗", enName: "Tidal Wyrm", color: "#79c8ff", patterns: ["wyrmPulse", "wyrmCurrent", "wyrmStreak"] },
   { name: "裂梦孢皇", enName: "Spore Regent", color: "#cee689", patterns: ["sporeSwarm", "sporeField", "sporePollen"] },
   { name: "维度噬口", enName: "Rift Devourer", color: "#ff9b76", patterns: ["mawEclipse", "mawScars", "mawFragments"] },
@@ -234,7 +236,9 @@ function bossStageTitle(target) {
 function bossFireProtectionFor(type) {
   if (type === finalAlienType) return { hit: .04, burst: .04, refill: .05 };
   const escalation = type / (finalAlienType - 1);
-  return { hit: .05, burst: .06 - .014 * escalation, refill: .09 - .03 * escalation };
+  // Per-Boss limits preserve attack cycles against sustained, over-cap firepower.
+  const refill = bossTypes[type].fireRefill ?? .09 - .03 * escalation;
+  return { hit: .05, burst: .06 - .014 * escalation, refill };
 }
 
 function spawnBoss(type = chooseBossType()) {
@@ -243,11 +247,12 @@ function spawnBoss(type = chooseBossType()) {
   const entry = bossEntryPosition(arena, type);
   const data = bossTypes[type];
   const alienFinal = type === finalAlienType;
-  const baseHealth = bossBalanceHealth(type, { level: weapon.damageLevel,
+  const scaling = bossScaling(type);
+  const baseHealth = bossBalanceHealth(type, { scaling,
     difficultyScale: typeof sortieRules === "function" ? sortieRules().bossHealth : 1 });
   const healthLog = Math.log(baseHealth);
   boss = { ...arena, type, alien: true, alienFinal, color: data.color, name: bossTypeName(type),
-    hp: 1, maxHp: 1, displayHp: 1, healthLog, baseHealth, fireProtection: bossFireProtectionFor(type),
+    hp: 1, maxHp: 1, displayHp: 1, healthLog, baseHealth, scaling, fireProtection: bossFireProtectionFor(type),
     x: entry.x, y: entry.y, previousX: entry.x, previousY: entry.y,
     phase: "enter", phaseTime: 0, age: 0, hitFlash: 0, attackIndex: -1,
     alienAttack: null, attackLabel: null, pressureCycle: 0, enraged: false, lockX: player.x, lockY: player.y, gapY: player.y, gapSize: 0,
