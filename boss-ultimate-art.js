@@ -155,20 +155,28 @@ function ultimateBone(ctx, x, y, length, width, angle, mat, alpha = 1) {
   ctx.restore();
 }
 
-function ultimateArc(ctx, x1, y1, x2, y2, seed, mat, width, alpha) {
+function appendUltimateArcPath(ctx, x1, y1, x2, y2, seed) {
   const dx = x2 - x1, dy = y2 - y1, length = Math.max(1, Math.hypot(dx, dy));
   const nx = -dy / length, ny = dx / length;
-  ctx.save(); ctx.globalCompositeOperation = "lighter";
-  ctx.beginPath();
   for (let step = 0; step <= 14; step++) {
     const t = step / 14;
     const jitter = Math.sin(step * 7.1 + seed) * Math.sin(t * Math.PI) * Math.min(19, length * .09);
     const x = x1 + dx * t + nx * jitter, y = y1 + dy * t + ny * jitter;
     if (!step) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
+}
+
+function strokeUltimateArcPath(ctx, mat, width, alpha) {
   ctx.strokeStyle = mat.mid; ctx.lineWidth = width * 3; ctx.globalAlpha = alpha * .25; ctx.stroke();
   ctx.strokeStyle = mat.rim; ctx.lineWidth = width; ctx.globalAlpha = alpha * .8; ctx.stroke();
   ctx.strokeStyle = mat.spark; ctx.lineWidth = Math.max(.7, width * .25); ctx.globalAlpha = alpha; ctx.stroke();
+}
+
+function ultimateArc(ctx, x1, y1, x2, y2, seed, mat, width, alpha) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  ctx.beginPath();
+  appendUltimateArcPath(ctx, x1, y1, x2, y2, seed);
+  strokeUltimateArcPath(ctx, mat, width, alpha);
   ctx.restore();
 }
 
@@ -476,8 +484,10 @@ function ultimateCloud(ctx, circle, mat, time, alpha, vacuum = false) {
   }
   if (vacuum) {
     for (let ring = 0; ring < 10; ring++) {
-      const r = radius * (.4 + ring * .06);
-      ctx.strokeStyle = ring % 3 ? mat.mid : mat.rim; ctx.globalAlpha = alpha * (.12 + ring % 3 * .13); ctx.lineWidth = 2 + ring % 3;
+      const r = radius * (.4 + ring * .06), lineWidth = 2 + ring % 3;
+      // The rotated ellipse is inside radius r; retain stroke and antialias margins.
+      if (inner > 0 && r + lineWidth * .5 + 2 <= inner) continue;
+      ctx.strokeStyle = ring % 3 ? mat.mid : mat.rim; ctx.globalAlpha = alpha * (.12 + ring % 3 * .13); ctx.lineWidth = lineWidth;
       ctx.beginPath(); ctx.ellipse(circle.x, circle.y, r, r * .36, -.2, ring * .6 + time, ring * .6 + time + 3.7); ctx.stroke();
     }
     ctx.fillStyle = "#000106"; ctx.globalAlpha = alpha;
@@ -551,12 +561,17 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
       ctx.strokeStyle = mat.dark; ctx.globalAlpha = alpha; ctx.lineWidth = radius - inner;
       ctx.beginPath(); ctx.arc(circle.x, circle.y, (radius + inner) / 2, 0, Math.PI * 2); ctx.stroke();
       const pieces = visualQuality.id === "low" ? 12 : 22;
+      // Preserve every subpath and sample; submit the ring's three light layers once.
+      ctx.save(); ctx.globalCompositeOperation = "lighter";
+      ctx.beginPath();
       for (let i = 0; i < pieces; i++) {
         const a = i / pieces * Math.PI * 2, b = (i + 1) / pieces * Math.PI * 2;
         const r = (radius + inner) / 2;
-        ultimateArc(ctx, circle.x + Math.cos(a) * r, circle.y + Math.sin(a) * r,
-          circle.x + Math.cos(b) * r, circle.y + Math.sin(b) * r, i + Math.floor(time * 13), mat, 2.5, alpha);
+        appendUltimateArcPath(ctx, circle.x + Math.cos(a) * r, circle.y + Math.sin(a) * r,
+          circle.x + Math.cos(b) * r, circle.y + Math.sin(b) * r, i + Math.floor(time * 13));
       }
+      strokeUltimateArcPath(ctx, mat, 2.5, alpha);
+      ctx.restore();
     } else ultimateDrawNode(ctx, circle.x, circle.y, circle.radius, name, alpha);
   }
   ctx.restore();
