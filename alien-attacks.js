@@ -199,9 +199,9 @@ const movingAlienHazards = new Set(["tide", "ring", "ribCage", "pincerLock", "ta
 
 function alienWarningLead(target, key, pressure) {
   const wide = pressure ? widePressureMaterials.has(pressure.material) : wideAlienPatterns.has(key);
-  const base = wide ? 1.68 : pressure || complexAlienPatterns.has(key) ? 1.54 : 1.4;
+  const base = target.quickAttack ? .9 : wide ? 1.68 : pressure || complexAlienPatterns.has(key) ? 1.54 : 1.4;
   const seen = target.seenAttacks ??= new Set();
-  const teaching = seen.has(key) ? 0 : .4;
+  const teaching = target.quickAttack || seen.has(key) ? 0 : .4;
   seen.add(key);
   return base + teaching + (typeof sortieWarningBonus === "function" ? sortieWarningBonus() : 0);
 }
@@ -217,7 +217,8 @@ function queueAlienHazard(target, kind, requestedWarning, options) {
   const warning = followup ? Math.max(minimum, requestedWarning) + adjustment : requestedWarning;
   const travels = movingAlienHazards.has(kind) || kind === "filament" && options.swingY
     || kind === "vortex" && options.grow;
-  const duration = travels ? options.duration / (target.scaling?.speedMul ?? 1) : options.duration;
+  const authoredDuration = target.quickAttack ? Math.min(.7, options.duration) : options.duration;
+  const duration = travels ? authoredDuration / (target.scaling?.speedMul ?? 1) : authoredDuration;
   addBossHazard(kind, { ...options, warning, duration });
   const attackStart = followup ? target.phaseTime : -target.telegraphDuration;
   const hazardEnd = attackStart + warning + duration + .12;
@@ -259,7 +260,7 @@ function vortexTell(target, { x, y, at = 0, duration, material, strength, core,
 }
 
 function edgeFilament(target, material, at, { y = target.lockY, tilt = 0, thickness = .27,
-  duration, flip = false, swing = 0, flare = false }) {
+  duration, flip = false, swing = 0, flare = false, anchorX = player.x }) {
   const span = flightBounds.bottom - flightBounds.top;
   const originX = flip ? -12 : Math.min(viewport.width + 12, target.x - target.width * .22);
   const endX = flip ? viewport.width + 12 : -12;
@@ -267,7 +268,7 @@ function edgeFilament(target, material, at, { y = target.lockY, tilt = 0, thickn
   const rise = span * tilt;
   // Pin the warning through the lock point at the player's actual x, even on
   // a very wide monitor or when the mirrored shot starts behind the player.
-  const along = clamp((player.x - originX) / (endX - originX), 0, 1);
+  const along = clamp((anchorX - originX) / (endX - originX), 0, 1);
   scheduleSignature(target, "filament", {
     at, duration, material, originX, originY: middle - rise * along, endX,
     endY: middle + rise * (1 - along), thickness: Math.max(13, player.height * thickness),
@@ -335,7 +336,7 @@ function alienCurrentVector() {
   let vx = 0;
   let vy = 0;
   for (const hazard of bossHazards) {
-    const arenaForce = alienMechanicVector(hazard, player);
+    const arenaForce = hazard.kind === "ultimate" ? bossUltimateVector(hazard, player) : alienMechanicVector(hazard, player);
     if (arenaForce) { vx += arenaForce.x; vy += arenaForce.y; }
     if (hazard.kind !== "vortex" || !hazard.strength || hazard.age < hazard.warning) continue;
     const dx = hazard.x - player.x;
@@ -423,7 +424,7 @@ function beamTell(target, at, y, duration, width = .45) {
 }
 
 function broodLash(target, y, warning, side, index) {
-  queueAlienHazard(target, "beam", warning, { y, duration: .28, material: "water", color: target.enraged ? "#ff6486" : "#f7a8ba",
+  queueAlienHazard(target, "beam", warning, { y, duration: .28, material: "water", color: target.enraged ? "#b9fbff" : "#75e8f7",
     thickness: Math.max(16, Math.min(57, player.height * (target.enraged ? .43 : .35))),
     right: bossPlayerRight() + player.width * .22, lash: true, side, index });
 }
@@ -445,12 +446,12 @@ function seamTell(target, warning) {
   queueAlienHazard(target, "seam", warning, { x: player.x, thickness, duration: .32, color: "#ffb476" });
 }
 
-function portalTell(target, warning, edge) {
+function portalTell(target, warning, edge, lock = player) {
   const originX = edge < 0 ? 12 : bossPlayerRight() + Math.min(32, player.width * .3);
   // Alternate the diagonal relative to the last dodge; the shot never tracks after the tell.
-  const originY = alienLane(player.y < alienLane(.5) ? .86 : .14);
-  queueAlienHazard(target, "portal", warning, { x: player.x, y: player.y, originX, originY,
-    duration: .23, speed: target.enraged ? 705 : 650, color: "#d7b7ff" });
+  const originY = alienLane(lock.y < alienLane(.5) ? .86 : .14);
+  queueAlienHazard(target, "portal", warning, { x: lock.x, y: lock.y, originX, originY,
+    duration: .23, speed: target.enraged ? 705 : 650, projectileRadius:lock.radius??10, color: "#d7b7ff" });
 }
 
 function firePortal(hazard) {
@@ -460,7 +461,7 @@ function firePortal(hazard) {
   const speed = alienAttackSpeed(boss, hazard.speed) / distance;
   gameAudio.bossAttack("volley", hazard.originX, hazard.originY);
   addBossProjectile(hazard.originX, hazard.originY, dx * speed, dy * speed,
-    { glyph: "prism", radius: 10, color: hazard.color, attackLabel: hazard.attackLabel });
+    { glyph: "prism", radius: hazard.projectileRadius??10, color: hazard.color, attackLabel: hazard.attackLabel });
 }
 
 function bindTell(target, at, x, y, duration, slow) {
@@ -485,6 +486,7 @@ function updateAlienAttackInterval(target) {
 function prepareAlienAttack(target, allowPressure = false) {
   target.ruptureWindow = false;
   target.counterTriggered = false;
+  if (typeof prepareBossPressureSeal === "function" && prepareBossPressureSeal(target)) return;
   const pressure = allowPressure ? chooseAlienPressure(target) : null;
   const patterns = bossTypes[target.type].patterns;
   const key = pressure ? "pressure" : patterns[target.attackIndex = (target.attackIndex + 1) % patterns.length];
@@ -493,6 +495,7 @@ function prepareAlienAttack(target, allowPressure = false) {
     : alienPatterns[key];
   target.attackLabel = [name, enName, hint, enHint];
   target.alienAttack = key;
+  target.quickAttack = target.type !== finalAlienType && !pressure && typeof quickAlienPlans !== "undefined" && !!quickAlienPlans[key];
   target.phase = "telegraph";
   target.phaseTime = 0;
   target.telegraphDuration = alienWarningLead(target, key, pressure);
@@ -512,30 +515,26 @@ function prepareAlienAttack(target, allowPressure = false) {
   const attackDensity = Math.max(1, target.scaling?.hpMul ?? 1);
   target.gapSize = Math.max(54, target.gapSize / (1 + (attackDensity - 1) * .3));
   bossHazards.length = 0;
-  target.attackEvents = plan(target).filter(Boolean);
-  // 战力足够高时，在连招中段再叠一组散射：两件事同时发生。
-  if (attackDensity >= 1.2) {
-    target.attackEvents.push(fan(Math.max(.5, target.attackDuration * .55), 2, .3, 470, "shard", { aim: true }));
+  target.attackEvents = (target.quickAttack ? quickAlienPlans[key](target) : plan(target)).filter(Boolean);
+  if (target.quickAttack) {
+    // Both linked contacts fit this authored action; their actual end times
+    // set the floor below. The full arena signature still runs separately.
+    target.attackDuration = .8;
   }
-  // 连携：本招收招前再朝玩家当前站位补一组追击 + 落点区。
-  // 前半招把玩家逼进缺口，这一下打的正是那个缺口，两招形成配合。
-  const comboAt = Math.max(.9, target.attackDuration - .55);
-  target.attackEvents.push(fan(comboAt, 3, .24, 560, "shard", { aim: true }));
-  target.attackEvents.push(beat(Math.max(1.0, comboAt + .18), x => zoneTell(x, Math.max(.95, comboAt), player.x, player.y, .34, "water")));
   target.attackEvents.sort((a, b) => a.at - b.at);
   // Only the time around the authored actions is adjustable. Every tell,
   // scheduled volley, active hazard and recovery still has time to finish.
   const protectedTime = target.telegraphDuration + alienRecoveryDuration(target);
   const baseInterval = protectedTime + target.attackDuration;
   const requestedDuration = baseInterval / (target.scaling?.tempoMul ?? 1) - protectedTime;
-  target.attackDuration = Math.max(requestedDuration, target.attackEndFloor, target.attackEvents.at(-1)?.at ?? 0);
+  target.attackDuration = Math.max(target.quickAttack ? .8 : requestedDuration, target.attackEndFloor, target.attackEvents.at(-1)?.at ?? 0);
   updateAlienAttackInterval(target);
   // Clear old projectiles before a marked corridor. Any follow-up inside it
   // is announced separately, with enough horizontal room to move.
   if (bossHazards.some(hazard => hazard.kind === "guide" || isWaterTide(hazard))) bossProjectiles.length = 0;
   target.nextEvent = 0;
   if ((target.type === 0 && key !== "broodSpawn") || pressure) gameAudio.bossAttack("coil", target.x, target.y);
-  setBossMessage(bossStageTitle(target), tr(hint, enHint));
+  setBossMessage(bossStageTitle(target), tr(target.attackLabel[2], target.attackLabel[3]));
 }
 
 function runAlienAttack(target) {
@@ -573,6 +572,10 @@ function updateBossProjectiles(seconds) {
       shot.y += shot.wave * (Math.sin(shot.age * 5 + phase) - Math.sin((shot.age - seconds) * 5 + phase));
     }
     // The marked channel stays navigable as the surge carries its own spray past the pilot.
+    if (shot.backgroundPressure && boss && Math.abs(shot.y - boss.pressureGapY) < boss.pressureGapSize / 2 + shot.radius) {
+      bossProjectiles.splice(i, 1);
+      continue;
+    }
     if (waterTide && shot.x <= sprayBoundary && Math.abs(shot.y - troughY) < waterTide.gapSize / 2 + shot.radius) {
       bossProjectiles.splice(i, 1);
       continue;
@@ -607,7 +610,7 @@ function updateBossProjectiles(seconds) {
         boss.lashSide = hazard.side;
         boss.lashY = hazard.y;
         gameAudio.bossAttack("whip", boss.x, boss.y);
-      } else if (alienSignatureKinds.has(hazard.kind)) {
+      } else if (alienSignatureKinds.has(hazard.kind) || hazard.kind === "ultimate") {
         gameAudio.bossAttack(hazard.sound, boss?.x, boss?.y);
         if (hazard.kind === "tide" || hazard.kind === "ring") addCombatShake(hazard.kind === "tide" ? 3.8 : 2);
       } else if (hazard.kind === "portal" && boss) {
@@ -623,6 +626,8 @@ function updateBossProjectiles(seconds) {
 
 function alienHazardHitsPlayer(hazard) {
   if (hazard.age < hazard.warning) return false;
+  if (hazard.kind === "pressureSeal") return pressureSealHitsPlayer(hazard);
+  if (hazard.kind === "ultimate") return bossUltimateHitsPlayer(hazard);
   if (alienMechanicKinds.has(hazard.kind)) return alienMechanicHits(hazard, player);
   const radius = player.height * .16;
   if (alienSignatureKinds.has(hazard.kind)) {
@@ -658,6 +663,14 @@ function alienHazardHitsPlayer(hazard) {
 }
 
 function drawAlienHazard(ctx, hazard, quiet) {
+  if (hazard.kind === "ultimate") {
+    if(typeof drawBossUltimateHazard === "function") drawBossUltimateHazard(ctx,hazard,quiet);
+    return;
+  }
+  if (hazard.kind === "pressureSeal") {
+    if (typeof drawPressureSealWarning === "function") drawPressureSealWarning(ctx, hazard, quiet);
+    return;
+  }
   if (alienMechanicKinds.has(hazard.kind)) { drawAlienMechanic(ctx, hazard, quiet); return; }
   if (typeof drawPressureColumn === "function" && drawPressureColumn(ctx, hazard, quiet)) return;
   if (typeof drawAlienSignatureHazard === "function" && drawAlienSignatureHazard(ctx, hazard, quiet)) return;

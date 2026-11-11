@@ -36,11 +36,11 @@ function chooseAlienPressure(target) {
   const plan = alienPressurePlans[target.type];
   const cycle = target.pressureCycle = (target.pressureCycle ?? -1) + 1;
   if (!target.enraged) {
-    // 独占招式提前到破壳之前：开场第 3 招起，每 3 招一次。
+    // 独占招式提前到破壳之前：开场第 5 次选择起，每 4 招一次。
     // 原来只在半血后才可能出现，快攻时玩家一次都见不到。
-    return cycle >= 2 && (cycle - 2) % 3 === 0 ? plan : null;
+    return cycle >= 4 && (cycle - 4) % 4 === 0 ? plan : null;
   }
-  return cycle % plan.repeat === 0 ? plan : null;
+  return cycle >= 4 && cycle % 4 === 0 ? plan : null;
 }
 
 function bossRuptureDuration(target) {
@@ -50,6 +50,8 @@ function bossRuptureDuration(target) {
 function beginAlienRupture(target) {
   target.enraged = true;
   target.enragedAt = target.age;
+  target.pressureState = null;
+  target.pressureArmor = false;
   target.phase = "rupture";
   target.phaseTime = 0;
   target.pressureCycle = 0;
@@ -65,6 +67,12 @@ function beginAlienRupture(target) {
 }
 
 function beginAlienRecovery(target) {
+  if (target.phase === "attack" && target.alienAttack !== "pressureSeal") {
+    const contacts = target.quickAttack ? 2 : 1;
+    target.pressureAttackCount = (target.pressureAttackCount ?? 0) + contacts;
+    target.attackContacts = (target.attackContacts ?? 0) + contacts;
+    if(target.quickAttack)target.completedComboCycles=(target.completedComboCycles??0)+1;
+  }
   target.phase = "recover";
   target.phaseTime = 0;
   if (!target.alienAttack) return;

@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v29: authored boss chains and elemental ultimates.** Ten aliens each have two linked assaults and a signature ultimate. A wave opening becomes a vortex, shelter from magma becomes a backdraft trap, and mirrors, webs, spores and neural circuits demand different responses. Shield through the announced arena finisher and attack as its shell breaks. No-shield challenges preserve a marked passage.
+
 Pick a fighter, cross five sectors, and survive eleven alien boss finales. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. **v24** compresses all 22 boss and finale models and loads battle scenery and faction music as the campaign progresses. Break a weak point, recognize the gold counter window, and commit your fire. Crimson rewards a fully charged shot, Azure chains marks, and Auric uses close-range suppression fields.
 
 [Public browser demo](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Previous trailer](media/trailer.mp4) · [中文说明](README.md)

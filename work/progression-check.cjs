@@ -288,7 +288,7 @@ check("Boss loadout and health lock through pickups and apply once to the finale
   assert.equal(next[0], Math.round(execute('bossBalanceBodies[5]') * 3.2 ** .85));
 });
 
-check("Equipment tightens actual attack cadence and speeds projectiles with fixed warning and recovery", () => {
+check("Equipment preserves the short-action cadence floor and speeds projectiles without cutting warning or recovery", () => {
   const sample = [];
   for (const high of [false, true]) {
     isolated(`showScreen("battle",{difficulty:"veteran",seed:4225});${high
@@ -296,7 +296,8 @@ check("Equipment tightens actual attack cadence and speeds projectiles with fixe
       : "raiseWeaponFloor(progressionPresetForBoss(1));"}spawnBoss(1);
       resetBossPresentation();Object.assign(boss,bossArena(1),{phase:"recover"});
       prepareAlienAttack(boss);boss.phase="attack";
-      for(const at of [0,.38,1.32]){boss.phaseTime=at;runAlienAttack(boss)}`);
+      for(const at of [0,.38,1.32]){boss.phaseTime=at;runAlienAttack(boss)}
+      fan(0,4,.3,500,"shard").fire(boss);`);
     sample.push(snapshot(`({ warning: boss.telegraphDuration, recovery: alienRecoveryDuration(boss),
       interval: boss.attackInterval, speed: Math.hypot(bossProjectiles[0].vx,bossProjectiles[0].vy),
       radius: bossProjectiles[0].radius, speedMul: boss.scaling.speedMul, end: boss.attackDuration,
@@ -307,7 +308,8 @@ check("Equipment tightens actual attack cadence and speeds projectiles with fixe
   assert.ok(upgraded.warning >= .9 && upgraded.recovery >= .8);
   assert.equal(base.recovery, upgraded.recovery);
   assert.equal(base.radius, upgraded.radius);
-  assert.ok(upgraded.interval < base.interval, JSON.stringify(sample));
+  assert.ok(upgraded.interval <= base.interval, JSON.stringify(sample));
+  assert.ok(upgraded.interval >= 2.5, "The 0.9 tell + 0.8 contact + 0.8 recovery cannot be compressed by equipment");
   assert.ok(upgraded.interval >= upgraded.warning + .4);
   assert.ok(upgraded.end >= upgraded.required);
   near(upgraded.speed / base.speed, upgraded.speedMul);

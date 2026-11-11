@@ -125,6 +125,8 @@ const gameStaticEnglish = new Map([
   ["攻速最多每秒 12 次，弹道最多 5 条。伤害成长有上限，进化会改变战斗方式。", "Fire up to 12 times per second across 5 lanes. Damage caps as you progress, while evolutions change how you fight."],
   ["完美护盾与地形", "Perfect Guard and Terrain"],
   ["完美护盾。", "Perfect Guard. "],
+  ["首领封场。", "Boss lockdown. "],
+  ["出现封场倒计时后，按护盾键抵挡全屏冲击。没有储能时会补给一次应急护盾；护盾禁用的挑战请进入标出的缺口。", "When the lockdown countdown appears, use your shield to block the arena-wide strike. An emergency charge is supplied if empty. In no-shield challenges, enter the marked opening."],
   ["完美连携。", "Perfect Link. "],
   ["借地形避险。", "Use the terrain. "],
   ["残骸能挡住敌弹。击碎陨石可用碎块打敌机，进入裂隙后注意引力箭头。", "Wrecks block enemy shots. Break asteroids to send debris into enemy ships. Watch the gravity arrows in the rift."],

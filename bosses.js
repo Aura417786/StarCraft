@@ -146,6 +146,7 @@ function updateBossHealthHud() {
 function clearAlienThreats() {
   bossProjectiles.length = 0;
   bossHazards.length = 0;
+  if (boss) { boss.pressureState = null; boss.pressureArmor = false; }
 }
 
 function clearBossFinaleAttacks() {
@@ -194,6 +195,10 @@ function resizeBossEncounter(oldWidth, oldHeight, oldBounds) {
     boss.lockY = resizeY(boss.lockY);
     boss.gapY = resizeY(boss.gapY);
     boss.gapSize *= scaleY;
+    if (boss.pressureState) {
+      boss.pressureState.gapY = resizeY(boss.pressureState.gapY);
+      boss.pressureState.gapSize *= scaleY;
+    }
     for (const shot of bossProjectiles) {
       shot.x = shot.previousX = shot.x * scaleX;
       shot.y = shot.previousY = resizeY(shot.y);
@@ -203,6 +208,17 @@ function resizeBossEncounter(oldWidth, oldHeight, oldBounds) {
       shot.radius *= widthScale;
     }
     for (const hazard of bossHazards) {
+      if (hazard.kind === "ultimate") {
+        hazard.lockX *= scaleX;hazard.lockY = resizeY(hazard.lockY);
+        hazard.originX *= scaleX;hazard.originY = resizeY(hazard.originY);
+        hazard.gapY = resizeY(hazard.gapY);hazard.gapSize *= scaleY;
+        for(const node of hazard.nodes) {node.x *= scaleX;node.y=resizeY(node.y);node.radius *= widthScale;}
+        continue;
+      }
+      if (hazard.kind === "pressureSeal") {
+        hazard.gapY = resizeY(hazard.gapY); hazard.gapSize *= scaleY;
+        continue;
+      }
       if (resizeAlienSignatureHazard(hazard, scaleX, scaleY, resizeY)
         || resizeAlienMechanic(hazard, scaleX, scaleY, resizeY)) continue;
       if (hazard.x !== undefined) hazard.x *= scaleX;
@@ -243,6 +259,7 @@ function bossFireProtectionFor(type) {
 
 function spawnBoss(type = chooseBossType()) {
   if (!Number.isInteger(type) || !bossTypes[type]) return;
+  if (typeof warmBossVfxMaterial === "function" && type < 10) warmBossVfxMaterial(type);
   const arena = bossArena(type);
   const entry = bossEntryPosition(arena, type);
   const data = bossTypes[type];
@@ -331,6 +348,7 @@ function updateBossEncounter(seconds) {
       pendingBossType = upcoming;
       if (pendingBossType === null) return;
       if (typeof preloadAlienBossArt === "function") preloadAlienBossArt(pendingBossType);
+      if (typeof warmBossVfxMaterial === "function" && pendingBossType < 10) warmBossVfxMaterial(pendingBossType);
       preloadBossFinaleArt(pendingBossType);
       enemies.length = 0;
       resetEnemyCombat(false);
@@ -365,6 +383,7 @@ function updateBossEncounter(seconds) {
     updateBossFinale(boss, seconds);
     return;
   }
+  if (typeof updateBossPressure === "function") updateBossPressure(boss, seconds);
   updateAlienBossPose(boss, seconds);
   if (boss.phase === "recover") {
     if (boss.phaseTime >= alienRecoveryDuration(boss)) prepareAlienAttack(boss, true);
@@ -432,7 +451,8 @@ function applyBossHit(shot, target = boss) {
   const attackingShell = countered ? 1.42 : ruptureWindow ? 1.32 : exposed ? 1.18 : target.phase !== "attack" ? 1
     : target.alienAttack === "pressure" ? .71 : target.alienFinal && target.enraged ? .62 : .78;
   const specialMultiplier = special && target.alienFinal ? bossRules.fusionSpecialMultiplier : 1;
-  const fraction = rawFraction * attackingShell * specialMultiplier * finaleMultiplier;
+  const pressureMultiplier = target.pressureArmor ? .15 : 1;
+  const fraction = rawFraction * attackingShell * specialMultiplier * finaleMultiplier * pressureMultiplier;
   if (fraction <= 0) return;
   target.hp = Math.max(bossHealthFloor(target), target.hp - fraction);
   target.hitFlash = .08;
@@ -515,6 +535,11 @@ function updateBossDamage() {
   if (contact) tryPerfectShield();
   if (!isBattleActive()) return;
   const hazard = bossHazards.find(area => !area.hitPlayer && alienHazardHitsPlayer(area));
+  const seal = bossHazards.find(area => area.kind === "pressureSeal" && !area.pressureLogged && alienHazardHitsPlayer(area));
+  if (seal && boss) {
+    seal.pressureLogged = true;
+    logBossPressure(boss, shieldIsActive() ? "guard" : bossHitGrace > 0 ? "grace" : "hit", { x: player.x, y: player.y, fullSeal: seal.fullSeal });
+  }
   const finale = boss?.finale && bossFinaleHitsPlayer(boss) ? boss : null;
   if (contact || hazard || finale) {
     // Lingering areas can hit once each. Repeated, newly telegraphed attacks
@@ -533,6 +558,7 @@ function drawBossBattle() {
   else if (boss) drawBossShip(context, boss, quiet);
   if (bossCounterActive(boss)) drawBossCounterCue(context, boss);
   if (typeof drawSceneryOcclusion === "function") drawSceneryOcclusion(context, boss ?? scene?.target);
+  if (typeof drawBossPressureArt === "function") drawBossPressureArt("front");
   for (const hazard of bossHazards) {
     drawAlienHazard(context, hazard, quiet);
     if (typeof drawFlightDangerPattern === "function") drawFlightDangerPattern(context, hazard);

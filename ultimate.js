@@ -257,6 +257,7 @@ function markCrimsonContact(shot, target) {
 }
 function resolveUltimateHits(shot = ultimate.shot, bossCap) {
   if (!shot) return;
+  if (typeof damageBossUltimateNodes === "function") damageBossUltimateNodes(shot);
   resolveUltimateBattlefieldObjects(shot);
   if (typeof resolveUltimateMines === "function") resolveUltimateMines(shot);
   for (let index = enemies.length - 1; index >= 0; index--) {
@@ -310,6 +311,7 @@ function ionAimPoint(target, missile) {
   return node ? finaleNodeGeometry(target, node) : finaleCoreGeometry(target);
 }
 function resolveIonHit(missile, bursts, age) {
+  if (typeof damageBossUltimateNodes === "function") damageBossUltimateNodes(missile, true);
   let time = Infinity;
   let index = -1;
   let boss = null;

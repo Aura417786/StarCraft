@@ -230,6 +230,7 @@ function resizeBattlefield() {
   player.previousX = player.x; player.previousY = player.y;
   resizeCombatEffects(oldWidth, oldHeight);
   resizeScenery();
+  if (typeof clearBossPressureArt === "function") clearBossPressureArt();
   clearMovement();
   refreshEvolutionChoice();
   battlefieldInitialized = true;
@@ -330,6 +331,7 @@ function showScreen(nextState, options = {}) {
   resetBattlefield(nextState === "battle");
   resetJourneyScenes();
   resetCombatEffects();
+  if (typeof clearBossPressureArt === "function") clearBossPressureArt();
   resetEvolution();
   resetFighterCombat();
   resetMomentum();
@@ -1094,6 +1096,7 @@ function endGame(won = false) {
   updateResultCopy(won);
   resetGravityTide();
   resetCombatEffects();
+  if (typeof clearBossPressureArt === "function") clearBossPressureArt();
   endMomentumBattle();
   resetEnemyCombat(false);
   cancelUltimate();
@@ -1268,6 +1271,7 @@ function advanceCombatStep(realSeconds) {
       updateShipVisuals(seconds, true);
       updateCombatEffects(seconds);
       if (cinematic.kind !== "death") updateBossEncounter(seconds);
+      if (typeof updateBossPressureArt === "function") updateBossPressureArt(seconds);
     }
   } else if (!pauseView) {
     const seconds = shieldFrameSeconds(realSeconds);
@@ -1285,6 +1289,7 @@ function advanceCombatStep(realSeconds) {
     updateEvolutionWeapons(seconds);
     updateEncounter(seconds);
     updateBossEncounter(seconds);
+    if (typeof updateBossPressureArt === "function") updateBossPressureArt(seconds);
     updateBattlefield(seconds);
     updatePowerups(seconds);
     updateUltimate(seconds);
@@ -1323,10 +1328,17 @@ function drawFrame(time) {
   context.clearRect(0, 0, viewport.width, viewport.height);
   context.save();
   applyBossPresentationCamera(context);
+  if (typeof bossPressureCameraScale === "function") {
+    const pressureZoom = bossPressureCameraScale();
+    context.translate(viewport.width / 2, viewport.height / 2);
+    context.scale(pressureZoom, pressureZoom);
+    context.translate(-viewport.width / 2, -viewport.height / 2);
+  }
   drawBattlefield(showCombat);
   if (typeof warmHadalDestination === "function") warmHadalDestination(context, state === "battle");
   drawActiveJourney("front");
   drawBossPresentationBackdrop(context);
+  if (showCombat && typeof drawBossPressureArt === "function") drawBossPressureArt("back");
   if (showCombat) drawCombatPostProcessing(context);
   context.globalAlpha = 1;
   if (showCombat) {

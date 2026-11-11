@@ -13,6 +13,7 @@ function signatureArena() {
     const viewport = { width: 1280, height: 720 };
     const flightBounds = { left: 62, right: 1062, top: 86, bottom: 633 };
     const player = { x: 310, y: 348, width: 180, height: 120, speed: 300 };
+    const battleTime = 0;
     const tr = (zh, en) => en;
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const gameAudio = { bossAttack() {} };
@@ -22,7 +23,7 @@ function signatureArena() {
     function positionBoss(type, enraged = false, pattern = 0, pressure = false) {
       clearAlienThreats();
       boss = { x: viewport.width * .84, y: viewport.height * .48, width: 252, height: 190,
-        color: bossTypes[type].color, type, enraged, pressureCycle: 0, attackIndex: pattern - 1 };
+        color: bossTypes[type].color, type, enraged, pressureCycle: pressure ? 3 : 0, attackIndex: pattern - 1 };
       prepareAlienAttack(boss, pressure);
       return boss;
     }
@@ -42,7 +43,7 @@ function signatureArena() {
         updateBossProjectiles(dt);
         for (const hazard of bossHazards) {
           kinds.add(hazard.kind);
-          readable &&= hazard.warning >= (hazard.kind === "tide" ? 1.6 : 1.4);
+          readable &&= hazard.warning >= .9;
           threatensStationary ||= alienHazardHitsPlayer(hazard);
         }
         threatensStationary ||= bossProjectiles.some(bossShotHitsPlayer);
@@ -51,7 +52,7 @@ function signatureArena() {
       return { peak, kinds: [...kinds], threatensStationary, readable, name: boss.attackLabel[1] };
     }
   `);
-  for (const file of ["bosses.js", "hostile-projectiles.js", "fire-control.js", "alien-attacks.js", "boss-mechanics.js", "alien-pressure.js", "boss-finales.js"]) {
+  for (const file of ["bosses.js", "hostile-projectiles.js", "fire-control.js", "alien-attacks.js", "boss-mechanics.js", "alien-pressure.js", "boss-pressure-copy.js", "boss-pressure.js", "boss-finales.js"]) {
     run(fs.readFileSync(path.join(__dirname, "..", file), "utf8"));
   }
   // The production HUD writes to DOM. These checks only exercise the simulation.
@@ -76,7 +77,7 @@ test("all eleven identities can execute every regular and enraged attack timelin
   }
 });
 
-test("each new attack has a teaching window and a concise actionable counter", () => {
+test("short actions retain the 0.9s tell and complex signatures retain their teaching window", () => {
   const run = signatureArena();
   const result = run(`(() => {
     const warnings = [];
@@ -89,18 +90,18 @@ test("each new attack has a teaching window and a concise actionable counter", (
           const wide = pressure ? widePressureMaterials.has(alienPressurePlans[type].material)
             : wideAlienPatterns.has(target.alienAttack);
           target.attackIndex = pattern - 1;
-          target.pressureCycle = 0;
+          target.pressureCycle = pressure ? 3 : 0;
           prepareAlienAttack(target, pressure);
-          warnings.push({ first, repeat: target.telegraphDuration, hint, enHint, wide });
+          warnings.push({ first, repeat: target.telegraphDuration, hint, enHint, wide, quick: target.quickAttack });
         }
       }
     }
     return { warnings, finales: bossFinaleStages.map(stage => stage.hint) };
   })()`);
   assert.equal(result.warnings.length, 44);
-  for (const { first, repeat, hint, enHint, wide } of result.warnings) {
-    assert.ok(Math.abs(first - repeat - .4) < 1e-8);
-    assert.ok(repeat >= (wide ? 1.6 : 1.4) && first <= 2.2);
+  for (const { first, repeat, hint, enHint, wide, quick } of result.warnings) {
+    assert.ok(Math.abs(first - repeat - (quick ? 0 : .4)) < 1e-8);
+    assert.ok(repeat >= (quick ? .9 : wide ? 1.6 : 1.4) && first <= 2.2);
     assert.ok(hint.length >= 8 && hint.length <= 26 && enHint.length < 86, hint);
   }
   for (const [hint, enHint] of result.finales) {
@@ -111,7 +112,7 @@ test("each new attack has a teaching window and a concise actionable counter", (
 test("the Broodmother's wall travels across the field and the painted cyan trough is safe", () => {
   const run = signatureArena();
   const result = run(`(() => {
-    positionBoss(0, false, 1);
+    positionBoss(0, false, bossTypes[0].patterns.indexOf("broodArc"));
     const wave = bossHazards.find(hazard => hazard.kind === "tide");
     const first = alienTideX(wave, 200, 0);
     const last = alienTideX(wave, 200, 1);
@@ -136,7 +137,7 @@ test("a compact arena leaves a dodge at the edge and no spray in the marked trou
     Object.assign(viewport, {width:640,height:450});
     Object.assign(flightBounds, {left:44,right:620,top:225,bottom:335});
     Object.assign(player, {x:80,y:227,width:95,height:56});
-    positionBoss(0, false, 1);
+    positionBoss(0, false, bossTypes[0].patterns.indexOf("broodArc"));
     const wave = bossHazards.find(hazard => hazard.kind === "tide");
     wave.age = wave.warning + wave.duration * .47;
     player.x = alienTideX(wave, player.y, .47);
@@ -181,6 +182,7 @@ test("diagonal filaments share geometry with their real hit and remap with the p
   const run = signatureArena();
   const result = run(`(() => {
     positionBoss(3, false, 0);
+    prepareAlienAttack(boss);
     const silk = bossHazards.find(hazard => hazard.kind === "filament");
     const oldOrigin = silk.originX;
     const warningSafe = !alienHazardHitsPlayer(silk);

@@ -30,6 +30,7 @@ async function open(profileDir, errors) {
   const [page] = context.pages();
   page.on("pageerror", error => errors.push(error.stack));
   await page.goto(origin);
+  await page.bringToFront();
   const guide = page.locator(".flight-guide-actions button").first();
   if (await guide.isVisible()) await guide.click();
   return { context, page };
@@ -124,6 +125,10 @@ async function main() {
         if (!enemies.length) throw Error("Fixture requires one existing enemy");
       });
       const before = await page.evaluate(() => enemies.length);
+      // Chrome 157 can reject native fullscreen for an inactive browser tab
+      // even when document.hasFocus() and transient activation both say true.
+      // Activate the actual tab; still exercise the real click and fullscreen API.
+      await page.bringToFront();
       await fullscreen.click();
       await page.waitForFunction(() => Boolean(document.fullscreenElement));
       assert.equal(await page.evaluate(() => enemies.length), before);

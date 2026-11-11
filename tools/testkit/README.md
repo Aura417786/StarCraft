@@ -1,5 +1,16 @@
 # 固定种子平衡测试
 
+v29 连携、元素绝招与实机画面新增以下入口（使用相同 `NODE_PATH` / `CHROME_PATH` 配置）：
+
+```powershell
+node tools/testkit/pressure.cjs . ../v29-pressure
+node tools/testkit/pressure-preview.cjs . ../v29-preview
+```
+
+`pressure.cjs --logic` 只执行固定步长战斗和碰撞合同。完整模式还截图十只 Boss 的蓄力、技能生效和最终冲击，并记录三档画质的真实 RAF/JS 帧耗时。报告保留实际几何、原始连携日志和连续输出窗口，不调整原九场验收门槛。
+
+`pressure-preview.cjs` 以真实浏览器时钟录制十个独立 Canvas WebM，生成可打开的预览页。可在末尾追加 `1,3,6` 只录指定 Boss。录像为关闭主炮且延长伤害保护的视觉检查，不含 DOM HUD/音频，不用于声称正常通关或性能达标。
+
 此工具扩展原有 `.testkit` 的单场景观察。它可从源码或从任意已解压的 `Game` 目录运行，结果写入指定文件。游戏目录可以保持只读。
 
 使用 Node.js、Playwright 和 Chrome。在当前机器没有 Playwright 时，先在单独的测试目录安装它，或者用 `NODE_PATH` 指向已有的 Playwright 目录。若没有 Playwright 自带的 Chromium，设置 `CHROME_PATH` 指向 Chrome 可执行文件。
