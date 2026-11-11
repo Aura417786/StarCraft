@@ -2,7 +2,7 @@
 
 // Loaded in the benchmark browser only. Movement goes through the regular
 // pressed-key input set and attacks go through the game's input handlers.
-const balancePolicyVersion = "telegraph-pilot/5";
+const balancePolicyVersion = "telegraph-pilot/6-exclusive-routes";
 const balancePolicyDirections = [
   [0, 0], [1, 0], [-1, 0], [0, -1], [0, 1],
   [1, -1], [1, 1], [-1, -1], [-1, 1],
@@ -109,10 +109,8 @@ function balanceHazardRisk(x, y, horizon, shots) {
 function balanceChooseAction(controls, mode) {
   if (evolution.pending) {
     const options = evolutionChoiceOptions().filter(kind => !evolutionCardDetails(kind).disabled);
-    const priority = controls.build === "falcon" ? ["blast", "pierce", "aegis"]
-      : controls.build === "aegis" ? ["aegis", "pierce", "blast"]
-      : ["pierce", "blast", "aegis"];
-    const choice = [...priority, "refit-heal", "refit-shield", ...options].find(kind => options.includes(kind));
+    const priority = [evolution.route, balanceBuildRoute(controls.build), "ember", "frost", "rewind"];
+    const choice = priority.find(kind => options.includes(kind));
     if (choice) chooseEvolution(choice);
   }
   if (!isBattleActive() || mode === "stationary") return;
@@ -186,22 +184,19 @@ function balanceChooseAction(controls, mode) {
     balancePress("KeyC");
     controls.chargeHeld = fighterCombat.redHeld;
   }
-  const wantsLance = !controls.chargeHeld && evolution.pierce >= 3 && evolutionWeapons.lanceCooldown <= 0 && (boss?.phase === "recover" || boss?.finale)
-    && aligned && best.cost < 24;
-  if (controls.shiftHeld && (!wantsLance || battleTime - controls.shiftSince > .74)) {
-    balancePress("ShiftLeft", "keyup");
-    controls.shiftHeld = false;
-    controls.nextLance = battleTime + .4;
-  } else if (wantsLance && !controls.shiftHeld && battleTime >= controls.nextLance) {
-    balancePress("ShiftLeft");
-    controls.shiftHeld = true;
-    controls.shiftSince = battleTime;
-  }
   const imminent = [.017, .045, .075, .105, .16].some(time =>
     balanceHazardRisk(moveX(best.vx, time), moveY(best.vy, time), time, nearby) > 45);
-  if (evolution.blast >= 2 && boss && battleTime >= controls.nextFalcon) {
+  const hurt = player.lives < (controls.previousLives ?? player.lives);
+  controls.previousLives = player.lives;
+  const marked = [...enemies, ...(boss ? [boss] : [])].some(target => target.hp > 0
+    && target.emberStacks > 0 && target.emberUntil > battleTime && (target !== boss || bossCanTakeDamage(target)));
+  const rewindAvailable = typeof battleRewind === "object" && battleRewind.availableSeconds > .25;
+  const wantsSkill = evolution.route === "ember" ? marked
+    : evolution.route === "frost" ? imminent
+    : evolution.route === "rewind" && rewindAvailable && (hurt || imminent);
+  if (wantsSkill && evolution.cooldown <= 0) {
     balanceTap("KeyF");
-    controls.nextFalcon = battleTime + (imminent && evolution.blast >= 3 ? .12 : 6);
+    if (evolution.cooldown > 0) controls.routeSkills++;
   }
   if (shield.charges > 0 && !shieldIsActive() && bossHitGrace <= .02 && imminent) {
     balanceTap("KeyV");

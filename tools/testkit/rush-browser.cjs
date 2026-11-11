@@ -34,7 +34,7 @@ async function main() {
     if (await guide.isVisible()) await guide.click();
     const openChallenges = () => page.locator('[data-sortie-console="challenges"]').click();
     await openChallenges();
-    await page.locator("#rush-difficulty").selectOption("abyss");
+    await page.locator("#rush-difficulty").selectOption("hard");
     await page.screenshot({ path: path.join(evidence, "rush-challenges.png") });
     const weeks = await page.evaluate(() => [
       weeklyRush(new Date("2026-11-09T00:00:00Z")),
@@ -45,7 +45,7 @@ async function main() {
     assert.notEqual(weeks[0].seed, weeks[2].seed);
 
     await page.getByRole("button", { name: "Launch this week's seed" }).click();
-    assert.equal(await page.evaluate(() => sortieStats.difficulty), "veteran");
+    assert.equal(await page.evaluate(() => sortieStats.difficulty), "hard");
     assert.equal(await page.evaluate(() => sortieStats.seed), await page.evaluate(() => weeklyRush().seed));
     assert.deepEqual(await page.evaluate(() => sortieStats.weekly.rules), await page.evaluate(() => weeklyRush().rules));
     assert.equal(await page.evaluate(() => sortieStats.rules.drift !== 0 || sortieStats.rules.movement !== 1), true);
@@ -53,20 +53,20 @@ async function main() {
 
     await openChallenges();
     await page.getByRole("button", { name: "Launch Boss Rush" }).click();
-    assert.equal(await page.evaluate(() => sortieStats.difficulty), "abyss");
+    assert.equal(await page.evaluate(() => sortieStats.difficulty), "hard");
     // Stage a loss at boss five, then continue entirely through the public menu.
     await page.evaluate(() => { bossDefeated = 4; pendingBossType = 4; player.lives = 0; endGame(false); });
     await page.getByRole("button", { name: "Practice from this boss (unranked)" }).waitFor();
     await page.reload();
     await openChallenges();
-    const rankedBefore = await page.evaluate(() => sortieProfile.data.rushByDifficulty.abyss);
+    const rankedBefore = await page.evaluate(() => sortieProfile.data.rushByDifficulty.hard);
     await page.getByRole("button", { name: /Practice from .*unranked/ }).click();
     await page.waitForFunction(() => boss?.type === 4, null, { timeout: 12000 });
     assert.deepEqual(await page.evaluate(() => ({ resumed: sortieStats.resumed, start: sortieStats.rushStart,
       waves: sortieAllowsWaves(), pickups: sortieAllowsPickups() })), { resumed: true, start: 4, waves: false, pickups: false });
     await page.screenshot({ path: path.join(evidence, "rush-resumed-boss-five.png") });
     await page.evaluate(() => { player.lives = 0; endGame(false); });
-    assert.deepEqual(await page.evaluate(() => sortieProfile.data.rushByDifficulty.abyss), rankedBefore);
+    assert.deepEqual(await page.evaluate(() => sortieProfile.data.rushByDifficulty.hard), rankedBefore);
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(evidence, "rush.json"), JSON.stringify({ weeks, rankedBefore,
       resumedBoss: 5, resumeAfterReload: true, continuationUnranked: true, errors }, null, 2));

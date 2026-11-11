@@ -1,5 +1,27 @@
 # 固定种子平衡测试
 
+## v30 回溯、进化、难度与命中反馈
+
+```powershell
+node tools/testkit/boss-retry.cjs . ../v30-tests/boss-retry
+node tools/testkit/evolution-routes.cjs . ../v30-tests/evolution
+node tools/testkit/battle-rewind.cjs . ../v30-tests/rewind
+node tools/testkit/difficulty.cjs . ../v30-tests/difficulty
+node tools/testkit/hit-feedback.cjs . ../v30-tests/hit-feedback
+node tools/testkit/v30-soak.cjs . ../v30-tests/soak
+```
+
+- `boss-retry`：实际死亡、DOM/Enter 重试，核对三战机、新路线、资源、随机状态、重复重试与结算隔离；普通战/终局死亡和中英小屏均覆盖。
+- `evolution-routes`：路线互斥、100 级增长、真实 F 键，66 个 Boss 爆破样本及冻结占空比，保留护壳和终局部件机制。
+- `battle-rewind`：同实体图恢复、WeakMap/WeakSet 和 Boss 延迟闭包、全场对象/分数/生命、外置冷却与账户数据保护；200 秒历史与容量压力检查。
+- `difficulty`：54 组同配装对照，验证相同 POWER 对应相同 HP，困难原样、简单/普通只降低频率与弹速；真实状态机统计起手间隔，并检查旧档兼容。
+- `hit-feedback`：实际 Web Audio 离线输出 WAV，验证普通命中/能量重击、音量与声部预算、静音和画面反馈限制。
+- `v30-soak`：三条路线各 30 秒、1920×1080 高画质、真实 RAF/按键、无声 Canvas 录屏及 HUD 截图。夹具保活并防止 Boss 提前结束，仅用于画面与短时性能观察，不能称为自然通关或长期稳定性证明。
+
+旧版混搭、三级专精和洗点已退休，对应断言保存在 `legacy/v29-evolution-checks.txt` 供历史查阅。现行回归验证新的一局单路线规则，不能再以旧路线可混搭作为通过条件。
+
+## v29 连携与元素绝招
+
 v29 连携、元素绝招与实机画面新增以下入口（使用相同 `NODE_PATH` / `CHROME_PATH` 配置）：
 
 ```powershell
@@ -38,7 +60,7 @@ node tools/testkit/boss-scaling.cjs . ../boss-scaling-fixture.json
 node tools/testkit/boss-scaling-overlay.cjs . ../boss-scaling-overlay
 ```
 
-夹具使用种子 4225、赤焰、老兵难度和同一套自动驾驶，分别挑战第 1、6、10 只 Boss。低配取该关的战役武器下限，中配取下限与满级的等级中点并四舍五入，满配用 24 级伤害、11 级射速和 5 道弹道。每场从 14 条生命和零进化开始，伤害、碰撞和阶段切换照常结算。九场各复跑一次并逐字段比较。
+夹具使用种子 4225、赤焰、困难难度（对应 v29 老兵强度）和同一套自动驾驶，分别挑战第 1、6、10 只 Boss。低配取该关的战役武器下限，中配取下限与满级的等级中点并四舍五入，满配用 24 级伤害、11 级射速和 5 道弹道。每场从 14 条生命和零进化开始，伤害、碰撞和阶段切换照常结算。九场各复跑一次并逐字段比较。
 
 `ttk_seconds` 来自正式战斗记录，与 `?qa=1` 的 TTK 使用同一时钟。`active_ttk_seconds` 从本体首次可受伤开始计算。`health` 记录本体和终局各自的血量。`attack_interval_seconds` 是相邻本体预警起点或相邻终局出招起点之间实测间隔的中位数，`timing` 保存原始时间和生产调度值。`contract` 检查拾取后的锁定、`k` 边界、100 次读取的纯函数行为，以及难度血量乘子。
 

@@ -318,8 +318,9 @@ function updateBossPressure(target, seconds) {
     const boundary = shot.pressureSide < 0 ? flightBounds.top : flightBounds.bottom;
     shot.y = edge + (boundary - edge) * shot.pressureLane;
   }
-  if (target.pressureFireTime < .48) return;
-  target.pressureFireTime %= .48;
+  const fireInterval = .48 / (typeof sortieRules === "function" ? sortieRules().attackTempo : 1);
+  if (target.pressureFireTime < fireInterval) return;
+  target.pressureFireTime %= fireInterval;
   const count = Math.round(10 + 3 * Math.max(1, target.scaling?.hpMul ?? 1));
   const activeCount = bossProjectiles.filter(shot => shot.backgroundPressure).length;
   if (activeCount >= 76) return;

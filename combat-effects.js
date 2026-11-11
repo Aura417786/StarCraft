@@ -2,7 +2,8 @@
 
 // 视觉效果有独立容量和时钟，不参与命中、伤害或敌人刷新。
 const combatEffects = { clock: 0, particles: [], impacts: [], wrecks: [], shockwaves: [],
-  detonations: [], shake: 0, shakeTime: 0, light: null };
+  detonations: [], contacts: [], shake: 0, shakeTime: 0, light: null,
+  directionalHit: null, hitPause: 0, nextHeavyPause: 0, nextContact: 0 };
 const spareDetonations = Array.from({ length: 8 }, () => ({}));
 const spareCombatParticles = Array.from({ length: 180 }, () => ({}));
 const detonationMaterials = {
@@ -320,16 +321,19 @@ function canAnimateCombatEffects() {
 }
 function resetCombatEffects() {
   for (const particle of combatEffects.particles) spareCombatParticles.push(particle);
-  for (const name of ["particles", "impacts", "wrecks", "shockwaves"]) combatEffects[name].length = 0;
+  for (const name of ["particles", "impacts", "wrecks", "shockwaves", "contacts"]) combatEffects[name].length = 0;
   while (combatEffects.detonations.length) releaseCombatDetonation(combatEffects.detonations.length - 1);
   combatEffects.clock = 0; combatEffects.shake = 0; combatEffects.shakeTime = 0; combatEffects.light = null;
+  combatEffects.directionalHit = null; combatEffects.hitPause = 0;
+  combatEffects.nextHeavyPause = 0; combatEffects.nextContact = 0;
   resetBossPresentation();
 }
 function resizeCombatEffects(oldWidth, oldHeight) {
   for (const particle of combatEffects.particles) spareCombatParticles.push(particle);
-  for (const name of ["particles", "impacts", "shockwaves"]) combatEffects[name].length = 0;
+  for (const name of ["particles", "impacts", "shockwaves", "contacts"]) combatEffects[name].length = 0;
   while (combatEffects.detonations.length) releaseCombatDetonation(combatEffects.detonations.length - 1);
   combatEffects.shake = 0; combatEffects.shakeTime = 0;
+  combatEffects.directionalHit = null; combatEffects.hitPause = 0;
   combatEffects.light = null;
   if (!isBossDeathPlaying()) { combatEffects.wrecks.length = 0; return; }
   const finale = bossPresentation.target;
@@ -365,11 +369,80 @@ function addCombatShake(strength) {
   combatEffects.shakeTime = 0.23;
 }
 function combatShakeOffset() {
-  if (quietCombatMotion() || shakePreference === "off" || combatEffects.shakeTime <= 0) return { x: 0, y: 0 };
-  const strength = Math.min(shakePreference === "full" ? 6 : 2.5,
+  if (quietCombatMotion() || shakePreference === "off") return { x: 0, y: 0 };
+  const maximum = shakePreference === "full" ? 6 : 2.5;
+  const strength = Math.min(maximum,
     combatEffects.shake * (shakePreference === "full" ? 1 : 0.42)) * combatEffects.shakeTime / 0.23;
-  return { x: Math.sin(combatEffects.clock * 109) * strength,
-    y: Math.cos(combatEffects.clock * 83) * strength * 0.7 };
+  const hit = combatEffects.directionalHit;
+  const kick = hit ? Math.cos(hit.age * 48) * Math.exp(-hit.age * 22)
+    * hit.strength * (shakePreference === "full" ? 1 : .42) : 0;
+  return { x: clamp(Math.sin(combatEffects.clock * 109) * strength + (hit?.x ?? 0) * kick, -maximum, maximum),
+    y: clamp(Math.cos(combatEffects.clock * 83) * strength * .7 + (hit?.y ?? 0) * kick, -maximum, maximum) };
+}
+
+// Called once per simulation step, before advancing the shared combat clock.
+// The whole simulation waits together, so projectiles cannot cross an unmoving
+// player. A single cannon can hold at most 24 ms in any 600 ms combat window.
+function combatImpactFrameSeconds(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  if (quietCombatMotion() || !canAnimateCombatEffects() || isBossPresentationPlaying()) {
+    combatEffects.hitPause = 0;
+    return seconds;
+  }
+  const held = Math.min(seconds, combatEffects.hitPause);
+  combatEffects.hitPause = Math.max(0, combatEffects.hitPause - held);
+  return seconds - held;
+}
+
+function recordSurfaceContact(target, bullet, bossHit, heavy) {
+  if (!heavy && combatEffects.clock < combatEffects.nextContact) return;
+  combatEffects.nextContact = combatEffects.clock + .035;
+  const w = target.width || 80, h = target.height || 60;
+  const angle = Number.isFinite(bullet.vx) && Number.isFinite(bullet.vy)
+    ? Math.atan2(bullet.vy, bullet.vx) : Number.isFinite(bullet.angle) ? bullet.angle : 0;
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+  const x = target.x - Math.sign(dx || 1) * w * .31;
+  const y = Number.isFinite(bullet.y) ? clamp(bullet.y, target.y - h * .34, target.y + h * .34) : target.y;
+  const material = bossHit ? bossDetonationMaterials[target.type] : "metal";
+  const palette = detonationMaterials[material] ?? detonationMaterials.metal;
+  const quiet = quietCombatMotion();
+  pushCombatEffect(combatEffects.contacts, { x, y, angle, age: 0, duration: heavy ? .29 : .16,
+    radius: Math.min(h * .32, heavy ? 44 : bossHit ? 18 : 13), heavy,
+    color: palette.glow, core: palette.core }, 20);
+  if (heavy && !quiet) {
+    combatEffects.directionalHit = { x: dx, y: dy, strength: bossHit ? 3.4 : 1.8, age: 0 };
+    if (combatEffects.clock >= combatEffects.nextHeavyPause) {
+      combatEffects.hitPause = bossHit ? .024 : .014;
+      combatEffects.nextHeavyPause = combatEffects.clock + .6;
+    }
+  }
+}
+
+function drawSurfaceContacts() {
+  const quiet = quietCombatMotion();
+  for (const hit of combatEffects.contacts) {
+    const p = Math.min(1, hit.age / hit.duration), fade = (1 - p) ** 2;
+    const radius = hit.radius * (quiet ? .65 : .45 + p * 1.2);
+    context.save();
+    context.translate(hit.x, hit.y); context.rotate(hit.angle);
+    context.globalAlpha = fade * (quiet ? .38 : .82);
+    context.strokeStyle = hit.color; context.lineWidth = hit.heavy ? 2.3 : 1.3;
+    // A compressed shell ripple follows the incoming axis instead of a large
+    // screen flash. Its centre stays small enough to leave danger tells visible.
+    context.beginPath(); context.ellipse(radius * .13, 0, radius * .36, radius, 0, -.92 * Math.PI, .92 * Math.PI);
+    context.stroke();
+    if (hit.heavy && !quiet) {
+      context.globalAlpha = fade * .42;
+      context.beginPath(); context.ellipse(radius * .23, 0, radius * .62, radius * 1.32, 0, -.76 * Math.PI, .76 * Math.PI);
+      context.stroke();
+    }
+    const flash = Math.max(0, 1 - hit.age / (hit.heavy ? .068 : .041));
+    context.globalAlpha = flash * (quiet ? .30 : .91);
+    context.fillStyle = hit.core;
+    context.beginPath(); context.ellipse(0, 0, hit.radius * .18, hit.radius * .59, 0, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  }
 }
 function combatBurst(x, y, size = 1, color = "#ffb569", armor = false) {
   const quiet = reducedMotion.matches;
@@ -404,28 +477,22 @@ function recordCombatFeedback(kind, target, bullet = null) {
         profile.color, kind === "shell" && i % 2 === 0, false);
     }
   }
-  if (profile.cue) gameAudio.fieldCue?.(profile.cue, x, y);
+  if (profile.cue && !bullet) gameAudio.fieldCue?.(profile.cue, x, y);
   if (profile.shake) addCombatShake(profile.shake);
   if (kind === "shell" || kind === "finale") pulseCombatLight(x, y, Math.max(85, w * .61), profile.color, "impact");
 }
 
 function recordCombatImpact(target, bullet, bossHit = false, category) {
-  if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
+  if (!target || !bullet || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
   const ultimateHit = bullet.source === "ultimate";
-  const kind = ultimateHit ? "ultimate" : category ?? (bullet.critical ? "critical" : "hit");
+  const heavy = ultimateHit || bullet.source === "crimson-heavy" || bullet.source === "evolution-lance" || bullet.source === "evolution-ember";
+  const kind = ultimateHit ? "ultimate" : category ?? (heavy || bullet.critical ? "critical" : "hit");
   const next = kind === "hit" ? "fxNextImpact" : "fxNextSpecialImpact";
   if ((target[next] ?? -1) > combatEffects.clock) return;
   target[next] = combatEffects.clock + (kind === "hit" ? .07 : .19);
   gameAudio.hit?.(bossHit, bullet.source, target.x, target.y);
   recordCombatFeedback(kind, target, bullet);
-  if (ultimateHit && bossHit) {
-    const x = target.x - (target.width || 80) * .31;
-    const y = Number.isFinite(bullet.y) ? clamp(bullet.y, target.y - target.height * .3, target.y + target.height * .3) : target.y;
-    pushCombatEffect(combatEffects.shockwaves, { x, y, age: 0, duration: 0.48,
-      radius: Math.min(155, target.width * 0.7), color: "#ff867a" }, 16);
-    addCombatShake(5);
-    pulseCombatLight(x, y, Math.max(80, target.width * .68), "#ff867a", "impact");
-  }
+  recordSurfaceContact(target, bullet, bossHit, heavy);
 }
 
 function drawCombatImpact(impact) {
@@ -498,6 +565,10 @@ function updateCombatEffects(seconds) {
   if (!canAnimateCombatEffects() || !Number.isFinite(seconds) || seconds <= 0) return;
   const cinematic = isBossDeathPlaying();
   combatEffects.clock += seconds;
+  if (combatEffects.directionalHit) {
+    combatEffects.directionalHit.age += seconds;
+    if (combatEffects.directionalHit.age >= .19) combatEffects.directionalHit = null;
+  }
   if (combatEffects.light) {
     combatEffects.light.age += seconds;
     if (combatEffects.light.age >= combatLightProfiles[combatEffects.light.kind].life) combatEffects.light = null;
@@ -509,7 +580,7 @@ function updateCombatEffects(seconds) {
     detonation.age += seconds;
     if (detonation.age >= detonation.life) releaseCombatDetonation(i);
   }
-  for (const name of ["particles", "impacts", "shockwaves"]) {
+  for (const name of ["particles", "impacts", "shockwaves", "contacts"]) {
     const list = combatEffects[name];
     for (let i = list.length - 1; i >= 0; i--) {
       const effect = list[i]; effect.age += seconds;
@@ -582,6 +653,7 @@ function drawCombatEffects() {
     context.restore();
   }
   for (const impact of combatEffects.impacts) drawCombatImpact(impact);
+  drawSurfaceContacts();
   for (const particle of combatEffects.particles) {
     const progress = particle.age / particle.duration;
     context.save(); context.translate(particle.x, particle.y); context.rotate(particle.angle + particle.spin * particle.age);

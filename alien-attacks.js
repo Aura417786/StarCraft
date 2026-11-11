@@ -524,7 +524,9 @@ function prepareAlienAttack(target, allowPressure = false) {
   target.attackEvents.sort((a, b) => a.at - b.at);
   // Only the time around the authored actions is adjustable. Every tell,
   // scheduled volley, active hazard and recovery still has time to finish.
-  const protectedTime = target.telegraphDuration + alienRecoveryDuration(target);
+  // Difficulty adds empty recovery after the authored action. Do not let it
+  // feed back into POWER-based active-duration compression.
+  const protectedTime = target.telegraphDuration + alienRecoveryDuration(target, true);
   const baseInterval = protectedTime + target.attackDuration;
   const requestedDuration = baseInterval / (target.scaling?.tempoMul ?? 1) - protectedTime;
   target.attackDuration = Math.max(target.quickAttack ? .8 : requestedDuration, target.attackEndFloor, target.attackEvents.at(-1)?.at ?? 0);

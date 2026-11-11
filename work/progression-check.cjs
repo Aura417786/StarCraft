@@ -93,7 +93,7 @@ const gameAudio={ muted:false,
   overdrive(){audioCalls.push({name:'overdrive',args:[]});},
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
-const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
+const sandbox = vm.createContext({ document, window, Math, Number, Set, structuredClone, gameAudio });
 for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js' && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
 // Explicit Resume models the v23 visible pause contract in legacy simulation tests.
 function focusAndConfirmResume() { emit(window, 'focus'); vm.runInContext('if (pauseView) resumeGame()', sandbox); }
@@ -315,17 +315,20 @@ check("Equipment preserves the short-action cadence floor and speeds projectiles
   near(upgraded.speed / base.speed, upgraded.speedMul);
 });
 
-check("Boss difficulty changes health and warning duration without changing the selected encounter", () => {
+check("live difficulties change attack tempo and speed while locking the same health to entry power", () => {
   const difficulties = [];
-  for (const difficulty of ["recruit", "veteran", "abyss"]) {
+  for (const difficulty of ["easy", "normal", "hard"]) {
     isolated(`showScreen("battle",{difficulty:"${difficulty}",seed:4225});raiseWeaponFloor(progressionPresetForBoss(2));spawnBoss(2);
       Object.assign(boss,bossArena(2),{phase:"recover"});resetBossPresentation();prepareAlienAttack(boss);`);
-    difficulties.push(snapshot('[boss.type,boss.baseHealth,boss.telegraphDuration]'));
+    difficulties.push(snapshot('[boss.type,boss.baseHealth,boss.telegraphDuration,sortieRules().attackTempo,sortieRules().projectileSpeed,sortieRules().damage]'));
   }
   assert.ok(difficulties.every(values => values[0] === 2));
-  assert.ok(difficulties[0][1] < difficulties[1][1] && difficulties[1][1] < difficulties[2][1]);
-  near(difficulties[0][2] - difficulties[1][2], .3);
-  assert.equal(difficulties[1][2], difficulties[2][2], "Abyss should intensify attacks without shortening the tell");
+  assert.equal(difficulties[0][1], difficulties[1][1]);
+  assert.equal(difficulties[1][1], difficulties[2][1]);
+  assert.equal(difficulties[0][2], difficulties[1][2]);
+  assert.equal(difficulties[1][2], difficulties[2][2]);
+  for (const column of [3, 4]) assert.ok(difficulties[0][column] < difficulties[1][column] && difficulties[1][column] < difficulties[2][column]);
+  assert.ok(difficulties.every(values => values[5] === 1));
 });
 
 check("enemy durability grows through the campaign while early scouts remain easy to kill", () => {

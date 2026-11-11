@@ -1,0 +1,307 @@
+Historical v29 evolution assertions, retired by the explicit v30 route redesign.
+These fixtures assume mixed Wings/Falcon/Aegis ranks, rank-3 caps, respec and old weapon helpers.
+They are preserved for reference against v29 (ebfed2e), not run against the new game.
+Replacement coverage: tools/testkit/evolution-routes.cjs, battle-rewind.cjs and current combat route tests.
+
+check('all three routes can mix, but one capstone reserves the other paths at rank two', () => {
+  for (const capstone of ['pierce', 'blast', 'aegis']) {
+    isolatedBattle();
+    for (const kind of ['pierce','blast','aegis']) for (let level = 1; level <= 2; level++) {
+      execute('openEvolutionChoice()');
+      assert.equal(execute('chooseEvolution(' + JSON.stringify(kind) + ')'), true);
+    }
+    execute('openEvolutionChoice()');
+    assert.equal(execute('chooseEvolution(' + JSON.stringify(capstone) + ')'), true);
+    assert.equal(evolutionState().capstone, capstone);
+    assert.equal(evolutionState()[capstone], 3);
+    assert.deepEqual(evolutionState().links, { falcon: true, phalanx: capstone === "blast", lance: true });
+    execute('openEvolutionChoice()');
+    for (const other of ['pierce', 'blast', 'aegis']) assert.equal(execute('chooseEvolution(' + JSON.stringify(other) + ')'), false);
+  }
+});
+
+check('respec confirms once and reassigns existing ranks before spending the new reward', () => {
+  isolatedBattle('evolution.pierce=2;evolution.aegis=1;shield.charges=1;shield.energy=8;openEvolutionChoice();');
+  assert.equal(execute('respecEvolution()'), false);
+  execute('evolution.resetConfirm=true;');
+  assert.equal(execute('respecEvolution()'), true);
+  assert.equal(evolutionState().reassignments, 3);
+  assert.equal(evolutionState().pierce, 0);
+  near(protection().energy / execute('evolutionShieldChargeTime()'), .4);
+  execute('chooseEvolution("aegis");chooseEvolution("blast");chooseEvolution("blast");');
+  assert.equal(evolutionState().pending, true);
+  assert.equal(evolutionState().reassignments, 0);
+  assert.equal(protection().charges, 1);
+  execute('chooseEvolution("blast");');
+  assert.equal(evolutionState().capstone, 'blast');
+  assert.equal(evolutionState().pending, false);
+  execute('openEvolutionChoice();evolution.resetConfirm=true;');
+  assert.equal(execute('respecEvolution()'), false);
+});
+
+check('maximal rank allocation gives bounded supplies without raising passive damage', () => {
+  isolatedBattle('evolution.pierce=3;evolution.blast=2;evolution.aegis=2;evolution.capstone="pierce";shield.charges=2;player.lives=3;openEvolutionChoice();');
+  assert.deepEqual(evolutionCards.map(card => card.dataset.choice), ['refit-fire','refit-heal','refit-shield']);
+  assert.deepEqual(evolutionCards.map(card => card.disabled), [false, true, true]);
+  const damage = weaponState().damage;
+  assert.equal(execute('chooseEvolution("refit-fire")'), true);
+  assert.equal(weaponState().damage, damage);
+  assert.equal(ult().energy, 50);
+  execute('player.lives=7;player.maxLives=8;openEvolutionChoice();chooseEvolution("refit-heal");');
+  assert.equal(health().lives, 8);
+  assert.equal(execute('player.maxLives'), 8);
+  execute('shield.charges=1;shield.energy=15;openEvolutionChoice();chooseEvolution("refit-shield");');
+  assert.equal(protection().charges, 2);
+  assert.equal(protection().energy, 0);
+  assert.equal(evolutionState().refits, 3);
+});
+
+check('Wings I hit one additional target once without adding passive damage', () => {
+  for (const rank of [0, 1]) {
+    isolatedBattle('evolution.pierce=' + rank + ';player.y=300;resetWeapons();updateShooting(0);');
+    for (let i = 0; i < 5; i++) execute(target(400 + i * 90, 300, 40, 10));
+    execute('bullets[0].previousX=300;bullets[0].x=900;resolveProjectileHits();');
+    const hp = scene().enemies.map(enemy => enemy.hp);
+    assert.deepEqual(hp, rank ? [9,9,10,10,10] : [9,10,10,10,10]);
+    execute('resolveProjectileHits()');
+    assert.deepEqual(scene().enemies.map(enemy => enemy.hp), hp);
+  }
+});
+
+check('Wings II spawns aimed shards once per cooldown when a nearby enemy is present', () => {
+  isolatedBattle('evolution.pierce=2;player.y=300;resetWeapons();updateShooting(0);' + target(400,300,30,10) + target(485,350,36,10) + target(500,245,36,10));
+  execute('bullets[0].previousX=350;bullets[0].x=405;resolveProjectileHits();resolveProjectileHits();');
+  assert.deepEqual(scene().enemies.map(enemy => enemy.hp), [9,10,10]);
+  assert.equal(execute('bullets.filter(shot => shot.source === "evolution-wing").length'), 2);
+  execute('shotCooldown=100;updateShooting(.12);resolveProjectileHits();');
+  assert.ok(execute('enemies[1].hp < 10 && enemies[2].hp < 10'));
+  assert.ok(execute('evolutionWeapons.splitCooldown > 0'));
+});
+
+check('Falcon rank one deploys one drone and rank two deploys two with focus lock', () => {
+  for (const rank of [1, 2]) {
+    droneAttackScene(rank, target(450,'player.y',40,10));
+    fireFirstDroneRound();
+    assert.equal(execute('evolutionWeapons.drones.length'), rank);
+    assert.equal(execute('bullets.filter(b => b.source === "evolution-drone").length'), rank);
+    key('KeyF'); key('KeyF', 'keyup');
+    assert.equal(execute('!!evolutionWeapons.focus'), rank === 2);
+  }
+});
+
+check('Falcon III intercepts a threatening volley, leaving area hazards and distant shots in play', () => {
+  droneAttackScene(3, target(550,'player.y',40,10));
+  execute('enemyProjectiles.push({x:player.x+95,y:player.y,vx:-400,vy:0});bossProjectiles.push({x:player.x+400,y:player.y,vx:-400,vy:0});bossHazards.push({kind:"beam",y:player.y,warning:1,duration:1});');
+  key('KeyF'); key('KeyF', 'keyup'); key('KeyF'); key('KeyF', 'keyup');
+  assert.equal(execute('enemyProjectiles.length'), 0);
+  assert.equal(execute('bossProjectiles.length'), 1);
+  assert.equal(execute('bossHazards.length'), 1);
+  assert.equal(execute('evolutionWeapons.grounded'), 4);
+  fireFirstDroneRound();
+  assert.equal(execute('bullets.filter(b => b.source === "evolution-drone").length'), 0);
+  assert.equal(execute('evolutionTryIntercept()'), false);
+});
+
+check('a real unlinked Falcon round stops at the first enemy and does not explode into its neighbors', () => {
+  droneAttackScene(1,target(400,'supportY',40,.75)+target(475,'supportY',40,1)+target(490,'supportY+25',40,1));
+  fireFirstDroneRound();
+  execute('updateShooting(.6);resolveProjectileHits();resolveProjectileHits();');
+  assert.equal(scene().score,100); assert.equal(health().kills,1);
+  assert.deepEqual(scene().enemies.map(enemy=>[enemy.x,enemy.hp]),[[475,1],[490,1]]);
+  near(ult().energy,12); assert.equal(execute('bullets.filter(b => b.auxiliary).length'),0);
+});
+
+check('ultimate kills remain isolated from Falcon firing and do not charge another cannon', () => {
+  isolatedBattle('evolution.blast=3;'+target(400,300,40,1)+target(450,300,40,10));
+  execute('applyEnemyHit(enemies[0],{damage:1,source:"ultimate"});defeatEnemy(0,{damage:1,source:"ultimate"});');
+  assert.equal(scene().enemies[0].hp,10); assert.equal(shots().length,0); near(ult().energy,0);
+  assert.equal(evolutionState().pulses.length,0);
+});
+
+check('Wings III separates tap, charge, release, cooldown and cancellation', () => {
+  isolatedBattle('evolution.pierce=3;');
+  key('ShiftLeft'); key('ShiftLeft', 'keyup');
+  assert.equal(execute('firingStyle.mode'), 'focus');
+  key('ShiftLeft'); execute('for (let i=0;i<7;i++) updateEvolutionWeapons(.1);');
+  assert.ok(execute('evolutionLanceActive() && fighterMovementScale() < 1'));
+  key('ShiftLeft', 'keyup');
+  assert.equal(execute('bullets.filter(b => b.source === "evolution-lance").length'), 1);
+  assert.ok(execute('evolutionWeapons.lanceCooldown > 5'));
+  assert.equal(execute('firingStyle.mode'), 'focus');
+  key('ShiftLeft'); execute('for (let i=0;i<7;i++) updateEvolutionWeapons(.1);'); key('ShiftLeft', 'keyup');
+  assert.equal(execute('bullets.filter(b => b.source === "evolution-lance").length'), 1);
+  execute('evolutionWeapons.lanceCooldown=0');
+  key('ShiftLeft'); execute('updateEvolutionWeapons(.1)'); emit(window, 'blur'); key('ShiftLeft', 'keyup');
+  assert.equal(execute('evolutionWeapons.lanceCharging'), false);
+  assert.equal(execute('firingStyle.mode'), 'focus');
+});
+
+check('Aegis II absorbs at the shield boundary and does not erase distant rounds', () => {
+  readyBoss(0,'evolution.aegis=2;bossHitGrace=0;shield.charges=1;requestShield();updateShield(.3);');
+  execute('bossProjectiles.push({x:player.x+player.width*.55,y:player.y},{x:player.x+player.width,y:player.y});updateBossDamage();');
+  assert.equal(bossState().bossProjectiles.length, 1);
+  assert.equal(execute('evolutionWeapons.absorbed.length'), 1);
+  execute('updateShield(2)');
+  assert.equal(execute('evolutionWeapons.absorbed.length'), 0);
+  assert.equal(execute('bullets.filter(b => b.source === "evolution-counter").length'), 1);
+});
+
+check('evolution effects stay bounded, pause and expire while combined ship modifications draw finite symmetric geometry', () => {
+  isolatedBattle('evolution.pierce=evolution.blast=evolution.aegis=3;for(let i=0;i<30;i++) addEvolutionPulse(player.x,player.y,150,"#ff914f",.4);');
+  assert.equal(evolutionState().pulses.length,16); emit(window,'blur'); frames(100); assert.equal(evolutionState().pulses[0].age,0);
+  focusAndConfirmResume(); step(); execute('updateEvolution(.4);'); assert.equal(evolutionState().pulses.length,0);
+  captureDraws=true; drawOperations.length=0; execute('drawEvolvedPlayer(context,player,evolution,reducedMotion.matches,battleTime);drawEvolution();'); captureDraws=false;
+  assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
+  assert.ok(drawOperations.some(op=>op.name==='scale'&&op.args[1]===-1)); assert.ok(drawOperations.some(op=>op.name==='scale'&&op.args[1]===1));
+  assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
+});
+
+check('Falcon and ultimate kills contribute separately and each Boss hull counts only once', () => {
+  droneAttackScene(1,target(400,'supportY',40,.75));
+  fireFirstDroneRound();
+  execute('updateShooting(.5);resolveProjectileHits();resolveProjectileHits();');
+  assert.equal(momentumState().count,1); assert.equal(scene().score,100);
+  isolatedBattle(target(400,300,40,1)); execute('defeatEnemy(0,{source:"ultimate",damage:1});'); assert.equal(momentumState().count,1);
+  readyBoss(10,'globalThis.comboDead=boss;defeatBoss();defeatBoss(globalThis.comboDead);'); assert.equal(momentumState().count,1);
+  finishBossPresentation();
+  assert.equal(health().state,'over'); assert.equal(execute('evolution.pending'),false);
+  assert.equal(nodes.get('#game-over-screen').dataset.victory,'true');
+  assert.equal(nodes.get('#game-over-title').textContent,'异形战役通关');
+  assert.equal(scene().score,6000);
+});
+
+check('focused piercing fire hits the two closest aligned enemies once each', () => {
+  isolatedBattle('weapon.lanes=4;evolution.pierce=1;firingStyle.mode="focus";player.y=300;resetWeapons();updateShooting(0);' + target(400,300,40,20) + target(550,300,40,20) + target(700,300,40,20));
+  execute('bullets[0].previousX=300;bullets[0].x=900;resolveProjectileHits();resolveProjectileHits();');
+  assert.deepEqual(scene().enemies.map(e => e.hp), [18.52,18.52,20]);
+});
+
+check('focused fire and an independently scheduled Falcon keep separate projectile damage', () => {
+  isolatedBattle('weapon.lanes=4;evolution.blast=1;firingStyle.mode="focus";player.y=300;resetWeapons();updateShooting(0);' + target(400,300,40,1) + target(475,300,40,20));
+  execute('bullets[0].previousX=300;bullets[0].x=420;resolveProjectileHits();');
+  near(scene().enemies[0].hp, 20);
+  near(ult().energy, 12);
+  fireFirstDroneRound();
+  assert.equal(execute('bullets[0].source'), 'evolution-drone');
+  near(execute('bullets[0].damage'), 5 * 1.48 * .16);
+});
+
+check('adding Wings preserves in-flight rounds and gives later shots armor piercing', () => {
+  for (const mode of ['spread', 'focus']) {
+    isolatedBattle('weapon.lanes=4;weapon.damage=3;firingStyle.mode=' + JSON.stringify(mode) + ';resetWeapons();updateShooting(0);');
+    const before = emitted();
+    execute('evolution.pierce=2;shotCooldown=0;updateShooting(0);');
+    const after = emitted();
+    assert.deepEqual(after.slice(0, before.length), before);
+    for (let i = 0; i < before.length; i++) {
+      near(after[i + before.length].damage, before[i].damage);
+      assert.equal(after[i + before.length].piercesLeft, 1);
+    }
+    assert.equal(execute('bullets.at(-1).armorPiercing'), true);
+  }
+});
+
+check('permanent evolution benefits are not erased by stronger automatic enemy or Boss health scaling', () => {
+  for (const time of [30,180,900,3600]) {
+    isolatedBattle(`battleTime=${time};weapon.tier=5;weapon.damage=13;weapon.lanes=4;weapon.interval=.05;`);
+    const healthLog=execute('enemyHealthLogForTime()'), ultimateLog=execute('ultimateDamageLog()');
+    execute('spawnBoss(0);'); const bossLog=execute('boss.healthLog');
+    execute('resetBossEncounter();evolution.pierce=evolution.blast=evolution.aegis=3;spawnBoss(0);');
+    near(execute('enemyHealthLogForTime()'),healthLog); near(execute('boss.healthLog'),bossLog);
+    near(execute('ultimateDamageLog()'),ultimateLog);
+  }
+});
+
+check('Falcon rounds pass through supply orbs without collecting them and hit the enemy behind', () => {
+  droneAttackScene(1,orb('red',350,'supportY')+target(500,'supportY',60,20));
+  fireFirstDroneRound();
+  execute('updateShooting(.6);resolveProjectileHits();');
+  assert.equal(orbScene().powerups.length,1); near(weaponState().damage,1);
+  near(scene().enemies[0].hp,20-.8); near(ult().energy,12*.8/20);
+});
+
+check('Falcon Breach increases armor-piercing damage only against the designated enemy', () => {
+  droneAttackScene(1,'evolution.links.falcon=true;'+target(400,'supportY',40,1.1)+target(490,'supportY',40,.75));
+  execute('evolutionWeapons.focus=enemies[0];');
+  fireFirstDroneRound();
+  assert.equal(execute('bullets[0].piercesLeft'),0);
+  near(execute('bullets[0].damage'),.8);
+  near(execute('fighterProjectileDamage(bullets[0],enemies[0]).damage'),.8*1.46);
+  assert.equal(execute('fighterProjectileDamage(bullets[0],enemies[0]).armorPiercing'),true);
+  near(execute('fighterProjectileDamage(bullets[0],enemies[1]).damage'),.8);
+  execute('updateShooting(.6);resolveProjectileHits();resolveProjectileHits();');
+  assert.equal(scene().score,100); assert.equal(health().kills,1); assert.equal(momentumState().count,1);
+  assert.deepEqual(scene().enemies.map(enemy=>[enemy.x,enemy.hp]),[[490,.75]]);
+  near(ult().energy,12); assert.equal(shots().length,0);
+});
+
+check('Falcon attack cadence freezes while paused and resumes without a queued volley', () => {
+  droneAttackScene(2); fireFirstDroneRound();
+  const cooldown=execute('evolutionWeapons.droneCooldown'), origin=emitted();
+  emit(window,'blur'); execute('updateEvolutionWeapons(10);updateShooting(10);');
+  near(execute('evolutionWeapons.droneCooldown'),cooldown); assert.deepEqual(emitted(),origin);
+  focusAndConfirmResume(); canvas.focus();
+  execute('for(let i=0;i<8;i++)updateEvolutionWeapons(.1);');
+  assert.equal(execute('bullets.length'),2); near(execute('evolutionWeapons.droneCooldown'),.06);
+  execute('updateEvolutionWeapons(.06);'); assert.equal(execute('bullets.length'),4);
+});
+
+check('Aegis ranks recharge at 25, 20, 18 and 17 seconds with two slots', () => {
+  for (let level=0;level<=3;level++) {
+    const duration = [25,20,18,17][level];
+    isolatedBattle('evolution.aegis=' + level + ';updateShield(' + (duration - .001) + ');');
+    assert.equal(protection().charges, 0);
+    execute('updateShield(.001);');
+    assert.equal(protection().charges, 1);
+    near(protection().energy, 0);
+    execute('updateShield(500);');
+    assert.equal(protection().charges, 2);
+    near(protection().energy, 0);
+  }
+});
+
+check('only the first Aegis selection grants a shield charge and all ranks keep recharge progress', () => {
+  for (let rank=0;rank<3;rank++) {
+    isolatedBattle('evolution.aegis=' + rank + ';shield.charges=0;shield.energy=evolutionShieldChargeTime()*.4;openEvolutionChoice();chooseEvolution("aegis");');
+    assert.equal(protection().charges, Number(rank === 0));
+    near(protection().energy / execute('evolutionShieldChargeTime()'), .4);
+  }
+});
+
+check('Aegis II reflects a true hit toward its origin and cannot counter while protected', () => {
+  isolatedBattle('evolution.aegis=2;bossHitGrace=0;player.lives=3;');
+  execute('damagePlayer("hit",{x:player.x+200,y:player.y+24});damagePlayer("grace");');
+  assert.equal(execute('bullets.filter(b => b.source === "evolution-counter").length'), 1);
+  assert.ok(execute('bullets.at(-1).vy > 0 && bullets.at(-1).noEnergy'));
+  assert.equal(health().lives, 2);
+  near(ult().energy, 0);
+});
+
+check('Aegis III perfect window restores energy and extends the same shield once', () => {
+  isolatedBattle('evolution.aegis=3;bossHitGrace=0;shield.charges=1;requestShield();');
+  execute('bossProjectiles.push({x:player.x,y:player.y});updateBossDamage();');
+  near(protection().remaining, 3);
+  near(ult().energy, 50);
+  execute('bossProjectiles.push({x:player.x,y:player.y});updateBossDamage();');
+  near(protection().remaining, 3);
+  near(ult().energy, 50);
+});
+
+check('all 63 evolved combinations preserve the centered raster nose and draw the selected Falcon count', () => {
+  isolatedBattle(); const before=execute('JSON.stringify(player)');
+  const muzzle=JSON.parse(execute('JSON.stringify(muzzlePosition())'));
+  const [tipX,tipY]=JSON.parse(execute('JSON.stringify(shipRenderSources.crimson.tip)'));
+  for(let p=0;p<=3;p++) for(let b=0;b<=3;b++) for(let a=0;a<=3;a++) {
+    captureDraws=true; drawOperations.length=0;
+    const drawn=execute(`(()=>{evolution.pierce=${p};evolution.blast=${b};evolution.aegis=${a};
+      const result=drawEvolvedPlayer(context,player,evolution,true,1);drawEvolutionWeapons();return result;})()`); captureDraws=false;
+    assert.equal(drawn,!!(p||b||a)); if(!drawn) continue;
+    assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
+    assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
+    const raster=drawOperations.filter(op=>op.name==='drawImage'&&op.args[0]===nodes.get('#fighter-art'));
+    assert.equal(raster.length,1+(b===0?0:b===1?1:2));
+    const [,sx,sy,sw,sh,x,y,w,h]=raster[0].args;
+    near(x+(tipX-sx)*w/sw,muzzle.x); near(y+(tipY-sy)*h/sh,muzzle.y);
+  }
+  assert.equal(execute('JSON.stringify(player)'),before);
+});

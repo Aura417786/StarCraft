@@ -259,6 +259,8 @@ function bossFireProtectionFor(type) {
 
 function spawnBoss(type = chooseBossType()) {
   if (!Number.isInteger(type) || !bossTypes[type]) return;
+  if (typeof resetBattleRewind === "function") resetBattleRewind("boss-arrival");
+  if (typeof captureBossRetryCheckpoint === "function") captureBossRetryCheckpoint(type);
   if (typeof warmBossVfxMaterial === "function" && type < 10) warmBossVfxMaterial(type);
   const arena = bossArena(type);
   const entry = bossEntryPosition(arena, type);
@@ -441,7 +443,8 @@ function applyBossHit(shot, target = boss) {
   const before = target.hp;
   const damageLog = shot.damageLog ?? Math.log(shot.damage ?? weapon.damage);
   const special = shot.source === "ultimate";
-  const rawFraction = special
+  const ember = shot.source === "evolution-ember";
+  const rawFraction = ember ? Math.exp(Math.min(Math.log(shot.emberCap ?? .075), damageLog - target.healthLog)) : special
     ? Math.exp(Math.min(Math.log(ultimateRules.bossDamageCap), damageLog - target.healthLog))
     : progressionHitFraction(target, damageLog, shot.armorPiercing ? fighterHitProtection(target, shot) : target.fireProtection);
   // The attacking shell absorbs part of the incoming damage, but no attack is invulnerable.
@@ -456,6 +459,7 @@ function applyBossHit(shot, target = boss) {
   if (fraction <= 0) return;
   target.hp = Math.max(bossHealthFloor(target), target.hp - fraction);
   target.hitFlash = .08;
+  if (typeof registerEvolutionHit === "function") registerEvolutionHit(target, shot);
   recordCombatImpact(target, shot, true, exposed && !target.finale ? "weak" : undefined);
   if (!shot.noEnergy && shot.source !== "ultimate" && shot.source !== "blast") gainUltimateEnergy(before - target.hp, "boss");
   if (target.hp <= 1e-12) {
@@ -478,6 +482,8 @@ function bossHealthFloor(target) {
 
 function defeatBoss(target = boss) {
   if (!target || target !== boss) return;
+  if (typeof resetBattleRewind === "function") resetBattleRewind("boss-cleared");
+  if (typeof clearBossRetryCheckpoint === "function") clearBossRetryCheckpoint();
   const fallen = target;
   if (typeof sortieBossCleared === "function") sortieBossCleared(fallen);
   const motion = fallen.finale ? captureBossPresentationMotion() : null;

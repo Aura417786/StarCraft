@@ -9,8 +9,8 @@ const flightAliases = Object.freeze({ up: "KeyW", down: "KeyS", left: "KeyA", ri
 const flightActionNames = Object.freeze({
   up: ["向上", "Move up"], down: ["向下", "Move down"], left: ["向左", "Move left"], right: ["向右", "Move right"],
   attack: ["主武器", "Main weapon"], special: ["大招", "Special"], shield: ["护盾", "Shield"],
-  charge: ["赤焰蓄力", "Crimson charge"], focus: ["星隼集火", "Falcon focus"],
-  stance: ["切换姿态 / 翼刃", "Fire mode / Wings lance"], pause: ["暂停 / 继续", "Pause / Resume"],
+  charge: ["赤焰蓄力", "Crimson charge"], focus: ["进化技能", "Evolution skill"],
+  stance: ["切换射击姿态", "Switch fire mode"], pause: ["暂停 / 继续", "Pause / Resume"],
 });
 const flightSettingsKey = "star-breaker-flight-controls";
 const flightBindingActions = Object.keys(defaultFlightBindings);
@@ -221,8 +221,8 @@ function renderFlightControlsDialog() {
   const status = flightControlNode("p", Array.isArray(flightBindingNotice) ? tr(...flightBindingNotice) : "", "flight-bindings-status");
   status.id = "flight-binding-status";
   status.setAttribute("role", "status");
-  const gamepad = flightControlNode("p", tr("手柄：左摇杆 / 十字键移动和选项导航；A / RT 开火，X 护盾，Y 大招，LT 蓄力，LB 姿态，RB 集火，Start 暂停。菜单用 A 确认、B 返回。",
-    "Gamepad: Left stick / D-pad moves and navigates. A / RT fires, X shields, Y uses the special, LT charges, LB changes fire mode, RB focuses, Start pauses. A confirms and B goes back in menus."), "flight-controls-note");
+  const gamepad = flightControlNode("p", tr("手柄：左摇杆 / 十字键移动和选项导航；A / RT 开火，X 护盾，Y 大招，LT 蓄力，LB 姿态，RB 进化技能，Start 暂停。菜单用 A 确认、B 返回。",
+    "Gamepad: Left stick / D-pad moves and navigates. A / RT fires, X shields, Y uses the special, LT charges, LB changes fire mode, RB uses the evolution skill, Start pauses. A confirms and B goes back in menus."), "flight-controls-note");
   const reset = makeFlightControlButton(tr("恢复默认键位", "Restore default keys"), () => {
     flightControls.bindings = { ...defaultFlightBindings };
     flightBindingCapture = "";

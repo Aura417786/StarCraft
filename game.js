@@ -320,6 +320,8 @@ if (fighterImage.complete) readyFighter();
 updateFighterSelection();
 
 function showScreen(nextState, options = {}) {
+  if (typeof resetBattleRewind === "function") resetBattleRewind("run", true);
+  if (typeof clearBossRetryCheckpoint === "function") clearBossRetryCheckpoint();
   if (typeof clearFlightTutorial === "function" && clearFlightTutorial()) sortieStats = null;
   if (state === "battle") completeSortie({ abandoned: true });
   if (typeof resetCampaignVictory === "function") resetCampaignVictory();
@@ -429,7 +431,7 @@ function dispatchFlightAction(action, down) {
   }
   if (action === "charge") beginFighterCharge();
   else if (action === "stance" && !beginEvolutionLance()) toggleFiringStyle();
-  else if (action === "focus") evolutionTryIntercept();
+  else if (action === "focus") requestEvolutionSkill();
   else if (action === "shield") requestShield();
   else if (action === "special") { gameAudio.unlock(); requestUltimate(); }
   else if (action === "attack" || ["up", "down", "left", "right"].includes(action)) gameAudio.unlock();
@@ -605,16 +607,17 @@ function updatePlayer(seconds) {
   player.previousX = player.x; player.previousY = player.y;
   if (!isBattleActive()) return;
   const { x: horizontal, y: vertical } = flightMovementVector();
-  const current = alienCurrentVector();
-  const gravity = gravityPlayerVector();
+  const frozen = evolutionIsFrozen();
+  const current = frozen ? { x: 0, y: 0 } : alienCurrentVector();
+  const gravity = frozen ? { x: 0, y: 0 } : gravityPlayerVector();
   current.x += gravity.x + journeyCatapultVector();
   current.y += gravity.y + sortieDrift();
   if (!(horizontal || vertical || current.x || current.y)) return;
   const length = Math.max(1, Math.hypot(horizontal, vertical));
-  const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * alienMovementScale() * sortiePlayerSpeed() * fighterMovementScale();
+  const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * (frozen ? 1 : alienMovementScale()) * sortiePlayerSpeed() * fighterMovementScale();
   player.x = clamp(player.x + (horizontal / length * speed + current.x) * seconds, flightBounds.left, bossPlayerRight());
   player.y = clamp(player.y + (vertical / length * speed + current.y) * seconds, flightBounds.top, flightBounds.bottom);
-  if (typeof constrainAlienPlayer === "function") constrainAlienPlayer(player, player.previousX, player.previousY);
+  if (!frozen && typeof constrainAlienPlayer === "function") constrainAlienPlayer(player, player.previousX, player.previousY);
   movementHint.hidden = true;
 }
 function resetWeapons(preserveUpgrades = true) {
@@ -789,7 +792,7 @@ function applyEnemyHit(enemy, bullet) {
   const before = enemy.hp;
   if (enemy.healthLog !== undefined) {
     const damageLog = bullet.damageLog ?? Math.log(bullet.damage ?? weapon.damage);
-    const protection = bullet.source === "ultimate" ? undefined : fighterHitProtection(enemy, bullet);
+    const protection = ["ultimate", "evolution-ember"].includes(bullet.source) ? undefined : fighterHitProtection(enemy, bullet);
     enemy.hp = Math.max(0, enemy.hp - progressionHitFraction(enemy, damageLog, protection));
     if (enemy.hp < 1e-12) enemy.hp = 0;
   } else {
@@ -799,6 +802,7 @@ function applyEnemyHit(enemy, bullet) {
     if (enemy.hp < 1e-12) enemy.hp = 0;
   }
   enemy.hitFlash = 0.08;
+  if (typeof registerEvolutionHit === "function") registerEvolutionHit(enemy, bullet);
   recordCombatImpact(enemy, bullet);
   if (!bullet.noEnergy && bullet.source !== "ultimate" && bullet.source !== "blast") gainUltimateEnergy((before - enemy.hp) / enemy.maxHp, "enemy");
 }
@@ -864,6 +868,7 @@ function bulletHitsEnemy(bullet, enemy) { return Number.isFinite(projectileEnemy
 function updateEncounter(seconds) {
   if (!isBattleActive()) return;
   battleTime += seconds;
+  if (typeof evolutionIsFrozen === "function" && evolutionIsFrozen()) { updateDifficultyDisplay(); return; }
   updateJourneyScene(seconds);
   updateDifficultyDisplay();
   const waves = sortieAllowsWaves();
@@ -1029,6 +1034,7 @@ function enemyTouchesPlayer(enemy) {
   return Math.hypot(x0 + dx * along, y0 + dy * along) <= 1;
 }
 function damagePlayer(message, origin = null) {
+  if (typeof evolutionIsFrozen === "function" && evolutionIsFrozen()) return false;
   if (origin?.source === "flight-training") {
     if (typeof noteFlightTutorialContact === "function") noteFlightTutorialContact(origin, false);
     return false;
@@ -1086,6 +1092,7 @@ function updateResultCopy(won) {
     : (lastDamageMessage || tr("调整航线，再次突围。", "Plot a new course and try again."));
 }
 function endGame(won = false) {
+  if (typeof prepareBossRetryResult === "function") prepareBossRetryResult(won);
   completeSortie({ won, died: !won && player.lives === 0 });
   clearPause();
   state = "over";
@@ -1122,6 +1129,7 @@ function endGame(won = false) {
   finalKills.textContent = String(kills);
   document.querySelector("#final-combo").textContent = String(momentum.best);
   gameOverScreen.hidden = false;
+  if (typeof refreshBossRetryUI === "function") refreshBossRetryUI();
   if (typeof refreshSortieResult === "function") refreshSortieResult();
   const epilogue = won && sortieMode() === "campaign" && typeof startCampaignVictory === "function"
     && startCampaignVictory(sortieStats?.result);
@@ -1274,7 +1282,8 @@ function advanceCombatStep(realSeconds) {
       if (typeof updateBossPressureArt === "function") updateBossPressureArt(seconds);
     }
   } else if (!pauseView) {
-    const seconds = shieldFrameSeconds(realSeconds);
+    const seconds = shieldFrameSeconds(combatImpactFrameSeconds(realSeconds));
+    if (realSeconds > 0 && seconds <= 0) return;
     if (typeof updateFlightTutorial === "function" && updateFlightTutorial(seconds)) return;
     updateCombatEffects(seconds);
     updateMomentum(seconds);
@@ -1284,20 +1293,20 @@ function advanceCombatStep(realSeconds) {
     updatePlayer(seconds);
     updateFighterCombat(seconds);
     updateShipVisuals(seconds);
-    updateGravityTide(seconds);
+    if (!evolutionIsFrozen()) updateGravityTide(seconds);
     updateShooting(seconds);
     updateEvolutionWeapons(seconds);
     updateEncounter(seconds);
-    updateBossEncounter(seconds);
+    if (!evolutionIsFrozen()) updateBossEncounter(seconds);
     if (typeof updateBossPressureArt === "function") updateBossPressureArt(seconds);
     updateBattlefield(seconds);
     updatePowerups(seconds);
     updateUltimate(seconds);
-    resolveBattlefieldCover();
-    updateEliteMines(seconds);
-    updatePlayerDamage(seconds);
-    updateEnemyProjectileDamage();
-    updateBossDamage();
+    if (!evolutionIsFrozen()) {
+      resolveBattlefieldCover(); updateEliteMines(seconds);
+      updatePlayerDamage(seconds); updateEnemyProjectileDamage(); updateBossDamage();
+    }
+    if (typeof stepBattleRewind === "function") stepBattleRewind(seconds);
   }
 }
 
@@ -1390,6 +1399,7 @@ function updateGameCanvasLabel() {
   canvas.setAttribute("aria-label", label);
 }
 function refreshGameLanguage() {
+  if (typeof refreshBossRetryUI === "function") refreshBossRetryUI();
   updateFighterSelection();
   if (state === "over") updateResultCopy(gameOverScreen.dataset.victory === "true");
   updateGameCanvasLabel();

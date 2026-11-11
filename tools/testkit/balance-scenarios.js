@@ -1,15 +1,14 @@
 "use strict";
 
 const balanceStep = 1 / 60;
-const balanceBuilds = {
-  stock: [0, 0, 0],
-  wings: [3, 1, 1],
-  falcon: [1, 3, 1],
-  aegis: [1, 1, 3],
-  hunter: [2, 3, 0],
-  guardbreaker: [3, 0, 2],
-  intercept: [0, 3, 2],
-};
+// Old fixture names are input aliases only, never mixed legacy ranks.
+const balanceBuildAliases = { wings: "ember", falcon: "frost", aegis: "rewind",
+  hunter: "frost", guardbreaker: "ember", intercept: "rewind" };
+function balanceBuildRoute(build) {
+  const route = balanceBuildAliases[build] ?? build;
+  return ["ember", "frost", "rewind"].includes(route) ? route : "";
+}
+function balanceEvolutionState() { return { route: evolution.route, level: evolution.level }; }
 function balanceRound(number) { return Math.round(number * 1000) / 1000; }
 
 function balanceStart(fixture) {
@@ -38,14 +37,11 @@ function balanceStart(fixture) {
     for (let index = 0; index < 1 + Math.floor(type / 2); index++) applyPowerup("blue");
     for (let index = 0; index < Math.floor(type / 3); index++) applyPowerup("yellow");
   }
-  const ranks = balanceBuilds[fixture.build];
-  for (const [index, route] of ["pierce", "blast", "aegis"].entries()) {
-    evolution[route] = ranks[index];
-    if (ranks[index]) onEvolutionUpgrade(route);
+  const route = balanceBuildRoute(fixture.build);
+  const rank = route ? fixture.evolutionLevel ?? 3 : 0;
+  for (let level = 0; level < rank; level++) {
+    if (!openEvolutionChoice() || !chooseEvolution(route)) throw new Error("Could not stage the requested live evolution route");
   }
-  const capstone = ranks.indexOf(3);
-  if (capstone >= 0) evolution.capstone = ["pierce", "blast", "aegis"][capstone];
-  refreshEvolutionLinks();
   if (fixture.fixture === "stress") {
     for (let index = 0; index < 64; index++) {
       applyPowerup("red");
@@ -81,14 +77,15 @@ function balanceGunState() {
 function runBalanceFixture(fixture) {
   balanceStart(fixture);
   const controls = {
-    build: fixture.build, shiftHeld: false, shiftSince: 0, nextLance: 0,
-    nextFalcon: 0, shields: 0, specials: 0, trace: fixture.trace ? [] : null,
+    build: fixture.build, shiftHeld: false, shields: 0, specials: 0, routeSkills: 0,
+    previousLives: player.lives, trace: fixture.trace ? [] : null,
   };
   const telemetry = { ordinaryShots: 0, maxShotDamage: 0, weaponPeak: balanceGunState(),
     maxFriendly: 0, maxHostile: 0, attacks: new Set(), seenPhases: new Set(), times: [], damageDealt: 0,
     hitsTaken: 0, unitsLost: 0, bossHealth: [], bodyTTK: null, finaleTTK: null,
     encounterTime: null, firstFailure: null, fieldFeatures: new Set() };
   const start = balanceGunState();
+  const startEvolution = balanceEvolutionState();
   const startingLives = player.lives;
   let aliveFrames = 0, previousLives = player.lives;
   let encounter = null, bodyStartedAt = null, finaleStartedAt = null, clearedAt = null, simSeconds = 0;
@@ -107,11 +104,14 @@ function runBalanceFixture(fixture) {
     for (let frame = 0; frame < fixture.seconds / balanceStep; frame++) {
       if (state !== "battle") break;
       if (fixture.bossType !== null && clearedAt !== null && !isBossPresentationPlaying()) break;
-      if (frame % 4 === 0 || evolution.pending) balanceChooseAction(controls, fixture.policy);
       const before = boss;
       const oldHp = before?.hp;
       const oldHealth = before?.healthLog;
       const oldFinale = !!before?.finale;
+      // C/F can apply damage synchronously in their real keyboard handler.
+      // Snapshot before input as well as the simulation step so that an input
+      // crossing a phase boundary cannot drop a health pool or kill record.
+      if (frame % 4 === 0 || evolution.pending) balanceChooseAction(controls, fixture.policy);
       window.__balanceClock.tick(balanceStep);
       simSeconds = (frame + 1) * balanceStep;
       if (player.lives > 0) aliveFrames++;
@@ -175,7 +175,10 @@ function runBalanceFixture(fixture) {
   const won = fixture.bossType === null ? bossDefeated === bossTypes.length && player.lives > 0 : clearedAt !== null;
   return {
     case: fixture.label, seed: fixture.seed, policy: fixture.policy === "stationary" ? "stationary-fire/1" : balancePolicyVersion,
-    mode: fixture.mode, fixture: fixture.fixture, difficulty: fixture.difficulty, fighter: fixture.fighter, build: fixture.build,
+    mode: fixture.mode, fixture: fixture.fixture, difficulty: sortieStats.difficulty, fighter: fixture.fighter,
+    build: balanceBuildRoute(fixture.build) || "stock", requested_build: fixture.build,
+    requested_difficulty: fixture.difficulty,
+    starting_evolution: startEvolution, final_evolution: balanceEvolutionState(), route_skills_used: controls.routeSkills,
     won, reached_stage: stagesSeen, score, duration_seconds: balanceRound(battleTime), simulated_seconds: balanceRound(simSeconds),
     survival_seconds: balanceRound(aliveFrames * balanceStep), ttk_seconds: telemetry.encounterTime,
     effective_damage_per_second: balanceRound(telemetry.damageDealt / Math.max(.01, telemetry.encounterTime ?? battleTime)),

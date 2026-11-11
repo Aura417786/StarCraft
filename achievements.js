@@ -2,9 +2,12 @@
 
 const StarBreakerAwards = (() => {
   const ships = ["red", "blue", "yellow"];
-  const difficulties = ["recruit", "veteran", "abyss"];
+  const difficulties = ["recruit", "veteran", "abyss", "easy", "normal", "hard"];
   const bossCount = 11;
   const buildBadges = {
+    "build-ember": [["烬火之心", "Heart of Cinders"], ["使用三级以上烬火焚心击破首领。", "Defeat a boss with Heartfire Detonation rank 3 or higher."]],
+    "build-frost": [["绝对冰域", "Absolute Zero"], ["使用三级以上极寒风暴击破首领。", "Defeat a boss with Absolute Blizzard rank 3 or higher."]],
+    "build-rewind": [["时隙行者", "Timewalker"], ["使用三级以上时隙回溯击破首领。", "Defeat a boss with Temporal Recall rank 3 or higher."]],
     "build-wing": [["穿甲专家", "Hull Piercer"], ["用三级翼刃击破一只首领。", "Defeat a boss with Wingblade III."]],
     "build-falcon": [["护航指挥官", "Escort Commander"], ["用三级僚机击破一只首领。", "Defeat a boss with Falcon III."]],
     "build-aegis": [["壁垒守望", "Aegis Sentinel"], ["用三级壁垒击破一只首领。", "Defeat a boss with Aegis III."]],
@@ -30,7 +33,7 @@ const StarBreakerAwards = (() => {
       filter: "hue-rotate(57deg) saturate(1.18)" },
     jade: { slot: "skin", ship: "yellow", badge: "fly-yellow", name: ["翡翠光 · 曜金", "Verdant Light · Auric"],
       filter: "hue-rotate(85deg) saturate(1.20)" },
-    archive: { slot: "theme", badge: "campaign-abyss", name: ["深渊档案主题", "Abyss Archive Theme"] },
+    archive: { slot: "theme", badge: "campaign-abyss", alternateBadge: "campaign-hard", name: ["深渊档案主题", "Abyss Archive Theme"] },
     trail: { slot: "effect", badge: "daily-streak", name: ["星门尾迹", "Stargate Wake"] },
     insignia: { slot: "effect", badge: "rush-fast", name: ["竞速尾迹", "Sprint Wake"] },
   });
@@ -48,7 +51,8 @@ const StarBreakerAwards = (() => {
     const active = {};
     for (const slot of ["skin", "theme", "effect"]) {
       const value = raw?.active?.[slot];
-      if (Object.hasOwn(cosmetics, value) && cosmetics[value].slot === slot && found.has(cosmetics[value].badge)) active[slot] = value;
+      if (Object.hasOwn(cosmetics, value) && cosmetics[value].slot === slot
+        && (found.has(cosmetics[value].badge) || found.has(cosmetics[value].alternateBadge))) active[slot] = value;
     }
     return { badges: ids.filter(id => found.has(id)), active };
   }
@@ -63,6 +67,10 @@ const StarBreakerAwards = (() => {
     return result;
   }
 
+  function routeBuildsFor(route, level) {
+    return level >= 3 && ["ember", "frost", "rewind"].includes(route) ? ["build-" + route] : [];
+  }
+
   function hasDailyStreak(daily, day) {
     let date = Date.parse(day + "T00:00:00Z");
     if (!Number.isFinite(date)) return false;
@@ -73,7 +81,7 @@ const StarBreakerAwards = (() => {
   }
 
   function award(current, run, result) {
-    if (!current.awards || run.resumed || run.mode === "practice") return [];
+    if (!current.awards || run.resumed || run.retried || run.mode === "practice") return [];
     const before = new Set(current.awards.badges);
     const earned = new Set(before);
     if (run.mode === "campaign") {
@@ -99,6 +107,10 @@ const StarBreakerAwards = (() => {
   }
 
   function words(id, bossName, fighterName, difficultyName) {
+    if (["build-wing", "build-falcon", "build-aegis", "build-crossfire", "build-escort"].includes(id)) {
+      const copy = names[id];
+      return [["旧版 · " + copy[0][0], "Legacy · " + copy[0][1]], ["旧版进化成就，已获得的徽章保留。", "Retired evolution achievement. Previously earned badges are preserved."]];
+    }
     if (names[id]) return names[id];
     if (id.startsWith("boss-")) return [[bossName, bossName], ["在战役中击破该首领。", "Defeat this boss in Campaign."]];
     if (id.startsWith("clean-")) return [[`无伤 · ${bossName}`, `No hit · ${bossName}`],
@@ -107,7 +119,7 @@ const StarBreakerAwards = (() => {
     return [[difficultyName, difficultyName], ["完成该难度的无辅助战役。", "Clear Campaign on this difficulty without assists."]];
   }
 
-  return { ids, hidden, cosmetics, buildsFor, normalize, award, words };
+  return { ids, hidden, cosmetics, buildsFor, routeBuildsFor, normalize, award, words };
 })();
 
 if (typeof module !== "undefined") module.exports = StarBreakerAwards;

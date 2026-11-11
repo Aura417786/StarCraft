@@ -62,7 +62,8 @@ async function main() {
     assert.ok(seeded.newAwards.includes("fly-red"));
     assert.ok(seeded.newAwards.includes("build-escort"));
     await openPanel(page, "awards");
-    assert.equal(await page.locator(".award-badge").count(), 38);
+    assert.equal(await page.locator(".award-badge").count(), await page.evaluate(() => StarBreakerAwards.ids.length));
+    assert.equal(await page.locator(".award-badge").count(), 44);
     assert.equal(await page.locator(".award-boss[data-earned='true']").count(), 11);
     await page.locator("#award-skin").selectOption("frost");
     await page.locator("#award-theme").selectOption("archive");

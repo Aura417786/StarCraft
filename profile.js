@@ -7,7 +7,10 @@ const StarBreakerProfile = (() => {
   const awards = typeof StarBreakerAwards !== "undefined" ? StarBreakerAwards
     : typeof require === "function" ? require("./achievements.js") : null;
   const bossCount = 11;
-  const difficulties = ["recruit", "veteran", "abyss"];
+  const difficulties = ["easy", "normal", "hard"];
+  // Keep v29 records under their original keys; changed rules are not the same leaderboard.
+  const legacyDifficulties = ["recruit", "veteran", "abyss"];
+  const recordDifficulties = [...difficulties, ...legacyDifficulties];
   const upgradeCosts = [1, 2, 3, 4, 5];
   const upgradeKeys = ["firepower", "survival", "mobility"];
   const maxStat = 1_000_000_000;
@@ -24,7 +27,7 @@ const StarBreakerProfile = (() => {
   }
 
   function recordedAssists(raw) {
-    return Object.fromEntries(["extendedWarning", "noScreenShake", "reducedMotion"].map(key => [key, raw?.[key] === true]));
+    return Object.fromEntries(["extendedWarning", "noScreenShake", "reducedMotion", "timeRewind"].map(key => [key, raw?.[key] === true]));
   }
 
   function sanitizeRecord(raw) {
@@ -50,7 +53,7 @@ const StarBreakerProfile = (() => {
       ...sanitizeRecord(value),
       totalKills: count(value.totalKills),
       bosses: Array.from({ length: bossCount }, (_, i) => sanitizeBoss(bosses[i] ?? value.bosses?.[i])),
-      byDifficulty: Object.fromEntries(difficulties.map(id => [id, sanitizeRecord(object(value.byDifficulty)[id])]))
+      byDifficulty: Object.fromEntries(recordDifficulties.map(id => [id, sanitizeRecord(object(value.byDifficulty)[id])]))
     };
   }
 
@@ -75,7 +78,7 @@ const StarBreakerProfile = (() => {
     }
     const resume = object(value.rushResume);
     const rushResume = Number.isInteger(resume.boss) && resume.boss >= 0 && resume.boss < bossCount
-      && Number.isInteger(resume.seed) && difficulties.includes(resume.difficulty)
+      && Number.isInteger(resume.seed) && recordDifficulties.includes(resume.difficulty)
       && ["red", "blue", "yellow"].includes(resume.fighter)
       ? { boss: resume.boss, seed: resume.seed >>> 0, difficulty: resume.difficulty, fighter: resume.fighter } : null;
     const unlocked = [...new Set((Array.isArray(value.unlocked) ? value.unlocked
@@ -91,7 +94,7 @@ const StarBreakerProfile = (() => {
       awards: awards?.normalize(value.awards, unlocked, campaign, rush) ?? { badges: [], active: {} },
       assisted: sanitizeCampaign(value.assisted),
       rush,
-      rushByDifficulty: Object.fromEntries(difficulties.map(id => [id, sanitizeRecord(object(value.rushByDifficulty)[id])])),
+      rushByDifficulty: Object.fromEntries(recordDifficulties.map(id => [id, sanitizeRecord(object(value.rushByDifficulty)[id])])),
       rushAssisted: sanitizeRecord(value.rushAssisted),
       weekly: datedRecords(value.weekly, 52),
       weeklyAssisted: datedRecords(value.weeklyAssisted, 52),
@@ -222,7 +225,7 @@ const StarBreakerProfile = (() => {
         const records = run.assisted ? current.dailyAssisted : current.daily;
         return addRun(records[run.day] ??= sanitizeRecord(), run, true);
       }
-      const difficulty = difficulties.includes(run.difficulty) ? run.difficulty : "veteran";
+      const difficulty = recordDifficulties.includes(run.difficulty) ? run.difficulty : "hard";
       if (run.mode === "rush") {
         if (run.resumed) return {};
         if (run.won) current.rushResume = null;
@@ -246,7 +249,9 @@ const StarBreakerProfile = (() => {
     }
 
     function finish(run) {
-      if (run.resumed) return {};
+      // The failed attempt was already recorded. Replaying a checkpoint must
+      // not count earlier kills/Bosses again or grant a false flawless record.
+      if (run.resumed || run.retried) return {};
       return transaction(current => {
         const result = recordRun(current, run);
         const newAwards = awards?.award(current, run, result) ?? [];
@@ -259,7 +264,8 @@ const StarBreakerProfile = (() => {
         if (!["skin", "theme", "effect"].includes(slot)) return false;
         if (!cosmetic) { delete current.awards.active[slot]; return true; }
         const item = awards?.cosmetics[cosmetic];
-        if (!item || item.slot !== slot || !current.awards.badges.includes(item.badge)) return false;
+        if (!item || item.slot !== slot || !(current.awards.badges.includes(item.badge)
+          || item.alternateBadge && current.awards.badges.includes(item.alternateBadge))) return false;
         current.awards.active[slot] = cosmetic;
         return true;
       });
@@ -280,7 +286,8 @@ const StarBreakerProfile = (() => {
     };
   }
 
-  return { key, backupKey, version, bossCount, difficulties, upgradeCosts, upgradeKeys, decode, createStore };
+  return { key, backupKey, version, bossCount, difficulties, legacyDifficulties, recordDifficulties,
+    upgradeCosts, upgradeKeys, decode, createStore };
 })();
 
 if (typeof module !== "undefined") module.exports = StarBreakerProfile;

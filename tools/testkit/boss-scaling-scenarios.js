@@ -87,7 +87,7 @@ function runBossScalingFixture({ seed, type, gear }) {
   let sample;
   try {
     sample = runBalanceFixture({ label: `scaling-${type + 1}-${gear}`, seed, bossType: type,
-      fighter: "red", difficulty: "veteran", mode: "campaign", policy: "pilot", build: "stock",
+      fighter: "red", difficulty: "hard", mode: "campaign", policy: "pilot", build: "stock",
       seconds: 150, fixture: "timing", weaponPreset: loadout });
   } finally {
     spawnBoss = realSpawn;
@@ -123,7 +123,7 @@ function checkBossScalingContract(seed) {
   const type = 5;
   const start = difficulty => balanceStart({ label: "scaling-contract", seed, bossType: type,
     fighter: "red", difficulty, mode: "campaign", policy: "pilot", build: "stock", fixture: "preset" });
-  start("veteran");
+  start("hard");
   const target = boss;
   const before = { health: target.baseHealth, healthLog: target.healthLog, ...target.scaling };
   const snapshot = () => JSON.stringify({ weapon, boss: boss.scaling, healthLog: boss.healthLog, battleTime,
@@ -138,13 +138,16 @@ function checkBossScalingContract(seed) {
   const after = { health: target.baseHealth, healthLog: target.healthLog, ...target.scaling, currentPower: sortieCombatPower() };
   const lockAfterPickups = after.currentPower > before.power && Object.isFrozen(target.scaling)
     && Object.keys(before).every(key => before[key] === after[key]);
-  const difficulty = ["recruit", "veteran", "abyss"].map(name => {
+  const difficulty = ["easy", "normal", "hard"].map(name => {
     start(name);
-    const expected = Math.round(bossBalanceBodies[type] * before.hpMul * sortieRules().bossHealth);
-    return { name, health: boss.baseHealth, expected, k: boss.scaling.k, healthScale: sortieRules().bossHealth };
+    const expected = Math.round(bossBalanceBodies[type] * before.hpMul);
+    return { name, health: boss.baseHealth, expected, k: boss.scaling.k, healthScale: sortieRules().bossHealth,
+      attackTempo: sortieRules().attackTempo, projectileSpeed: sortieRules().projectileSpeed };
   });
   return { pure, repeatCount: repeatedIndices.length,
     clamp: { ...clamped, passed: clamped.low === .85 && clamped.high === 3.2 },
     spawnLock: { before, after, passed: lockAfterPickups },
-    difficulty: { cases: difficulty, passed: difficulty.every(entry => entry.health === entry.expected && entry.k === before.k) } };
+    difficulty: { cases: difficulty, passed: difficulty.every(entry => entry.health === entry.expected && entry.k === before.k && entry.healthScale === 1)
+      && difficulty[0].attackTempo < difficulty[1].attackTempo && difficulty[1].attackTempo < difficulty[2].attackTempo
+      && difficulty[0].projectileSpeed < difficulty[1].projectileSpeed && difficulty[1].projectileSpeed < difficulty[2].projectileSpeed } };
 }

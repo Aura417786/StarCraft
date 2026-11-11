@@ -18,6 +18,8 @@ function timingChecks(run) {
   const recovery = body.map(event => event.observedRecoverySeconds).filter(Number.isFinite);
   return {
     cleared: run.won && Number.isFinite(run.ttk_seconds),
+    healthPoolsRecorded: Number.isFinite(run.health.body) && run.health.body > 0
+      && Number.isFinite(run.health.finale) && run.health.finale > 0,
     observedAttackIntervals: bodyIntervals.length > 0 && finaleIntervals.length > 0,
     telegraphMinimum: body.length > 0 && finale.length > 0
       && [...body.map(event => event.warningSeconds), ...finale.flatMap(event => event.warnings)].every(seconds => seconds >= .9 - tolerance),
@@ -75,7 +77,7 @@ async function main() {
       && [...acceptance, ...loadoutComparisons].every(row => !Object.values(row).includes(false));
     const report = {
       schema: "star-breaker-boss-scaling/1", sourceFingerprint: fingerprint.digest("hex"), sourceFiles,
-      seed, browser: browser.version(), fighter: "red", difficulty: "veteran", deterministicRepeat: true,
+      seed, browser: browser.version(), fighter: "red", difficulty: "hard", deterministicRepeat: true,
       methodology: {
         gear: "Low uses each Boss's campaign floor, medium is the rounded level midpoint from floor to cap, full uses global 24/11/5.",
         inputs: "Production combat with the same telegraph pilot, 60 Hz clock, stock evolution, and 14 fixture-only lives. Ordinary damage, collision, and phase transitions apply.",

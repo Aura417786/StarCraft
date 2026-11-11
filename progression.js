@@ -38,7 +38,8 @@ function combatPowerForLoadout(damage, rate, lanes) {
 }
 function sortieCombatPower() {
   const rate = progressionRateForLevel(weapon.speedLevel, fighterProfile().rate);
-  return combatPowerForLoadout(weapon.damage, rate, weapon.lanes);
+  return combatPowerForLoadout(weapon.damage, rate, weapon.lanes)
+    * (typeof evolutionPowerMultiplier === "function" ? evolutionPowerMultiplier() : 1);
 }
 function baselinePowerForBoss(type) {
   const fighter = fighterProfile();

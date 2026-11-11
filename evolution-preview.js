@@ -1,217 +1,117 @@
 "use strict";
 
 const evolutionPreview = { elapsed: 0, lastTime: null, lastPaint: -Infinity, signature: "" };
+const evolutionPreviewColors = { ember: "#ff9b69", frost: "#a3efff", rewind: "#c9b0ff" };
 
 function previewPulse(ctx, x, y, length, width, color, angle = 0) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.roundRect(-length, -width / 2, length, width, width / 2);
-  ctx.fill();
+  ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.fillStyle = color;
+  ctx.beginPath(); ctx.roundRect(-length, -width / 2, length, width, width / 2); ctx.fill(); ctx.restore();
+}
+function previewTarget(ctx, x, y, color) {
+  ctx.save(); ctx.translate(x,y); ctx.fillStyle="#162531"; ctx.strokeStyle=color; ctx.lineWidth=1.3;
+  ctx.beginPath(); ctx.ellipse(0,0,10,17,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(-3,0,2.5,6,0,0,Math.PI*2);ctx.fill();ctx.restore();
+}
+function previewBaseShip(ctx, ship, opacity = 1) {
+  ctx.save(); ctx.globalAlpha *= opacity;
+  if (!drawFighterVariant(ctx,ship,fighterProfile().id,null,true,0)) {
+    ctx.fillStyle="#d67a85";ctx.beginPath();ctx.moveTo(ship.x+ship.width*.46,ship.y);
+    ctx.lineTo(ship.x-ship.width*.36,ship.y-ship.height*.32);ctx.lineTo(ship.x-ship.width*.2,ship.y);
+    ctx.lineTo(ship.x-ship.width*.36,ship.y+ship.height*.32);ctx.closePath();ctx.fill();
+  }
   ctx.restore();
 }
-
-function previewWingFire(ctx, ship, level, time, quiet) {
-  if (level < 1) return;
-  const age = quiet ? .45 : (time + .06) % 1.5;
-  const muzzle = { x: ship.x + ship.width * .465, y: ship.y };
-  const impactX = 121;
-  const progress = clamp(age / evolutionWeaponRules.lanceCharge, 0, 1);
-  ctx.strokeStyle = "#81bac970";
-  ctx.strokeRect(impactX, ship.y - 6, 8, 12);
-  if (level === 3 && progress < 1) {
-    ctx.strokeStyle = "#9edfff"; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.arc(muzzle.x, muzzle.y, 5 + 5 * progress, -.5 * Math.PI, (2 * progress - .5) * Math.PI); ctx.stroke();
-    return;
+function previewEmber(ctx, ship, level, time, quiet) {
+  const cycle=quiet ? 1.7 : time%2.4, targetX=128, radius=12+Math.min(6,Math.log2(level+1)*2);
+  previewTarget(ctx,targetX,ship.y,"#f0a17b");
+  const marks=Math.min(8,2+Math.floor(cycle*3));
+  for(let i=0;i<marks;i++) {
+    const a=i*Math.PI*2/8;
+    ctx.fillStyle="#ffae71";ctx.beginPath();ctx.arc(targetX+Math.cos(a)*radius,ship.y+Math.sin(a)*radius*1.12,1.6,0,Math.PI*2);ctx.fill();
   }
-  const travel = level === 3 ? age - evolutionWeaponRules.lanceCharge : age % .52;
-  const x = muzzle.x + travel * 110;
-  previewPulse(ctx, x, muzzle.y, level === 3 ? 29 : 11, level === 3 ? 4.7 : 2.6, "#d2f5ff");
-  if (level >= 2 && x > impactX) for (const side of [-1, 1]) {
-    const d = x - impactX;
-    previewPulse(ctx, impactX + d * .7, ship.y + side * d * .65, 10, 2, "#9edfff", side * .68);
-  }
-}
-
-function previewDroneFire(ctx, ship, level, time, quiet) {
-  if (level < 1) return;
-  const interval = evolutionWeaponRules.droneInterval[level];
-  const age = quiet ? .53 : time % interval;
-  const defending = level === 3 && (quiet || time % 3.6 > 2.8);
-  const focusX = 123;
-  if (level >= 2) {
-    ctx.strokeStyle = "#9ce9e2";
-    ctx.setLineDash([2, 4]);
-    ctx.beginPath(); ctx.arc(focusX, ship.y, defending ? 19 : 11, 0, 2 * Math.PI); ctx.stroke();
-    ctx.setLineDash([]);
-  }
-  for (const drone of getEvolutionDronePositions(ship, level)) {
-    drawEvolutionDroneBody(ctx, drone, level, true);
-    const aim = Math.atan2(ship.y - drone.muzzleY, focusX - drone.muzzleX);
-    const x = drone.muzzleX + Math.cos(aim) * 128 * age;
-    const y = drone.muzzleY + Math.sin(aim) * 128 * age;
-    if (x <= focusX) previewPulse(ctx, x, y, 8, 2.1, "#a0f3de", aim);
-  }
-}
-
-function previewShieldFire(ctx, ship, level, time, quiet) {
-  if (level < 1) return;
-  const lance = level === 3;
-  const age = quiet ? (lance ? 2.45 : 1.95) : (time + .98) % 3.35;
-  const radiusX = ship.width * .6;
-  const radiusY = ship.height * .65;
-  const capacity = evolutionWeaponRules.absorbLimit[level];
-  let absorbed = 0;
-  const active = age >= .22 && age < 2.22;
-  if (active) {
-    ctx.fillStyle = level ? "#ee935837" : "#e8554a1f";
-    ctx.strokeStyle = level ? "#ffc08d" : "#fa8c7a";
-    ctx.lineWidth = level ? 1.8 : 1.3;
-    ctx.beginPath();
-    ctx.ellipse(ship.x, ship.y, radiusX, radiusY, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-  for (let index = 0; index < 8; index++) {
-    const y = ship.y + (index % 4 - 1.5) * 8;
-    const shotAge = age - (.24 + index * .16);
-    if (shotAge < 0) continue;
-    const x = 154 - shotAge * 119;
-    const edge = ship.x + radiusX * Math.sqrt(1 - ((y - ship.y) / radiusY) ** 2);
-    if (x > edge) previewPulse(ctx, x, y, 9, 2.4, "#f596b8", Math.PI);
-    else absorbed++;
-  }
-  const count = Math.min(absorbed, capacity);
-  for (let index = 0; index < count; index++) {
-    const angle = count === 1 ? 0 : -1.15 + index / (count - 1) * 2.3;
-    if (active) {
-      const x = ship.x + Math.cos(angle) * (radiusX + 3);
-      const y = ship.y + Math.sin(angle) * (radiusY + 3);
-      previewPulse(ctx, x, y, 4, 3, "#ffd58c");
-    } else if (age >= 2.22 && age < 3.05) {
-      const fan = angle * .24, distance = (age - 2.22) * 132;
-      previewPulse(ctx, ship.x + radiusX + distance * Math.cos(fan), ship.y + distance * Math.sin(fan),
-        lance ? 22 : 12, lance ? 3.2 : 2.4, "#ffce86", fan);
-    }
-  }
-}
-
-function previewRefit(ctx, choice, upgraded) {
-  if (choice === "refit-fire") {
-    for (const y of [41, 56, 71]) previewPulse(ctx, 122, y, upgraded ? 42 : 30, upgraded ? 4 : 2.7, "#b6d9ff");
-    if (upgraded) {
-      ctx.fillStyle = "#bedbff";
-      ctx.font = "11px sans-serif";
-      ctx.fillText("+8%", 118, 85);
-    }
-    return;
-  }
-  const heal = choice === "refit-heal";
-  const maximum = heal ? player.maxLives : shieldRules.maxCharges;
-  const count = Math.min(maximum, (heal ? player.lives : shield.charges) + Number(upgraded));
-  ctx.font = "17px sans-serif";
-  if (heal && maximum > startingPlayerLives) {
-    ctx.fillStyle = "#83e9ad";
-    ctx.fillText(`♥ ${count} / ${maximum}`, 89, 61, 100);
+  if(cycle<1.72) {
+    const flight=(cycle%.30)/.30;
+    previewPulse(ctx,ship.x+ship.width*.4+flight*37,ship.y,9,2.2,"#ffb482");
   } else {
-    for (let index = 0; index < maximum; index++) {
-      ctx.fillStyle = index < count ? (heal ? "#83e9ad" : "#ffc293") : "#525b70";
-      ctx.fillText(heal ? "♥" : "◆", 89 + index * 18, 61);
+    const burst=quiet ? .46 : (cycle-1.72)/.68;
+    ctx.globalAlpha*=1-burst*.6;ctx.strokeStyle="#ffd1a2";ctx.lineWidth=2;
+    for(let ring=0;ring<2;ring++) {
+      ctx.beginPath();ctx.ellipse(targetX,ship.y,8+burst*21+ring*5,10+burst*27+ring*5,0,0,Math.PI*2);ctx.stroke();
+    }
+    ctx.fillStyle="#fff0d0";ctx.beginPath();ctx.ellipse(targetX,ship.y,4,9,0,0,Math.PI*2);ctx.fill();
+  }
+}
+function previewFrost(ctx, ship, level, time, quiet) {
+  const frozen=quiet || time%3.1>.75, strength=Math.min(1.6,1+Math.log2(level)*.12);
+  previewTarget(ctx,128,ship.y,frozen?"#b4f4ff":"#ac839a");
+  for(let i=0;i<4;i++) {
+    const x=frozen?97+i*13:152-((time*.6+i*.22)%1)*70,y=ship.y+(i%2?1:-1)*(10+i*2);
+    previewPulse(ctx,x,y,5,2,frozen?"#b6f5ff":"#df9ca6",Math.PI);
+    if(frozen) {
+      ctx.strokeStyle="#77d3ef70";ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.stroke();
     }
   }
-  if (upgraded) {
-    ctx.fillStyle = "#bedbff";
-    ctx.font = "11px sans-serif";
-    ctx.fillText(tr("本局补给", "Sortie supply"), 90, 82);
+  if(frozen) {
+    ctx.strokeStyle="#9beaff";ctx.lineWidth=1;
+    for(let i=0;i<6;i++) {
+      const a=i*Math.PI/3,x=128+Math.cos(a)*22*strength,y=ship.y+Math.sin(a)*22*strength;
+      ctx.beginPath();ctx.moveTo(128,ship.y);ctx.lineTo(x,y);ctx.lineTo(x-Math.cos(a-.7)*6,y-Math.sin(a-.7)*6);ctx.moveTo(x,y);ctx.lineTo(x-Math.cos(a+.7)*6,y-Math.sin(a+.7)*6);ctx.stroke();
+    }
   }
+  const flight=quiet?.45:time%.4/.4;
+  previewPulse(ctx,ship.x+ship.width*.4+flight*35,ship.y,8,2,"#fff0bd");
 }
-
+function previewRewind(ctx, ship, level, time, quiet) {
+  const p=quiet?.52:(time%2.6)/2.6;
+  const path=[{x:47,y:ship.y+12},{x:64,y:ship.y-12},{x:83,y:ship.y}];
+  ctx.strokeStyle="#b7a4f86b";ctx.setLineDash([3,3]);ctx.beginPath();
+  for(let i=0;i<path.length;i++){if(!i)ctx.moveTo(path[i].x,path[i].y);else ctx.lineTo(path[i].x,path[i].y);}ctx.stroke();ctx.setLineDash([]);
+  for(let i=0;i<path.length;i++) previewBaseShip(ctx,{...ship,...path[i],width:ship.width*.62,height:ship.height*.62},.13+i*.13);
+  const destination=path[0],current=path[2],back=Math.min(1,p*1.4);
+  previewBaseShip(ctx,{...ship,x:current.x+(destination.x-current.x)*back,y:current.y+(destination.y-current.y)*back,width:ship.width*.82,height:ship.height*.82},.9);
+  ctx.strokeStyle="#d1b7ff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(127,ship.y,15,-.25,Math.PI*1.65);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(132,ship.y-15);ctx.lineTo(123,ship.y-17);ctx.lineTo(126,ship.y-9);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(127,ship.y);ctx.lineTo(127,ship.y-8);ctx.moveTo(127,ship.y);ctx.lineTo(133,ship.y+4);ctx.stroke();
+}
+function previewEvolutionMetric(route, level) {
+  if(!level)return tr("尚未选择路线","No route selected");
+  if(route==="ember")return tr((8+Math.floor(3*Math.log2(level)))+" 层 · 12 秒冷却",(8+Math.floor(3*Math.log2(level)))+" marks · 12s CD");
+  if(route==="frost")return tr("冻结 "+(1.8+.9*Math.log2(level)).toFixed(1)+" 秒",(1.8+.9*Math.log2(level)).toFixed(1)+"s freeze");
+  return tr("回溯 "+(3+.5*(level-1)).toFixed(1)+" 秒",(3+.5*(level-1)).toFixed(1)+"s recall");
+}
 function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
-  const route = choice;
-  const ranks = { pierce: 0, blast: 0, aegis: 0 };
-  const level = Math.min(3, (evolution[route] || 0) + Number(right && route === choice));
-  const label = right ? (choice.startsWith("refit-") ? tr("整备后", "Refitted") : tr("升级后", "Upgraded")) : tr("当前", "Current");
-  if (Object.hasOwn(ranks, route)) ranks[route] = level;
-
-  ctx.save();
-  ctx.translate(right ? 160 : 0, 0);
-  ctx.beginPath();
-  ctx.rect(0, 0, 160, 148);
-  ctx.clip();
-  const background = ctx.createLinearGradient(0, 0, 160, 148);
-  background.addColorStop(0, right ? "#173145" : "#141c2b");
-  background.addColorStop(1, "#080f1a");
-  ctx.fillStyle = background;
-  ctx.fillRect(0, 0, 160, 148);
-  if (right) {
-    ctx.fillStyle = "#b1e2ff";
-    ctx.globalAlpha = quiet ? .34 : .25 + .09 * Math.sin(time * 3);
-    ctx.fillRect(0, 0, 160, 2);
-    ctx.globalAlpha = 1;
-  }
-  ctx.translate(0, 16);
-  ctx.strokeStyle = "#89b5d217";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(8, 55); ctx.lineTo(151, 55);
-  ctx.moveTo(8, 91); ctx.lineTo(151, 91);
-  ctx.stroke();
-
-  const ship = { x: 54, y: 55, width: 85, height: 56, visualBank: 0 };
-  if (!drawEvolvedPlayer(ctx, ship, ranks, true, 0)) drawFighterVariant(ctx, ship, fighterProfile().id, null, true, 0);
-  if (route === "pierce") previewWingFire(ctx, ship, level, time, quiet);
-  if (route === "blast") previewDroneFire(ctx, ship, level, time, quiet);
-  if (route === "aegis") previewShieldFire(ctx, ship, ranks.aegis, time, quiet);
-  if (choice.startsWith("refit-")) previewRefit(ctx, choice, right);
-  else {
-    const age = quiet ? .24 : (time + .09) % .48;
-    previewPulse(ctx, ship.x + ship.width * .465 + age * 131, ship.y, 9, 2, "#ffd5aa");
-  }
-  ctx.fillStyle = right ? "#c4e5f8" : "#9cacbf";
-  ctx.font = "600 12px system-ui, sans-serif";
-  ctx.fillText(label, 10, 119);
-  ctx.restore();
+  const route=Object.hasOwn(evolutionPreviewColors,choice)?choice:null;
+  const current=evolution.route===route?Math.max(0,evolution.level||0):0;
+  const level=current+Number(right&&!!route),color=evolutionPreviewColors[route]||"#93b5ca";
+  ctx.save();ctx.translate(right?160:0,0);ctx.beginPath();ctx.rect(0,0,160,148);ctx.clip();
+  const bg=ctx.createLinearGradient(0,0,160,148);bg.addColorStop(0,right?"#1c263e":"#131d2c");bg.addColorStop(1,"#080e19");
+  ctx.fillStyle=bg;ctx.fillRect(0,0,160,148);ctx.fillStyle=color;ctx.globalAlpha=right?.6:.2;ctx.fillRect(0,0,160,2);ctx.globalAlpha=1;
+  ctx.strokeStyle="#88a8cb16";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(9,71);ctx.lineTo(151,71);ctx.stroke();
+  const ship={x:47,y:68,width:73,height:49,visualBank:0};
+  if(route!=="rewind"||!level)previewBaseShip(ctx,ship);
+  if(level&&route==="ember")previewEmber(ctx,ship,level,time,quiet);
+  else if(level&&route==="frost")previewFrost(ctx,ship,level,time,quiet);
+  else if(level&&route==="rewind")previewRewind(ctx,ship,level,time,quiet);
+  else {previewTarget(ctx,128,ship.y,"#7b8da4");const p=quiet?.48:time%.5/.5;previewPulse(ctx,80+p*40,ship.y,8,2,"#eed1a0");}
+  ctx.globalAlpha=1;ctx.fillStyle=right?color:"#9caec2";ctx.font="600 11px system-ui,sans-serif";
+  ctx.fillText((right?tr("升级后","Upgraded"):tr("当前","Current"))+" · Lv "+level,10,119,145);
+  ctx.fillStyle="#a8b7ca";ctx.font="10px system-ui,sans-serif";ctx.fillText(previewEvolutionMetric(route,level),10,136,145);ctx.restore();
 }
-
 function drawEvolutionChoicePreviews(now) {
-  if (!evolution.pending) {
-    evolutionPreview.elapsed = 0;
-    evolutionPreview.lastTime = null;
-    evolutionPreview.lastPaint = -Infinity;
-    evolutionPreview.signature = "";
-    return;
-  }
-  if (document.hidden || !windowActive || !Number.isFinite(now)) {
-    evolutionPreview.lastTime = null;
-    return;
-  }
-  const quiet = reducedMotion.matches;
-  if (evolutionPreview.lastTime !== null && !quiet) {
-    evolutionPreview.elapsed += Math.max(0, Math.min(.05, (now - evolutionPreview.lastTime) / 1000));
-  }
-  evolutionPreview.lastTime = now;
-  const signature = [quiet, shipRenderAssets.crimson.ready, evolution.pierce, evolution.blast, evolution.aegis,
-    gameLanguage, ...evolutionCards.map(card => card.dataset.choice)].join("/");
-  if (signature === evolutionPreview.signature && (quiet || now - evolutionPreview.lastPaint < 1000 / 30)) return;
-  evolutionPreview.signature = signature;
-  evolutionPreview.lastPaint = now;
-
-  for (const card of evolutionCards) {
-    const preview = card.querySelector(".evolution-card-preview");
-    const ctx = preview?.getContext?.("2d");
-    if (!ctx) continue;
-    const choice = card.dataset.choice;
-    ctx.setTransform(preview.width / 320, 0, 0, preview.height / 148, 0, 0);
-    paintEvolutionPreviewPane(ctx, choice, false, evolutionPreview.elapsed, quiet);
-    paintEvolutionPreviewPane(ctx, choice, true, evolutionPreview.elapsed, quiet);
-    ctx.fillStyle = "#80a9c43d";
-    ctx.fillRect(159.5, 0, 1, 148);
-    ctx.fillStyle = "#cde9f9";
-    ctx.font = "600 13px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("›", 160, 77);
-    ctx.textAlign = "start";
+  if(!evolution.pending){evolutionPreview.elapsed=0;evolutionPreview.lastTime=null;evolutionPreview.lastPaint=-Infinity;evolutionPreview.signature="";return;}
+  if(document.hidden||!windowActive||!Number.isFinite(now)){evolutionPreview.lastTime=null;return;}
+  const quiet=typeof quietCombatMotion==="function"?quietCombatMotion():reducedMotion.matches;
+  if(evolutionPreview.lastTime!==null&&!quiet)evolutionPreview.elapsed+=Math.max(0,Math.min(.05,(now-evolutionPreview.lastTime)/1000));
+  evolutionPreview.lastTime=now;
+  const signature=[quiet,shipRenderAssets.crimson.ready,evolution.route,evolution.level,gameLanguage,...evolutionCards.map(card=>card.dataset.choice)].join("/");
+  if(signature===evolutionPreview.signature&&(quiet||now-evolutionPreview.lastPaint<1000/30))return;
+  evolutionPreview.signature=signature;evolutionPreview.lastPaint=now;
+  for(const card of evolutionCards){
+    const preview=card.querySelector(".evolution-card-preview"),ctx=preview?.getContext?.("2d");if(!ctx)continue;
+    ctx.setTransform(preview.width/320,0,0,preview.height/148,0,0);
+    paintEvolutionPreviewPane(ctx,card.dataset.choice,false,evolutionPreview.elapsed,quiet);
+    paintEvolutionPreviewPane(ctx,card.dataset.choice,true,evolutionPreview.elapsed,quiet);
+    ctx.fillStyle="#80a9c43d";ctx.fillRect(159.5,0,1,148);ctx.fillStyle="#cde9f9";ctx.font="600 13px system-ui,sans-serif";
+    ctx.textAlign="center";ctx.fillText("›",160,77);ctx.textAlign="start";
   }
 }

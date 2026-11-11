@@ -304,7 +304,9 @@ function updateBossFinale(target, seconds) {
   const lastImpact = f.hazards.reduce(
     (latest, hazard) => Math.max(latest, hazard.warning + hazard.duration - hazard.age), 0);
   const cadence = bossFinaleStages[target.type].interval - (target.hp < .4 ? .24 : 0);
-  f.attackInterval = Math.max(cadence / (target.scaling?.tempoMul ?? 1), lastImpact + .8, f.openUntil - f.age + .12);
+  const protectedInterval = Math.max(cadence / (target.scaling?.tempoMul ?? 1), lastImpact + .8, f.openUntil - f.age + .12);
+  const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
+  f.attackInterval = Math.max(protectedInterval / tempo, lastImpact + .8, f.openUntil - f.age + .12);
   f.next = f.age + f.attackInterval;
   gameAudio.bossAttack("coil", target.x, target.y);
 }

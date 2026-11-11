@@ -8,16 +8,17 @@ const sortieConsoleButtons = document.querySelectorAll("[data-sortie-console]");
 const sortieModeBadge = document.querySelector("#sortie-mode-badge");
 const sortieResultSummary = document.querySelector("#sortie-result-summary");
 let sortieConsolePage = "";
-const starBreakerVersion = "v29";
+const starBreakerVersion = "v30";
 
 const sortieUiWords = {
   awards: ["徽章墙", "Badge Wall"],
   challenges: ["挑战", "Challenges"], upgrades: ["改装", "Refits"], archive: ["战役档案", "Campaign Archive"], settings: ["设置", "Settings"],
   campaign: ["战役", "Campaign"], rush: ["首领连战", "Boss Rush"], practice: ["单首领练习", "Boss Practice"], daily: ["每日挑战", "Daily Challenge"],
-  recruit: ["新兵", "Recruit"], veteran: ["老兵", "Veteran"], abyss: ["深渊", "Abyss"],
+  easy: ["简单", "Easy"], normal: ["普通", "Normal"], hard: ["困难", "Hard"],
+  recruit: ["旧版新兵", "Legacy Recruit"], veteran: ["旧版老兵", "Legacy Veteran"], abyss: ["旧版深渊", "Legacy Abyss"],
   firepower: ["火力", "Firepower"], survival: ["生存", "Survival"], mobility: ["机动", "Mobility"],
   "fast-shots": ["首领弹速 +20%", "Boss shots +20% speed"],
-  "thick-shell": ["首领生命 +12%", "Boss health +12%"],
+  "thick-shell": ["首领攻击频率 +12%", "Boss attack frequency +12%"],
   updraft: ["持续向上引力", "Upward drift"], downdraft: ["持续向下引力", "Downward drift"],
   "heavy-thrusters": ["移动速度 −12%", "Flight speed −12%"],
   "sealed-shield": ["护盾禁用", "No shield"], "slow-recharge": ["护盾充能用时 +30%", "Shield recharge +30% time"]
@@ -122,8 +123,8 @@ function renderSortieChallenges(profile) {
     `Practice from ${bossTypeName(resume.boss)} (unranked)`),
     () => launchSortie(sortieRushResumeOptions(resume))));
   const weeklyCard = sortieChallengeCard(tr("每周首领连战", "Weekly Boss Rush"),
-    tr(`${weekly.week} UTC 周起 · 老兵 · 固定种子 ${weekly.seed}`,
-      `Week of ${weekly.week} UTC · Veteran · seed ${weekly.seed}`),
+    tr(`${weekly.week} UTC 周起 · 困难 · 固定种子 ${weekly.seed}`,
+      `Week of ${weekly.week} UTC · Hard · seed ${weekly.seed}`),
     sortieButton(tr("挑战本周种子", "Launch this week's seed"), () => launchSortie({ mode: "rush", week: weekly.week })));
   const weeklyModifiers = sortieElement("ul", "", "sortie-rules");
   weeklyModifiers.append(...weekly.rules.map(rule => sortieElement("li", sortieWord(rule))));
@@ -219,6 +220,10 @@ function renderSortieArchive(profile) {
     levels.append(sortieMetric(sortieWord(difficulty), `${row.bestScore} · ${sortieTime(row.bestTime)}`));
   }
   sortieConsoleBody.append(levels);
+  const legacy = StarBreakerProfile.legacyDifficulties.filter(id => campaign.byDifficulty[id].attempts > 0);
+  if (legacy.length) sortieConsoleBody.append(
+    sortieElement("p", tr("以下旧版纪录保留原规则，不与当前三档难度合并。", "Legacy records retain their original rules and are separate from the current difficulty tiers."), "sortie-explainer"),
+    sortieMetrics(legacy.map(id => [sortieWord(id), `${campaign.byDifficulty[id].bestScore} · ${sortieTime(campaign.byDifficulty[id].bestTime)}`])));
   const table = sortieElement("table", "", "sortie-archive-table");
   const headings = sortieElement("tr");
   headings.append(...[
@@ -296,7 +301,7 @@ function sortieVolumeControl() {
 function sortieDifficultyTable() {
   const wrap = sortieElement("div", "", "sortie-difficulty-scroll");
   const table = sortieElement("table", "", "sortie-difficulty-table");
-  const caption = sortieElement("caption", tr("难度数值 · 以老兵为基准", "Difficulty settings relative to Veteran"));
+  const caption = sortieElement("caption", tr("难度数值 · 困难保留原版攻势，简单与普通降低攻击频率和弹速", "Difficulty settings · Hard keeps the original attacks; Easy and Normal reduce frequency and speed"));
   const heading = sortieElement("tr");
   for (const value of [tr("难度", "Difficulty"), tr("首领生命", "Boss health"), tr("预警", "Warning"),
     tr("攻势节奏", "Attack pace"), tr("敌弹速度", "Shot speed"), tr("受击伤害", "Damage taken")]) {
@@ -307,12 +312,13 @@ function sortieDifficultyTable() {
   const head = sortieElement("thead"); head.append(heading);
   const body = sortieElement("tbody");
   const percent = value => `${Math.round(value * 100)}%`;
-  for (const [key, rule] of Object.entries(sortieDifficulty)) {
+  for (const key of StarBreakerProfile.difficulties) {
+    const rule = sortieDifficulty[key];
     const row = sortieElement("tr");
     const title = sortieElement("th", sortieWord(key));
     title.scope = "row";
     const warning = rule.warning ? tr(`+${rule.warning} 秒`, `+${rule.warning}s`) : "—";
-    row.append(title, ...[percent(rule.bossHealth), warning, percent(rule.attackTempo), percent(rule.projectileSpeed), percent(rule.damage)]
+    row.append(title, ...[tr("按入场战力锁定", "Locked to entry power"), warning, percent(rule.attackTempo), percent(rule.projectileSpeed), percent(rule.damage)]
       .map(value => sortieElement("td", value)));
     body.append(row);
   }
@@ -321,13 +327,16 @@ function sortieDifficultyTable() {
 }
 function sortieAssistLabels(flags) {
   const labels = { extendedWarning: tr("预警延长", "Longer warnings"), noScreenShake: tr("关闭震动", "Shake off"),
-    reducedMotion: tr("减少动态", "Reduced motion") };
+    reducedMotion: tr("减少动态", "Reduced motion"), timeRewind: tr("使用时隙回溯", "Temporal Recall used") };
   return Object.keys(labels).filter(key => flags?.[key]).map(key => labels[key]);
 }
 
 function renderSortieSettings() {
   const difficulty = sortieSelect("sortie-difficulty", StarBreakerProfile.difficulties.map(key => [key, sortieWord(key)]),
-    sortieSettings.difficulty, value => saveSortieSetting("difficulty", value));
+    sortieSettings.difficulty, value => {
+      saveSortieSetting("difficulty", value);
+      refreshHangarDifficulty();
+    });
   const extended = sortieCheckbox("sortie-extended", sortieSettings.extended, value => saveSortieSetting("extended", value));
   const shakeOptions = [["off", tr("关", "Off")], ["low", tr("轻", "Low")], ["full", tr("强", "High")]];
   const shake = sortieSelect("sortie-reduce-shake", shakeOptions, shakePreference, value => {
@@ -357,11 +366,11 @@ function renderSortieSettings() {
     sortieElement("h3", tr("难度与辅助", "Difficulty and assists"), "sortie-section-title"),
     sortieSettingLine(tr("战役难度", "Campaign difficulty"), difficulty),
     sortieDifficultyTable(),
-    sortieElement("p", tr("在挑战页单独选首领连战难度。每日、单首领练习和每周种子连战使用老兵难度。", "Choose Boss Rush difficulty in Challenges. Daily, Boss Practice, and Weekly Rush use Veteran."), "sortie-explainer"),
+    sortieElement("p", tr("在挑战页单独选首领连战难度。每日、单首领练习和每周种子连战使用困难难度。三档生命算法相同，首领生命在入场时按战机战力锁定。", "Choose Boss Rush difficulty in Challenges. Daily, Boss Practice and Weekly Rush use Hard. All three tiers share the same Boss health calculation, locked to fighter power on arrival."), "sortie-explainer"),
     sortieSettingLine(tr("延长攻击预警 +0.35 秒", "Extend attack warnings by 0.35s"), extended),
     sortieSettingLine(tr("画面震动", "Screen shake"), shake),
     sortieSettingLine(tr("减少演出动态", "Reduce effects motion"), motion),
-    sortieElement("p", tr("只有延长攻击预警会将本局计入辅助纪录。关闭震动、减少动态和显示辅助不影响正式成绩。旧版纪录保持原样。", "Only longer attack warnings put a sortie in assisted records. Shake, reduced motion and display preferences do not affect ranked records. Older records are preserved."), "sortie-explainer"),
+    sortieElement("p", tr("延长攻击预警或使用 F 时隙回溯计入辅助纪录；阵亡后的 Boss 回溯不登记本局成绩与成就。关闭震动、减少动态和显示辅助不影响正式成绩。旧版纪录保持原样。", "Longer attack warnings or using the F Temporal Recall skill put a sortie in assisted records. Retrying a boss after death stops score and achievement recording for that run. Shake, reduced motion and display preferences do not affect ranked records. Older records are preserved."), "sortie-explainer"),
     sortieElement("h3", tr("玩法与制作名单", "Flight manual and credits"), "sortie-section-title"),
     guide,
     training,
@@ -397,6 +406,8 @@ function refreshSortieHud() {
   const run = sortieStats;
   if (!run) { sortieModeBadge.textContent = ""; return; }
   const parts = [sortieWord(run.mode)];
+  if (run.retried) parts.push(tr("Boss 回溯 · 不计成绩", "Boss retry · unranked"));
+  else if (run.assists?.timeRewind) parts.push(tr("时隙回溯 · 辅助纪录", "Temporal Recall · assisted"));
   if (run.mode === "campaign" || run.mode === "rush") parts.push(sortieWord(run.difficulty));
   if (run.rules.drift) parts.push(run.rules.drift < 0 ? "↑" : "↓");
   if (run.guardReady) parts.push(tr("护甲就绪", "Plating ready"));
@@ -406,7 +417,8 @@ function refreshSortieHud() {
 function refreshSortieResult() {
   const result = sortieStats?.result;
   if (!sortieResultSummary || !result) return;
-  const headline = result.resumed ? tr("连战续练 · 不计成绩", "Rush practice · unranked")
+  const headline = result.retried ? tr("Boss 回溯 · 不计正式纪录与成就", "Boss retry · unranked, no achievements")
+    : result.resumed ? tr("连战续练 · 不计成绩", "Rush practice · unranked")
     : result.assisted ? tr("辅助出击", "Assisted sortie")
     : result.week ? tr("每周首领连战", "Weekly Boss Rush") : sortieWord(result.mode);
   const stat = result.newScore || result.newTime ? (result.assisted ? tr("刷新辅助纪录", "New assisted record") : tr("刷新纪录", "New record"))
@@ -418,7 +430,8 @@ function refreshSortieResult() {
   const assists = sortieAssistLabels(result.assists);
   if (assists.length) sortieResultSummary.append(sortieElement("p", assists.join(" · ")));
   const resume = sortieProfile.data.rushResume;
-  if (result.mode === "rush" && !result.resumed && !result.won && resume) {
+  if (result.mode === "rush" && !result.resumed && !result.retried && !result.won && resume
+    && !(typeof bossRetryAvailable !== "undefined" && bossRetryAvailable)) {
     sortieResultSummary.append(sortieButton(tr("从当前首领续练（不计成绩）", "Practice from this boss (unranked)"),
       () => startBattleWithSound(sortieRushResumeOptions(resume))));
   }
@@ -431,6 +444,7 @@ function refreshSortieResult() {
 }
 
 function refreshSortieUI() {
+  refreshHangarDifficulty();
   if (!sortieConsole) return;
   for (const button of sortieConsoleButtons) button.textContent = sortieWord(button.dataset.sortieConsole);
   document.querySelector(".hangar-console-actions")?.setAttribute("aria-label", tr("机库终端", "Hangar console"));
@@ -446,3 +460,26 @@ if (sortieConsole) {
   refreshAwardLook();
   refreshSortieUI();
 }
+
+// The campaign shortcut shares the settings value; Boss Rush retains its own selector.
+function refreshHangarDifficulty() {
+  const picker = document.querySelector("#hangar-difficulty");
+  if (!picker) return;
+  document.querySelector("#hangar-difficulty-label").textContent = tr("战役难度", "Campaign difficulty");
+  document.querySelector("#hangar-difficulty-note").textContent = tr(
+    "仅调整 Boss 出招频率与弹速；血量由开战时 POWER 决定。",
+    "Only Boss attack frequency and shot speed change. HP follows POWER at battle entry.");
+  for (const radio of picker.querySelectorAll("input")) {
+    radio.checked = radio.value === sortieSettings.difficulty;
+    radio.nextElementSibling.textContent = sortieWord(radio.value);
+  }
+}
+
+document.querySelector("#hangar-difficulty")?.addEventListener("change", event => {
+  const radio = event.target;
+  if (!radio.matches('input[name="hangar-difficulty"]') || !radio.checked) return;
+  saveSortieSetting("difficulty", radio.value);
+  refreshHangarDifficulty();
+  const settingsPicker = document.querySelector("#sortie-difficulty");
+  if (settingsPicker) settingsPicker.value = sortieSettings.difficulty;
+});

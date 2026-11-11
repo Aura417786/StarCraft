@@ -114,11 +114,11 @@ test("Rush resume survives reopen and finishing it does not affect any ranked re
   assert.equal(reopened.data.rushByDifficulty.veteran.fast, 1);
 });
 
-test("38 badges grant cosmetics only for earned conditions and survive save recovery", () => {
+test("44 current and legacy badges grant cosmetics only for earned conditions and survive save recovery", () => {
   const awards = require("../achievements.js");
   const storage = memoryStorage();
   const save = profile.createStore(storage);
-  assert.equal(awards.ids.length, 38);
+  assert.equal(awards.ids.length, 44);
   assert.equal(new Set(awards.ids).size, awards.ids.length);
   assert.equal(save.equipAward("skin", "frost"), false);
   const result = save.finish({ ...rushClear, mode: "campaign", fighter: "red", difficulty: "abyss",

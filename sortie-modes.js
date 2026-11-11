@@ -5,25 +5,33 @@ const sortieProfile = StarBreakerProfile.createStore({
   setItem: (key, value) => window.localStorage.setItem(key, value)
 });
 const sortieSettingsKey = "star-breaker-sortie-settings";
-const sortieSettings = { difficulty: "veteran", rushDifficulty: "veteran", extended: false, radio: true };
+const sortieSettings = { difficulty: "hard", rushDifficulty: "hard", extended: false, radio: true };
 const sortieDifficulty = {
-  recruit: { bossHealth: .85, warning: .3, attackTempo: .86, projectileSpeed: .93, damage: .75 },
+  easy: { bossHealth: 1, warning: 0, attackTempo: .62, projectileSpeed: .72, damage: 1 },
+  normal: { bossHealth: 1, warning: 0, attackTempo: .80, projectileSpeed: .86, damage: 1 },
+  hard: { bossHealth: 1, warning: 0, attackTempo: 1, projectileSpeed: 1, damage: 1 },
+  // Legacy IDs are input aliases, never a hidden fourth difficulty.
+  recruit: { bossHealth: 1, warning: 0, attackTempo: .62, projectileSpeed: .72, damage: 1 },
   veteran: { bossHealth: 1, warning: 0, attackTempo: 1, projectileSpeed: 1, damage: 1 },
-  abyss: { bossHealth: 1.12, warning: 0, attackTempo: 1.18, projectileSpeed: 1.1, damage: 1.25 }
+  abyss: { bossHealth: 1, warning: 0, attackTempo: 1, projectileSpeed: 1, damage: 1 }
 };
+function liveSortieDifficulty(value) {
+  if (["easy", "normal", "hard"].includes(value)) return value;
+  return value === "recruit" ? "easy" : "hard";
+}
 try {
   const saved = JSON.parse(window.localStorage.getItem(sortieSettingsKey));
-  if (Object.hasOwn(sortieDifficulty, saved?.difficulty)) sortieSettings.difficulty = saved.difficulty;
-  if (Object.hasOwn(sortieDifficulty, saved?.rushDifficulty)) sortieSettings.rushDifficulty = saved.rushDifficulty;
+  if (Object.hasOwn(sortieDifficulty, saved?.difficulty)) sortieSettings.difficulty = liveSortieDifficulty(saved.difficulty);
+  if (Object.hasOwn(sortieDifficulty, saved?.rushDifficulty)) sortieSettings.rushDifficulty = liveSortieDifficulty(saved.rushDifficulty);
   sortieSettings.extended = saved?.extended === true;
   sortieSettings.radio = saved?.radio !== false;
 } catch { /* The default sortie settings work without storage. */ }
 
-const sortieBaseline = { ...sortieDifficulty.veteran, noShield: false, shieldRate: 1, movement: 1, drift: 0 };
+const sortieBaseline = { ...sortieDifficulty.hard, noShield: false, shieldRate: 1, movement: 1, drift: 0 };
 let sortieStats = null;
 
 function saveSortieSetting(key, value) {
-  if ((key === "difficulty" || key === "rushDifficulty") && Object.hasOwn(sortieDifficulty, value)) sortieSettings[key] = value;
+  if ((key === "difficulty" || key === "rushDifficulty") && Object.hasOwn(sortieDifficulty, value)) sortieSettings[key] = liveSortieDifficulty(value);
   if (key === "extended") sortieSettings.extended = value === true;
   if (key === "radio") sortieSettings.radio = value !== false;
   try { window.localStorage.setItem(sortieSettingsKey, JSON.stringify(sortieSettings)); }
@@ -31,14 +39,16 @@ function saveSortieSetting(key, value) {
   syncSortieEligibility();
 }
 
-function sortieGenerator(seed) {
-  let n = seed >>> 0;
-  return () => {
+function sortieGenerator(seed, restoredState = seed) {
+  let n = restoredState >>> 0;
+  const random = () => {
     n = (n + 0x6D2B79F5) >>> 0;
     let sample = Math.imul(n ^ n >>> 15, n | 1);
     sample ^= sample + Math.imul(sample ^ sample >>> 7, sample | 61);
     return ((sample ^ sample >>> 14) >>> 0) / 4294967296;
   };
+  random.getState = () => n;
+  return random;
 }
 
 function sortieDay(date = new Date()) {
@@ -106,8 +116,8 @@ function newSortie(options = {}) {
   const week = mode === "rush" && !resumed && /^\d{4}-\d{2}-\d{2}$/.test(options.week ?? "") ? options.week : null;
   const weekly = week ? weeklyRushRules(week) : null;
   const practiceType = Math.max(0, Math.min(StarBreakerProfile.bossCount - 1, Math.floor(options.bossType || 0)));
-  const difficulty = mode === "daily" || mode === "practice" || week ? "veteran"
-    : Object.hasOwn(sortieDifficulty, options.difficulty) ? options.difficulty
+  const difficulty = mode === "daily" || mode === "practice" || week ? "hard"
+    : Object.hasOwn(sortieDifficulty, options.difficulty) ? liveSortieDifficulty(options.difficulty)
     : mode === "rush" ? sortieSettings.rushDifficulty : sortieSettings.difficulty;
   const rules = { ...sortieBaseline, ...sortieDifficulty[difficulty] };
   const upgrades = mode === "campaign" ? sortieProfile.data.upgrades : { firepower: 0, survival: 0, mobility: 0 };
@@ -116,7 +126,8 @@ function newSortie(options = {}) {
   rules.shieldRate = upgrades.survival >= 5 ? .90 : upgrades.survival >= 3 ? .95 : 1;
   for (const modifier of daily?.rules ?? weekly?.rules ?? []) {
     if (modifier === "fast-shots") rules.projectileSpeed *= 1.2;
-    if (modifier === "thick-shell") rules.bossHealth *= 1.12;
+    // Preserve the seeded modifier ID, but health always follows locked entry POWER.
+    if (modifier === "thick-shell") rules.attackTempo *= 1.12;
     if (modifier === "updraft") rules.drift = -.11;
     if (modifier === "downdraft") rules.drift = .11;
     if (modifier === "heavy-thrusters") rules.movement = .88;
@@ -208,7 +219,7 @@ function sortieBossCleared(target) {
   const run = sortieStats;
   if (run.bossRecords.some(record => record.type === target.type)) return;
   const start = target.sortieStart ?? { time: battleTime, hits: run.hitsTaken };
-  const builds = typeof StarBreakerAwards === "undefined" ? [] : StarBreakerAwards.buildsFor(evolution.pierce, evolution.blast, evolution.aegis);
+  const builds = typeof StarBreakerAwards === "undefined" ? [] : StarBreakerAwards.routeBuildsFor(evolution.route, evolution.level);
   const seconds = Math.max(.001, battleTime - start.time);
   run.bossRecords.push({ type: target.type, seconds, hitCount: run.hitsTaken - start.hits, builds });
   if (typeof captureBossScalingQaResult === "function") captureBossScalingQaResult(target, seconds);
@@ -225,7 +236,7 @@ function sortiePresentationEndsRun(target) {
 function sortieLaunchHint() {
   const controls = tr("上下移动瞄准。空格使用大招，V 开盾。", "Move up or down to aim. Space uses your special; V shields.");
   if (sortieStats?.resumed) return tr("连战续练 · 从中断首领开始，独立于正式纪录。", "Rush practice · resumes at the interrupted boss and is unranked.") + " " + controls;
-  if (sortieStats?.week) return tr("每周连战 · 老兵难度与本周航线规则。", "Weekly Rush · Veteran with this week's route rules.") + " " + controls;
+  if (sortieStats?.week) return tr("每周连战 · 困难难度与本周航线规则。", "Weekly Rush · Hard with this week's route rules.") + " " + controls;
   if (sortieMode() === "rush") return tr("首领连战开始。11 场连续对决，击破后有一次进化选择。", "Boss Rush has begun. Fight 11 bosses in order and evolve after each duel.") + " " + controls;
   if (sortieMode() === "practice") return tr("开始单首领练习。装备固定，共有三条生命。", "Boss Practice has begun. Your equipment is fixed and you have three lives.") + " " + controls;
   if (sortieMode() === "daily") {
@@ -245,6 +256,7 @@ function completeSortie({ won = false, died = false, abandoned = false } = {}) {
   const summary = { won, died, abandoned, mode: run.mode, difficulty: run.difficulty, assisted: run.assisted, assists: { ...run.assists },
     seconds: battleTime, score, kills, combo: momentum.best, hits: run.hitsTaken, bossRecords: run.bossRecords.slice(),
     unlocks: run.unlocks.slice(), day: run.daily?.day, week: run.week, resumed: run.resumed,
+    retried: run.retried === true, retryCount: run.retryCount ?? 0,
     currentBoss: !won && run.mode === "rush" ? Math.min(StarBreakerProfile.bossCount - 1, boss?.type ?? pendingBossType ?? bossDefeated) : null,
     seed: run.seed, fighter: run.fighter };
   run.result = { ...summary, ...sortieProfile.finish(summary) };

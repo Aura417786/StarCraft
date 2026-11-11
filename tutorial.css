@@ -26,7 +26,7 @@
 .flight-training p { margin: 0; color: #c6d7e8; font-size: 13px; line-height: 1.42; }
 .flight-training .secondary-button { min-height: 32px; flex-shrink: 0; padding: 5px 9px; }
 .flight-training-evolution-skip { display: block; margin: 10px auto 0; }
-.sortie-difficulty-scroll { overflow: auto; border: 1px solid #3a516d; border-radius: 5px; }
+.sortie-difficulty-scroll { height: max-content; overflow: auto; border: 1px solid #3a516d; border-radius: 5px; }
 .sortie-difficulty-table { width: 100%; min-width: 430px; border-collapse: collapse; text-align: left; font-size: 12px; }
 .sortie-difficulty-table caption { padding: 8px 10px; text-align: left; color: #caecfa; background: #16253a; font-weight: 600; }
 .sortie-difficulty-table :is(th, td) { padding: 7px 10px; border-top: 1px solid #2d3e55; white-space: nowrap; }

@@ -42,7 +42,7 @@ function drawAwardWake(ctx, ship) {
 function awardCopy(id) {
   const match = id.match(/^(?:boss|clean)-(\d+)$/);
   const ship = fighterProfiles[id.slice(4)];
-  const difficulty = StarBreakerProfile.difficulties.includes(id.slice(9)) ? sortieWord(id.slice(9)) : "";
+  const difficulty = StarBreakerProfile.recordDifficulties.includes(id.slice(9)) ? sortieWord(id.slice(9)) : "";
   return StarBreakerAwards.words(id, match ? bossTypeName(Number(match[1])) : "",
     ship ? tr(...ship.label) : "", difficulty).map(pair => tr(...pair));
 }
@@ -61,7 +61,7 @@ function renderAwardWall(profile) {
       });
     for (const option of select.options) {
       const item = StarBreakerAwards.cosmetics[option.value];
-      if (item && !unlocked.has(item.badge)) {
+      if (item && !unlocked.has(item.badge) && !unlocked.has(item.alternateBadge)) {
         option.disabled = true;
         option.textContent += tr(" · 待解锁", " · Locked");
       }
@@ -69,7 +69,8 @@ function renderAwardWall(profile) {
     const requirements = sortieElement("ul", "", "award-unlocks");
     for (const [, item] of items) {
       const [name] = awardCopy(item.badge);
-      requirements.append(sortieElement("li", tr(...item.name) + " · " + name));
+      const alternate = item.alternateBadge ? tr(" 或 ", " or ") + awardCopy(item.alternateBadge)[0] : "";
+      requirements.append(sortieElement("li", tr(...item.name) + " · " + name + alternate));
     }
     inventory.append(sortieSettingLine(label, select), requirements);
   }

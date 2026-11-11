@@ -42,6 +42,9 @@ const gameAudio = (() => {
   let lastOverdriveTime = -Infinity;
   let lastPerfectShieldTime = -Infinity;
   let lastImpactTime = -Infinity;
+  let lastHeavyImpactTime = -Infinity;
+  let impactBudget = 4;
+  let impactBudgetAt = 0;
   let duckPriority = 1;
   let duckUntil = -Infinity;
   let lastBossVoiceTime = -Infinity;
@@ -158,11 +161,12 @@ const gameAudio = (() => {
   }
   function limitVoices(bus) {
     const sameBus = Array.from(voices).filter(voice => voice.bus === bus);
-    const limit = bus === "music" ? 28 : bus === "ultimate" ? 8 : bus === "boss" ? 12 : 24;
+    const limit = bus === "music" ? 28 : bus === "ultimate" ? 8 : bus === "boss" || bus === "impact" ? 12 : 24;
     if (sameBus.length >= limit) retireVoice(sameBus[0], 0.008);
     if (voices.size >= MAX_VOICES) {
       // 蓄力与炮声有独立声部，密集射击和背景乐不会抢断它们。
-      const expendable = Array.from(voices).find(voice => voice.bus === "sfx") ||
+      const expendable = Array.from(voices).find(voice => voice.bus === "impact") ||
+        Array.from(voices).find(voice => voice.bus === "sfx") ||
         Array.from(voices).find(voice => voice.bus !== "ultimate" && !voice.loop);
       if (expendable) retireVoice(expendable, 0.008);
       else return false;
@@ -860,12 +864,45 @@ const gameAudio = (() => {
       filterType: "bandpass", cutoff: 650, endCutoff: 2100, resonance: 0.55, attack: 0.014 });
   }
   function hit(isBoss, source = "", x, y) {
-    if (!canPlay() || audio.currentTime - lastImpactTime < .072) return;
-    const heavy = source === "ultimate";
-    if (sample(isBoss ? "hit_organic" : "hit_metal",
-      { level: heavy ? .32 : .22, rate: (heavy ? .77 : .94) + .12 * Math.random(), ...soundPosition(x, y) })) {
-      lastImpactTime = audio.currentTime;
+    if (!canPlay()) return false;
+    const time = audio.currentTime;
+    const heavy = source === "ultimate" || source === "crimson-heavy" || source === "evolution-lance" || source === "evolution-ember";
+    // A cannon impact may interrupt the ordinary-hit rhythm, but neither rapid
+    // fire nor a screen-wide barrage can stack an unbounded number of transients.
+    if (heavy ? time - lastHeavyImpactTime < .16
+      : time - lastImpactTime < .075 || time - lastHeavyImpactTime < .09) return false;
+    impactBudget = Math.min(4, impactBudget + Math.max(0, time - impactBudgetAt) * 10);
+    impactBudgetAt = time;
+    const cost = heavy ? 1.75 : 1;
+    const layers = heavy ? 4 : 3;
+    const occupied = [...voices, ...fadingVoices].filter(voice => voice.bus === "impact").length;
+    // Ordinary fire leaves one heavy-impact budget in reserve.
+    if (impactBudget < cost + (heavy ? 0 : 1.75) || occupied + layers > 12
+      || voices.size + fadingVoices.size + layers > 44) return false;
+    impactBudget -= cost;
+    if (heavy) lastHeavyImpactTime = time;
+    lastImpactTime = time;
+    const position = soundPosition(x, y);
+    if (isBoss) position.attenuation = Math.max(.48, position.attenuation);
+    const common = { bus: "impact", time, ...position };
+    const weight = heavy ? 1 : .52;
+    // Crack, body and burn occupy separate frequency bands. They remain audible
+    // when the optional sample bank is unavailable, with no asset download.
+    note({ ...common, noise: true, duration: heavy ? .056 : .033, volume: .16 * weight,
+      filterType: "highpass", cutoff: isBoss ? 1850 : 2850, endCutoff: 980,
+      resonance: .55, attack: .001 });
+    note({ ...common, time: time + .004, type: "sine", duration: heavy ? .24 : .13,
+      frequency: isBoss ? (heavy ? 116 : 162) : 215, endFrequency: isBoss ? 44 : 72,
+      volume: (isBoss ? .41 : .27) * weight, cutoff: 560, endCutoff: 150, attack: .003 });
+    note({ ...common, time: time + .012, noise: true, duration: heavy ? .21 : .084,
+      filterType: "bandpass", cutoff: heavy ? 2250 : 1650, endCutoff: 390,
+      volume: .13 * weight, resonance: .62, attack: .012 });
+    if (heavy) {
+      note({ ...common, time: time + .008, type: "triangle", duration: .18,
+        frequency: 290, endFrequency: 81, volume: .075, cutoff: 850, endCutoff: 190, attack: .004 });
+      duckMusic(.79, .16);
     }
+    return true;
   }
   function hurt() {
     if (!canPlay()) return;

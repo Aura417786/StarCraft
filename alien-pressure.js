@@ -80,17 +80,22 @@ function beginAlienRecovery(target) {
   setBossMessage(bossStageTitle(target), message);
 }
 
-function alienRecoveryDuration(target) {
+function alienRecoveryDuration(target, ignoreDifficulty = false) {
   if (target.ruptureWindow) return bossRules.exposedWindow;
   const pressure = target.alienAttack === "pressure";
   const recovery = bossRules.recovery + (pressure ? .28 : 0);
-  const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
-  const authored = Math.max(.42, recovery - target.type * .029 - (target.enraged && !pressure ? .16 : 0)) / tempo;
+  const tempo = !ignoreDifficulty && typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
+  const authored = Math.max(.42, recovery - target.type * .029 - (target.enraged && !pressure ? .16 : 0));
   // 战力越高，收招硬直越短；但契约要求反击窗口不短于 0.8 秒，这里只压缩到该下限。
   const density = Math.max(1, target.scaling?.hpMul ?? 1);
   const squeeze = 1 + (density - 1) * .26;
   const floor = target.alienAttack ? .8 : .35;
-  return Math.max(floor, authored / squeeze);
+  const base = Math.max(floor, authored / squeeze);
+  if (tempo === 1) return base;
+  const active = Math.max(0, target.telegraphDuration || 0) + Math.max(0, target.attackDuration || 0);
+  // Slow whole attack cycles by adding breathing room after the unchanged move.
+  // Never slow a warning animation, stretch an active hitbox, or alter Hard.
+  return Math.max(floor, (base + active) / tempo - active);
 }
 
 function alienDamageExplanation(hit, finalStage) {
