@@ -75,7 +75,7 @@ function beginAlienRecovery(target) {
 function alienRecoveryDuration(target) {
   if (target.ruptureWindow) return bossRules.exposedWindow;
   const pressure = target.alienAttack === "pressure";
-  const recovery = bossRules.recovery + (pressure ? .28 : 0);
+  const recovery = .58 + (pressure ? .28 : 0);
   const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
   const authored = Math.max(.42, recovery - target.type * .029 - (target.enraged && !pressure ? .16 : 0)) / tempo;
   // 战力越高，收招硬直越短（反击窗口仍在，只是不再宽裕）。

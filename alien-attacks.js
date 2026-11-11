@@ -517,6 +517,11 @@ function prepareAlienAttack(target, allowPressure = false) {
   if (attackDensity >= 1.2) {
     target.attackEvents.push(fan(Math.max(.5, target.attackDuration * .55), 2, .3, 470, "shard", { aim: true }));
   }
+  // 连携：本招收招前再朝玩家当前站位补一组追击 + 落点区。
+  // 前半招把玩家逼进缺口，这一下打的正是那个缺口，两招形成配合。
+  const comboAt = Math.max(.9, target.attackDuration - .55);
+  target.attackEvents.push(fan(comboAt, 3, .24, 560, "shard", { aim: true }));
+  target.attackEvents.push(beat(Math.max(1.0, comboAt + .18), x => zoneTell(x, Math.max(.95, comboAt), player.x, player.y, .34, "water")));
   target.attackEvents.sort((a, b) => a.at - b.at);
   // Only the time around the authored actions is adjustable. Every tell,
   // scheduled volley, active hazard and recovery still has time to finish.
