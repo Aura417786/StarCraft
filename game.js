@@ -327,7 +327,7 @@ function showScreen(nextState, options = {}) {
   else sortieStats = null;
   lastDamageMessage = "";
   resetShipVisuals();
-  resetBattlefield();
+  resetBattlefield(nextState === "battle");
   resetJourneyScenes();
   resetCombatEffects();
   resetEvolution();
@@ -337,6 +337,8 @@ function showScreen(nextState, options = {}) {
   clearMovement();
   resetWeapons(false);
   resetEncounter();
+  if (typeof resetStarBreakerModels === "function") resetStarBreakerModels();
+  if (typeof resetAlienBossArt === "function") resetAlienBossArt();
   resetPlayer();
   resetPlayerLives();
   applySortieStartingEquipment();
@@ -1085,6 +1087,8 @@ function endGame(won = false) {
   completeSortie({ won, died: !won && player.lives === 0 });
   clearPause();
   state = "over";
+  if (typeof resetStarBreakerModels === "function") resetStarBreakerModels();
+  if (typeof resetAlienBossArt === "function") resetAlienBossArt();
   battleScreen.hidden = true;
   gameOverScreen.dataset.victory = String(won);
   updateResultCopy(won);
@@ -1397,6 +1401,4 @@ function refreshGameLanguage() {
 }
 updateLifeDisplay();
 resizeBattlefield();
-if (typeof preloadHadalSurface === "function") preloadHadalSurface();
-if (typeof preloadStarBreakerModel === "function") preloadStarBreakerModel(0);
 window.requestAnimationFrame(drawFrame);

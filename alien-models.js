@@ -8,7 +8,10 @@ const starBreakerModelNames = [
   "neural-crown", "extinction-core",
 ];
 const starBreakerModelCache = new Map();
+const starBreakerModelLimit = 2;
 let starBreakerModelStage;
+let starBreakerModelLoad;
+let starBreakerModelPumpScheduled = false;
 let starBreakerModelsUnavailable = false;
 // The sector plate motivates the key; the darker opposite hemisphere preserves shape.
 const bossSectorLights = [
@@ -106,73 +109,146 @@ function canUseStarBreakerModels() {
 
 function starBreakerFinaleModelIndex(type) { return 11 + type; }
 
-function releaseStarBreakerModel(entry) {
-  entry.evicted = true;
-  // Three still polls the program object while compileAsync is pending.
-  if (!entry.model || entry.warming) return;
-  entry.model.mixer?.stopAllAction();
-  entry.model.mixer?.uncacheRoot(entry.model.center);
-  const materials = new Set(), textures = new Set(), sources = new Set(), geometry = new Set();
-  entry.model.center.traverse(mesh => {
+function starBreakerModelResources(center) {
+  const materials = new Set(), textures = new Set(), geometries = new Set();
+  center.traverse(mesh => {
     if (!mesh.isMesh) return;
-    geometry.add(mesh.geometry);
-    for (const material of [].concat(mesh.material)) materials.add(material);
+    geometries.add(mesh.geometry);
+    for (const material of [].concat(mesh.material)) {
+      if (materials.has(material)) continue;
+      materials.add(material);
+      for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+    }
   });
-  for (const mesh of geometry) mesh.dispose();
-  for (const material of materials) {
-    for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
-    material.dispose();
-  }
+  return { materials, textures, geometries };
+}
+
+function disposeStarBreakerModelResources({ materials, textures, geometries }) {
+  const sources = new Set();
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of materials) material.dispose();
   for (const texture of textures) {
     sources.add(texture.source?.data);
     texture.dispose();
   }
   for (const source of sources) source?.close?.();
-  entry.model.turn.removeFromParent();
+}
+
+function releaseStarBreakerModel(entry) {
+  entry.evicted = true;
+  entry.controller?.abort();
+  const model = entry.model;
+  if (!model) return;
+  model.turn.removeFromParent();
+  if (starBreakerModelStage?.current === model) {
+    starBreakerModelStage.current = null;
+    starBreakerModelStage.renderer.renderLists.dispose();
+  }
+  entry.model = null;
+  model.mixer?.stopAllAction();
+  model.mixer?.uncacheRoot(model.center);
+  disposeStarBreakerModelResources(model.resources);
 }
 
 function warmStarBreakerModel(entry, stage) {
   if (entry.evicted || !canUseStarBreakerModels()) return;
-  if (stage.warmEntry) {
-    stage.queuedWarm = entry;
-    return;
-  }
-  stage.warmEntry = entry;
-  entry.warming = true;
-  Promise.resolve().then(() => stage.renderer.compileAsync(entry.model.turn, stage.camera, stage.scene))
-    .catch(() => { /* Draw path remains available. */ })
-    .finally(() => {
-      entry.warming = false;
-      if (entry.evicted) releaseStarBreakerModel(entry);
-      const queued = stage.queuedWarm;
-      stage.queuedWarm = null;
-      stage.warmEntry = null;
-      if (queued) warmStarBreakerModel(queued, stage);
-    });
+  try {
+    for (const texture of entry.model.resources.textures) stage.renderer.initTexture(texture);
+    // Submit shader work before the fight. No polling keeps disposed models
+    // alive when the player leaves or the context is lost during compilation.
+    stage.renderer.compile(entry.model.turn, stage.camera, stage.scene);
+  } catch { /* Draw path remains available. */ }
 }
 
-function preloadStarBreakerModel(index) {
+function preloadStarBreakerModel(index, foreground = false) {
   if (!canUseStarBreakerModels() || !starBreakerModelNames[index]) return null;
   let entry = starBreakerModelCache.get(index);
   if (entry) {
-    starBreakerModelCache.delete(index);
-    starBreakerModelCache.set(index, entry);
+    if (foreground) {
+      entry.foreground = true;
+      starBreakerModelCache.delete(index);
+      starBreakerModelCache.set(index, entry);
+    }
     return entry;
   }
-  // The current body, the next telegraphed encounter and the current finale fit this budget.
-  entry = { model: null, evicted: false };
+  entry = { index, model: null, evicted: false, pending: true, foreground };
   starBreakerModelCache.set(index, entry);
-  if (starBreakerModelCache.size > 3) {
+  if (starBreakerModelCache.size > starBreakerModelLimit) {
     const oldest = starBreakerModelCache.keys().next().value;
     releaseStarBreakerModel(starBreakerModelCache.get(oldest));
     starBreakerModelCache.delete(oldest);
   }
-  const { GLTFLoader, Box3, Vector3, Group, AnimationMixer } = StarBreaker3D;
-  new GLTFLoader().load(`assets/models/${starBreakerModelNames[index]}.glb`, gltf => {
+  scheduleStarBreakerModelLoad();
+  return entry;
+}
+
+function scheduleStarBreakerModelLoad() {
+  if (starBreakerModelLoad || starBreakerModelPumpScheduled || !canUseStarBreakerModels()) return;
+  starBreakerModelPumpScheduled = true;
+  window.setTimeout(() => {
+    starBreakerModelPumpScheduled = false;
+    const pending = [...starBreakerModelCache.values()].filter(entry => entry.pending);
+    const entry = pending.find(candidate => candidate.foreground) ?? pending[0];
+    if (entry && canUseStarBreakerModels()) loadStarBreakerModel(entry);
+  }, 0);
+}
+
+function disposeIdleBossModelDecoder(stage) {
+  if (!stage?.gltfLoader || starBreakerModelLoad || starBreakerModelCache.size) return;
+  if (stage.ktx2Loader?.transcoderPending) stage.ktx2Loader.dispose();
+  stage.ktx2Loader = null;
+  stage.gltfLoader = null;
+}
+
+function resetStarBreakerModels() {
+  for (const entry of starBreakerModelCache.values()) releaseStarBreakerModel(entry);
+  starBreakerModelCache.clear();
+  const stage = starBreakerModelStage;
+  if (!stage) return;
+  stage.scene.environment = stage.environment.texture;
+  for (const map of stage.sectorMaps.values()) map?.dispose();
+  stage.sectorMaps.clear();
+  stage.environmentGeneration++;
+  if (!stage.renderer.getContext().isContextLost()) stage.renderer.setSize(16, 16, false);
+  disposeIdleBossModelDecoder(stage);
+}
+
+async function loadStarBreakerModel(entry) {
+  entry.pending = false;
+  starBreakerModelLoad = entry;
+  const { GLTFLoader, KTX2Loader, MeshoptDecoder, Box3, Vector3, Group, AnimationMixer } = StarBreaker3D;
+  let stage;
+  try {
+    const controller = new AbortController();
+    entry.controller = controller;
+    const url = `assets/models/${starBreakerModelNames[entry.index]}.glb`;
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return;
+    const data = await response.arrayBuffer();
+    entry.controller = null;
+    if (entry.evicted || !canUseStarBreakerModels()) return;
+    stage = bossModelStage();
+    if (!stage) return;
+    if (!stage.gltfLoader) {
+      stage.ktx2Loader = new KTX2Loader().setTranscoderPath("vendor/basis/").setWorkerLimit(1).detectSupport(stage.renderer);
+      stage.gltfLoader = new GLTFLoader().setKTX2Loader(stage.ktx2Loader).setMeshoptDecoder(MeshoptDecoder);
+    }
+    const gltf = await stage.gltfLoader.parseAsync(data, "assets/models/");
     const center = gltf.scene;
+    const resources = starBreakerModelResources(center);
+    // GLTFLoader can resolve a scene even if one of its maps failed to load.
+    // Its cached texture dependencies expose missing maps before drawing it.
+    const maps = await gltf.parser.getDependencies("texture");
+    if (entry.evicted || maps.some(map => !map)) {
+      disposeStarBreakerModelResources(resources);
+      return;
+    }
     const bounds = new Box3().setFromObject(center);
     const size = bounds.getSize(new Vector3());
-    if (!Number.isFinite(size.x) || size.x <= 0 || size.y <= 0) return;
+    if (!Number.isFinite(size.x) || size.x <= 0 || size.y <= 0) {
+      disposeStarBreakerModelResources(resources);
+      return;
+    }
     const turn = new Group();
     center.position.sub(bounds.getCenter(new Vector3()));
     turn.add(center);
@@ -188,25 +264,30 @@ function preloadStarBreakerModel(index) {
     const mixer = gltf.animations.length ? new AnimationMixer(center) : null;
     for (const clip of gltf.animations) mixer.clipAction(clip).play();
     const duration = Math.max(1, ...gltf.animations.map(clip => clip.duration));
-    entry.model = { center, turn, size, mixer, duration, animatedMeshes };
-    if (entry.evicted) {
-      releaseStarBreakerModel(entry);
-      return;
-    }
+    entry.model = { center, turn, size, mixer, duration, animatedMeshes, resources };
     // The warning starts asset work before the encounter. Compile off the draw path when idle.
+    entry.warming = true;
     const prepare = () => {
-      if (entry.evicted || !canUseStarBreakerModels()) return;
-      const stage = bossModelStage();
-      if (!stage) return;
-      const journey = sceneryJourney();
-      preloadBossEnvironment(stage, journey.current);
-      preloadBossEnvironment(stage, journey.next);
-      warmStarBreakerModel(entry, stage);
+      try {
+        if (entry.evicted || !canUseStarBreakerModels()) return;
+        const journey = sceneryJourney();
+        preloadBossEnvironment(stage, journey.current);
+        preloadBossEnvironment(stage, journey.next);
+        warmStarBreakerModel(entry, stage);
+      } finally {
+        entry.warming = false;
+      }
     };
     if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(prepare, { timeout: 1500 });
     else window.setTimeout(prepare, 0);
-  }, undefined, () => { /* The calibrated 2D asset remains available. */ });
-  return entry;
+  } catch {
+    // Unsupported GPU codecs and failed requests retain the 2D artwork.
+  } finally {
+    entry.controller = null;
+    starBreakerModelLoad = null;
+    disposeIdleBossModelDecoder(starBreakerModelStage);
+    if ([...starBreakerModelCache.values()].some(candidate => candidate.pending)) scheduleStarBreakerModelLoad();
+  }
 }
 
 function bossModelLight(scene, color, intensity, point) {
@@ -242,10 +323,11 @@ function makeBossModelEnvironment(renderer, scene) {
 function preloadBossEnvironment(stage, sector) {
   if (stage.sectorMaps.has(sector)) return;
   const image = new Image();
+  const generation = stage.environmentGeneration;
   stage.sectorMaps.set(sector, null);
   image.onload = () => {
     const prepare = () => {
-      if (starBreakerModelsUnavailable || stage.renderer.getContext().isContextLost()) return;
+      if (stage.environmentGeneration !== generation || starBreakerModelsUnavailable || stage.renderer.getContext().isContextLost()) return;
       const canvas = document.createElement("canvas");
       canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -276,6 +358,7 @@ function preloadBossEnvironment(stage, sector) {
 
 function bossModelStage() {
   if (starBreakerModelStage) return starBreakerModelStage;
+  if (!canUseStarBreakerModels()) return null;
   try {
     const canvas = document.createElement("canvas");
     const { WebGLRenderer, Scene, OrthographicCamera, HemisphereLight, PointLight, AgXToneMapping } = StarBreaker3D;
@@ -308,9 +391,19 @@ function bossModelStage() {
     canvas.addEventListener("webglcontextlost", event => {
       event.preventDefault();
       starBreakerModelsUnavailable = true;
+      resetStarBreakerModels();
+    });
+    canvas.addEventListener("webglcontextrestored", () => {
+      const stage = starBreakerModelStage;
+      try {
+        stage.environment.dispose();
+        stage.environment = makeBossModelEnvironment(renderer, scene);
+        stage.ktx2Loader?.detectSupport(renderer);
+        starBreakerModelsUnavailable = false;
+      } catch { /* Keep using 2D artwork. */ }
     });
     starBreakerModelStage = { renderer, scene, camera, key, rim, bounce, emitter, spill, environment,
-      sectorMaps: new Map(), current: null };
+      sectorMaps: new Map(), environmentGeneration: 0, current: null };
   } catch {
     starBreakerModelsUnavailable = true;
   }
@@ -328,9 +421,9 @@ function lightBossModel(stage, model, type, pose, x, y, width) {
   const near = blend < .5 ? current : next;
   preloadBossEnvironment(stage, near);
   const map = stage.sectorMaps.get(near);
-  scene.environment = (map ?? stage.environment).texture;
+  scene.environment = map?.texture ?? stage.environment.texture;
   // A brief reduction in reflection hides the cubemap change during a sector dissolve.
-  scene.environmentIntensity = (map ? .73 : .54) * (.79 + Math.abs(.5 - blend) * .42);
+  scene.environmentIntensity = (map?.texture ? .73 : .54) * (.79 + Math.abs(.5 - blend) * .42);
   const from = bossSectorLights[current], to = bossSectorLights[next];
   const mix = (a, b) => a + (b - a) * blend;
   const mixColor = (field, light) => light.color.setRGB(...from[field].map((channel, i) => mix(channel, to[field][i]) / 255),
@@ -399,7 +492,7 @@ function drawBossContactShadow(ctx, x, y, width, height) {
 }
 
 function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
-  const model = preloadStarBreakerModel(type)?.model;
+  const model = preloadStarBreakerModel(type, true)?.model;
   if (!model) return false;
   const stage = bossModelStage();
   if (!stage) return false;

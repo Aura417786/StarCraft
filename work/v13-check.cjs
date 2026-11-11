@@ -541,11 +541,22 @@ function readSceneryImage(relative) {
   const bytes=fs.readFileSync(path.join(__dirname,'..',relative));
   assert.equal(bytes.toString('ascii',0,4),'RIFF');
   assert.equal(bytes.readUInt32LE(4)+8,bytes.length,'complete WebP container');
-  assert.equal(bytes.toString('ascii',8,16),'WEBPVP8 ');
+  assert.equal(bytes.toString('ascii',8,12),'WEBP');
+  const kind=bytes.toString('ascii',12,16);
   const chunkSize=bytes.readUInt32LE(16);
   assert.equal(20+chunkSize+chunkSize%2,bytes.length,'complete VP8 chunk');
-  assert.equal(bytes.subarray(23,26).toString('hex'),'9d012a','VP8 image signature');
-  const width=bytes.readUInt16LE(26)&0x3fff,height=bytes.readUInt16LE(28)&0x3fff;
+  let width, height;
+  if(kind==='VP8L'){
+    assert.equal(bytes[20],0x2f,'VP8L image signature');
+    const dimensions=bytes.readUInt32LE(21);
+    width=(dimensions&0x3fff)+1;
+    height=((dimensions>>>14)&0x3fff)+1;
+  }else{
+    assert.equal(kind,'VP8 ');
+    assert.equal(bytes.subarray(23,26).toString('hex'),'9d012a','VP8 image signature');
+    width=bytes.readUInt16LE(26)&0x3fff;
+    height=bytes.readUInt16LE(28)&0x3fff;
+  }
   assert.ok(width>=1024&&height>=720&&width<=8192&&height<=8192,relative+' full-resolution asset');
   return {width,height};
 }
@@ -561,11 +572,11 @@ class SceneryImageMock {
   }
   get src(){return this.url;}
 }
-check('current and next cinematic images preload and only three backgrounds stay cached', () => {
+check('next panorama loads before crossfade and only three backgrounds stay cached', () => {
   sandbox.Image=SceneryImageMock;execute('sceneryCache.clear();');isolated();
-  assert.equal(execute('sceneryCache.get(0).ready&&sceneryCache.get(1).ready'),true);
+  assert.equal(execute('sceneryCache.get(0).ready&&!sceneryCache.has(1)'),true);
   for(let leg=0;leg<16;leg++){
-    execute(`battlefieldState.clock=${leg*75};scenerySyncJourney();`);
+    execute(`battlefieldState.clock=${leg*75+53};scenerySyncJourney();`);
     assert.equal(execute('sceneryCache.size<=3'),true);
     assert.equal(execute('sceneryCache.get(sceneryJourney().current).ready&&sceneryCache.get(sceneryJourney().next).ready'),true);
   }
@@ -601,8 +612,9 @@ check('decoded backgrounds and sector-specific solid meshes render without sprit
 });
 check('first battle draws the menu orbit while the new panorama is still loading', () => {
   isolated('sceneryLayer(0,true);sceneryCache.get(0).ready=false;');
+  const menuAsset = execute('sceneryCache.get("menu").asset');
   drawOperations.length=0;captureDraws=true;execute('drawBattlefield();');captureDraws=false;
-  assert.ok(drawOperations.some(op=>op.name==='drawImage'&&op.args[0].src==='assets/scenery/orbit-silent.png'));
+  assert.ok(drawOperations.some(op=>op.name==='drawImage'&&op.args[0].src===menuAsset));
   execute('sceneryCache.get(0).ready=true;');
 });
 check('resize reuses decoded images and failed or absent Image loaders leave a safe fallback', () => {

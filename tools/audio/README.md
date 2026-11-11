@@ -23,12 +23,15 @@ Boss 生命降至 66% 或 33% 时，下一半拍开始交叉淡化，终局形�
 ```powershell
 python tools/audio/render_bank.py --synth "C:/tools/fluidsynth/bin/fluidsynth.exe" --soundfont "C:/tools/MuseScore_General.sf3" --ffmpeg "C:/tools/ffmpeg/bin/ffmpeg.exe" --work "C:/tools/star-breaker-audio/base"
 python tools/audio/render_factions.py --synth "C:/tools/fluidsynth/bin/fluidsynth.exe" --soundfont "C:/tools/MuseScore_General.sf3" --ffmpeg "C:/tools/ffmpeg/bin/ffmpeg.exe" --work "C:/tools/star-breaker-audio/factions"
+python tools/audio/export_web_audio.py
 ```
 
-两套脚本输出可编辑的 MIDI。循环轨连续渲染三次，保留中间一轮和边界处的混响，用短窗衔接后交给 FFmpeg 做均衡、限幅和 Opus 编码。资源内嵌在 JavaScript 中，双击 `index.html` 和在线版均可解码。浏览器在首次解锁声音和预警时提前逐层解码，缓存只常驻一套阵营音乐。切换期间旧声源只存活至淡出结束，合成音频在解码不可用时接替战斗配乐。
+制作脚本输出可编辑的 MIDI。循环轨连续渲染三次，保留中间一轮和边界处的混响，用短窗衔接后交给 FFmpeg 做均衡、限幅和 Opus 编码。导出脚本从原音频库逐字节写出 `assets/audio/*.ogg`，同时更新体积很小的 `audio-catalog.js`。HTTP 版在需要声音时才请求 Ogg，Boss 阵营分轨逐层预载，返航时释放该套解码缓存。旧声源保持到淡出完成。双击 `index.html` 时，浏览器在声音解锁后加载离线音频库，按需要解码同一份录音。音频暂未就绪或解码不可用时先播放合成声。
 
 分轨创作使用 [Compose Game Music](https://github.com/sora16bit/codex-game-music-skill/blob/13e5236615871573f50effd75a24a7c5b5d19271/skills/compose-game-music/SKILL.md) 的动机变形、分句与打击优先级。混音和验证按 [Audio Design](https://github.com/gamedev-skills/awesome-gamedev-agent-skills/blob/dcf3bbbb83f365632402c086bf595048aa24aaa8/skills/disciplines/audio-design/SKILL.md) 的同一时间轴、分组增益、短时压低音乐与真实输出采样做了调整。
 
 ## 验证
 
 `node work/audio-check.cjs` 检查回退合成、声音并发与暂停。安装 Playwright 后运行 `node work/audio-bank-browser.cjs <证据目录>`，实际打开双击版，记录两声道 PCM、各层起播时间、HP 阈值、循环接缝、左右声像、爆炸远近、暂停与结局恢复。`CHROME_PATH` 可指定本机 Chrome。
+
+`node tools/testkit/final-audio.cjs . <证据目录>` 另行校验首屏请求和阵营缓存退场。命令最后追加在线入口（如 `http://127.0.0.1:8080/`）可运行同样的检查。

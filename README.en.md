@@ -1,10 +1,10 @@
 # Star Breaker · 星际突围
 
-Pick a fighter, cross five sectors, and survive eleven alien boss finales. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. **v23-rc1 — Final Release Candidate** refines the existing campaign after independent QA. Break a weakpoint, recognize the gold counter window, and commit your fire. Crimson rewards a fully charged shot, Azure chains marks, and Auric uses close-range suppression fields. Valid hits no longer disappear into timed health floors.
+Pick a fighter, cross five sectors, and survive eleven alien boss finales. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. **v24** compresses all 22 boss and finale models and loads battle scenery and faction music as the campaign progresses. Break a weak point, recognize the gold counter window, and commit your fire. Crimson rewards a fully charged shot, Azure chains marks, and Auric uses close-range suppression fields.
 
 [Public browser demo](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Previous trailer](media/trailer.mp4) · [中文说明](README.md)
 
-For v23-rc1 testing, use the final candidate ZIP. The public demos may be on a different version.
+Public demos may run different versions. Open the game over HTTP to enable its WebGL boss models.
 
 - **Three fighters, three ways to aim.** Crimson holds and releases C for a piercing cannon. Azure builds marks and discharges them in a three-hit chain. Auric earns suppression fields by managing charge and distance. Each ship has a different special.
 - **Evolve during a run.** Mix Wing Blades, a Falcon Wingman, and a return-fire shield. Only one branch can reach its final rank. Campaign merit buys persistent refits; practice and daily runs use fixed equipment.

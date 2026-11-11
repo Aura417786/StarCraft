@@ -28,7 +28,7 @@ const alienArtProfiles = [
   { core: [-0.13, -0.02], rigid: -0.03, flex: 0.81, fins: 9, tempo: 1.62, fold: 0.074,
     sacs: [[-0.13, -0.03], [0.02, -0.19], [0.12, 0.19]] },
 ];
-const alienArtAssets = Array(alienArtProfiles.length).fill(null);
+const alienArtAssets = new Map();
 const alienArtSize = 448;
 const alienArtPadding = 36;
 let alienArtFrame;
@@ -43,9 +43,17 @@ function loadAlienArt(path) {
 
 function preloadAlienBossArt(type) {
   if (!alienArtProfiles[type] || typeof Image !== "function") return null;
-  alienArtAssets[type] ??= loadAlienArt(`assets/aliens/boss-${String(type + 1).padStart(2, "0")}.webp`);
+  if (!alienArtAssets.has(type)) {
+    alienArtAssets.set(type, loadAlienArt(`assets/aliens/boss-${String(type + 1).padStart(2, "0")}.webp`));
+    if (alienArtAssets.size > 2) alienArtAssets.delete(alienArtAssets.keys().next().value);
+  }
   if (type === 0) alienBroodmotherEnraged ??= loadAlienArt("assets/aliens/boss-01-enraged.webp");
-  return alienArtAssets[type];
+  return alienArtAssets.get(type);
+}
+
+function resetAlienBossArt() {
+  alienArtAssets.clear();
+  alienBroodmotherEnraged = null;
 }
 
 function alienArtCanvas(width, height) {
@@ -56,15 +64,16 @@ function alienArtCanvas(width, height) {
 }
 
 function alienArtTexture(asset) {
-  if (!asset?.image.complete || !asset.image.naturalWidth) return null;
-  if (!asset.texture) {
-    const scale = alienArtSize / Math.max(asset.image.naturalWidth, asset.image.naturalHeight);
-    const texture = alienArtCanvas(Math.max(1, Math.round(asset.image.naturalWidth * scale)),
-      Math.max(1, Math.round(asset.image.naturalHeight * scale)));
-    texture.getContext("2d").drawImage(asset.image, 0, 0, texture.width, texture.height);
-    asset.texture = texture;
-  }
-  return asset.texture;
+  if (asset?.texture) return asset.texture;
+  const image = asset?.image;
+  if (!image?.complete || !image.naturalWidth) return null;
+  const scale = alienArtSize / Math.max(image.naturalWidth, image.naturalHeight);
+  const texture = alienArtCanvas(Math.max(1, Math.round(image.naturalWidth * scale)),
+    Math.max(1, Math.round(image.naturalHeight * scale)));
+  texture.getContext("2d").drawImage(image, 0, 0, texture.width, texture.height);
+  asset.texture = texture;
+  asset.image = null;
+  return texture;
 }
 
 
@@ -367,15 +376,10 @@ function drawAlienArtFallback(ctx, width, height, profile, color, time, charge, 
   if (!disabled) alienArtGlow(ctx, ...profile.core, 0.18, color, 0.32 + charge * 0.43);
   ctx.restore();
 }
-
 function drawBossShip(ctx, target, reduceMotion = false) {
-  if (typeof drawStarBreakerBoss === "function" && drawStarBreakerBoss(ctx, target, reduceMotion)) {
-    preloadAlienBossArt(target.type + 1);
-    return;
-  }
+  if (typeof drawStarBreakerBoss === "function" && drawStarBreakerBoss(ctx, target, reduceMotion)) return;
   const profile = alienArtProfiles[target.type] || alienArtProfiles[0];
   const asset = preloadAlienBossArt(target.type);
-  preloadAlienBossArt(target.type + 1);
   const texture = alienArtTexture(asset);
   const enragedTexture = target.type === 0 && target.enraged ? alienArtTexture(alienBroodmotherEnraged) : null;
   const transition = enragedTexture && texture && !target.disabled && !reduceMotion && Number.isFinite(target.enragedAt)
@@ -425,5 +429,3 @@ function drawBossShip(ctx, target, reduceMotion = false) {
   }
   ctx.restore();
 }
-
-preloadAlienBossArt(0);

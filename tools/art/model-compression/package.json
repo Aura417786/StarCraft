@@ -1,0 +1,9 @@
+{
+  "name": "star-breaker-model-compression",
+  "private": true,
+  "dependencies": {
+    "ktx2-encoder": "0.6.0",
+    "meshoptimizer": "1.3.0",
+    "sharp": "0.35.5"
+  }
+}

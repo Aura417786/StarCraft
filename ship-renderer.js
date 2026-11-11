@@ -3,31 +3,34 @@
 // 预渲染的立体舰体 + 独立的喷流、受光和侧倾。所有数值只用于绘制。
 // tip 为素材机鼻坐标；将它固定到原枪口，侧倾也不会让弹道偏离机头。
 const shipRenderSources = {
-  crimson: { src: "assets/ships/crimson-sleek.png", atlas: "red", crop: [69, 122, 1415, 800], tip: [1482, 494.5],
+  crimson: { src: "assets/ships/crimson-sleek.webp", atlas: "red", crop: [69, 122, 1415, 800], tip: [1482, 494.5],
     engines: [[96, 400], [94, 580]], direction: 1, color: "#b1e7f2" },
-  scout: { src: "assets/ships/scout-sleek.png", crop: [39, 102, 1431, 819], tip: [40, 508],
+  scout: { src: "assets/ships/scout-sleek.webp", crop: [39, 102, 1431, 819], tip: [40, 508],
     engines: [[1442, 401], [1443, 587]], direction: -1, color: "#b1e7f2" },
-  armored: { src: "assets/ships/armored-sleek.png", crop: [47, 85, 1398, 856], tip: [48, 510],
+  armored: { src: "assets/ships/armored-sleek.webp", crop: [47, 85, 1398, 856], tip: [48, 510],
     engines: [[1415, 388], [1415, 600]], direction: -1, color: "#b1e7f2" },
-  gunner: { src: "assets/ships/gunner-sleek.png", crop: [68, 126, 1404, 774], tip: [69, 512.5],
+  gunner: { src: "assets/ships/gunner-sleek.webp", crop: [68, 126, 1404, 774], tip: [69, 512.5],
     engines: [[1447, 399], [1447, 577]], direction: -1, color: "#b1e7f2" },
-  fairing: { src: "assets/ships/fairing-sleek.png", crop: [52, 118, 2067, 501], tip: [2110, 410],
+  fairing: { src: "assets/ships/fairing-sleek.webp", crop: [52, 118, 2067, 501], tip: [2110, 410],
     engines: [], direction: 1, color: "#b1e7f2" },
-  rail: { src: "assets/ships/rail-sleek.png", crop: [40, 361, 1457, 314], tip: [1488, 523],
+  rail: { src: "assets/ships/rail-sleek.webp", crop: [40, 361, 1457, 314], tip: [1488, 523],
     engines: [], direction: 1, color: "#b1e7f2" },
 };
-function createShipRenderAsset(source) {
+function createShipRenderAsset(source, eager = true) {
   const asset = { ...source, image: null, ready: false, cache: new Map() };
-  if (typeof Image === "function") {
-    asset.image = new Image(); asset.image.decoding = "async";
-    asset.image.onload = () => { asset.ready = asset.image.naturalWidth > 0; asset.cache.clear(); };
-    asset.image.onerror = () => { asset.ready = false; asset.cache.clear(); };
-    asset.image.src = source.src;
-  }
+  if (eager) loadShipRenderAsset(asset);
   return asset;
 }
+function loadShipRenderAsset(asset) {
+  if (!asset || asset.image || typeof Image !== "function") return;
+  asset.image = new Image();
+  asset.image.decoding = "async";
+  asset.image.onload = () => { asset.ready = asset.image.naturalWidth > 0; asset.cache.clear(); };
+  asset.image.onerror = () => { asset.ready = false; asset.cache.clear(); };
+  asset.image.src = asset.src;
+}
 const shipRenderAssets = Object.fromEntries(Object.entries(shipRenderSources).map(([kind, source]) =>
-  [kind, createShipRenderAsset(source)]));
+  [kind, createShipRenderAsset(source, kind === "crimson")]));
 const shipVisuals = { clock: 0, bank: 0 };
 const fighterAtlasImages = new Map();
 // Rim and canopy glints follow existing highlights on the original crimson texture.
@@ -213,6 +216,7 @@ function drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, foreground)
   const pierce = rank("pierce"), blast = rank("blast"), aegis = rank("aegis");
   if (!(pierce || blast || aegis)) return;
   const fairing = shipRenderAssets.fairing;
+  loadShipRenderAsset(fairing);
   const module = (part, x, y, width) => {
     if (!part.ready) return false;
     const height = width * part.crop[3] / part.crop[2];
@@ -248,6 +252,7 @@ function drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, foreground)
   ctx.restore();
 }
 function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0, asset = shipRenderAssets[kind]) {
+  loadShipRenderAsset(asset);
   if (!asset?.ready || !asset.image || !(ship.width > 0 && ship.height > 0)) return false;
   const playerShip = kind === "crimson";
   const clock = quiet ? 0 : time;
@@ -316,6 +321,7 @@ function drawEvolutionWingCannons(ctx, ship, level, quiet = false, time = 0, tin
   const muzzles = typeof getEvolutionWingMuzzles === "function" ? getEvolutionWingMuzzles(ship)
     : [-1, 1].map(side => ({ x: ship.x + ship.width * .20, y: ship.y + side * ship.height * .30, side }));
   const rail = shipRenderAssets.rail, length = ship.width * (.26 + rank * .028);
+  loadShipRenderAsset(rail);
   ctx.save();
   for (const muzzle of muzzles) {
     if (rail.ready && rail.image) {

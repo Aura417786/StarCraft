@@ -52,20 +52,26 @@ const gameAudio = (() => {
   const soundStage = { width: 1280, height: 720, listenerX: 128, listenerY: 360, bossX: 1000, bossY: 360 };
   let threat = 0;
   let bankLoading = false;
+  let bankRequest = null;
   let liveScore = null;
   let victoryActive = false;
   let victoryVoice = null;
   let victoryOffset = 0;
+  let victoryLoading = false;
   let requestedFaction = "";
   let factionLoading = "";
   let factionGeneration = 0;
+  let factionRequest = null;
   const scoreOffsets = { adventure: 0, boss: 0, bio: 0, mechanical: 0, void: 0 };
   const buffers = new Map();
   const authoredStems = {
     adventure: ["flight_harmony", "flight_pulse"],
     boss: ["boss_harmony", "boss_pressure", "boss_finale"],
   };
-  const factionScores = typeof starBreakerFactionAudio !== "undefined" ? starBreakerFactionAudio.factions : null;
+  const catalog = typeof starBreakerAudioCatalog !== "undefined" ? starBreakerAudioCatalog : null;
+  const factionScores = catalog && document.currentScript?.hasAttribute("data-faction-scores") ? catalog.factions : null;
+  const offlineAudio = window.location?.protocol === "file:";
+  const offlineBanks = new Map();
   const factions = ["bio", "bio", "mechanical", "void", "mechanical", "mechanical", "bio", "bio", "void", "void", "void"];
   const factionLayerNames = ["harmony", "pressure", "finale"];
   function scoreStemNames(theme) {
@@ -288,74 +294,127 @@ const gameAudio = (() => {
       }
     }
   }
-  async function decodeAudio(current, encoded, loop = false) {
+  function offlineBank(filename) {
+    if (!offlineBanks.has(filename)) {
+      offlineBanks.set(filename, new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = filename;
+        script.onload = () => { script.remove(); resolve(); };
+        script.onerror = () => { script.remove(); reject(new Error("Cannot load local audio bank")); };
+        document.head.append(script);
+      }));
+    }
+    return offlineBanks.get(filename);
+  }
+  async function audioBytes(name, faction, signal) {
+    if (!offlineAudio) {
+      const response = await fetch(`assets/audio/${name}.ogg`, { signal });
+      return response.ok ? response.arrayBuffer() : null;
+    }
+    let encoded;
+    if (faction || name === "victory") {
+      await offlineBank("audio-faction-bank.js");
+      encoded = name === "victory" ? starBreakerFactionAudio.victory[1]
+        : starBreakerFactionAudio.factions[faction].layers[name.slice(faction.length + 1)][1];
+    } else {
+      await offlineBank("audio-bank.js");
+      encoded = starBreakerAudioBank.stems[name]?.[1] ?? starBreakerAudioBank.effects[name];
+    }
+    if (disposed || signal?.aborted || !encoded) return null;
+    if (typeof Uint8Array.fromBase64 === "function") return Uint8Array.fromBase64(encoded).buffer;
+    const raw = atob(encoded);
+    const bytes = new Uint8Array(raw.length);
+    for (let index = 0; index < raw.length; index++) bytes[index] = raw.charCodeAt(index);
+    return bytes.buffer;
+  }
+  async function decodeAudio(current, name, { faction, signal, loop = false } = {}) {
     try {
-      const bytes = Uint8Array.from(atob(encoded), letter => letter.charCodeAt(0));
-      const buffer = await current.decodeAudioData(bytes.buffer);
+      const bytes = await audioBytes(name, faction, signal);
+      if (!bytes || disposed || signal?.aborted || audio !== current) return null;
+      const buffer = await current.decodeAudioData(bytes);
       if (loop) matchLoopSeam(buffer);
       return buffer;
     } catch {
       return null;
     }
   }
+  function releaseFactionScore() {
+    if (!requestedFaction) return;
+    factionGeneration++;
+    factionRequest?.abort();
+    factionRequest = null;
+    for (const name of scoreStemNames(requestedFaction)) buffers.delete(name);
+    requestedFaction = factionLoading = "";
+  }
   function requestFactionScore(theme) {
-    if (!audio || !factionScores?.[theme] || requestedFaction === theme || typeof atob !== "function") return;
+    if (!audio || muted || disposed || !factionScores?.[theme] || requestedFaction === theme) return;
+    // Retiring the cache does not cut off existing sources during their fade.
+    releaseFactionScore();
     requestedFaction = theme;
     const generation = ++factionGeneration;
     const current = audio;
     const names = scoreStemNames(theme);
-    if (names.every(name => buffers.has(name))) { factionLoading = ""; return; }
+    const request = new AbortController();
+    factionRequest = request;
     factionLoading = theme;
-    for (const key of buffers.keys()) {
-      // Keep the old live sources through the handoff, but release their
-      // decoded cache entries so only one full faction remains resident.
-      if (Object.keys(factionScores).some(faction => faction !== theme && key.startsWith(faction + "_"))) buffers.delete(key);
-    }
     async function prepare() {
-      for (const [index, layer] of factionLayerNames.entries()) {
-        if (buffers.has(names[index])) continue;
-        const buffer = await decodeAudio(current, factionScores[theme].layers[layer][1], true);
+      for (const name of names) {
+        const buffer = await decodeAudio(current, name, { faction: theme, signal: request.signal, loop: true });
         if (disposed || audio !== current || generation !== factionGeneration) return;
-        if (buffer) buffers.set(names[index], buffer);
+        if (buffer) buffers.set(name, buffer);
       }
-      if (disposed || generation !== factionGeneration) return;
+      factionRequest = null;
       factionLoading = "";
       reconcile();
     }
     prepare().catch(() => {
-      if (generation === factionGeneration) { factionLoading = ""; reconcile(); }
+      if (generation === factionGeneration) { factionRequest = null; factionLoading = ""; reconcile(); }
     });
   }
   function preloadBossScore(type) {
     if (Number.isInteger(type) && factions[type]) requestFactionScore(factions[type]);
+    if (type === factions.length - 1) requestVictory();
+  }
+  function requestVictory() {
+    if (!audio || muted || !factionScores || victoryLoading) return;
+    const current = audio;
+    victoryLoading = true;
+    decodeAudio(current, "victory").then(buffer => {
+      if (!buffer || disposed || audio !== current) return;
+      buffers.set("victory", buffer);
+      if (victoryActive) reconcile();
+    });
   }
   function loadBank(current) {
-    if (bankLoading || typeof starBreakerAudioBank === "undefined"
-      || typeof current.decodeAudioData !== "function" || typeof atob !== "function") return;
+    if (bankLoading || !catalog || typeof current.decodeAudioData !== "function") return;
     bankLoading = true;
-    async function decode(name, encoded) {
-      const buffer = await decodeAudio(current, encoded, name === "room" || Object.hasOwn(starBreakerAudioBank.stems, name));
+    const request = new AbortController();
+    bankRequest = request;
+    async function decode(name) {
+      const loop = name === "room" || Object.hasOwn(catalog.stems, name);
+      const buffer = await decodeAudio(current, name, { signal: request.signal, loop });
       if (buffer && !disposed && audio === current) buffers.set(name, buffer);
     }
     async function prepare() {
-      const { stems, effects } = starBreakerAudioBank;
-      await Promise.all([
-        ...authoredStems.adventure.map(name => decode(name, stems[name][1])),
-        decode("room", effects.room),
-      ]);
-      if (audio === current && !disposed) reconcile();
+      if (disposed) return;
+      await Promise.all([...authoredStems.adventure, "room"].map(decode));
+      if (audio !== current || disposed) return;
+      reconcile();
       const remaining = [
-        ...Object.entries(effects).filter(([name]) => name !== "room" && !name.startsWith("boss_")),
-        ...(factionScores ? [["victory", starBreakerFactionAudio.victory[1]]] : authoredStems.boss.map(name => [name, stems[name][1]])),
-        ...Object.entries(effects).filter(([name]) => name.startsWith("boss_")),
+        ...catalog.effects.filter(name => name !== "room"),
+        ...(factionScores ? [] : authoredStems.boss),
       ];
-      // Small batches keep decompression work off the foreground start button.
       for (let index = 0; index < remaining.length && !disposed; index += 4) {
-        await Promise.all(remaining.slice(index, index + 4).map(([name, bytes]) => decode(name, bytes)));
+        await Promise.all(remaining.slice(index, index + 4).map(decode));
       }
+      bankRequest = null;
       if (audio === current && !disposed) reconcile();
     }
-    prepare().catch(() => { /* No network dependency if the bank is unavailable. */ });
+    const begin = () => prepare().catch(() => { bankRequest = null; });
+    // Local file playback still needs an embedded bank. Read it during idle so
+    // the start button and initial movement can use the synthesized sounds.
+    if (offlineAudio && typeof window.requestIdleCallback === "function") window.requestIdleCallback(begin, { timeout: 800 });
+    else begin();
   }
   function updateScoreMix() {
     if (!liveScore) return;
@@ -393,7 +452,7 @@ const gameAudio = (() => {
   function startScore(theme) {
     const names = scoreStemNames(theme);
     const clips = names.map(name => buffers.get(name));
-    const intended = factionScores?.[theme]?.layers.harmony[0] ?? starBreakerAudioBank.stems[names[0]][0];
+    const intended = factionScores?.[theme]?.layers.harmony ?? catalog.stems[names[0]];
     const duration = Math.min(...clips.map(clip => clip.duration), intended);
     if (!(duration > 0)) return;
     const start = audio.currentTime + .024;
@@ -592,6 +651,7 @@ const gameAudio = (() => {
     if (victoryActive) {
       stopMusic(.25, false);
       if (!canPlay("music") || !visible) { stopVictory(); return; }
+      requestVictory();
       smoothGain(musicBus, .62, .26);
       playVictory();
       return;
@@ -601,6 +661,7 @@ const gameAudio = (() => {
       stopVoices();
       return;
     }
+    loadBank(audio);
     if (!factionScores && (warningActive || cinematicActive)) { stopMusic(); return; }
     const theme = cinematicActive && liveScore ? liveScore.theme
       : bossActive ? (factionScores ? currentFaction() : "boss") : "adventure";
@@ -667,8 +728,6 @@ const gameAudio = (() => {
         .then(() => {
           if (audio !== current || disposed) return false;
           reconcile();
-          loadBank(current);
-          if (active && factionScores) requestFactionScore(currentFaction());
           return current.state === "running";
         }).catch(() => false);
     } catch {
@@ -716,6 +775,7 @@ const gameAudio = (() => {
       overdriveMusic !== nextOverdrive || bossType !== nextType || bossPhase !== nextPhase || threat !== nextThreat
       || bossMusicTier !== nextTier || visible !== nextVisible;
     const wasActive = active;
+    const wasInBossSequence = bossActive || warningActive || cinematicActive;
     active = !!nextActive;
     paused = nextPaused;
     bossActive = !!nextBossActive;
@@ -732,6 +792,8 @@ const gameAudio = (() => {
     for (const key in soundStage) {
       if (Number.isFinite(context[key])) soundStage[key] = key === "width" || key === "height" ? Math.max(1, context[key]) : context[key];
     }
+    const inBossSequence = bossActive || warningActive || cinematicActive;
+    if (!inBossSequence && (wasInBossSequence || (!active && !paused && visible))) releaseFactionScore();
     if ((nextWarning || nextBossActive) && factionScores && Number.isInteger(nextType)) requestFactionScore(currentFaction());
     if (changed) reconcile();
     if (wasActive && canPlay() && (entering || transforming)) {
@@ -1089,6 +1151,8 @@ const gameAudio = (() => {
   function destroy() {
     if (disposed) return;
     disposed = true;
+    bankRequest?.abort();
+    releaseFactionScore();
     stopMusic();
     stopVictory(true);
     stopVoices();

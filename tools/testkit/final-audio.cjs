@@ -8,6 +8,7 @@ const { chromium } = require("playwright");
 
 const root = path.resolve(process.argv[2]);
 const output = process.argv[3] ? path.resolve(process.argv[3]) : null;
+const entry = process.argv[4] ?? pathToFileURL(path.join(root, "index.html")).href;
 function writeStereoWav(name, record) {
   if (!output) return;
   const pcm = Buffer.from(record.data, "base64");
@@ -25,8 +26,13 @@ async function run() {
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = [];
+  const audioRequests = [];
   page.setDefaultTimeout(16000);
   page.on("pageerror", error => errors.push(error.message));
+  page.on("request", request => {
+    const file = new URL(request.url()).pathname.split("/").at(-1);
+    if (/\.ogg$|^audio-(faction-)?bank\.js$/.test(file)) audioRequests.push(file);
+  });
   await page.addInitScript(() => {
     const proof = { sources: [], decoded: [], pending: null, meter: null, gains: [] };
     window.audioProof = proof;
@@ -126,7 +132,8 @@ async function run() {
     return stats;
   }
   try {
-    await page.goto(pathToFileURL(path.join(root, "index.html")).href);
+    await page.goto(entry);
+    assert.deepEqual(audioRequests, [], "The menu must not request any score or effect payload");
     const closeGuide = page.locator(".flight-guide-actions button").first();
     if (await closeGuide.isVisible()) await closeGuide.click();
     await page.locator("#start-button").click();
@@ -140,7 +147,8 @@ async function run() {
     assert.equal(flight[0].time, flight[1].time);
     assert.ok(Math.abs(flight[0].loopEnd - 33.103) < .003);
     assert.ok(flight.every(voice => voice.seam < .00001));
-    await waitFor(() => audioProof.decoded.some(([duration]) => Math.abs(duration - 15) < .01));
+    assert.ok(!audioRequests.some(file => /^(bio|mechanical|void)_|^victory\.ogg$|^audio-faction-bank\.js$/.test(file)),
+      "Cruise should not load a faction or victory score");
     for (const [name, type, duration] of [["bio", 0, 68.571], ["mechanical", 2, 61.935], ["void", 8, 73.846]]) {
       await page.evaluate(type => {
         spawnBoss(type);
@@ -171,7 +179,7 @@ async function run() {
       await page.waitForTimeout(720);
       const transition = await capture(name + "-continuous-transition", 21, { thresholds: true });
       const section = await page.evaluate(theme => {
-        const score = starBreakerFactionAudio.factions[theme];
+        const score = starBreakerAudioCatalog.factions[theme];
         return { bars: score.sectionBars, sequence: score.sequence, answerAt: score.sectionBars * 240 / score.bpm };
       }, name);
       assert.deepEqual(section.sequence, ["A", "B", "A'", "B'"]);
@@ -249,6 +257,14 @@ async function run() {
     const dense = await capture("dense-combat-mix", 2.4, { dense: true });
     assert.ok(dense.peak > .03 && dense.peak < .8913, JSON.stringify(dense));
     await page.waitForTimeout(850);
+    const retiredFaction = await page.evaluate(() => {
+      const match = ([duration]) => Math.abs(duration - 73.846) < .004;
+      gameAudio.sync(true, false);
+      return audioProof.decoded.filter(match).length;
+    });
+    await page.evaluate(() => gameAudio.sync(true, true, false, { bossType: 8, bossPhase: "recover" }));
+    await waitFor(count => audioProof.decoded.filter(([duration]) => Math.abs(duration - 73.846) < .004).length >= count + 3, retiredFaction);
+    report.factionDecodedAgainAfterFlight = true;
     await page.evaluate(() => { gameAudio.victorySequence(true); gameAudio.sync(false, false); });
     await waitFor(() => audioProof.sources.some(source => !source.loop && Math.abs(source.duration - 15) < .003));
     await page.waitForTimeout(260);
@@ -266,6 +282,8 @@ async function run() {
     assert.equal(await page.evaluate(() => gameAudio.volume), .44);
     assert.deepEqual(errors, []);
     report.errors = errors;
+    report.protocol = new URL(entry).protocol;
+    report.audioRequests = audioRequests;
     if (output) fs.writeFileSync(path.join(output, "audio-browser.json"), JSON.stringify(report, null, 2));
     console.log(JSON.stringify({ factionDurations: Object.fromEntries(Object.entries(report.factions).map(([name, value]) => [name, value.duration])),
       left: left.rmsL / left.rmsR, right: right.rmsR / right.rmsL, farNear: far.rmsL / near.rmsL,

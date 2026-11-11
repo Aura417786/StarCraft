@@ -139,7 +139,6 @@ async function run() {
     assert.equal(flight[0].time, flight[1].time);
     assert.ok(Math.abs(flight[0].loopEnd - 33.103) < .003);
     assert.ok(flight.every(voice => voice.seam < .00001));
-    await waitFor(() => audioProof.decoded.some(([duration]) => Math.abs(duration - 15) < .01));
     for (const [name, type, duration] of [["bio", 0, 68.571], ["mechanical", 2, 61.935], ["void", 8, 73.846]]) {
       await page.evaluate(type => {
         spawnBoss(type);

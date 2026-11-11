@@ -1,5 +1,5 @@
 Azure / Auric starter hulls
-Codex built-in ImageGen. Style and camera reference: assets/ships/crimson-sleek.png.
+Codex built-in ImageGen. Style and camera reference: assets/ships/crimson-sleek.webp.
 The generated alpha sprites were resampled to 960 × 640 and encoded as WebP.
 
 Shared prompt

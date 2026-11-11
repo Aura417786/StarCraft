@@ -317,6 +317,7 @@ function updateBossEncounter(seconds) {
       if (prefetchedBossType !== null && typeof preloadStarBreakerModel === "function") {
         preloadStarBreakerModel(prefetchedBossType);
       }
+      if (prefetchedBossType !== null && typeof preloadAlienBossArt === "function") preloadAlienBossArt(prefetchedBossType);
       if (prefetchedBossType !== null) gameAudio.preloadBossScore?.(prefetchedBossType);
       if (prefetchedBossType === 0 && typeof preloadHadalSurface === "function") preloadHadalSurface();
     }

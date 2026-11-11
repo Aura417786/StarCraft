@@ -27,7 +27,7 @@ function sceneryLayer(sector, menu = false) {
   if (sceneryCache.has(key)) return sceneryCache.get(key);
   if (typeof Image === "undefined") return null;
   const image = new Image();
-  const asset = menu ? "assets/scenery/orbit-silent.png" : battlefieldSectors[index].asset;
+  const asset = menu ? "assets/scenery/orbit-silent.webp" : battlefieldSectors[index].asset;
   const record = { image, ready: false, failed: false, width: 0, height: 0, asset };
   sceneryCache.set(key, record);
   image.decoding = "async";
@@ -51,9 +51,10 @@ function sceneryJourney(clock = battlefieldState.clock) {
   const raw = sceneryClamp((phase - (duration - blend)) / blend, 0, 1);
   return { leg, current, next, phase, currentAge: phase + blend, nextAge: Math.max(0, phase - (duration - blend)), blend: raw * raw * (3 - 2 * raw) };
 }
-function resetBattlefield() {
+function resetBattlefield(inBattle = false) {
   Object.assign(battlefieldState, { sector: 0, previous: 0, completed: 0, clock: 0, ambientClock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 });
-  sceneryLayer(0); sceneryLayer(1);
+  for (const key of sceneryCache.keys()) if (key !== "menu" && (!inBattle || key !== 0)) sceneryCache.delete(key);
+  if (inBattle) sceneryLayer(0);
 }
 function resizeScenery() {
   // Full-resolution images remain usable at every viewport size; no reload/texture stall.
@@ -72,8 +73,12 @@ function scenerySyncJourney() {
   battlefieldState.previous = journey.current;
   battlefieldState.sector = journey.blend >= 0.5 ? journey.next : journey.current;
   battlefieldState.transition = journey.blend > 0 ? sceneryRules.interval - journey.phase : 0;
-  sceneryLayer(journey.current); sceneryLayer(journey.next);
-  if (battlefieldSectors[journey.next].id === "citadel") loadJourneyCitadelImage();
+  if (state === "menu") return;
+  sceneryLayer(journey.current);
+  if (journey.phase >= sceneryRules.interval - sceneryRules.blend - 12) {
+    sceneryLayer(journey.next);
+    if (battlefieldSectors[journey.next].id === "citadel") loadJourneyCitadelImage();
+  }
 }
 function updateBattlefield(seconds, cinematic = false) {
   if (state !== "menu" && !cinematic && (typeof isBattleActive !== "function" || !isBattleActive())) return;
