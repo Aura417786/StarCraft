@@ -8,6 +8,8 @@ const vm = require("node:vm");
 const { chromium } = require("playwright");
 const root = path.resolve(process.argv[2] || ".");
 const output = path.resolve(process.argv[3] || path.join(root, ".qa-hit-feedback"));
+const audioSource = path.resolve(process.env.HIT_AUDIO_SOURCE || path.join(root, "audio.js"));
+const sampleBank = process.env.HIT_AUDIO_SAMPLES === "1";
 fs.mkdirSync(output, { recursive: true });
 
 function writeWav(name, record) {
@@ -17,6 +19,29 @@ function writeWav(name, record) {
   header.writeUInt32LE(record.rate, 24); header.writeUInt32LE(record.rate * 4, 28);
   header.writeUInt16LE(4, 32); header.writeUInt16LE(16, 34); header.write("data", 36); header.writeUInt32LE(pcm.length, 40);
   fs.writeFileSync(path.join(output, name + ".wav"), Buffer.concat([header, pcm]));
+}
+
+function spectrum(record) {
+  const pcm = Buffer.from(record.pcm, "base64"), frames = pcm.length / 4;
+  let start = 0;
+  while (start < frames && Math.abs(pcm.readInt16LE(start * 4)) < 20) start++;
+  const n = 2048, data = Array.from({ length: n }, (_, index) => {
+    const at = start + index;
+    return at >= frames ? 0 : (pcm.readInt16LE(at * 4) + pcm.readInt16LE(at * 4 + 2)) / 65534
+      * (.5 - .5 * Math.cos(2 * Math.PI * index / (n - 1)));
+  });
+  let power = 0, low = 0, moment = 0;
+  for (let bin = 1; bin <= 256; bin++) {
+    let real = 0, imaginary = 0;
+    for (let index = 0; index < n; index++) {
+      const angle = 2 * Math.PI * bin * index / n;
+      real += data[index] * Math.cos(angle); imaginary -= data[index] * Math.sin(angle);
+    }
+    const energy = real * real + imaginary * imaginary, frequency = bin * record.rate / n;
+    power += energy; moment += frequency * energy;
+    if (frequency < 500) low += energy;
+  }
+  return { onsetCentroidHz: moment / Math.max(1e-12, power), onsetBelow500Fraction: low / Math.max(1e-12, power) };
 }
 
 function visualChecks() {
@@ -73,14 +98,24 @@ async function main() {
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
-    await page.route("**/*", route => route.request().url() === "https://hit-fixture.invalid/"
-      ? route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Hit feedback audio fixture</title>" }) : route.abort());
+    await page.route("**/*", route => {
+      const url = new URL(route.request().url());
+      if (url.href === "https://hit-fixture.invalid/") return route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Hit feedback audio fixture</title>" });
+      if (sampleBank && /^\/assets\/audio\/[a-z0-9_]+\.ogg$/.test(url.pathname)) {
+        const file = path.join(root, url.pathname.slice(1));
+        if (fs.existsSync(file)) return route.fulfill({ contentType: "audio/ogg", path: file });
+      }
+      return route.abort();
+    });
     await page.goto("https://hit-fixture.invalid/");
     await page.evaluate(() => {
-      const proof = window.hitProof = { live: 0, peakVoices: 0, hitLive: 0, peakHitVoices: 0, accepted: 0, denied: 0, inHit: false, gains: [] };
-      // Stop the music scheduler in this isolated fixture. The production engine,
-      // limiter, distance mix, mute and voice lifecycle are otherwise unmodified.
-      window.setInterval = () => 0;
+      let seed = 71230;
+      Math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+      const proof = window.hitProof = { live: 0, peakVoices: 0, hitLive: 0, peakHitVoices: 0, accepted: 0, denied: 0, inHit: false, gains: [], decoded: 0, bufferSources: 0, oscillators: 0 };
+      const decode = AudioContext.prototype.decodeAudioData;
+      AudioContext.prototype.decodeAudioData = function () {
+        return decode.apply(this, arguments).then(buffer => { proof.decoded++; return buffer; });
+      };
       const realGain = AudioContext.prototype.createGain;
       AudioContext.prototype.createGain = function () {
         const gain = realGain.call(this); proof.gains.push(gain); return gain;
@@ -91,6 +126,7 @@ async function main() {
           const node = original.call(this), impact = proof.inHit;
           const start = node.start;
           node.start = function () {
+            if (method === "createBufferSource") proof.bufferSources++; else proof.oscillators++;
             proof.live++; if (impact) proof.hitLive++;
             proof.peakVoices = Math.max(proof.peakVoices, proof.live);
             proof.peakHitVoices = Math.max(proof.peakHitVoices, proof.hitLive);
@@ -130,22 +166,44 @@ async function main() {
         proof.job = {resolve,frames,position:0,peak:0,power:0,pcm:new Int16Array(frames*2)};
       });
     });
-    await page.addScriptTag({ content: fs.readFileSync(path.join(root, "audio.js"), "utf8") });
+    if (sampleBank) await page.addScriptTag({ content: 'const starBreakerAudioCatalog={stems:{},effects:["shot_red","shot_blue","shot_gold","collapse"]};' });
+    await page.addScriptTag({ content: fs.readFileSync(audioSource, "utf8") });
     await page.evaluate(async () => {
-      await gameAudio.unlock(); gameAudio.sync(true,false);
-      const music = hitProof.gains[2].gain; music.cancelScheduledValues(0); music.value=0;
+      // Use the engine's real warning state: score remains stopped through
+      // async context/decode callbacks, while SFX stay live. Do not merely set
+      // a gain to zero; reconcile() would later overwrite it.
+      gameAudio.sync(true,false,false,{warning:true}); await gameAudio.unlock();
       const hit = gameAudio.hit;
       gameAudio.hit = (...args) => { hitProof.inHit=true; try {
         const played=hit(...args); if(played)hitProof.accepted++;else hitProof.denied++; return played;
       } finally {hitProof.inHit=false;} };
     });
+    if (sampleBank) await page.waitForFunction(() => hitProof.decoded >= 10);
     await page.waitForTimeout(400);
+    const silentFloor = await page.evaluate(() => hitProof.capture(.25));
+    assert.ok(silentFloor.peak < .000001, "Music or stale SFX leaked into the isolated recording");
     const captures = {};
-    for (const [name,source] of [["normal-shell-hit",""],["energy-cannon-hit","ultimate"],["ember-detonation-hit","evolution-ember"]]) {
-      const record = await page.evaluate(async source => {
-        const result=hitProof.capture(.45); gameAudio.hit(true,source,900,360); return await result;
-      },source);
-      writeWav(name,record); const {pcm,...metrics}=record; captures[name]=metrics;
+    const soundCases = [
+      ["muzzle-normal", "shoot", [false, 1, "red"], .45],
+      ["muzzle-overdrive", "shoot", [true, 1, "red"], .45],
+      ["muzzle-blue", "shoot", [false, 1, "blue"], .45],
+      ["muzzle-gold", "shoot", [false, 1, "yellow"], .45],
+      ["enemy-shell-hit", "hit", [false, "", 900, 360], .45],
+      ["normal-shell-hit", "hit", [true, "", 900, 360], .45],
+      ["energy-cannon-hit", "hit", [true, "ultimate", 900, 360], .45],
+      ["ember-detonation-hit", "hit", [true, "evolution-ember", 900, 360], .45],
+      ["boss-final-collapse", "explode", [true, 900, 360], 1.6]
+    ];
+    for (const [name,method,args,duration] of soundCases) {
+      const record = await page.evaluate(async ({method,args,duration}) => {
+        const result=hitProof.capture(duration), before = { buffer:hitProof.bufferSources, oscillator:hitProof.oscillators };
+        // Arm a complete recorder block before a 20-40ms muzzle transient.
+        // Otherwise an immediate SFX can begin before the first input callback.
+        await new Promise(resolve => setTimeout(resolve, 60));
+        gameAudio[method](...args);
+        return {...await result, sources:{buffer:hitProof.bufferSources-before.buffer,oscillator:hitProof.oscillators-before.oscillator}};
+      },{method,args,duration});
+      writeWav(name,record); const {pcm,...metrics}=record; captures[name]={...metrics,...spectrum(record)};
       await page.waitForTimeout(180);
     }
     const dense = await page.evaluate(async () => {
@@ -166,15 +224,63 @@ async function main() {
     assert.ok(captures["normal-shell-hit"].rms>.0002,JSON.stringify(captures));
     assert.ok(captures["energy-cannon-hit"].rms>captures["normal-shell-hit"].rms*1.3,JSON.stringify(captures));
     assert.ok(captures["ember-detonation-hit"].rms>.001);
+    assert.ok(captures["enemy-shell-hit"].rms>.0002);
+    assert.ok(captures["muzzle-normal"].rms>0&&captures["muzzle-overdrive"].rms>0);
+    for(const name of ["muzzle-normal","muzzle-overdrive","muzzle-blue","muzzle-gold"]) {
+      assert.equal(captures[name].sources.buffer, sampleBank ? 1 : 0, name + " used the wrong audio path");
+      assert.equal(captures[name].sources.oscillator > 0, !sampleBank, name + " used the wrong audio path");
+    }
     assert.ok(dense.peak<.85&&dense.rms>.001,JSON.stringify(denseMetrics));
     assert.ok(counters.voices<=48&&counters.hitVoices<=12,JSON.stringify(counters));
     assert.ok(counters.denied>1000&&counters.accepted<40,JSON.stringify(counters));
     assert.ok(muted.peak<.001,JSON.stringify({peak:muted.peak}));
     assert.deepEqual(errors,[]);
-    const report={visual,audio:captures,counters,mutedPeak:muted.peak,errors,
+    const routing = await productionAudioRouting(browser);
+    const report={audioSource,sampleBank,silentFloorPeak:silentFloor.peak,visual,routing,audio:captures,counters,mutedPeak:muted.peak,errors,
       scope:"Measured Web Audio output and bounded visual state; listening quality and full-game play require separate review."};
     fs.writeFileSync(path.join(output,"hit-feedback.json"),JSON.stringify(report,null,2));
     console.log(JSON.stringify(report,null,2));
   } finally { await browser.close(); }
+}
+
+async function productionAudioRouting(browser) {
+  const errors = [], { open } = require("./boss-retry.cjs");
+  const page = await open(browser, errors);
+  try {
+    const result = await page.evaluate(() => {
+      const calls = [];
+      gameAudio.hit = (boss, source) => { calls.push({ method: "hit", boss, source }); return true; };
+      gameAudio.explode = boss => calls.push({ method: "explode", boss });
+      showScreen("battle", { mode: "campaign", seed: 814 });
+      spawnEnemy("scout");
+      const enemy = enemies[0]; delete enemy.healthLog; enemy.hp = enemy.maxHp = 10;
+      applyEnemyHit(enemy, { damage: 1, source: "primary" });
+      const enemyAlive = calls.splice(0);
+      combatEffects.clock += .3;
+      applyEnemyHit(enemy, { damage: 20, source: "primary" }); defeatEnemy(enemies.indexOf(enemy));
+      const enemyFinal = calls.splice(0);
+      spawnBoss(0); resetBossPresentation(); boss.phase = "attack"; boss.enraged = true; boss.hp = .8;
+      applyBossHit({ source: "ultimate", damageLog: boss.healthLog - 5 });
+      const bossAlive = calls.splice(0);
+      combatEffects.clock += .3; boss.hp = .000001;
+      applyBossHit({ source: "ultimate", damageLog: boss.healthLog + 2 });
+      const bossBodyTransition = calls.splice(0);
+      resetBossPresentation(); boss.finale.age = boss.finale.transform + 1;
+      boss.hp = .000001; combatEffects.clock += .3;
+      applyBossHit({ source: "ultimate", damageLog: boss.healthLog + 2 });
+      const bossFinalImpact = calls.splice(0);
+      advanceBossDeathPresentation(bossPresentation.duration * .4);
+      const bossFinalCollapse = calls.splice(0);
+      return { enemyAlive, enemyFinal, bossAlive, bossBodyTransition, bossFinalImpact, bossFinalCollapse };
+    });
+    assert.deepEqual(result.enemyAlive, [{ method:"hit", boss:false, source:"primary" }]);
+    assert.deepEqual(result.enemyFinal, [{ method:"explode", boss:false }]);
+    assert.deepEqual(result.bossAlive, [{ method:"hit", boss:true, source:"ultimate" }]);
+    assert.deepEqual(result.bossBodyTransition, [{ method:"hit", boss:true, source:"ultimate" }]);
+    assert.deepEqual(result.bossFinalImpact, []);
+    assert.deepEqual(result.bossFinalCollapse, [{ method:"explode", boss:true }]);
+    assert.deepEqual(errors, []);
+    return { ...result, errors };
+  } finally { await page.close(); }
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

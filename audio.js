@@ -813,25 +813,28 @@ const gameAudio = (() => {
     if (time - lastShotTime < 0.043) return;
     lastShotTime = time;
     const weight = Math.min(4, Math.max(0, tier - 1));
+    // Lower only the repeatable muzzle layer. Overdrive activation, hazards,
+    // shields and special-weapon cues retain their own mix and timing.
+    const shotLevel = overdrive ? .68 : .66;
     const cannon = fighter === "yellow" ? "gold" : fighter === "blue" ? "blue" : "red";
-    if (sample("shot_" + cannon, { level: overdrive ? .25 : .19,
+    if (sample("shot_" + cannon, { level: (overdrive ? .25 : .19) * shotLevel,
       rate: 1.05 - weight * .048 - (overdrive ? .11 : 0) + .065 * Math.random() })) return;
     if (overdrive) {
       // 保留清晰的短射击节奏，以较低的主音和低频脉冲表现引擎过载。
       note({ time, duration: 0.065, frequency: 920, endFrequency: 320,
-        type: "triangle", volume: 0.085, cutoff: 2300 });
+        type: "triangle", volume: 0.085 * shotLevel, cutoff: 2300 });
       note({ time, duration: 0.027, frequency: 1300, endFrequency: 650,
-        type: "square", volume: 0.013, cutoff: 2100 });
+        type: "square", volume: 0.013 * shotLevel, cutoff: 2100 });
       note({ time, duration: 0.065, frequency: 110, endFrequency: 65,
-        type: "sine", volume: 0.07, cutoff: 360 });
+        type: "sine", volume: 0.07 * shotLevel, cutoff: 360 });
       return;
     }
     note({ time, duration: 0.043 + weight * .005, frequency: 1400 / (1 + weight * .12), endFrequency: 510 / (1 + weight * .1),
-      type: "triangle", volume: 0.082, cutoff: 3300 });
+      type: "triangle", volume: 0.082 * shotLevel, cutoff: 3300 });
     note({ time, duration: 0.023, frequency: 2100, endFrequency: 1050,
-      type: "square", volume: 0.016, cutoff: 2800 });
+      type: "square", volume: 0.016 * shotLevel, cutoff: 2800 });
     if (weight) note({ time, duration: .055, frequency: 145 - weight * 12, endFrequency: 75,
-      type: "sine", volume: .025 + weight * .006, cutoff: 400 });
+      type: "sine", volume: (.025 + weight * .006) * shotLevel, cutoff: 400 });
   }
   function overdrive() {
     if (!canPlay()) return;
@@ -883,23 +886,26 @@ const gameAudio = (() => {
     if (heavy) lastHeavyImpactTime = time;
     lastImpactTime = time;
     const position = soundPosition(x, y);
-    if (isBoss) position.attenuation = Math.max(.48, position.attenuation);
+    position.attenuation = Math.max(isBoss ? .60 : .44, position.attenuation);
     const common = { bus: "impact", time, ...position };
-    const weight = heavy ? 1 : .52;
-    // Crack, body and burn occupy separate frequency bands. They remain audible
-    // when the optional sample bank is unavailable, with no asset download.
-    note({ ...common, noise: true, duration: heavy ? .056 : .033, volume: .16 * weight,
-      filterType: "highpass", cutoff: isBoss ? 1850 : 2850, endCutoff: 980,
+    const weight = heavy ? 1 : .62;
+    // Fighter hits crack quickly like a small explosive shell; a living Boss
+    // answers with a lower, damped body thump. Final deaths use explode(), not
+    // an extra copy of this impact, so the collapse retains its own silhouette.
+    note({ ...common, noise: true, duration: heavy ? .060 : isBoss ? .047 : .036,
+      volume: (isBoss ? .13 : .20) * weight, filterType: "bandpass",
+      cutoff: isBoss ? 1050 : 2650, endCutoff: isBoss ? 300 : 780,
       resonance: .55, attack: .001 });
-    note({ ...common, time: time + .004, type: "sine", duration: heavy ? .24 : .13,
-      frequency: isBoss ? (heavy ? 116 : 162) : 215, endFrequency: isBoss ? 44 : 72,
-      volume: (isBoss ? .41 : .27) * weight, cutoff: 560, endCutoff: 150, attack: .003 });
-    note({ ...common, time: time + .012, noise: true, duration: heavy ? .21 : .084,
-      filterType: "bandpass", cutoff: heavy ? 2250 : 1650, endCutoff: 390,
-      volume: .13 * weight, resonance: .62, attack: .012 });
+    note({ ...common, time: time + .004, type: "sine", duration: isBoss ? (heavy ? .29 : .18) : (heavy ? .19 : .105),
+      frequency: isBoss ? (heavy ? 94 : 132) : 195, endFrequency: isBoss ? (heavy ? 36 : 48) : 78,
+      volume: (isBoss ? .52 : .34) * weight, cutoff: isBoss ? 430 : 600, endCutoff: 140, attack: .003 });
+    note({ ...common, time: time + .011, noise: true, duration: isBoss ? (heavy ? .22 : .115) : (heavy ? .15 : .090),
+      filterType: isBoss ? "bandpass" : "lowpass", cutoff: isBoss ? (heavy ? 1200 : 720) : 3700,
+      endCutoff: isBoss ? 200 : 570, volume: (isBoss ? .16 : .19) * weight, resonance: .62, attack: .005 });
     if (heavy) {
       note({ ...common, time: time + .008, type: "triangle", duration: .18,
-        frequency: 290, endFrequency: 81, volume: .075, cutoff: 850, endCutoff: 190, attack: .004 });
+        frequency: isBoss ? 205 : 290, endFrequency: isBoss ? 58 : 81,
+        volume: isBoss ? .09 : .075, cutoff: isBoss ? 620 : 850, endCutoff: 190, attack: .004 });
       duckMusic(.79, .16);
     }
     return true;

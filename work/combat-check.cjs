@@ -2342,30 +2342,34 @@ check('perfect guard expires at one quarter second while ordinary shield still p
     execute(`updateShield(${elapsed});${contactShell()}updateEnemyProjectileDamage();`);
     assert.equal(protection().perfectUsed,perfect); assert.equal(parrySoundCount()-sounds,Number(perfect));
     assert.equal(health().lives,3); near(protection().remaining,2-elapsed);
-    near(protection().energy,elapsed+(perfect?6.25:0));
+    assert.equal(protection().charges,Number(perfect)); near(protection().energy,elapsed);
   }
 });
 check('many ordinary and Boss shells yield only one perfect guard and refund per shield activation', () => {
   activateParry(); const sounds=parrySoundCount();
   execute(contactShell().repeat(6)+bossProjectile().repeat(6)+'updateEnemyProjectileDamage();updateBossDamage();');
-  assert.equal(protection().perfectUsed,true); near(protection().energy,6.25);
+  assert.equal(protection().perfectUsed,true); assert.equal(protection().charges,1); near(protection().energy,0);
   assert.equal(parrySoundCount()-sounds,1); assert.equal(execute('enemyProjectiles.length+bossProjectiles.length'),0);
-  execute(contactShell()+'updateEnemyProjectileDamage();'); near(protection().energy,6.25);
-  execute('updateShield(2);shield.charges=1;requestShield();'+contactShell()+'updateEnemyProjectileDamage();');
+  execute(contactShell()+'updateEnemyProjectileDamage();'); assert.equal(protection().charges,1); near(protection().energy,0);
+  assert.equal(execute('requestShield()'),false); assert.equal(protection().remaining,2);
+  execute('updateShield(2);requestShield();'+contactShell()+'updateEnemyProjectileDamage();');
   assert.equal(parrySoundCount()-sounds,2);
+  assert.equal(protection().charges,1);
 });
-check('perfect guard refunds a quarter of recharge on every current route and cannot hide a third charge', () => {
+check('perfect guard refunds one use on every route and preserves recharge progress until the shield is full', () => {
   for(const route of ['', 'ember', 'frost', 'rewind']) {
-    activateParry(`evolution.route="${route}";evolution.level=${route?4:0};shield.energy=0;`);
-    const period=execute('evolutionShieldChargeTime()');
-    execute(contactShell()+'updateEnemyProjectileDamage();'); near(protection().energy,period*.25);
     activateParry(`evolution.route="${route}";evolution.level=${route?4:0};shield.energy=evolutionShieldChargeTime()*.9;`);
+    const period=execute('evolutionShieldChargeTime()');
     execute(contactShell()+'updateEnemyProjectileDamage();');
-    assert.equal(protection().charges,1); near(protection().energy,period*.15);
-    isolatedBattle(`bossHitGrace=0;evolution.route="${route}";evolution.level=${route?4:0};shield.charges=2;shield.energy=evolutionShieldChargeTime()*.9;requestShield();`);
+    assert.equal(protection().charges,1); near(protection().energy,period*.9);
+    isolatedBattle(`bossHitGrace=0;evolution.route="${route}";evolution.level=${route?4:0};shield.charges=2;requestShield();updateShield(.1);`);
     execute(contactShell()+'updateEnemyProjectileDamage();');
     assert.equal(protection().charges,2); near(protection().energy,0);
   }
+  activateParry('shield.energy=evolutionShieldChargeTime()-.1;');
+  execute('updateShield(.2);'); assert.equal(protection().charges,1);
+  execute(contactShell()+'updateEnemyProjectileDamage();');
+  assert.equal(protection().charges,2); near(protection().energy,0);
 });
 check('ordinary damage and existing hurt grace cannot award a perfect guard without an eligible shield', () => {
   isolatedBattle('bossHitGrace=0;'); const sounds=parrySoundCount();
@@ -2403,7 +2407,7 @@ check('shield opening only consumes a shell presently at the shield ellipse', ()
     isolatedBattle(`bossHitGrace=0;shield.charges=1;enemyProjectiles.push({x:player.x+player.width*${contact?.5:.85},previousX:player.x,y:player.y,previousY:player.y,vx:0,vy:0,radius:6,age:0});`);
     const sounds=parrySoundCount(); execute('requestShield();');
     assert.equal(protection().perfectUsed,contact); assert.equal(execute('enemyProjectiles.length'),Number(!contact));
-    near(protection().energy,contact?execute('evolutionShieldChargeTime()')*.25:0);
+    assert.equal(protection().charges,Number(contact)); near(protection().energy,0);
     assert.equal(parrySoundCount()-sounds,Number(contact));
   }
 });
@@ -2433,6 +2437,7 @@ check('lethal perfect counters safely finish a Boss after collecting contact bul
   readyBoss(0,'beginBossFinale(boss);boss.finale.age=boss.finale.transform+bossRules.finaleMinimum;bossHitGrace=0;weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
   execute(bossProjectile().repeat(8)+'updateBossDamage();updateBossDamage();');
   assert.equal(execute('boss'),null); assert.equal(execute('bossDefeated'),1); assert.equal(scene().score,2000);
+  assert.equal(protection().charges,1);
   assert.equal(execute('bossProjectiles.length'),0); assert.equal(execute('isBossDeathPlaying()'),true); near(ult().energy,0);
 });
 check('perfect window and all shield feedback timers freeze on hidden tabs, window blur and control focus', () => {

@@ -490,7 +490,11 @@ function recordCombatImpact(target, bullet, bossHit = false, category) {
   const next = kind === "hit" ? "fxNextImpact" : "fxNextSpecialImpact";
   if ((target[next] ?? -1) > combatEffects.clock) return;
   target[next] = combatEffects.clock + (kind === "hit" ? .07 : .19);
-  gameAudio.hit?.(bossHit, bullet.source, target.x, target.y);
+  // Damage is already applied when this hook runs. Keep the visual contact on
+  // a fatal blow, but leave its sound to the enemy explosion / final collapse.
+  // A Boss body reaching zero still has its final form, so it gets a body hit.
+  const finalKill = Number.isFinite(target.hp) && target.hp <= 1e-12 && (!bossHit || !!target.finale);
+  if (!finalKill) gameAudio.hit?.(bossHit, bullet.source, target.x, target.y);
   recordCombatFeedback(kind, target, bullet);
   recordSurfaceContact(target, bullet, bossHit, heavy);
 }

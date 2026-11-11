@@ -19,6 +19,8 @@ async function main() {
     await page.locator("#start-button").click();
     await page.waitForFunction(() => flightTutorial?.stage === 1 && flightTutorial.cue);
     const original = await page.evaluate(() => ({ lives: player.lives, seed: sortieStats.seed, profile: JSON.stringify(sortieProfile.data) }));
+    const shieldRefund = { zh: { instructions: await page.locator("#flight-training-copy").textContent() } };
+    assert.match(shieldRefund.zh.instructions, /完美格挡会返还本次护盾/);
     await page.screenshot({ path: path.join(evidence, "training-shield.png") });
     // Deliberately accept the first shot. The actual collision offers corrective feedback without recording damage.
     await page.waitForFunction(() => flightTutorial?.hint === "guardLate");
@@ -30,8 +32,20 @@ async function main() {
       return time <= .17 && time > .06;
     });
     await page.keyboard.press("v");
+    await page.waitForFunction(() => shield.perfectUsed);
+    shieldRefund.zh.feedback = await page.evaluate(() => ({ charges: shield.charges, energy: shield.energy,
+      remaining: shield.remaining, count: shieldCount.textContent, label: shieldLabel.textContent,
+      title: shieldPanel.title, status: statusMessage.textContent }));
+    assert.equal(shieldRefund.zh.feedback.charges, 1, "The real V-key parry must refund the one training shield");
+    assert.equal(shieldRefund.zh.feedback.count, "1 / 2");
+    assert.match(shieldRefund.zh.feedback.label, /已返还护盾/);
+    assert.match(shieldRefund.zh.feedback.status, /返还 1 次护盾/);
+    assert.match(shieldRefund.zh.feedback.title, /返还本次护盾/);
+    assert.ok(shieldRefund.zh.feedback.remaining > 0 && shieldRefund.zh.feedback.remaining <= 2);
+    await page.screenshot({ path: path.join(evidence, "training-refund-zh.png") });
     await page.waitForFunction(() => flightTutorial?.stage === 2);
-    const caught = await page.evaluate(() => shield.perfectUsed && !sortieStats.hitsTaken && ultimate.charges === 1);
+    const caught = await page.evaluate(() => shield.perfectUsed && shield.charges === 1
+      && !sortieStats.hitsTaken && ultimate.charges === 1);
     await page.screenshot({ path: path.join(evidence, "training-special.png") });
     await page.keyboard.press("Space");
     await page.waitForFunction(() => flightTutorial?.stage === 3 && evolution.pending);
@@ -60,7 +74,30 @@ async function main() {
     await page.setViewportSize({ width: 640, height: 360 });
     await page.evaluate(() => { setGameLanguage("en"); startBattleWithSound({ flightTraining: "replay" }); });
     await page.waitForFunction(() => flightTutorial?.cue);
+    shieldRefund.en = { instructions: await page.locator("#flight-training-copy").textContent() };
+    assert.match(shieldRefund.en.instructions, /A Perfect Guard refunds this shield use/);
     await page.screenshot({ path: path.join(evidence, "training-compact-en.png") });
+    await page.waitForFunction(() => {
+      const shot = flightTutorial?.projectile;
+      if (!shot) return false;
+      const time = (shot.x - player.x - player.width * .60 - shot.radius) / -shot.vx;
+      return time <= .17 && time > .06;
+    });
+    await page.keyboard.press("v");
+    await page.waitForFunction(() => shield.perfectUsed);
+    shieldRefund.en.feedback = await page.evaluate(() => ({ charges: shield.charges, energy: shield.energy,
+      remaining: shield.remaining, count: shieldCount.textContent, label: shieldLabel.textContent,
+      title: shieldPanel.title, status: statusMessage.textContent }));
+    assert.equal(shieldRefund.en.feedback.charges, 1, "The English replay must refund the actual V-key shield use too");
+    assert.equal(shieldRefund.en.feedback.count, "1 / 2");
+    assert.match(shieldRefund.en.feedback.label, /Shield refunded/);
+    assert.match(shieldRefund.en.feedback.status, /One shield use refunded/);
+    assert.match(shieldRefund.en.feedback.title, /refund this shield use/);
+    assert.doesNotMatch(Object.values(shieldRefund.en.feedback).join(" "), /[\u3400-\u9fff]/);
+    await page.screenshot({ path: path.join(evidence, "training-refund-en.png") });
+    await page.waitForFunction(() => flightTutorial?.stage === 2);
+    shieldRefund.en.retainedInNextStep = await page.evaluate(() => shield.charges === 1);
+    assert.equal(shieldRefund.en.retainedInNextStep, true);
     await page.locator("#flight-training-skip").focus();
     await page.keyboard.press("Enter");
     const keyboardSkip = await page.evaluate(() => state === "menu" && !flightTutorial);
@@ -80,7 +117,7 @@ async function main() {
       const result = completeSortie({ abandoned: true });
       return { isolation, assisted: result.assisted, flags: result.assists, abyssWarning: sortieWarningBonus() };
     });
-    const result = { noDamage, caught, specialHit, completed, elapsedSeconds, noRepeat, replaySkip, keyboardSkip, difficultyRows, ...modes };
+    const result = { noDamage, caught, shieldRefund, specialHit, completed, elapsedSeconds, noRepeat, replaySkip, keyboardSkip, difficultyRows, ...modes };
     for (const key of ["noDamage", "caught", "specialHit", "completed", "noRepeat", "replaySkip", "keyboardSkip", "assisted"]) assert.equal(result[key], true, key);
     assert.ok(elapsedSeconds < 180);
     assert.equal(difficultyRows.length, 3);

@@ -1,7 +1,7 @@
 "use strict";
 
 const shieldRules = { maxCharges: 2, chargeTime: 25, duration: 2, perfectWindow: 0.25,
-  refundFraction: 0.25, counterSeconds: 0.65, bossDamageCap: 0.03, slowDuration: 0.16, slowScale: 0.4 };
+  counterSeconds: 0.65, bossDamageCap: 0.03, slowDuration: 0.16, slowScale: 0.4 };
 // energy 以有效战斗秒数计量；储满后停止，不能暗中囤积第三次。
 const shield = { charges: 0, energy: 0, remaining: 0, perfectRemaining: 0, perfectUsed: false,
   duration: shieldRules.duration, flash: 0, slowRemaining: 0, effect: null };
@@ -56,6 +56,8 @@ function tryPerfectShield() {
   // 先消费机会，再结算伤害。击杀 Boss 可能清空弹幕并开始解体演出。
   shield.perfectUsed = true;
   shield.perfectRemaining = 0;
+  shield.charges = Math.min(shieldRules.maxCharges, shield.charges + 1);
+  if (shield.charges === shieldRules.maxCharges) shield.energy = 0;
   armCannonLink();
   armEvolutionGuardPierce();
   const aegisMastery = evolution.aegis >= 3;
@@ -66,7 +68,6 @@ function tryPerfectShield() {
   }
   shield.flash = 0.65;
   shield.slowRemaining = reducedMotion.matches ? 0 : shieldRules.slowDuration;
-  gainShieldEnergy(evolutionShieldChargeTime() * shieldRules.refundFraction);
   const halfHeight = Math.max(95, player.height * 1.1);
   shield.effect = { x: player.x, y: player.y, halfHeight, length: Math.max(0, viewport.width - player.x) };
   gameAudio.perfectShield();
@@ -88,9 +89,9 @@ function tryPerfectShield() {
   }
   updateShieldDisplay();
   if (isBattleActive()) statusMessage.textContent = aegisMastery
-    ? tr("壁垒完美格挡 · 大招回能 50% · 无敌延长 1 秒", "Aegis Perfect Guard · 50% special energy · 1s extended protection")
-    : tr("完美格挡！返还 25% 护盾充能，3 秒内释放已储存的大招可加快蓄力。",
-      "Perfect Guard! Restored 25% shield charge. Use a stored special within 3 seconds to charge it faster.");
+    ? tr("壁垒完美格挡 · 返还护盾 · 大招回能 50% · 无敌延长 1 秒", "Aegis Perfect Guard · Shield refunded · 50% special energy · 1s extended protection")
+    : tr("完美格挡！返还 1 次护盾。3 秒内释放已储存的大招可加快蓄力。",
+      "Perfect Guard! One shield use refunded. Use a stored special within 3 seconds to charge it faster.");
   else { shield.slowRemaining = 0; resetCannonLink(); }
   return true;
 }
@@ -127,8 +128,7 @@ function updateShieldDisplay() {
   shieldPanel.dataset.perfect = String(perfect);
   shieldSlots.forEach((slot, index) => { slot.dataset.filled = String(index < shield.charges); });
   shieldLabel.textContent = disabled ? tr("本局护盾禁用", "Shield disabled for this sortie")
-    : perfect && evolution.aegis >= 3 ? tr("完美格挡 · 大招回能", "Perfect Guard · Special energy")
-    : perfect ? tr("完美格挡 · 返还 25% 充能", "Perfect Guard · 25% back")
+    : perfect ? tr("完美格挡 · 已返还护盾", "Perfect Guard · Shield refunded")
     : ready ? tr("完美窗口 · 迎击敌弹", "Perfect Guard window")
     : shieldIsActive() && absorbLimit ? tr("吸收弹药 " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + " 秒",
       "Absorbed " + absorbed + "/" + absorbLimit + " · " + remaining.toFixed(1) + "s")
@@ -136,8 +136,8 @@ function updateShieldDisplay() {
     : full ? tr("储能已满 · " + keyLabel + " 迎弹反击", "Fully charged · " + keyLabel + " to guard")
     : shield.charges ? tr(keyLabel + " 迎弹格挡 · 2 秒无敌", keyLabel + " to guard · 2s protection")
     : tr("自动充能 · " + Math.ceil(chargeTime - shield.energy) + " 秒", "Recharging · " + Math.ceil(chargeTime - shield.energy) + "s");
-  shieldPanel.title = tr("敌弹触盾前按 " + keyLabel + "，最初 0.25 秒可完美格挡，触发反击并返还 25% 充能。",
-    "Press " + keyLabel + " just before a shot reaches you. Block within 0.25 seconds to counter and restore 25% shield charge.")
+  shieldPanel.title = tr("敌弹触盾前按 " + keyLabel + "。开盾后 0.25 秒内挡弹可反击并返还本次护盾。",
+    "Press " + keyLabel + " just before a shot reaches you. Block within 0.25 seconds to counter and refund this shield use.")
     + (absorbLimit ? tr(" 当前壁垒可吸收 " + absorbLimit + " 发接触护盾的敌弹，并在护盾结束时释放。",
       " Your Aegis absorbs up to " + absorbLimit + " shots it blocks and releases them when the shield ends.") : "");
 }

@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v30.1 Perfect Guard and impact audio.** Press **V** as a projectile approaches. Blocking it within 0.25 seconds counterattacks and refunds the shield use. Gunfire is quieter, hits on enemy fighters crack like small blasts, and boss hits land with louder, deeper thuds before the final explosion.
+
 **v30: combat feedback and exclusive evolutions.** Shell cracks, low impacts and localized ripples distinguish ordinary hits from energy bursts. Heavy hits add a brief pause and directional camera kick. Easy, Normal and Hard change hostile attack frequency and projectile speed; boss durability follows your power at entrance. Commit to **Heartfire Detonation**, **Absolute Blizzard** or **Temporal Recall**, then level that route with subsequent boss victories without a rank cap. Press **F** for its skill. Space specials and V shields remain available. [Mechanics and checks](docs/v30-combat-evolution.md)
 
 **v30: retry the current boss.** If you die during a boss fight, choose **Retry this boss** to return to its entrance with the same fighter, equipment, evolution, lives and stored skill energy. Combo and battle time also rewind. Dying in a finale restarts the whole boss encounter. The checkpoint exists only for this run in the current page; refreshing or closing the page clears it. Retried runs can still earn new Campaign boss unlocks and merit, but do not record scores or award speed, no-hit or other achievements. [Rules and manual checks](docs/v30-boss-retry.md)
@@ -29,7 +31,7 @@ Choose **English** on the main menu. The guide opens on your first visit and can
 | J | Fire if autofire is disabled |
 | F | Use the selected evolution skill |
 | Space | Use your fighter's stored special |
-| V | Shield for two seconds; activate close to a projectile for a perfect block |
+| V | Shield for two seconds. A Perfect Guard refunds the shield use. |
 | Esc | Pause |
 
 Shoot blue orbs for fire rate, yellow for firing lanes, and red for damage. Rare green orbs restore life, or raise your life capacity if you're full. Firepower has ceilings; use the gaps in each boss's attack cycle to sustain damage.

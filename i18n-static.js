@@ -124,7 +124,7 @@ const gameStaticEnglish = new Map([
   ["命中敌军积攒能量，存好一发后释放所选战机的大招", "Hit enemies to charge your fighter's special. Use it once a charge is stored."],
   ["完美护盾", "Perfect Guard"],
   ["等实体敌弹快碰到战机时按", "As a projectile approaches, press"],
-  ["。开盾后 0.25 秒内挡住敌弹，即触发「完美格挡」，向前反击并返还 25% 护盾充能。", ". Block within 0.25s of shielding to counterattack and regain 25% shield charge."],
+  ["。开盾后 0.25 秒内挡住敌弹，即触发「完美格挡」，向前反击并返还本次护盾次数。", ". Block within 0.25s of shielding to counterattack and refund this shield use."],
   ["若已存好一次大招，在「完美连携」出现后 3 秒内按", "With a stored special charge, press"],
   ["，蓄力缩短至 0.45 秒。", " within 3s of Perfect Link to charge in 0.45s."],
   ["战斗与升级", "Combat and Upgrades"],

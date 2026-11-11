@@ -26,7 +26,7 @@ function refreshFlightTutorial() {
   flightTrainingStep.textContent = tr(`模拟训练 ${stage} / 3`, `SIMULATION ${stage} / 3`);
   flightTrainingTitle.textContent = stage === 1 ? tr("用护盾接住训练弹", "Block the training round") : tr("用大招击中标靶", "Hit the target with your special");
   const messages = {
-    shield: tr(`守住标记航线。弹头靠近时按 ${shieldKey} 开盾。最后一瞬格挡可触发完美护盾。`, `Hold the marked lane. Press ${shieldKey} as the round approaches. A last-moment block triggers a Perfect Guard.`),
+    shield: tr(`守住标记航线。弹头靠近时按 ${shieldKey} 开盾。完美格挡会返还本次护盾。`, `Hold the marked lane. Press ${shieldKey} as the round approaches. A Perfect Guard refunds this shield use.`),
     guardHit: tr("收到！护盾接住了实弹。", "Block confirmed. Your shield caught the round."),
     guardLate: tr(`弹头撞到机身。再试一次，在弹头碰到椭圆护盾前按 ${shieldKey}。`, `The round reached the hull. Try ${shieldKey} just before the round touches the shield ellipse.`),
     guardMiss: tr(`弹头掠过了机身。留在虚线航道上，再用 ${shieldKey} 接住它。`, `The round passed your ship. Stay on the dotted lane and catch it with ${shieldKey}.`),
