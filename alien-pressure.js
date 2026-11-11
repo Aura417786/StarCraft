@@ -33,9 +33,14 @@ const alienPressurePlans = [
 }));
 
 function chooseAlienPressure(target) {
-  if (!target.enraged) return null;
   const plan = alienPressurePlans[target.type];
-  return target.pressureCycle++ % plan.repeat === 0 ? plan : null;
+  const cycle = target.pressureCycle = (target.pressureCycle ?? -1) + 1;
+  if (!target.enraged) {
+    // 独占招式提前到破壳之前：开场第 3 招起，每 3 招一次。
+    // 原来只在半血后才可能出现，快攻时玩家一次都见不到。
+    return cycle >= 2 && (cycle - 2) % 3 === 0 ? plan : null;
+  }
+  return cycle % plan.repeat === 0 ? plan : null;
 }
 
 function bossRuptureDuration(target) {
@@ -73,7 +78,11 @@ function alienRecoveryDuration(target) {
   const recovery = bossRules.recovery + (pressure ? .28 : 0);
   const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
   const authored = Math.max(.42, recovery - target.type * .029 - (target.enraged && !pressure ? .16 : 0)) / tempo;
-  return Math.max(target.alienAttack ? .8 : .35, authored);
+  // 战力越高，收招硬直越短（反击窗口仍在，只是不再宽裕）。
+  const density = Math.max(1, target.scaling?.hpMul ?? 1);
+  const squeeze = 1 + (density - 1) * .26;
+  const floor = target.alienAttack ? .8 - Math.min(.18, (density - 1) * .11) : .35;
+  return Math.max(floor, authored / squeeze);
 }
 
 function alienDamageExplanation(hit, finalStage) {

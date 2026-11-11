@@ -365,6 +365,9 @@ function addBossProjectile(x, y, vx, vy, options = {}) {
 
 function fan(at, count, spread, speed, glyph, options = {}) {
   return beat(at, target => {
+    // 战力越高，弹幕越密（同一招的弹数随 hpMul 增长，最多 +2）。
+    const density = Math.max(1, target?.scaling?.hpMul ?? 1);
+    const shots = Math.min(11, Math.max(1, Math.round(count * 1.4 + (density - 1) * 1.2)));
     const x = target.x - target.width * .42;
     const y = target.y + target.height * (options.offsetY || 0);
     const aim = options.lock || options.aim;
@@ -373,8 +376,8 @@ function fan(at, count, spread, speed, glyph, options = {}) {
     const bearing = aim ? clamp(Math.atan2(aimY - y, Math.max(40, x - aimX)), -.83, .83) : options.angle || 0;
     const velocity = alienAttackSpeed(target, speed);
     gameAudio.bossAttack(options.sound || "volley", x, y);
-    for (let i = 0; i < count; i++) {
-      const angle = bearing + spread * (2 * i / (count - 1) - 1);
+    for (let i = 0; i < shots; i++) {
+      const angle = bearing + spread * (2 * i / Math.max(1, shots - 1) - 1);
       const dx = -Math.cos(angle), dy = Math.sin(angle);
       const arc = options.arc ? target.width * .19 : 0;
       addBossProjectile(x + dx * arc, y + dy * arc, velocity * dx, velocity * dy,
@@ -386,7 +389,9 @@ function fan(at, count, spread, speed, glyph, options = {}) {
 function wall(at, speed, glyph) {
   return beat(at, target => {
     const span = flightBounds.bottom - flightBounds.top;
-    const spacing = Math.max(30, span / 14);
+    // 战力越高，弹墙越密（间距缩小，缺口以外的覆盖更连续）。
+    const density = Math.max(1, target?.scaling?.hpMul ?? 1);
+    const spacing = Math.max(26, span / (14 * (1 + (density - 1) * .22)));
     const velocity = alienAttackSpeed(target, speed);
     gameAudio.bossAttack("volley", target.x, target.y);
     for (let y = flightBounds.top; y <= flightBounds.bottom + spacing / 2; y += spacing) {
@@ -503,8 +508,16 @@ function prepareAlienAttack(target, allowPressure = false) {
   const reach = player.speed * (target.telegraphDuration - .24) * .65;
   target.gapY = clamp(desiredGap, player.y - reach, player.y + reach);
   target.gapSize = Math.min(span * .76, Math.max(75, player.height * (1.22 - target.type * .017)));
+  // 战力越高，安全缺口越窄，走位从「站进去」变成「卡进去」。
+  const attackDensity = Math.max(1, target.scaling?.hpMul ?? 1);
+  target.gapSize = Math.max(54, target.gapSize / (1 + (attackDensity - 1) * .3));
   bossHazards.length = 0;
-  target.attackEvents = plan(target).filter(Boolean).sort((a, b) => a.at - b.at);
+  target.attackEvents = plan(target).filter(Boolean);
+  // 战力足够高时，在连招中段再叠一组散射：两件事同时发生。
+  if (attackDensity >= 1.2) {
+    target.attackEvents.push(fan(Math.max(.5, target.attackDuration * .55), 2, .3, 470, "shard", { aim: true }));
+  }
+  target.attackEvents.sort((a, b) => a.at - b.at);
   // Only the time around the authored actions is adjustable. Every tell,
   // scheduled volley, active hazard and recovery still has time to finish.
   const protectedTime = target.telegraphDuration + alienRecoveryDuration(target);
