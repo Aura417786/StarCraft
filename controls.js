@@ -180,7 +180,7 @@ function renderFlightControlsDialog() {
     const row = flightControlNode("div", "", "flight-binding-row");
     const button = makeFlightControlButton(flightBindingCapture === action ? tr("等待按键…", "Press a key…") : controlBindingLabel(action, true), () => {
       flightBindingCapture = action;
-      flightBindingNotice = tr("等待输入 · Esc 取消（暂停键除外）", "Waiting for a key · Esc cancels except when setting Pause");
+      flightBindingNotice = ["等待输入 · Esc 取消（暂停键除外）", "Waiting for a key · Esc cancels except when setting Pause"];
       renderFlightControlsDialog();
     });
     button.dataset.flightBinding = action;
@@ -218,7 +218,7 @@ function renderFlightControlsDialog() {
   checkbox("colorAssist", tr("危险区纹理与形状提示", "Hazard patterns and shapes"));
   select("ui", tr("界面大小", "UI scale"), ["90", "100", "115"]);
   select("subtitle", tr("字幕大小", "Subtitle scale"), ["85", "100", "130"]);
-  const status = flightControlNode("p", flightBindingNotice, "flight-bindings-status");
+  const status = flightControlNode("p", Array.isArray(flightBindingNotice) ? tr(...flightBindingNotice) : "", "flight-bindings-status");
   status.id = "flight-binding-status";
   status.setAttribute("role", "status");
   const gamepad = flightControlNode("p", tr("手柄：左摇杆 / 十字键移动和选项导航；A / RT 开火，X 护盾，Y 大招，LT 蓄力，LB 姿态，RB 集火，Start 暂停。菜单用 A 确认、B 返回。",
@@ -226,7 +226,7 @@ function renderFlightControlsDialog() {
   const reset = makeFlightControlButton(tr("恢复默认键位", "Restore default keys"), () => {
     flightControls.bindings = { ...defaultFlightBindings };
     flightBindingCapture = "";
-    flightBindingNotice = tr("默认键位已恢复。", "Default keys restored.");
+    flightBindingNotice = ["默认键位已恢复。", "Default keys restored."];
     saveFlightControls();
     flightControlsContent.querySelector("#flight-controls-reset")?.focus({ preventScroll: true });
   });
@@ -245,26 +245,26 @@ function captureFlightBinding(event) {
   const action = flightBindingCapture;
   if (event.code === "Escape" && action !== "pause") {
     flightBindingCapture = "";
-    flightBindingNotice = tr("已取消，原键位保留。", "Cancelled. Your previous key stays assigned.");
+    flightBindingNotice = ["已取消，原键位保留。", "Cancelled. Your previous key stays assigned."];
     renderFlightControlsDialog();
     return;
   }
   if (event.ctrlKey || event.altKey || event.metaKey || !flightKeyAvailable(event.code, action)) {
-    flightBindingNotice = tr("此键留给浏览器或菜单，请换一个键。", "That key is reserved for the browser or menus. Choose another.");
+    flightBindingNotice = ["此键留给浏览器或菜单，请换一个键。", "That key is reserved for the browser or menus. Choose another."];
     renderFlightControlsDialog();
     return;
   }
   const nextBindings = { ...flightControls.bindings, [action]: event.code };
   const conflict = flightBindingList(nextBindings, action).map(code => flightBindingConflict(nextBindings, action, code)).find(Boolean);
   if (conflict) {
-    const name = tr(...flightActionNames[conflict]);
-    flightBindingNotice = tr("该键已用于「" + name + "」。请换一个键。", "That key is already assigned to " + name + ". Choose another.");
+    const names = flightActionNames[conflict];
+    flightBindingNotice = ["该键已用于「" + names[0] + "」。请换一个键。", "That key is already assigned to " + names[1] + ". Choose another."];
     renderFlightControlsDialog();
     return;
   }
   flightControls.bindings = nextBindings;
   flightBindingCapture = "";
-  flightBindingNotice = tr("键位已保存。", "Binding saved.");
+  flightBindingNotice = ["键位已保存。", "Binding saved."];
   saveFlightControls();
 }
 document.addEventListener("keydown", captureFlightBinding, true);
@@ -357,7 +357,7 @@ function backFromFlightMenu(scope) {
   if (scope?.id === "evolution-screen" && typeof skipFlightTutorial === "function" && skipFlightTutorial()) return;
   if (scope?.id === "flight-controls" && flightBindingCapture) {
     flightBindingCapture = "";
-    flightBindingNotice = tr("已取消。", "Cancelled.");
+    flightBindingNotice = ["已取消。", "Cancelled."];
     renderFlightControlsDialog();
   } else if (scope?.open && typeof scope.close === "function") scope.close();
   else if (pauseView) togglePauseFromInput();
@@ -376,7 +376,10 @@ function pollFlightGamepad() {
     }
   } catch { return; }
   if (!gamepad) {
-    if (flightPad.index !== null) { clearMovement(); flightPad.previous.length = 0; flightPad.index = null; }
+    if (flightPad.index !== null) {
+      clearMovement(); flightPad.previous.length = 0; flightPad.index = null;
+      if (!pauseView) pauseGame("menu", "controller");
+    }
     return;
   }
   if (gamepad.index !== flightPad.index) {

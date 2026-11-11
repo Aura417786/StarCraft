@@ -95,10 +95,13 @@ const gameAudio={ muted:false,
 };
 const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudio });
 for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js' && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
+// Explicit Resume models the v23 visible pause contract in legacy simulation tests.
+function focusAndConfirmResume() { emit(window, 'focus'); vm.runInContext('if (pauseView) resumeGame()', sandbox); }
+function visibilityAndConfirmResume() { emit(document, 'visibilitychange'); if (!document.hidden) vm.runInContext('if (pauseView) resumeGame()', sandbox); }
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
 // 成长曲线用同一火力基准比较，不受出击机型影响。
 function begin() {
-  emit(window, 'focus');
+  focusAndConfirmResume();
   emit(nodes.get('#start-button'), 'click');
   vm.runInContext(`
     powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity;
@@ -319,8 +322,8 @@ check("a Broodmother finale keeps its own life pool and cannot be skipped by lef
   execute('applyBossHit({damage:999})');
   assert.equal(execute('boss.hp'), 1);
   execute('resetBossPresentation();boss.finale.age=boss.finale.transform;boss.hp=.04;applyBossHit({source:"ultimate",damage:999});');
-  near(execute('boss.hp'), .035);
-  execute('boss.finale.age+=bossRules.finaleMinimum;applyBossHit({source:"ultimate",damage:999});');
+  // Once the visible transformation ends, lethal fire really kills. There
+  // is no invisible 3.5% life floor that discards an otherwise valid hit.
   assert.equal(execute('boss'), null);
 });
 
@@ -345,7 +348,7 @@ check("an Aegis shield preserves captured shots through pause and fullscreen-sty
   surface = { width: 1024, height: 640 }; emit(window, 'resize');
   assert.equal(execute('evolutionWeapons.absorbed.length'), 2);
   assert.equal(execute('bullets.filter(shot=>shot.visual==="counter").length'), 0);
-  emit(window, 'focus'); canvas.focus(); execute('updateShield(1.7);');
+  focusAndConfirmResume(); canvas.focus(); execute('updateShield(1.7);');
   assert.equal(execute('bullets.filter(shot=>shot.visual==="counter").length'), 2);
 });
 

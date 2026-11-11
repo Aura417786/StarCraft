@@ -418,7 +418,11 @@ function bossFinaleDamageMultiplier(target, shot) {
     return .18;
   }
   const remaining = f.nodes.reduce((sum, part) => sum + Number(part.hp > 0), 0);
-  if (mode === "synapse") return remaining ? .34 + (3 - remaining) * .14 : 1.23;
+  // Bone anchors and the neural sequence are the actual finale objective.
+  // Blindly firing into the middle used to retain over half normal damage,
+  // making their stated counter optional even with an ordinary late build.
+  if (mode === "synapse") return remaining ? .12 + (3 - remaining) * .12 : 1.23;
+  if (mode === "bones") return remaining ? .12 + (f.nodes.length - remaining) * .24 : 1.20;
   return remaining ? .53 + (f.nodes.length - remaining) * .17 : 1.20;
 }
 

@@ -857,6 +857,7 @@ const gameAudio = (() => {
     const time = audio.currentTime;
     if (time - lastWarningTime < 1.5) return;
     lastWarningTime = time;
+    duckMusic(.52, 1.05);
     if (sample("warning", { bus: "boss", level: .62 })) return;
     // 双响低沉警报，低频冲击和号角负责威胁感，不靠尖锐蜂鸣提高音量。
     for (let index = 0; index < 2; index++) {
@@ -881,7 +882,13 @@ const gameAudio = (() => {
     const pressure = kind === "surge" || kind === "beam" || kind === "cannon";
     const cue = pressure ? "pressure" : kind === "coil" ? "stage" : kind === "whip" ? "snap" : "hit_organic";
     const level = pressure ? .48 : kind === "volley" ? .17 : .31;
-    if (signature && kind !== "volley") duckMusic(kind === "coil" ? .63 : .73, .15);
+    // Give the actionable cue room through its attack and early tail. The old
+    // 150 ms dip recovered before the 450–620 ms warning/voice was readable.
+    // Ordinary volleys never duck the mix, avoiding continuous pumping.
+    if (signature && kind !== "volley") {
+      const windup = kind === "coil";
+      duckMusic(windup ? .56 : pressure ? .58 : .68, windup ? .65 : pressure ? .55 : .42);
+    }
     if (sample(cue, { bus: "boss", level, rate: kind === "beam" ? 1.37 : 1,
       duration: kind === "coil" ? .45 : Infinity, ...position })) {
       if (pressure) {

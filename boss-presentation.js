@@ -143,9 +143,9 @@ function advanceLivingBossPresentation(seconds) {
     const arena = bossArena();
     const progress = scene.age / duration;
     const arrival = presentationEase(progress, .12, 1);
-    const [reach, lift] = profile.approach;
-    target.x = arena.x + (viewport.width - arena.x + arena.width * .44) * reach * (1 - arrival);
-    target.y = clamp(arena.y + arena.height * lift * (1 - arrival), arena.top, arena.bottom);
+    const entry = bossEntryPosition(arena, target.type);
+    target.x = arena.x + (entry.x - arena.x) * (1 - arrival);
+    target.y = arena.y + (entry.y - arena.y) * (1 - arrival);
   } else if (kind === "transform") {
     target.finale.age = scene.age;
     const arena = bossArena();
@@ -171,7 +171,8 @@ function advanceLivingBossPresentation(seconds) {
     } else if (kind === "rupture") {
       target.ruptureWindow = true;
       beginAlienRecovery(target);
-      setBossMessage(bossStageTitle(target), tr("护壳破裂 · 核心外露 6.5 秒", "Shell ruptured · Core exposed for 6.5 s"));
+      setBossMessage(bossStageTitle(target), tr("护壳破裂 · 核心外露 " + bossRules.exposedWindow + " 秒",
+        "Shell ruptured · Core exposed for " + bossRules.exposedWindow + " s"));
     }
   }
   return true;

@@ -14,7 +14,9 @@ function evolutionBaseDpsLog() {
 function fighterHitProtection(target, shot) {
   const protection = target.fireProtection;
   if (!protection || !shot.armorPiercing) return protection;
-  return { hit: protection.hit * 1.75, burst: protection.burst * 1.2, refill: protection.refill * 1.25 };
+  const strength = clamp(shot.armorStrength ?? 1, 0, 1);
+  return { hit: protection.hit * (1 + .75 * strength), burst: protection.burst * (1 + .2 * strength),
+    refill: protection.refill * (1 + .25 * strength) };
 }
 function getEvolutionWingMuzzles(ship = player) {
   return [-1, 1].map(side => ({ x: ship.x + ship.width * .20,
@@ -323,12 +325,17 @@ function releaseFighterCharge() {
   if (!held || !isBattleActive() || ultimateSuppressesFire()
     || power + 1e-7 < fighterCombatRules.redMinCharge / fighterCombatRules.redCharge) return false;
   const muzzle = muzzlePosition();
-  const damage = Math.min(850, Math.exp(evolutionBaseDpsLog()) * (.18 + .77 * power));
+  // A charge is a deliberate commitment. The previous linear curve gave its
+  // startup bonus on every 0.2s tap, making short taps stronger than a full
+  // charge despite their much shorter movement/fire penalty. Keep the same
+  // fully charged output, but earn that output toward the end of the windup.
+  const damage = Math.min(850, Math.exp(evolutionBaseDpsLog()) * (.08 + .87 * Math.pow(power, 1.65)));
   const start = muzzle.x + 2, color = "#ff9a82";
   const shot = { x: start, y: muzzle.y, previousX: start, previousY: muzzle.y, vx: 1120, vy: 0,
     angle: 0, length: 36 + 34 * power, halfHeight: 4 + 3 * power, color, core: "#fff0d5",
     damage, damageLog: Math.log(damage), visual: "lance", source: "crimson-heavy",
-    armorPiercing: true, critical: power >= .96, piercesLeft: power >= .96 ? 4 : 2, hitTargets: new Set() };
+    armorPiercing: true, armorStrength: power, critical: power >= .96,
+    piercesLeft: power >= .96 ? 4 : 2, hitTargets: new Set() };
   applyGuardPiercingRound(shot);
   bullets.push(shot);
   fighterCombat.redCooldown = fighterCombatRules.redCycle;
@@ -343,10 +350,12 @@ function releaseFighterCharge() {
 function fighterMovementScale() {
   return fighterCombat.redHeld ? .64 : evolutionLanceActive() ? .69 : 1;
 }
-function directFighterHit(target, shot, fraction, source) {
+function directFighterHit(target, shot, fraction, source, contact = null) {
   const value = Math.min(850, (shot.damage ?? Math.exp(shot.damageLog)) * fraction);
   if (!isBattleActive() || !(value > 0)) return;
-  const hit = { damage: value, damageLog: Math.log(value), source, x: target.x, y: target.y, noEnergy: true };
+  const hit = { damage: value, damageLog: Math.log(value), source,
+    x: contact?.x ?? target.x, y: contact?.y ?? target.y, noEnergy: true };
+  if (Number.isInteger(contact?.finaleNode)) hit.finaleNode = contact.finaleNode;
   if (source === "azure-chain" && shot.hitTargets?.has(target)) hit.finaleNode = shot.finaleNode;
   if (enemies.includes(target) && target.hp > 0) {
     applyEnemyHit(target, hit);
@@ -354,6 +363,30 @@ function directFighterHit(target, shot, fraction, source) {
   } else if (activeBosses().includes(target) && bossCanTakeDamage(target)) {
     applyBossHit(hit, target);
   }
+}
+function fighterFieldContact(target, field) {
+  const radius = fighterCombatRules.auricRadius;
+  if (!target.finale) {
+    return Math.hypot(target.x - field.x, target.y - field.y) <= radius + target.height * .30
+      ? { x: target.x, y: target.y } : null;
+  }
+  // An area effect must strike the part it actually overlaps. Collapsing every
+  // impact to the body center made a field placed on a finale node ineffective.
+  // Pick one closest contact, never one damage packet per overlapping part.
+  let contact = null, closest = Infinity;
+  for (const node of target.finale.nodes) {
+    if (!(node.hp > 0)) continue;
+    const geometry = finaleNodeGeometry(target, node);
+    const distance = Math.hypot(geometry.x - field.x, geometry.y - field.y);
+    if (distance <= radius + geometry.radius && distance < closest) {
+      contact = { x: geometry.x, y: geometry.y, finaleNode: node.index };
+      closest = distance;
+    }
+  }
+  if (contact) return contact;
+  const core = finaleCoreGeometry(target);
+  return Math.hypot(core.x - field.x, core.y - field.y) <= radius + Math.min(core.width, core.height) * .4
+    ? { x: core.x, y: core.y, finaleNode: -1 } : null;
 }
 function updateFighterCombat(seconds) {
   if (!isBattleActive()) return;
@@ -378,8 +411,8 @@ function updateFighterCombat(seconds) {
       const radius = fighterCombatRules.auricRadius;
       addEvolutionPulse(field.x, field.y, radius, "#ffce79", .30);
       for (const target of [...enemies, ...activeBosses()]) {
-        const dx = target.x - field.x, dy = target.y - field.y;
-        if (Math.hypot(dx, dy) <= radius + target.height * .30) directFighterHit(target, field, 1, "auric-field");
+        const contact = fighterFieldContact(target, field);
+        if (contact) directFighterHit(target, field, 1, "auric-field", contact);
       }
       for (const mine of [...eliteDirector.mines]) {
         if (Math.hypot(mine.x - field.x, mine.y - field.y) <= radius) defuseEliteMine(mine, field);
@@ -426,8 +459,28 @@ function spawnFighterRound(bullet, volley, primary) {
   return bullet;
 }
 function auricCloseRange() { return clamp(viewport.width * .29, 175, 380); }
+function fighterImpactGeometry(shot, target) {
+  if (!target.finale) return target;
+  const node = target.finale.nodes[shot.finaleNode];
+  if (!node) return finaleCoreGeometry(target);
+  const geometry = finaleNodeGeometry(target, node);
+  return { ...geometry, width: geometry.radius * 2, height: geometry.radius * 2 };
+}
 function isAuricCloseShot(shot, target) {
-  return target.x - (target.width ?? 0) * .34 - shot.launchX <= auricCloseRange();
+  const impact = fighterImpactGeometry(shot, target);
+  return impact.x - (impact.width ?? 0) * .34 - shot.launchX <= auricCloseRange();
+}
+function auricTargetInReach() {
+  const muzzle = muzzlePosition();
+  const contacts = evolutionVisibleTargets(muzzle).flatMap(target => !target.finale ? [target]
+    : [finaleCoreGeometry(target), ...target.finale.nodes.filter(node => node.hp > 0).map(node => {
+      const part = finaleNodeGeometry(target, node);
+      return { ...part, width: part.radius * 2, height: part.radius * 2 };
+    })]);
+  return contacts.filter(target =>
+    Math.abs(target.y - muzzle.y) < target.height * .42 + 24
+      && isAuricCloseShot({ launchX: muzzle.x + 3 }, target))
+    .sort((a, b) => a.x - b.x)[0] ?? null;
 }
 function fighterProjectileDamage(shot, target) {
   if (shot.source === "evolution-drone" && evolution.links.falcon && evolutionWeapons.focus === target) {
@@ -495,8 +548,9 @@ function onFighterProjectileImpact(shot, target) {
   splitEvolutionImpact(shot, target);
   if (shot.auric === "auric-spread" && !fighterCombat.field && fighterCombat.capacitor >= .999
     && isAuricCloseShot(shot, target)) {
+    const impact = fighterImpactGeometry(shot, target);
     fighterCombat.capacitor = 0;
-    fighterCombat.field = { x: target.x, y: target.y, age: 0, nextPulse: .04, pulses: 0,
+    fighterCombat.field = { x: impact.x, y: impact.y, age: 0, nextPulse: .04, pulses: 0,
       damage: Math.min(220, Math.exp(evolutionBaseDpsLog()) * .21) };
     gameAudio.shoot?.(true, 1, "yellow");
   }
@@ -524,7 +578,7 @@ function onFighterProjectileImpact(shot, target) {
   }
 }
 function fighterWeaponCopy(kind = fighterProfile().id) {
-  if (kind === "red") return tr("按住蓄力键，松手打出穿透重炮", "Hold the charge key, then release a piercing slug");
+  if (kind === "red") return tr("蓄满后松手打出穿透重炮 · 短点伤害较低", "Fully charge, then release a piercing slug · Taps deal less damage");
   if (kind === "blue") return tr("远距追踪 · 三次命中触发三连爆 · 聚焦追弱点", "Long-range seekers · Triple chain on 3 hits · Focus tracks weak points");
   return tr("近距扩散布下三脉冲力场 · 聚焦加快充能", "Close spread fire plants a three-pulse field · Focus charges faster");
 }
@@ -547,10 +601,15 @@ function updateFighterSystemsHud() {
   const chargeKey = typeof controlBindingLabel === "function" ? controlBindingLabel("charge") || "C" : "C";
   const value = id === "red" ? charged : id === "blue" ? Math.round(markCount / 3 * 100) : aura;
   const label = id === "red"
-    ? redHeld ? tr("重炮蓄力 " + charged + "%", "Heavy cannon " + charged + "%")
+    ? redHeld ? charged >= 100 ? tr("重炮就绪 · 松开 " + chargeKey, "Charged · Release " + chargeKey)
+      : tr("重炮蓄力 " + charged + "%", "Heavy cannon " + charged + "%")
       : redCooldown > 0 ? tr("重炮冷却", "Cannon cycling") : tr(chargeKey + " 蓄重炮", chargeKey + " charge")
     : id === "blue" ? tr("离子标记 " + markCount + "/3", "Ion marks " + markCount + "/3")
       : field ? tr("压制场 " + field.pulses + "/3", "Field pulses " + field.pulses + "/3")
+        : aura >= 100 ? auricTargetInReach()
+          ? firingStyle.mode === "spread" ? tr("近距就绪 · 命中布场", "In range · Hit to deploy")
+            : tr("目标入距 · 切扩散布场", "In range · Spread to deploy")
+          : tr("电容就绪 · 靠近目标", "Cap ready · Close the distance")
         : tr("压制电容 " + aura + "%", "Suppression cap " + aura + "%");
   const link = evolutionWeapons.armorRoundRemaining > 0 ? tr(" · 穿盾弹就绪", " · Shieldbreak ready") : "";
   const key = [id, value, label, link].join("|");
@@ -566,6 +625,24 @@ function drawFighterCombat(ctx = context) {
   const { field, arcs, marked, stacks, stability, capacitor, redFlash } = fighterCombat;
   const id = fighterProfile().id;
   ctx.save();
+  if (id === "yellow" && !field && capacitor >= .999) {
+    const muzzle = muzzlePosition(), reach = Math.min(viewport.width - 20, muzzle.x + 3 + auricCloseRange());
+    const inReach = auricTargetInReach();
+    // Small range brackets disclose the actual close-shot threshold without
+    // painting a full-screen aiming corridor over hostile telegraphs.
+    ctx.strokeStyle = inReach ? "#ffe4a0" : "#b99c67";
+    ctx.globalAlpha = inReach ? .82 : .38; ctx.lineWidth = 1.5;
+    for (const side of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(reach - 8, muzzle.y + side * 24);
+      ctx.lineTo(reach, muzzle.y + side * 24); ctx.lineTo(reach, muzzle.y + side * 12); ctx.stroke();
+    }
+    if (inReach) {
+      const x = inReach.x - inReach.width * .34;
+      ctx.beginPath(); ctx.moveTo(x - 7, muzzle.y - 5); ctx.lineTo(x, muzzle.y);
+      ctx.lineTo(x - 7, muzzle.y + 5); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
   if (field) {
     const radius = fighterCombatRules.auricRadius;
     ctx.strokeStyle = "#efbd7170"; ctx.lineWidth = 1.6;

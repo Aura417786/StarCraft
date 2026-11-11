@@ -467,6 +467,7 @@ function alienMovementScale() {
 
 function prepareAlienAttack(target, allowPressure = false) {
   target.ruptureWindow = false;
+  target.counterTriggered = false;
   const pressure = allowPressure ? chooseAlienPressure(target) : null;
   const patterns = bossTypes[target.type].patterns;
   const key = pressure ? "pressure" : patterns[target.attackIndex = (target.attackIndex + 1) % patterns.length];

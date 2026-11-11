@@ -127,3 +127,94 @@
 }
 .fighter-systems-readout[data-fighter="blue"] { color: #94dcf6; }
 .fighter-systems-readout[data-fighter="yellow"] { color: #f4cc7e; }
+
+/* Keep the equipment strip on its own rail below the header controls. */
+@media (min-width: 1001px) {
+  .weapon-readout {
+    top: 94px;
+    right: max(24px, 3.4vw);
+    max-width: calc(100% - 310px);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 2px 14px;
+    padding: 2px 10px;
+    border-inline-end: 2px solid #71869f;
+    border-radius: 4px 0 0 4px;
+    background: #080f1bd9;
+    line-height: 1.6;
+  }
+}
+
+/* A short landscape window still puts selection and launch above the fold.
+   Details use the otherwise decorative right column; no control is removed. */
+@media (max-height: 460px) and (min-width: 521px) {
+  .start-screen {
+    inset: 64px 0 16px;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 24px 12px;
+    isolation: isolate;
+  }
+  .start-screen .start-copy { min-width: 0; }
+  .start-screen .start-copy > .eyebrow { display: none; }
+  .start-screen .start-copy h1,
+  html[lang="en"] .start-screen .start-copy h1 { font-size: 32px; margin: 2px 0 10px; }
+  .start-screen .hangar-art {
+    position: absolute;
+    inset: 0 1% 0 46%;
+    z-index: -1;
+    height: 100%;
+    opacity: .25;
+  }
+  .start-screen .hangar-art img { width: min(100%, 320px); }
+  .start-screen .fighter-picker {
+    position: relative;
+    max-width: none;
+    min-height: 110px;
+    padding-inline-end: 48%;
+    margin-bottom: 7px;
+  }
+  .start-screen .fighter-brief {
+    position: absolute;
+    inset: 0 0 auto auto;
+    width: 44%;
+    margin: 0;
+    padding: 7px 9px;
+  }
+  .start-screen .fighter-stats { grid-template-columns: 1.1fr .6fr 1fr; }
+  .start-screen .fighter-stats dd { font-size: 13px; }
+  .start-screen .fighter-option > span { padding-inline: 5px; gap: 0 5px; }
+  .start-screen .fighter-option strong { font-size: 12px; }
+  .start-screen .start-actions { margin: 0; }
+  .start-screen .start-actions > .primary-button {
+    width: 136px;
+    gap: 10px;
+    letter-spacing: .04em;
+    white-space: nowrap;
+  }
+  .app:has(.start-screen:not([hidden])) .lesson-note { display: none; }
+}
+
+@media (max-height: 460px) and (min-width: 521px) and (max-width: 740px) {
+  .app:has(.battle-screen:not([hidden])) .masthead { height: 57px; padding-block: 9px; }
+  .hud { top: 63px; left: 24px; right: 24px; align-items: center; }
+  .hud > div { display: flex; align-items: center; gap: 7px; }
+  .hud strong { font-size: 15px; line-height: 1.2; }
+  .hud .hearts { font-size: 15px; line-height: 1.2; }
+  .difficulty-readout { top: 86px; left: 24px; font-size: 9px; }
+  .weapon-readout {
+    top: 105px;
+    left: 24px;
+    right: 24px;
+    gap: 2px 10px;
+    flex-wrap: wrap;
+    font-size: 9px;
+    line-height: 1.4;
+  }
+  .weapon-stat strong { font-size: 9px; margin-left: 3px; }
+  .fighter-systems-readout { padding-inline: 4px; }
+  .ready-message { inset: 130px 15% 38%; text-align: center; }
+  .ready-message h2 { font-size: 17px; margin: 3px 0; }
+  .ready-message p { font-size: 10px; letter-spacing: 0; margin: 3px 0; }
+  .ready-message :is(.eyebrow, .flight-direction) { display: none; }
+  .app:has(.battle-screen:not([hidden])) .lesson-note { display: none; }
+}

@@ -2,7 +2,7 @@
 
 const bossRules = { firstArrival: 65, interval: 31, warning: 5, artLead: 20,
   recovery: .78, grace: 1.1, maxProjectiles: 240, fusionSpecialMultiplier: .78, shellThreshold: .5,
-  armoredMinimum: 13.4, exposedWindow: 6.5, coreMinimum: 13.2, finaleMinimum: 7.5 };
+  armoredMinimum: 0, exposedWindow: 2.4, coreMinimum: 0, finaleMinimum: 0, counterWindow: 1.5 };
 const bossTypes = [
   { name: "渊潮母体", enName: "Abyssal Broodmother", color: "#79e7f3", patterns: ["broodSweep", "broodArc", "broodSpawn"] },
   { name: "骨冠猎兽", enName: "Ossuary Stalker", color: "#dfa5e6", patterns: ["boneSpears", "boneRibs", "bonePounce"] },
@@ -49,7 +49,17 @@ function bossArena(type = boss?.type ?? 0) {
   const height = width * aspect;
   const top = Math.min(viewport.height / 2, Math.max(height * .57 + 13, flightBounds.top + height * .1));
   const bottom = Math.max(top, Math.min(viewport.height - height * .57 - 13, flightBounds.bottom - height * .1));
-  return { width, height, x: viewport.width - width * .63 - 18, y: (top + bottom) / 2, top, bottom };
+  // The renderer occupies 1.14 x the collision body. Reserve room for its
+  // wind-up, rupture bank and breathing, rather than framing only the hitbox.
+  return { width, height, x: viewport.width - width * .78 - 24, y: (top + bottom) / 2, top, bottom };
+}
+
+function bossEntryPosition(arena, type) {
+  const [reach, lift] = bossPresentationProfiles[type].approach;
+  // Arrive from the edge with the creature already visible. Distance depends
+  // on its visual size, not monitor width, so widescreen entry is not a blank.
+  return { x: Math.min(viewport.width - arena.width * .17, arena.x + arena.width * .62 * reach),
+    y: clamp(arena.y + arena.height * lift, arena.top, arena.bottom) };
 }
 
 function bossPlayerRight() {
@@ -75,9 +85,25 @@ function setBossMessage(title, action, visible = true) {
 function bossHealthStage(target) {
   if (target.finale) return tr("III · 终局形态", "III · Final form");
   if (target.phase === "rupture") return tr("II · 外壳破裂", "II · Shell rupture");
+  if (bossCounterActive(target)) return tr("破招成功 · 核心失衡", "Countered · Core destabilized");
   if (!target.enraged) return tr("I · 护壳防御", "I · Armored");
   return target.phase === "recover" && (target.alienAttack || target.ruptureWindow) ? tr("II · 核心外露", "II · Core exposed")
     : tr("II · 狂暴核心", "II · Frenzied core");
+}
+
+function bossCounterActive(target) {
+  return !!target && !target.finale && (target.counterUntil ?? 0) > target.age;
+}
+
+function rewardAlienCounter(target = boss) {
+  if (!target || target.finale || target.counterTriggered || !bossCanTakeDamage(target)) return;
+  target.counterTriggered = true;
+  target.counterUntil = target.age + bossRules.counterWindow;
+  target.counterCount = (target.counterCount ?? 0) + 1;
+  target.hitFlash = .18;
+  setBossMessage(bossStageTitle(target), tr("破招成功 · 抓住金色破绽反击", "Counter successful · Strike the golden breach"));
+  pulseCombatLight(target.x, target.y, target.width * .95, "#ffe2a0", "impact");
+  gameAudio.bossAttack("hatch", target.x, target.y);
 }
 
 function updateBossHealthHud() {
@@ -214,6 +240,7 @@ function bossFireProtectionFor(type) {
 function spawnBoss(type = chooseBossType()) {
   if (!Number.isInteger(type) || !bossTypes[type]) return;
   const arena = bossArena(type);
+  const entry = bossEntryPosition(arena, type);
   const data = bossTypes[type];
   const alienFinal = type === finalAlienType;
   const baseHealth = bossBalanceHealth(type, { level: weapon.damageLevel,
@@ -221,7 +248,7 @@ function spawnBoss(type = chooseBossType()) {
   const healthLog = Math.log(baseHealth);
   boss = { ...arena, type, alien: true, alienFinal, color: data.color, name: bossTypeName(type),
     hp: 1, maxHp: 1, displayHp: 1, healthLog, baseHealth, fireProtection: bossFireProtectionFor(type),
-    x: viewport.width + arena.width / 2, previousX: viewport.width + arena.width / 2, previousY: arena.y,
+    x: entry.x, y: entry.y, previousX: entry.x, previousY: entry.y,
     phase: "enter", phaseTime: 0, age: 0, hitFlash: 0, attackIndex: -1,
     alienAttack: null, attackLabel: null, pressureCycle: 0, enraged: false, lockX: player.x, lockY: player.y, gapY: player.y, gapSize: 0,
     lashPulse: 0, lashSide: 1, lashIndex: 0 };
@@ -273,7 +300,8 @@ function updateAlienBossPose(target, seconds) {
     swayY += Math.min(18, room * .065) * target.lashPulse * target.lashSide;
   }
   const follow = 1 - Math.exp(-seconds * 7);
-  target.x += (arena.x + swayX * quiet - target.x) * follow;
+  const maxX = viewport.width - target.width * .67 - 20;
+  target.x += (Math.min(maxX, arena.x + swayX * quiet) - target.x) * follow;
   target.y += (clamp(arena.y + swayY * quiet, arena.top, arena.bottom) - target.y) * follow;
 }
 
@@ -315,6 +343,12 @@ function updateBossEncounter(seconds) {
     return;
   }
   boss.age += seconds;
+  if (boss.counterUntil && boss.age >= boss.counterUntil) {
+    boss.counterUntil = 0;
+    if (boss.attackLabel && (boss.phase === "attack" || boss.phase === "telegraph")) {
+      setBossMessage(bossStageTitle(boss), tr(boss.attackLabel[2], boss.attackLabel[3]));
+    }
+  }
   boss.phaseTime += seconds;
   boss.lashPulse = Math.max(0, boss.lashPulse - seconds / .48);
   boss.previousX = boss.x;
@@ -387,8 +421,9 @@ function applyBossHit(shot, target = boss) {
     : progressionHitFraction(target, damageLog, shot.armorPiercing ? fighterHitProtection(target, shot) : target.fireProtection);
   // The attacking shell absorbs part of the incoming damage, but no attack is invulnerable.
   const ruptureWindow = target.phase === "recover" && target.ruptureWindow;
-  const exposed = target.phase === "recover" && (target.alienAttack || ruptureWindow);
-  const attackingShell = ruptureWindow ? 1.32 : exposed ? 1.18 : target.phase !== "attack" ? 1
+  const countered = bossCounterActive(target);
+  const exposed = countered || target.phase === "recover" && (target.alienAttack || ruptureWindow);
+  const attackingShell = countered ? 1.42 : ruptureWindow ? 1.32 : exposed ? 1.18 : target.phase !== "attack" ? 1
     : target.alienAttack === "pressure" ? .71 : target.alienFinal && target.enraged ? .62 : .78;
   const specialMultiplier = special && target.alienFinal ? bossRules.fusionSpecialMultiplier : 1;
   const fraction = rawFraction * attackingShell * specialMultiplier * finaleMultiplier;
@@ -410,11 +445,9 @@ function applyBossHit(shot, target = boss) {
 }
 
 function bossHealthFloor(target) {
-  if (target.finale) {
-    return target.finale.age < target.finale.transform + bossRules.finaleMinimum ? .035 : 0;
-  }
-  if (!target.enraged) return target.age < bossRules.armoredMinimum ? bossRules.shellThreshold + .001 : bossRules.shellThreshold;
-  return target.age - target.enragedAt < bossRules.coreMinimum ? .021 : 0;
+  // Only the visible shell transition stops a single hit crossing two phases.
+  // Do not discard landed damage to satisfy an invisible survival timer.
+  return !target.finale && !target.enraged ? bossRules.shellThreshold : 0;
 }
 
 function defeatBoss(target = boss) {
@@ -492,6 +525,7 @@ function drawBossBattle() {
   if (scene && scene.kind !== "death") drawBossPresentationBody(context, scene, quiet);
   else if (boss?.finale) drawBossFinale(context, boss, quiet);
   else if (boss) drawBossShip(context, boss, quiet);
+  if (bossCounterActive(boss)) drawBossCounterCue(context, boss);
   if (typeof drawSceneryOcclusion === "function") drawSceneryOcclusion(context, boss ?? scene?.target);
   for (const hazard of bossHazards) {
     drawAlienHazard(context, hazard, quiet);
@@ -508,4 +542,22 @@ function drawBossBattle() {
     context.stroke();
     context.restore();
   }
+}
+
+function drawBossCounterCue(ctx, target) {
+  const left = target.x - target.width * .48, right = target.x + target.width * .32;
+  const top = target.y - target.height * .31, bottom = target.y + target.height * .31;
+  const remaining = clamp((target.counterUntil - target.age) / bossRules.counterWindow, 0, 1);
+  ctx.save();
+  ctx.strokeStyle = "#ffe2a0"; ctx.fillStyle = "#ffe2a0"; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (const [x, dx] of [[left, 1], [right, -1]]) for (const [y, dy] of [[top, 1], [bottom, -1]]) {
+    ctx.moveTo(x, y + dy * 10); ctx.lineTo(x, y); ctx.lineTo(x + dx * 10, y);
+  }
+  ctx.stroke();
+  const width = Math.min(92, target.width * .43);
+  ctx.fillRect(target.x - width / 2, bottom + 9, width * remaining, 2);
+  ctx.font = "600 11px system-ui"; ctx.textAlign = "center";
+  ctx.fillText(tr("破绽", "BREACH"), target.x, bottom + 25);
+  ctx.restore();
 }

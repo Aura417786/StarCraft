@@ -333,6 +333,9 @@ function interceptAlienRound(bullet) {
         if (!node.health) {
           combatBurst(node.x, node.y, .46, hazard.color);
           gameAudio.bossAttack("burst", node.x, node.y);
+          // Cutting the attack apparatus creates an actual, short payoff.
+          // At most one opening per move, even with simultaneous area fire.
+          if (hazard.kind === "fusionLimbs" || hazard.nodes.every(part => part.health <= 0)) rewardAlienCounter();
         }
       }
       return !bullet.piercesShield;
@@ -551,7 +554,7 @@ function drawClawLock(ctx, hazard, active, p, quiet) {
   ctx.strokeStyle = "#e5ffde";
   ctx.lineWidth = 2;
   for (const side of [-1, 1]) {
-    const rail = y + side * hazard.gap * .69;
+    const rail = y + side * hazard.gap;
     ctx.beginPath();
     ctx.moveTo(x - width - marker, rail + marker * side);
     ctx.lineTo(x - width - marker, rail);

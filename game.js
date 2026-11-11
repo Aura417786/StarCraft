@@ -55,6 +55,7 @@ const combatStepSeconds = 1 / 120;
 let combatStepRemainder = 0;
 let windowActive = true;
 let pauseView = "";
+let pauseReason = "";
 let pauseConfirmFromMenu = false;
 const fighterProfiles = {
   red: { id: "red", rate: 3.6, lanes: 1, damage: 2.2,
@@ -459,7 +460,7 @@ function clearMovement() {
   resetFlightGamepad();
   previousTime = 0;
 }
-// 主动暂停由菜单控制。切走窗口时也会冻结，只有焦点回到战场才恢复。
+// 切走窗口时进入可见的暂停态，回来后由玩家确认续玩。
 function battleHasFocus() {
   return state === "battle" && !pauseView && !evolution.pending && windowActive && !document.hidden && document.activeElement === canvas;
 }
@@ -469,7 +470,11 @@ function isBattleActive() {
 function refreshPauseCopy() {
   if (!pauseScreen || !pauseView) return;
   const copy = {
-    menu: [tr("战斗暂停", "Combat paused"), tr("本局已暂停。准备好后可继续战斗。", "Your sortie is on hold. Resume when ready.")],
+    menu: [tr("战斗暂停", "Combat paused"), pauseReason === "focus"
+      ? tr("已离开游戏窗口，本局自动暂停。准备好后点击继续战斗。", "The game lost focus and paused automatically. Resume when ready.")
+      : pauseReason === "controller"
+        ? tr("手柄已断开，本局自动暂停。重新连接或使用键盘后继续。", "Controller disconnected. Reconnect or use the keyboard, then resume.")
+        : tr("本局已暂停。准备好后可继续战斗。", "Your sortie is on hold. Resume when ready.")],
     settings: [tr("战斗设置", "Combat settings"), tr("设置会立即保存，战斗保持暂停。", "Settings save immediately. Combat remains paused.")],
     exit: [tr("返回机库？", "Return to hangar?"), tr("退出会结束本局，得分和战斗进度将丢失。", "Leaving ends this sortie. Its score and progress will be lost.")],
     restart: [tr("重新开始？", "Restart sortie?"), tr("重新开始会放弃本局得分和战斗进度。", "Restarting discards this sortie's score and progress.")],
@@ -495,11 +500,12 @@ function refreshPauseCopy() {
     for (const option of pauseQualityControl.options) option.textContent = labels[option.value];
   }
 }
-function pauseGame(view = "menu") {
+function pauseGame(view = "menu", reason = "") {
   if (state !== "battle" || evolution.pending) return;
   const wasPaused = !!pauseView;
   pauseConfirmFromMenu = (view === "exit" || view === "restart") && pauseView === "menu";
   pauseView = view;
+  pauseReason = reason;
   if (!wasPaused) {
     for (const element of [canvas, battleScreen, document.querySelector(".masthead")]) {
       if (!element) continue;
@@ -521,12 +527,14 @@ function pauseGame(view = "menu") {
 }
 function clearPause() {
   pauseView = "";
+  pauseReason = "";
   pauseConfirmFromMenu = false;
   if (pauseScreen) pauseScreen.hidden = true;
   for (const [element, previous] of pauseBackground) element.inert = previous;
   pauseBackground.clear();
 }
 function resumeGame() {
+  if (state !== "battle" || !windowActive || document.hidden) return;
   syncSortieEligibility();
   clearPause();
   clearMovement();
@@ -565,6 +573,7 @@ function updatePauseHint() {
 window.addEventListener("blur", () => {
   windowActive = false;
   clearMovement();
+  if (!pauseView) pauseGame("menu", "focus");
   updatePauseHint();
 });
 window.addEventListener("focus", () => {
@@ -574,6 +583,7 @@ window.addEventListener("focus", () => {
 });
 document.addEventListener("visibilitychange", () => {
   clearMovement();
+  if (document.hidden && !pauseView) pauseGame("menu", "focus");
   updatePauseHint();
 });
 canvas.addEventListener("blur", () => {

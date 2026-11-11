@@ -62,3 +62,25 @@ node tools/testkit/boss-mechanics.cjs . 'D:/星际争霸/AI_Development/Metrics/
 node tools/testkit/performance.cjs . 'D:/星际争霸/AI_Development/Metrics/performance'
 node tools/testkit/soak.cjs . 'D:/星际争霸/AI_Development/Metrics/soak' 30
 ```
+
+## v23-rc1 专项复现
+
+先运行上述完整回归，再按需复现专项。输出目录必须不同于历史证据目录。浏览器性能测试应串行执行，关闭其他重型测试。
+
+```powershell
+node tools/testkit/final-core.cjs . ../qa-v23/core
+node tools/testkit/final-layout.cjs . ../qa-v23/layout
+node tools/testkit/final-boss.cjs . ../qa-v23/boss
+node tools/testkit/final-gameplay.cjs . ../qa-v23/gameplay
+node tools/testkit/final-gameplay-live.cjs . ../qa-v23/ships
+node tools/testkit/final-ultimate.cjs . ../qa-v23/ultimate
+node tools/testkit/final-audio.cjs . ../qa-v23/audio
+node tools/testkit/final-endurance.cjs . ../qa-v23/endurance 30
+node tools/testkit/final-performance.cjs . ../qa-v23/performance
+```
+
+`final-core` 检查可见暂停、显式恢复、辅助成绩与双语改键提示。`final-layout` 覆盖三分辨率、两种语言、三机与界面比例。`final-boss` 使用真实 GLB 轮廓检查 132 个构图状态，并验证拆招反击窗口不无限续期。`final-gameplay` 与 `final-ultimate` 使用固定目标测量命中和伤害；它们支持与 v22 冻结目录对照，不能冒充自然战役。
+
+`final-endurance` 使用生产时钟与绘制，新档三生命、零改装，依次选择三架战机，由读取状态的自动驾驶通过 Playwright 发送可信键盘事件。它不注入血量、胜利、敌人或加速时钟；保留失败尝试、结局和完整录屏，并对战斗停止推进设置 30 秒 watchdog。测试为避开教学重复先标记教学已读，教学本身另由 training 回归覆盖。每五分钟主动 GC，报告要注明，不能将这些堆数据当作未经干预的内存曲线。它不等价于人手自然通关。
+
+`final-performance` 分开报告 RAF 帧间隔、JavaScript 绘制/物理步长耗时与 CDP 主线程任务时长；不声称测量了 GPU 完成时间或物理键盘到显示器延迟。`final-audio` 记录实际音频样本和客观电平，不能替代耳机试听。实体手柄、人工初见可读性与主观听感另行标注。

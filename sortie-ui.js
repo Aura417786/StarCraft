@@ -8,7 +8,7 @@ const sortieConsoleButtons = document.querySelectorAll("[data-sortie-console]");
 const sortieModeBadge = document.querySelector("#sortie-mode-badge");
 const sortieResultSummary = document.querySelector("#sortie-result-summary");
 let sortieConsolePage = "";
-const starBreakerVersion = "v22";
+const starBreakerVersion = "v23-rc1";
 
 const sortieUiWords = {
   awards: ["徽章墙", "Badge Wall"],
@@ -361,7 +361,7 @@ function renderSortieSettings() {
     sortieSettingLine(tr("延长攻击预警 +0.35 秒", "Extend attack warnings by 0.35s"), extended),
     sortieSettingLine(tr("画面震动", "Screen shake"), shake),
     sortieSettingLine(tr("减少演出动态", "Reduce effects motion"), motion),
-    sortieElement("p", tr("这三项辅助独立设置。出击期间曾启用任意一项，成绩即计入辅助纪录。", "These three assists are independent. If any is used during a sortie, its score goes into assisted records."), "sortie-explainer"),
+    sortieElement("p", tr("只有延长攻击预警会将本局计入辅助纪录。关闭震动、减少动态和显示辅助不影响正式成绩。旧版纪录保持原样。", "Only longer attack warnings put a sortie in assisted records. Shake, reduced motion and display preferences do not affect ranked records. Older records are preserved."), "sortie-explainer"),
     sortieElement("h3", tr("玩法与制作名单", "Flight manual and credits"), "sortie-section-title"),
     guide,
     training,

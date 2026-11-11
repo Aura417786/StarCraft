@@ -98,8 +98,8 @@ function installFixedClock() {
   };
 }
 
-async function createPage(browser, game, deterministic, { flightTraining = false } = {}) {
-  const page = await browser.newPage({ viewport: windowSize, deviceScaleFactor: 1, reducedMotion: "no-preference" });
+async function createPage(browser, game, deterministic, { flightTraining = false, pageOptions = {} } = {}) {
+  const page = await browser.newPage({ viewport: windowSize, deviceScaleFactor: 1, reducedMotion: "no-preference", ...pageOptions });
   const errors = [];
   page.on("pageerror", error => errors.push(error.stack ?? error.message));
   page.on("response", response => {

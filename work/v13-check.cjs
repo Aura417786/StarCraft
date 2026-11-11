@@ -93,9 +93,12 @@ const sandbox = vm.createContext({ document, window, Math, Number, Set, gameAudi
 for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => !['audio.js', 'sortie-ui.js'].includes(file) && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox, { filename: file });
 const position = () => vm.runInContext('({ x: player.x, y: player.y })', sandbox);
 const bounds = vm.runInContext('flightBounds', sandbox);
+// Explicit Resume models the v23 visible pause contract in legacy simulation tests.
+function focusAndConfirmResume() { emit(window, 'focus'); vm.runInContext('if (pauseView) resumeGame()', sandbox); }
+function visibilityAndConfirmResume() { emit(document, 'visibilitychange'); if (!document.hidden) vm.runInContext('if (pauseView) resumeGame()', sandbox); }
 function step(seconds = 0.05) { now += seconds * 1000; animationCallback(now); }
 // 各旧功能用例隔离自动刷新的事件；v13-check 会显式开启新事件计时。
-function begin() { emit(window, 'focus'); emit(nodes.get('#start-button'), 'click'); vm.runInContext('powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity; formationState.nextTime = Infinity; battlefieldEvents.nextObject = Infinity; battlefieldEvents.nextTransport = Infinity; if(typeof aceEncounter!=="undefined")aceEncounter.nextTime=Infinity;', sandbox); step(); }
+function begin() { focusAndConfirmResume(); emit(nodes.get('#start-button'), 'click'); vm.runInContext('powerupCooldown = 999; enemyCooldown = 999; nextBossTime = Infinity; formationState.nextTime = Infinity; battlefieldEvents.nextObject = Infinity; battlefieldEvents.nextTransport = Infinity; if(typeof aceEncounter!=="undefined")aceEncounter.nextTime=Infinity;', sandbox); step(); }
 function key(code, type = 'keydown', extra) { return emit(window, type, { code, ...extra }); }
 function samePosition(a, b) { assert.equal(a.x, b.x); assert.equal(a.y, b.y); }
 let checks = 0;
@@ -836,7 +839,7 @@ check('pausing, changing fullscreen and restarting keep or clear the flight enco
   emit(window,'blur'); advanceJourneyFrames(.5);
   near(execute('liveJourneyScene.elapsed'),elapsed);
   near(execute('battlefieldState.clock'),clock);
-  emit(window,'focus'); canvas.focus();
+  focusAndConfirmResume(); canvas.focus();
   for (const fullscreen of [true,false]) {
     surface=fullscreen?{width:1920,height:1080}:{width:1280,height:720};
     document.fullscreenElement=fullscreen?nodes.get('#game-app'):null;

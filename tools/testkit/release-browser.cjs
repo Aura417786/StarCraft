@@ -66,6 +66,10 @@ async function main() {
     await page.locator("#award-skin").selectOption("frost");
     await page.locator("#award-theme").selectOption("archive");
     await page.screenshot({ path: path.join(out, "award-wall-zh.png") });
+    fs.writeFileSync(path.join(out, "before-relaunch.json"), JSON.stringify(await page.evaluate(() => ({
+      primary: localStorage.getItem("star-breaker-profile"), backup: localStorage.getItem("star-breaker-profile-backup"),
+      current: sortieProfile.data, status: sortieProfile.status,
+    })), null, 2));
     await session.context.close();
     session = await open(profileDir, errors);
     ({ page } = session);
@@ -74,6 +78,10 @@ async function main() {
       badge: sortieProfile.data.awards.badges.includes("fly-red"),
       filter: document.querySelector("#fighter-art").style.filter,
     }));
+    fs.writeFileSync(path.join(out, "after-relaunch.json"), JSON.stringify(await page.evaluate(() => ({
+      primary: localStorage.getItem("star-breaker-profile"), backup: localStorage.getItem("star-breaker-profile-backup"),
+      current: sortieProfile.data, status: sortieProfile.status,
+    })), null, 2));
     assert.deepEqual(saved.appearance, { skin: "frost", theme: "archive" });
     assert.ok(saved.filter.includes("grayscale"));
     assert.ok(saved.badge);

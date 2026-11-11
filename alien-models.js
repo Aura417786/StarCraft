@@ -81,11 +81,12 @@ function bossActionPose(target, quiet = false) {
     : type === 7 && !quiet ? 1 + .12 * Math.sin(phaseTime * 11) : 1;
   const weight = (ready - release * .39) * motion * (1 - slack);
   const lowCharge = warming ? clamp(1 - remaining / Math.max(.01, target.telegraphDuration), 0, 1) * .19 : 0;
+  const countered = typeof bossCounterActive === "function" && bossCounterActive(target) ? 1 : 0;
   return {
     readiness: ready, release, loss, slack,
     charge: clamp((lowCharge + ready * .81 + release * .84) * rhythmic * (1 - slack), 0, 1),
-    spread: unfold * (ready + release * .36) * (1 - slack),
-    core: core * (lowCharge + ready * .88 + release * .55) * (1 - slack),
+    spread: Math.max(countered * .48, unfold * (ready + release * .36)) * (1 - slack),
+    core: Math.max(countered * 1.2, core * (lowCharge + ready * .88 + release * .55)) * (1 - slack),
     x: weight * (retreat + lunge - vent) + slack * .05,
     y: weight * (lift + sweep * .20) + slack * .10 * motion,
     pitch: weight * pitch - slack * .21 * motion + tremor,

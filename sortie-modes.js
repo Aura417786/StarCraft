@@ -92,7 +92,9 @@ function syncSortieEligibility() {
   for (const key of Object.keys(flags)) {
     if (!flags[key]) continue;
     (sortieStats.assists ??= {})[key] = true;
-    sortieStats.assisted = true;
+    // Presentation preferences do not change combat rules or score eligibility.
+    // Keep them in the run history, but only longer warnings are a gameplay assist.
+    if (key === "extendedWarning") sortieStats.assisted = true;
   }
 }
 
@@ -128,7 +130,7 @@ function newSortie(options = {}) {
     resumed, rushStart: resumed ? options.rushStart : 0, week, weekly,
     guardReady: upgrades.survival >= 4, hitDebt: 0, hitsTaken: 0, bossRecords: [], unlocks: [],
     assisted: false, assists: sortieAssistFlags(), result: null };
-  sortieStats.assisted = Object.values(sortieStats.assists).some(Boolean);
+  sortieStats.assisted = sortieStats.assists.extendedWarning;
   return sortieStats;
 }
 

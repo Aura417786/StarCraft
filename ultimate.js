@@ -182,7 +182,7 @@ function fireUltimate() {
       x: 0, previousX: 0, startX: 0, y: viewport.height * 0.5, radius: viewport.height * 0.5,
       delay: index * coronaRules.interval, speed: Math.max(1250, viewport.width * 1.68),
       length: clamp(viewport.width * 0.047, 33, 94), damageLog: damageLog + Math.log(coronaRules.damageShare),
-      source: "ultimate", hitTargets: new WeakSet(),
+      source: "ultimate", waveIndex: index, hitTargets: new WeakSet(),
     }));
     ultimate.shot = { waves, linked };
   } else {
@@ -218,9 +218,36 @@ function ultimateHitsTarget(shot, target) {
   }
   return true;
 }
-function hitUltimateBoss(target, shot, cap) {
+function ultimateFinaleRegion(target, geometry, finaleNode = -1) {
+  return { ...geometry,
+    width: geometry.width ?? geometry.radius * 2, height: geometry.height ?? geometry.radius * 2,
+    previousX: geometry.x + (target.previousX ?? target.x) - target.x,
+    previousY: geometry.y + (target.previousY ?? target.y) - target.y, finaleNode };
+}
+function ultimateBossContact(shot, target) {
+  if (!target.finale) return ultimateHitsTarget(shot, target) ? target : null;
+  const f = target.finale;
+  const nodes = f.nodes.filter(node => node.hp > 0);
+  if (Number.isInteger(shot.waveIndex) && nodes.length) {
+    // A full-height wave covers the actual objectives, not just screen centre.
+    // Spend its existing single damage packet on one node; never multiply it
+    // by the number of overlapping parts. Sequence/mirror rules still apply.
+    const legal = f.mode === "mirror" || f.mode === "synapse"
+      ? nodes.filter(node => node.index === f.activeNode) : nodes;
+    if (legal.length) {
+      const node = legal[shot.waveIndex % legal.length];
+      const region = ultimateFinaleRegion(target, finaleNodeGeometry(target, node), node.index);
+      return ultimateHitsTarget(shot, region) ? region : null;
+    }
+  }
+  const regions = [ultimateFinaleRegion(target, finaleCoreGeometry(target)),
+    ...nodes.map(node => ultimateFinaleRegion(target, finaleNodeGeometry(target, node), node.index))];
+  return regions.filter(region => ultimateHitsTarget(shot, region))
+    .sort((a, b) => a.x - a.width * .45 - (b.x - b.width * .45))[0] ?? null;
+}
+function hitUltimateBoss(target, shot, cap, contact = shot) {
   const damageLog = cap ? Math.min(shot.damageLog, target.healthLog + Math.log(cap)) : shot.damageLog;
-  applyBossHit({ source: "ultimate", damageLog, y: shot.y, finaleNode: shot.finaleNode }, target);
+  applyBossHit({ source: "ultimate", damageLog, y: contact.y, finaleNode: contact.finaleNode }, target);
 }
 function markCrimsonContact(shot, target) {
   if (!shot.contacts) return;
@@ -241,10 +268,12 @@ function resolveUltimateHits(shot = ultimate.shot, bossCap) {
     if (enemy.hp <= 0) defeatEnemy(index, shot);
   }
   for (const target of activeBosses()) {
-    if (!bossCanTakeDamage(target) || shot.hitTargets.has(target) || !ultimateHitsTarget(shot, target)) continue;
+    if (!bossCanTakeDamage(target) || shot.hitTargets.has(target)) continue;
+    const contact = ultimateBossContact(shot, target);
+    if (!contact) continue;
     shot.hitTargets.add(target);
-    markCrimsonContact(shot, target);
-    hitUltimateBoss(target, shot, bossCap);
+    markCrimsonContact(shot, contact);
+    hitUltimateBoss(target, shot, bossCap, contact);
     if (!isBattleActive()) return;
   }
 }
@@ -262,6 +291,23 @@ function selectIonTarget(missile, aimY) {
     if (score < best) { selected = enemy; best = score; }
   }
   return selected;
+}
+function ionAimPoint(target, missile) {
+  if (missile.aimBoss !== target) { missile.aimBoss = target; missile.aimNode = null; }
+  if (!target.finale) return target;
+  const f = target.finale;
+  const legal = f.nodes.filter(node => node.hp > 0
+    && (!(f.mode === "mirror" || f.mode === "synapse") || node.index === f.activeNode));
+  let node = legal.find(part => part.index === missile.aimNode);
+  if (!node) {
+    node = legal.map(part => ({ part, g: finaleNodeGeometry(target, part) }))
+      .sort((a, b) => Math.hypot(a.g.x - missile.x, a.g.y - missile.y)
+        - Math.hypot(b.g.x - missile.x, b.g.y - missile.y))[0]?.part;
+    missile.aimNode = node?.index ?? -1;
+  }
+  // aimNode is steering only. The swept collision assigns finaleNode on impact,
+  // so an intercepted missile cannot damage a different, untouched component.
+  return node ? finaleNodeGeometry(target, node) : finaleCoreGeometry(target);
 }
 function resolveIonHit(missile, bursts, age) {
   let time = Infinity;
@@ -304,7 +350,8 @@ function updateIonSwarm(shot, before, after) {
     missile.target ??= selectIonTarget(missile, shot.aimY);
     const target = missile.target;
     if (target) {
-      const aim = Math.atan2(target.y - missile.y, Math.max(32, target.x - missile.x));
+      const point = ionAimPoint(target, missile);
+      const aim = Math.atan2(point.y - missile.y, Math.max(32, point.x - missile.x));
       const turn = clamp(aim - missile.angle, -seconds * 7, seconds * 7);
       missile.angle = clamp(missile.angle + turn, -1.17, 1.17);
     }
