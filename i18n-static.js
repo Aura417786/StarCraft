@@ -5,6 +5,13 @@ const gameStaticEnglish = new Map([
   ["星际突围，一款逐步开发的横向飞机射击小游戏。", "Star Breaker is a side-scrolling space shooter for desktop browsers."],
   ["星际突围 · 深渊临界", "Star Breaker · Abyssal Threshold"],
   ["深空机库 / HANGAR", "DEEP SPACE / HANGAR"],
+  ["机库主菜单", "Hangar main menu"],
+  ["机库功能", "Hangar functions"],
+  ["出击配置", "Sortie Setup"],
+  ["档案与改装", "Records & Refits"],
+  ["飞行手册", "Flight Manual"],
+  ["返回主菜单", "Back to Menu"],
+  ["确认出击", "Launch Sortie"],
   ["选择战机，迎战群渊。", "Choose your fighter. Face the Abyss."],
   ["选择出击战机", "Choose your fighter"],
   ["赤焰", "Crimson"],
@@ -230,8 +237,8 @@ function applyGameStaticLanguage() {
 
 document.addEventListener("DOMContentLoaded", () => {
   const button = document.querySelector("#language-button");
-  if (!button) return;
+  if (!button && !document.querySelector("#start-screen[data-hangar-page]")) return;
   applyGameStaticLanguage();
   if (typeof refreshGameLanguage === "function") refreshGameLanguage();
-  button.addEventListener("click", () => setGameLanguage(tr("en", "zh-CN")));
+  button?.addEventListener("click", () => setGameLanguage(tr("en", "zh-CN")));
 }, { once: true });

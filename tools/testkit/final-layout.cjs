@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
+const { selectHangarFighter } = require("./hangar-test-controls.cjs");
 const root = path.resolve(process.argv[2]);
 const output = path.resolve(process.argv[3]);
 const baseline = process.argv.includes("--baseline");
@@ -28,6 +29,7 @@ async function main() {
   await page.addInitScript(() => {
     localStorage.setItem("star-breaker-guide-seen", "1");
     localStorage.setItem("star-breaker-flight-training", "1");
+    localStorage.setItem("star-breaker-opening-seen", "1");
   });
   try {
     await page.goto(origin);
@@ -45,7 +47,7 @@ async function main() {
             document.querySelector("#start-screen").scrollTop = 0;
           }, [language, ui]);
           for (const fighter of ["red", "blue", "yellow"]) {
-            await page.locator(`#fighter-picker label[data-fighter="${fighter}"]`).click();
+            await selectHangarFighter(page, fighter);
             await page.evaluate(() => { document.querySelector("#start-screen").scrollTop = 0; });
             const bounds = await page.evaluate(() => {
               const button = document.querySelector("#start-button"), screen = document.querySelector("#start-screen");

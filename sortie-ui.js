@@ -8,7 +8,7 @@ const sortieConsoleButtons = document.querySelectorAll("[data-sortie-console]");
 const sortieModeBadge = document.querySelector("#sortie-mode-badge");
 const sortieResultSummary = document.querySelector("#sortie-result-summary");
 let sortieConsolePage = "";
-const starBreakerVersion = "v30";
+const starBreakerVersion = "v34";
 
 const sortieUiWords = {
   awards: ["徽章墙", "Badge Wall"],
@@ -351,6 +351,9 @@ function renderSortieSettings() {
     visualQuality.id, value => setVisualQuality(value));
   const language = sortieSelect("sortie-language", [["zh-CN", "中文"], ["en", "English"]], gameLanguage, value => setGameLanguage(value));
   const sound = sortieCheckbox("sortie-sound", !gameAudio.muted, () => toggleGameSound());
+  const fullscreen = sortieButton("", () => fullscreenButton.click());
+  fullscreen.id = "sortie-fullscreen";
+  fullscreen.disabled = fullscreenButton.hidden;
   const guide = sortieButton(tr("打开玩法说明", "Open flight manual"), () => {
     sortieConsole.close();
     document.querySelector("#guide-button")?.click();
@@ -360,6 +363,7 @@ function renderSortieSettings() {
     sortieElement("h3", tr("显示与声音", "Display and audio"), "sortie-section-title"),
     sortieSettingLine(tr("语言", "Language"), language),
     sortieSettingLine(tr("画质", "Graphics"), quality),
+    sortieSettingLine(tr("显示模式", "Window mode"), fullscreen),
     sortieSettingLine(tr("声音", "Sound"), sound),
     sortieSettingLine(tr("主音量", "Master volume"), sortieVolumeControl()),
     sortieSettingLine(tr("无线电播报", "Radio dispatches"), radio),
@@ -381,6 +385,7 @@ function renderSortieSettings() {
     sortieElement("p", tr("存档、徽章和设置保存在当前浏览器，并保留一份本机备份。更换浏览器、网页地址或清除网站数据会切换或移除存档。游戏没有账号或在线排行榜。",
       "Saves, badges, and settings stay in this browser with a local backup. A different browser or URL uses a different save. Clearing site data removes the save. The game has no accounts or online leaderboard."), "sortie-explainer")
   );
+  updateFullscreenDisplay();
   if (typeof appendFlightControlsSettings === "function") appendFlightControlsSettings(sortieConsoleBody);
 }
 
@@ -447,7 +452,6 @@ function refreshSortieUI() {
   refreshHangarDifficulty();
   if (!sortieConsole) return;
   for (const button of sortieConsoleButtons) button.textContent = sortieWord(button.dataset.sortieConsole);
-  document.querySelector(".hangar-console-actions")?.setAttribute("aria-label", tr("机库终端", "Hangar console"));
   if (sortieConsole.open) renderSortieConsole();
   refreshSortieHud();
   if (state === "over") refreshSortieResult();
@@ -473,6 +477,7 @@ function refreshHangarDifficulty() {
     radio.checked = radio.value === sortieSettings.difficulty;
     radio.nextElementSibling.textContent = sortieWord(radio.value);
   }
+  refreshHangarLoadoutSummary();
 }
 
 document.querySelector("#hangar-difficulty")?.addEventListener("change", event => {

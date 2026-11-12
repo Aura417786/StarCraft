@@ -1,6 +1,8 @@
 # Star Breaker · 星际突围
 
-**v33 Deep-space hangar and Dark Forest prologue.** Select Crimson, Azure, or Auric in the redesigned hangar. The first campaign launch plays a 2:26 cinematic with bilingual subtitles. When a returning signal gives away Earth, a research lead takes the prototype up to buy time for evacuation. The selected fighter's special carries the final shot into gameplay. Pause or skip the prologue, or choose **Replay prologue** from the hangar.
+**v34 Hangar main menu.** Start Game launches with the displayed fighter and difficulty. Sortie Setup lets you change both. Records & Refits holds refits, the campaign archive, and badges. The Flight Manual holds the guide and prologue replay. Use Settings for sound, graphics, language, and fullscreen.
+
+**v33 Deep-space hangar and Dark Forest prologue.** The first campaign launch plays a 2:26 cinematic with bilingual subtitles. When a returning signal gives away Earth, a research lead takes the prototype up to buy time for evacuation. The selected fighter's special carries the final shot into gameplay. Pause or skip it, or choose **Replay Prologue** in the Flight Manual.
 
 **v32 Battlefield lighting.** Key light and ambient bounce change as you fly through the five sectors. Charged weapons, shields and explosions cast brief pools of light on nearby ships and aliens. Try the mirror boss in single-boss practice to see its cyan and violet beams, from the charge to the fading aftershock.
 
@@ -27,7 +29,7 @@ Public demos may run different versions. Open the game over HTTP to enable its W
 
 ## Quick start
 
-Choose **English** on the main menu. The guide opens on your first visit and can be reopened via **How to Play**. Pick a fighter and a mode. Your main gun fires automatically by default. The first campaign offers a skippable training sequence for shielding, specials, and evolution.
+Choose **English** under **Settings**. The guide opens on your first visit and can be reopened via **Flight Manual → How to Play**. Pick a fighter in Sortie Setup. Your main gun fires automatically by default. The first campaign offers a skippable training sequence for shielding, specials, and evolution.
 
 | Key | Action |
 | --- | --- |

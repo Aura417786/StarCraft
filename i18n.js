@@ -3,7 +3,8 @@
 const gameLanguageKey = "star-breaker-language";
 let gameLanguage = "zh-CN";
 try {
-  if (document.querySelector("#language-button") && window.localStorage.getItem(gameLanguageKey) === "en") gameLanguage = "en";
+  if (document.querySelector("#start-screen[data-hangar-page], #language-button")
+    && window.localStorage.getItem(gameLanguageKey) === "en") gameLanguage = "en";
 } catch { /* Browser storage can be unavailable in embedded or local play. */ }
 
 function tr(chinese, english) { return gameLanguage === "en" ? english : chinese; }

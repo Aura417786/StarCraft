@@ -17,15 +17,8 @@
   background: linear-gradient(90deg, #091117f2, #0b1820a1 49%, #0a161ed1);
 }
 
-.battlefield:has(> #start-screen:not([hidden])) > .masthead .secondary-button {
-  background: #101c22c9;
-  border-color: #849fa14f;
-  border-radius: 2px;
-  color: #e4ebeb;
-}
-
-.battlefield:has(> #start-screen:not([hidden])) > .masthead .secondary-button:hover {
-  border-color: #bedbdc;
+.battlefield:has(> #start-screen:not([hidden])) > .masthead .header-actions {
+  display: none;
 }
 
 .battlefield:has(> #start-screen:not([hidden])) > .lesson-note {
@@ -125,13 +118,6 @@ html[lang="en"] #start-screen h1 {
 
 html[lang="en"] #start-screen h1 > span {
   display: block;
-}
-
-#start-screen .intro {
-  margin: 0;
-  color: #c3ced4;
-  font-size: clamp(12px, 1.15vw, 17px);
-  letter-spacing: .10em;
 }
 
 #start-screen .fighter-picker,
@@ -237,129 +223,116 @@ html[lang="en"] #start-screen h1 > span {
   font-size: 11px;
 }
 
-#start-screen .start-actions {
+.hangar-panel {
+  width: 100%;
+  animation: hangar-ui-enter .34s var(--hangar-ease) both;
+}
+
+.hangar-launch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 9px;
+  border: 1px solid #b2d1d851;
+  background: #07131ac9;
+}
+
+.hangar-start, .hangar-configure, .hangar-row, .hangar-back {
+  appearance: none;
+  cursor: pointer;
+  color: #eaf6f8;
+  font: 650 1rem/1.22 "Instrument Sans", "Microsoft YaHei", sans-serif;
+  text-align: left;
+}
+
+.hangar-start {
   display: flex;
-  align-items: stretch;
-  justify-content: start;
-  gap: 7px;
-  margin: 0;
-  flex-wrap: wrap;
-}
-
-#start-screen .start-actions > .primary-button {
-  --launch-color: color-mix(in srgb, var(--hangar-accent) 57%, #fff4df);
-  position: relative;
-  isolation: isolate;
-  flex: 1 1 150px;
-  min-height: 49px;
-  width: auto;
-  margin: 0;
-  padding: 8px 15px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 7px 17px 7px 15px;
   border: 0;
-  border-radius: 0;
-  white-space: nowrap;
-  color: #10212b;
-  background: none;
-  box-shadow: none;
-  font-weight: 800;
-  letter-spacing: .045em;
-  transition: color .22s ease;
+  border-inline-start: 3px solid var(--hangar-accent);
+  background: linear-gradient(105deg, color-mix(in srgb, var(--hangar-accent) 24%, #14222c), #121f28);
 }
 
-#start-screen .start-actions > .primary-button::before {
+.hangar-start strong { font-size: clamp(17px, 1.65vw, 24px); font-weight: 800; }
+.hangar-start small { display: block; margin-top: 3px; color: #ccdadd; font-size: .76rem; }
+.hangar-start-arrow { color: color-mix(in srgb, var(--hangar-accent) 60%, #f7f7f5); transition: transform .22s var(--hangar-ease); }
+.hangar-start:is(:hover, :focus):not(:disabled) {
+  background: linear-gradient(105deg, color-mix(in srgb, var(--hangar-accent) 38%, #182633), #1c313c);
+}
+.hangar-start:is(:hover, :focus) .hangar-start-arrow { transform: translate(3px, -3px); }
+.hangar-start:disabled { opacity: .55; cursor: default; }
+.hangar-start:focus-visible, .hangar-configure:focus-visible, .hangar-back:focus-visible {
+  outline: 2px solid #a2e8f7;
+  outline-offset: -3px;
+}
+
+.hangar-configure {
+  min-width: 106px;
+  padding: 8px 13px;
+  border: 0;
+  border-inline-start: 1px solid var(--hangar-rule);
+  background: #12212b;
+  text-align: center;
+  font-size: .87rem;
+}
+.hangar-configure:is(:hover, :focus), .hangar-back:is(:hover, :focus) { background-color: #263c48; color: #fff; }
+
+.hangar-menu-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+}
+
+.hangar-row {
+  display: flex;
+  position: relative;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 47px;
+  padding: 7px 17px 7px 17px;
+  border: 1px solid transparent;
+  border-block-end-color: #a7c0ca24;
+  background: transparent;
+  font-size: clamp(.93rem, 1.3vw, 1.18rem);
+  transition: background-color .19s ease, border-color .19s ease, padding .2s var(--hangar-ease);
+}
+.hangar-row::after { content: "›"; color: #8cb3c0; font-size: 1.35em; line-height: 1; }
+.hangar-row::before {
   content: "";
   position: absolute;
-  inset: 0;
-  z-index: -1;
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-  background:
-    linear-gradient(115deg, #ffffff00 28%, #ffffff89 49%, #ffffff00 71%) 140% 0 / 230% 100% no-repeat,
-    linear-gradient(104deg, var(--launch-color), #f3fbf6 90%);
-  transition: background-position .64s var(--hangar-ease);
+  inset-block: 20%;
+  left: -1px;
+  width: 2px;
+  background: var(--hangar-accent);
+  opacity: 0;
+  transition: opacity .18s ease;
 }
+.hangar-row:is(:hover, :focus) {
+  padding-inline-start: 23px;
+  border-color: #a4ced652;
+  background: #213946b5;
+}
+.hangar-row:is(:hover, :focus)::before { opacity: 1; }
+.hangar-row:focus-visible { outline: 2px solid #a2e8f7; outline-offset: -2px; }
 
-#start-screen .start-actions > .primary-button:hover,
-#start-screen .start-actions > .primary-button:focus-visible {
-  transform: none;
-  box-shadow: none;
+.hangar-subhead { display: grid; justify-items: start; gap: 6px; margin-bottom: 14px; }
+.hangar-subhead h2 { margin: 0; font-size: clamp(1.2rem, 2.3vw, 1.8rem); line-height: 1.1; }
+.hangar-back {
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid #a7c0ca26;
+  background: #11212bc4;
+  color: #c4dbe2;
+  font-size: .8rem;
 }
-
-#start-screen .start-actions > .primary-button:is(:hover, :focus-visible)::before {
-  background-position: 0 0;
-}
-
-#start-screen .start-actions > .primary-button:active::before {
-  filter: brightness(.91);
-}
-
-#start-screen .primary-button > span {
-  font-size: 19px;
-  transition: transform .25s var(--hangar-ease);
-}
-
-#start-screen .primary-button:is(:hover, :focus-visible) > span {
-  transform: translate(2px, -2px);
-}
-
-#start-screen .secondary-button {
-  border-color: var(--hangar-rule);
-  border-radius: 2px;
-  color: var(--hangar-metal);
-  background: var(--hangar-surface);
-  transition: color .2s ease, background-color .2s ease, border-color .2s ease;
-}
-
-#start-screen .secondary-button:hover {
-  color: #fff;
-  border-color: #accbd2;
-  background: #29404a;
-}
-
-#start-screen .secondary-button:active {
-  background: #36505b;
-}
-
-#start-screen .start-actions > .secondary-button {
-  min-height: 44px;
-  padding: 6px 11px;
-}
-
-#start-screen .hangar-console-actions {
-  margin: 14px 0 0;
-  padding-top: 11px;
-  border-top: 1px solid var(--hangar-rule);
-  gap: 5px;
-}
-
-#start-screen .hangar-console-actions .secondary-button {
-  min-height: 31px;
-  padding: 4px 9px;
-}
-
-#start-screen .hangar-utility {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
-  margin-top: 8px;
-}
-
-#start-screen .hangar-utility .secondary-button {
-  min-height: 31px;
-  padding: 4px 9px;
-  font-size: 12px;
-}
-
-#start-screen .render-quality-control {
-  margin: 0;
-  color: var(--hangar-muted);
-}
-
-#start-screen .render-quality-control select {
-  border-color: var(--hangar-rule);
-  background: #111e28;
-  min-height: 31px;
-}
+.hangar-back::before { content: "‹"; margin-inline-end: .6em; }
+.hangar-loadout-panel > .hangar-start { width: 100%; min-height: 44px; }
 
 #start-screen .hangar-art {
   position: relative;
@@ -477,7 +450,6 @@ html[lang="en"] #start-screen h1 > span {
   .hangar-title { padding-bottom: 9px; margin-bottom: 12px; }
   #start-screen h1 { font-size: clamp(42px, 6vw, 72px); margin-block: 8px 10px; }
   #start-screen .fighter-picker { margin-bottom: 10px; }
-  #start-screen .hangar-console-actions { margin-top: 11px; padding-top: 9px; }
 }
 
 @media (max-height: 480px) and (min-width: 561px) {
@@ -489,13 +461,11 @@ html[lang="en"] #start-screen h1 > span {
     align-content: start;
   }
   .battlefield:has(> #start-screen:not([hidden])) > .masthead { height: 50px; padding-block: 7px; }
-  .battlefield:has(> #start-screen:not([hidden])) > .masthead .secondary-button { min-height: 31px; padding-block: 4px; }
   .hangar-title { margin-bottom: 5px; padding-bottom: 4px; }
   #start-screen .hangar-title .eyebrow { display: none; }
   #start-screen h1, html[lang="en"] #start-screen h1 { font-size: clamp(27px, 5.8vh, 38px); margin-block: 3px 0; }
   html[lang="en"] #start-screen h1 { max-width: 100%; line-height: 1; }
   html[lang="en"] #start-screen h1 > span { display: inline; }
-  #start-screen .intro { display: none; }
   #start-screen .fighter-picker { position: static; padding: 0; min-height: 0; margin-bottom: 6px; }
   #start-screen .fighter-picker legend { margin-bottom: 4px; }
   #start-screen .fighter-option > span { min-height: 27px; padding-block: 3px; }
@@ -507,14 +477,15 @@ html[lang="en"] #start-screen h1 > span {
   #start-screen .hangar-difficulty legend { line-height: 23px; }
   #start-screen .hangar-difficulty-options span { padding-block: 0; line-height: 20px; }
   #start-screen .hangar-difficulty p { margin-top: 3px; font-size: 9px; line-height: 1.25; }
-  #start-screen .start-actions { gap: 4px; }
-  #start-screen .start-actions > .primary-button { flex-basis: 108px; min-height: 33px; padding: 4px 9px; font-size: 13px; }
-  #start-screen .start-actions > .secondary-button { min-height: 33px; padding: 3px 7px; font-size: 11px; }
-  #start-screen .hangar-console-actions { margin-top: 6px; padding-top: 5px; }
-  #start-screen .hangar-console-actions .secondary-button { min-height: 25px; padding: 2px 6px; font-size: 10px; }
-  #start-screen .hangar-utility { margin-top: 4px; }
-  #start-screen .hangar-utility .secondary-button,
-  #start-screen .render-quality-control select { min-height: 25px; padding-block: 2px; font-size: 10px; }
+  .hangar-launch { margin-bottom: 5px; }
+  .hangar-start { min-height: 42px; padding: 4px 10px; }
+  .hangar-start strong { font-size: .96rem; }
+  .hangar-start small { font-size: .66rem; margin-top: 2px; }
+  .hangar-row { min-height: 34px; padding-block: 4px; }
+  .hangar-subhead { grid-template-columns: auto 1fr; gap: 9px; align-items: center; margin-bottom: 8px; }
+  .hangar-subhead h2 { font-size: 1.12rem; }
+  .hangar-back { min-height: 29px; }
+  .hangar-loadout-panel > .hangar-start { min-height: 33px; }
   #start-screen .hangar-art { grid-row: 1; grid-column: 2; }
   #start-screen .hangar-art img { width: min(108%, 320px); }
   #start-screen .ship-label { bottom: 5%; padding: 4px 6px; font-size: 9px; letter-spacing: .045em; }
@@ -533,7 +504,6 @@ html[lang="en"] #start-screen h1 > span {
   .battlefield:has(> #start-screen:not([hidden])) > .masthead .brand { gap: 6px; font-size: 11px; letter-spacing: .035em; }
   .battlefield:has(> #start-screen:not([hidden])) > .masthead .brand-mark { font-size: 20px; }
   .battlefield:has(> #start-screen:not([hidden])) > .masthead .edition { display: none; }
-  .battlefield:has(> #start-screen:not([hidden])) > .masthead .secondary-button { min-height: 30px; padding: 4px 6px; font-size: 10px; }
   #start-screen {
     inset: 54px 0 0;
     grid-template-columns: minmax(0, 1fr);
@@ -557,9 +527,7 @@ html[lang="en"] #start-screen h1 > span {
   #start-screen .fighter-brief { padding: 6px 9px; }
   #start-screen .fighter-special { font-size: 11px; }
   #start-screen .hangar-difficulty { margin-bottom: 8px; }
-  #start-screen .start-actions > .primary-button { flex-basis: 116px; min-height: 41px; padding-inline: 9px; }
-  #start-screen .start-actions > .secondary-button { min-height: 40px; padding-inline: 7px; font-size: 12px; }
-  #start-screen .hangar-console-actions { margin-top: 8px; padding-top: 8px; }
+  .hangar-back, .hangar-row { min-height: 44px; }
 }
 
 .app[data-quality="low"] #start-screen .hangar-art img {
@@ -578,5 +546,5 @@ html[lang="en"] #start-screen h1 > span {
     animation: none !important;
     transition: none !important;
   }
-  #start-screen .primary-button:is(:hover, :focus-visible) > span { transform: none; }
+  #start-screen .hangar-start:is(:hover, :focus) .hangar-start-arrow { transform: none; }
 }

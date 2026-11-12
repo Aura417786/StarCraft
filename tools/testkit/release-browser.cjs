@@ -37,6 +37,10 @@ async function open(profileDir, errors) {
 }
 
 async function openPanel(page, section) {
+  if (["upgrades", "archive", "awards"].includes(section)) {
+    const records = page.locator("#hangar-records");
+    if (await records.isVisible()) await records.click();
+  }
   const entry = page.locator(`[data-sortie-console="${section}"]`);
   await entry.focus();
   await page.keyboard.press("Enter");

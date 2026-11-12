@@ -3,6 +3,7 @@
 const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");
 const {chromium}=require("playwright");
 const {createPage}=require("./balance.cjs");
+const {selectHangarFighter}=require("./hangar-test-controls.cjs");
 
 async function main(){
   const root=path.resolve(process.argv[2]),out=path.resolve(process.argv[3]);
@@ -13,7 +14,7 @@ async function main(){
     for(const fighter of ["red","blue","yellow"]){
       const {page,errors}=await createPage(browser,root,false);
       try{
-        await page.locator(`#fighter-picker input[value="${fighter}"]`).check();
+        await selectHangarFighter(page, fighter);
         await page.locator("#start-button").click();
         await page.evaluate(fighter=>{
           enemyCooldown=nextBossTime=powerupCooldown=Infinity;

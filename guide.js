@@ -92,10 +92,12 @@ document.addEventListener("DOMContentLoaded", () => {
     rememberGuide();
   }
 
-  guideButton.addEventListener("click", () => showGuide(guideButton));
+  guideButton.addEventListener("click", () =>
+    showGuide(guideButton.closest?.("[hidden]") ? document.activeElement : guideButton));
   dialog.addEventListener("close", () => {
-    const target = returnFocus && !returnFocus.disabled ? returnFocus : guideButton;
-    target.focus({ preventScroll: true });
+    const target = [returnFocus, startButton, guideButton, document.querySelector("#hangar-manual")].find(button =>
+      button && !button.disabled && !button.closest?.("[hidden],dialog:not([open])"));
+    target?.focus({ preventScroll: true });
   });
   if (!hasSeenGuide()) showGuide(startButton);
   else refreshFlightGuideNavigation();

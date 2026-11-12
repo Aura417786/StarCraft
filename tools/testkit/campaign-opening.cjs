@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 const { createPage } = require("./balance.cjs");
+const { openHangarPage, closeHangarPage } = require("./hangar-test-controls.cjs");
 
 const root = path.resolve(process.argv[2]);
 const out = path.resolve(process.argv[3]);
@@ -24,8 +25,10 @@ async function testOpening(browser, fighter) {
       setGameLanguage(value);
       flightControls.autofire = false;
     }, language);
+    await openHangarPage(page, "loadout");
     await page.locator(`#fighter-picker label[data-fighter="${fighter}"]`).click();
     await page.locator(`#hangar-difficulty label:has(input[value="${difficulty}"])`).click();
+    await closeHangarPage(page, "loadout");
     await start.click();
     await intro.waitFor({ state: "visible" });
     assert.deepEqual(await page.evaluate(() => ({ state, battleTime, active: campaignOpening.active })), {
@@ -81,11 +84,14 @@ async function testOpening(browser, fighter) {
     await intro.waitFor({ state: "hidden" });
 
     await page.evaluate(() => showScreen("menu"));
+    await openHangarPage(page, "manual");
     await replay.click();
     await intro.waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
     await intro.waitFor({ state: "hidden" });
     assert.equal(await page.evaluate(() => state), "menu");
+    await page.waitForFunction(() => document.activeElement?.id === "replay-intro-button");
+    await closeHangarPage(page, "manual");
     await start.click();
     await page.waitForFunction(() => state === "battle");
     assert.equal(await intro.isVisible(), false);

@@ -5,6 +5,7 @@ const path = require("node:path");
 const { performance } = require("node:perf_hooks");
 const { chromium } = require("playwright");
 const { createPage } = require("./balance.cjs");
+const { selectHangarFighter } = require("./hangar-test-controls.cjs");
 
 async function main() {
   const root = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]);
@@ -57,7 +58,7 @@ async function main() {
         const victoryReturn = page.locator("#campaign-report-hangar");
         await (await victoryReturn.isVisible() ? victoryReturn : page.locator("#result-menu-button")).click();
       }
-      await page.locator(`#fighter-picker input[value="${fighter}"]`).check();
+      await selectHangarFighter(page, fighter);
       await page.evaluate(({ seed, fighter }) => {
         const original = startBattleWithSound;
         startBattleWithSound = options => { startBattleWithSound = original; original({ ...options, seed, difficulty: "veteran" }); };

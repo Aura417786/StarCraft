@@ -360,6 +360,7 @@ function backFromFlightMenu(scope) {
     flightBindingNotice = ["已取消。", "Cancelled."];
     renderFlightControlsDialog();
   } else if (scope?.open && typeof scope.close === "function") scope.close();
+  else if (scope?.id === "start-screen" && typeof backHangarPage === "function") backHangarPage();
   else if (pauseView) togglePauseFromInput();
   else if (scope?.id === "campaign-epilogue") document.querySelector("#campaign-epilogue-skip")?.click();
   else if (scope?.id === "campaign-victory-report") document.querySelector("#campaign-report-hangar")?.click();

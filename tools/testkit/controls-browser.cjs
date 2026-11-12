@@ -82,7 +82,16 @@ async function run() {
     assert.deepEqual(evidence.reload, { key: "H", pause: "P", autofire: false, ui: "115", subtitle: "130", pattern: "true" });
 
     await page.evaluate(() => { testFlightPad.connected = true; });
-    await page.locator('#fighter-picker input[value="red"]').focus();
+    if (await page.locator("#hangar-loadout").count()) {
+      await page.locator("#hangar-loadout").focus();
+      await tap(0);
+      await page.locator("#hangar-loadout-panel").waitFor();
+      await tap(1);
+      await focusIs("#hangar-loadout");
+      assert.equal(await page.locator("#hangar-loadout-panel").isVisible(), false);
+    } else {
+      await page.locator('#fighter-picker input[value="red"]').focus();
+    }
     for (let step = 0; step < 16 && !(await page.evaluate(() => document.activeElement.id === "start-button")); step++)
       await tap(13);
     await focusIs("#start-button");

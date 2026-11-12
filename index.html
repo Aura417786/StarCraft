@@ -81,6 +81,7 @@
   <script src="opening-art.js" defer></script>
   <script src="opening-score.js" defer></script>
   <script src="opening.js" defer></script>
+  <script src="hangar-navigation.js" defer></script>
   <script src="game.js" defer></script>
   <script src="boss-retry.js" defer></script>
   <script src="battle-rewind.js" defer></script>
@@ -98,54 +99,81 @@
         <a class="brand" href="./" aria-label="星际突围首页"><span class="brand-mark" aria-hidden="true">✦</span> 星际突围 <span class="edition">STAR BREAKER</span></a>
         <div class="header-actions"><button id="shake-button" class="secondary-button shake-button" type="button">震动：轻</button><button id="sound-button" class="secondary-button sound-button" type="button" aria-pressed="true" title="开启或关闭音效和音乐">声音：开</button><button id="fullscreen-button" class="secondary-button fullscreen-button" type="button" aria-pressed="false" hidden>⛶ 全屏</button></div>
       </header>
-      <div id="start-screen" class="start-screen" data-fighter="red">
+      <div id="start-screen" class="start-screen" data-fighter="red" data-hangar-page="home">
         <div class="start-copy">
           <div class="hangar-title">
             <span class="eyebrow"><span></span> 深空机库 / HANGAR</span>
             <h1>星际<span>突围</span></h1>
-            <p class="intro">选择战机，迎战群渊。</p>
           </div>
-          <fieldset id="fighter-picker" class="fighter-picker" aria-describedby="fighter-brief">
-            <legend>选择出击战机</legend>
-            <div class="fighter-options">
-              <label class="fighter-option" data-fighter="red"><input type="radio" name="fighter" value="red" checked><span><strong>赤焰</strong><small>重炮</small></span></label>
-              <label class="fighter-option" data-fighter="blue"><input type="radio" name="fighter" value="blue"><span><strong>苍电</strong><small>速射</small></span></label>
-              <label class="fighter-option" data-fighter="yellow"><input type="radio" name="fighter" value="yellow"><span><strong>曜金</strong><small>广域</small></span></label>
+          <section id="hangar-home" class="hangar-home hangar-panel" data-hangar-panel="home" aria-label="机库主菜单">
+            <div class="hangar-launch">
+              <button id="start-button" class="hangar-start" data-hangar-key type="button" disabled>
+                <span><strong>开始游戏</strong><small id="hangar-loadout-summary">赤焰 · 困难</small></span><span class="hangar-start-arrow" aria-hidden="true">↗</span>
+              </button>
+              <button id="hangar-loadout" class="hangar-configure" data-hangar-open="loadout" data-hangar-key type="button" aria-controls="hangar-loadout-panel">出击配置</button>
             </div>
-            <div id="fighter-brief" class="fighter-brief" aria-live="polite">
-              <dl class="fighter-stats">
-                <div><dt>发射频率</dt><dd id="fighter-rate">3.6 次/秒</dd></div>
-                <div><dt>弹道</dt><dd id="fighter-lanes">1</dd></div>
-                <div><dt>单发伤害</dt><dd id="fighter-damage">2.2</dd></div>
-              </dl>
-              <p class="fighter-special"><strong id="fighter-ultimate">赤焰贯星炮</strong><span id="fighter-ultimate-detail">蓄力发射高伤害贯穿炮，适合集中打击。</span></p>
+            <nav class="hangar-menu-list" aria-label="机库功能">
+              <button class="hangar-row" data-sortie-console="challenges" data-hangar-key type="button" aria-haspopup="dialog" aria-controls="sortie-console">挑战</button>
+              <button id="hangar-records" class="hangar-row" data-hangar-open="records" data-hangar-key type="button" aria-controls="hangar-records-panel">档案与改装</button>
+              <button class="hangar-row" data-sortie-console="settings" data-hangar-key type="button" aria-haspopup="dialog" aria-controls="sortie-console">设置</button>
+              <button id="hangar-manual" class="hangar-row" data-hangar-open="manual" data-hangar-key type="button" aria-controls="hangar-manual-panel">飞行手册</button>
+            </nav>
+          </section>
+          <section id="hangar-loadout-panel" class="hangar-panel hangar-loadout-panel" data-hangar-panel="loadout" aria-labelledby="hangar-loadout-title" hidden>
+            <header class="hangar-subhead">
+              <button id="hangar-back-loadout" class="hangar-back" data-hangar-open="home" data-hangar-key type="button" aria-controls="hangar-home">返回主菜单</button>
+              <h2 id="hangar-loadout-title">出击配置</h2>
+            </header>
+            <fieldset id="fighter-picker" class="fighter-picker" aria-describedby="fighter-brief">
+              <legend>选择出击战机</legend>
+              <div class="fighter-options">
+                <label class="fighter-option" data-fighter="red"><input type="radio" name="fighter" value="red" checked><span><strong>赤焰</strong><small>重炮</small></span></label>
+                <label class="fighter-option" data-fighter="blue"><input type="radio" name="fighter" value="blue"><span><strong>苍电</strong><small>速射</small></span></label>
+                <label class="fighter-option" data-fighter="yellow"><input type="radio" name="fighter" value="yellow"><span><strong>曜金</strong><small>广域</small></span></label>
+              </div>
+              <div id="fighter-brief" class="fighter-brief" aria-live="polite">
+                <dl class="fighter-stats">
+                  <div><dt>发射频率</dt><dd id="fighter-rate">3.6 次/秒</dd></div>
+                  <div><dt>弹道</dt><dd id="fighter-lanes">1</dd></div>
+                  <div><dt>单发伤害</dt><dd id="fighter-damage">2.2</dd></div>
+                </dl>
+                <p class="fighter-special"><strong id="fighter-ultimate">赤焰贯星炮</strong><span id="fighter-ultimate-detail">蓄力发射高伤害贯穿炮，适合集中打击。</span></p>
+              </div>
+            </fieldset>
+            <fieldset id="hangar-difficulty" class="hangar-difficulty" aria-describedby="hangar-difficulty-note">
+              <legend id="hangar-difficulty-label">战役难度</legend>
+              <div class="hangar-difficulty-options">
+                <label><input type="radio" name="hangar-difficulty" value="easy"><span>简单</span></label>
+                <label><input type="radio" name="hangar-difficulty" value="normal"><span>普通</span></label>
+                <label><input type="radio" name="hangar-difficulty" value="hard" checked><span>困难</span></label>
+              </div>
+              <p id="hangar-difficulty-note">仅调整 Boss 出招频率与弹速；血量由开战时 POWER 决定。</p>
+            </fieldset>
+            <button id="hangar-confirm-launch" class="hangar-start" data-hangar-key type="button" disabled>
+              <strong>确认出击</strong><span class="hangar-start-arrow" aria-hidden="true">↗</span>
+            </button>
+          </section>
+          <section id="hangar-records-panel" class="hangar-panel" data-hangar-panel="records" aria-labelledby="hangar-records-title" hidden>
+            <header class="hangar-subhead">
+              <button id="hangar-back-records" class="hangar-back" data-hangar-open="home" data-hangar-key type="button" aria-controls="hangar-home">返回主菜单</button>
+              <h2 id="hangar-records-title">档案与改装</h2>
+            </header>
+            <div class="hangar-menu-list">
+              <button class="hangar-row" data-sortie-console="upgrades" data-hangar-key type="button" aria-haspopup="dialog" aria-controls="sortie-console">改装</button>
+              <button class="hangar-row" data-sortie-console="archive" data-hangar-key type="button" aria-haspopup="dialog" aria-controls="sortie-console">战役档案</button>
+              <button class="hangar-row" data-sortie-console="awards" data-hangar-key type="button" aria-haspopup="dialog" aria-controls="sortie-console">徽章墙</button>
             </div>
-          </fieldset>
-          <fieldset id="hangar-difficulty" class="hangar-difficulty" aria-describedby="hangar-difficulty-note">
-            <legend id="hangar-difficulty-label">战役难度</legend>
-            <div class="hangar-difficulty-options">
-              <label><input type="radio" name="hangar-difficulty" value="easy"><span>简单</span></label>
-              <label><input type="radio" name="hangar-difficulty" value="normal"><span>普通</span></label>
-              <label><input type="radio" name="hangar-difficulty" value="hard" checked><span>困难</span></label>
+          </section>
+          <section id="hangar-manual-panel" class="hangar-panel" data-hangar-panel="manual" aria-labelledby="hangar-manual-title" hidden>
+            <header class="hangar-subhead">
+              <button id="hangar-back-manual" class="hangar-back" data-hangar-open="home" data-hangar-key type="button" aria-controls="hangar-home">返回主菜单</button>
+              <h2 id="hangar-manual-title">飞行手册</h2>
+            </header>
+            <div class="hangar-menu-list">
+              <button id="guide-button" class="hangar-row" data-hangar-key type="button" aria-haspopup="dialog" aria-controls="flight-guide">玩法说明</button>
+              <button id="replay-intro-button" class="hangar-row" data-hangar-key type="button" aria-haspopup="dialog" aria-controls="campaign-opening" hidden>重看序章</button>
             </div>
-            <p id="hangar-difficulty-note">仅调整 Boss 出招频率与弹速；血量由开战时 POWER 决定。</p>
-          </fieldset>
-          <div class="start-actions">
-            <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">↗</span></button>
-            <button id="replay-intro-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="campaign-opening" hidden>重看序章</button>
-            <button id="guide-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="flight-guide">玩法说明</button>
-          </div>
-          <nav class="hangar-console-actions" aria-label="机库终端">
-            <button class="secondary-button" data-sortie-console="challenges" type="button" aria-haspopup="dialog">挑战</button>
-            <button class="secondary-button" data-sortie-console="upgrades" type="button" aria-haspopup="dialog">改装</button>
-            <button class="secondary-button" data-sortie-console="archive" type="button" aria-haspopup="dialog">战役档案</button>
-            <button class="secondary-button" data-sortie-console="awards" type="button" aria-haspopup="dialog">徽章墙</button>
-            <button class="secondary-button" data-sortie-console="settings" type="button" aria-haspopup="dialog">设置</button>
-          </nav>
-          <div class="hangar-utility">
-            <button id="language-button" class="secondary-button" type="button" aria-label="切换游戏语言为英文">English</button>
-            <label class="render-quality-control"><span id="render-quality-label">画质</span><select id="render-quality" aria-labelledby="render-quality-label"><option value="low">低</option><option value="medium">中</option><option value="high" selected>高</option></select></label>
-          </div>
+          </section>
           <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>
         </div>
         <div class="hangar-art">

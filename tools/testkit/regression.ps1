@@ -30,7 +30,7 @@ if (!$SkipUnit) {
     }
 }
 if ($Browser) {
-    foreach ($suite in 'release-browser','rush-browser','boss-mechanics','tactics-feedback','cinematic-check','training','controls-browser','field','boss-retry','evolution-routes','battle-rewind','difficulty','hit-feedback','campaign-opening') {
+    foreach ($suite in 'release-browser','rush-browser','boss-mechanics','tactics-feedback','cinematic-check','training','controls-browser','field','boss-retry','evolution-routes','battle-rewind','difficulty','hit-feedback','campaign-opening','menu-navigation') {
         Invoke-Check $suite @((Join-Path $PSScriptRoot "$suite.cjs"), $gameRoot, (Join-Path $resultRoot $suite))
     }
 }

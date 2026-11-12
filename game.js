@@ -7,6 +7,7 @@ const app = document.querySelector("#game-app");
 const startScreen = document.querySelector("#start-screen");
 const battleScreen = document.querySelector("#battle-screen");
 const startButton = document.querySelector("#start-button");
+const hangarConfirmLaunch = document.querySelector("#hangar-confirm-launch");
 const replayIntroButton = document.querySelector("#replay-intro-button");
 const menuButton = document.querySelector("#menu-button");
 const pauseButton = document.querySelector("#pause-button");
@@ -296,7 +297,14 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
 function readyFighter() {
   const image = !fighterOptions.length || selectedFighter === "red" ? fighterImage : hangarVariantImage;
   startButton.disabled = !image.complete || !image.naturalWidth;
+  if (hangarConfirmLaunch) hangarConfirmLaunch.disabled = startButton.disabled;
   assetStatus.hidden = !image.complete || !!image.naturalWidth;
+}
+function refreshHangarLoadoutSummary() {
+  const summary = document.querySelector("#hangar-loadout-summary");
+  if (!summary || typeof sortieWord !== "function") return;
+  const fighter = tr(...fighterProfiles[selectedFighter].label).split(" · ")[0];
+  summary.textContent = `${fighter} · ${sortieWord(sortieSettings.difficulty)}`;
 }
 function updateFighterSelection() {
   if (!fighterOptions.length) return;
@@ -317,6 +325,7 @@ function updateFighterSelection() {
   document.querySelector("#fighter-ultimate").textContent = ultimateName(fighter.id);
   document.querySelector("#fighter-ultimate-detail").textContent = fighterWeaponCopy(fighter.id) + " · " + tr(...fighter.special);
   if (typeof applyHangarAwardSkin === "function") applyHangarAwardSkin(fighter.id);
+  refreshHangarLoadoutSummary();
   readyFighter();
 }
 for (const option of fighterOptions) option.addEventListener("change", () => {
@@ -367,6 +376,7 @@ function showScreen(nextState, options = {}) {
   state = nextState;
   const inBattle = state === "battle";
   startScreen.hidden = inBattle;
+  if (!inBattle && typeof setHangarPage === "function") setHangarPage("home", false);
   battleScreen.hidden = !inBattle;
   movementHint.hidden = false;
   canvas.tabIndex = inBattle ? 0 : -1;
@@ -427,10 +437,12 @@ function playCampaignOpening(launch) {
     },
   });
 }
-startButton.addEventListener("click", () => {
+function launchHangarCampaign() {
   const skipOpening = window.campaignOpening && new URLSearchParams(window.location.search).get("intro") === "0";
   if (skipOpening || campaignOpeningSeen || !playCampaignOpening(true)) startBattleWithSound();
-});
+}
+startButton.addEventListener("click", launchHangarCampaign);
+hangarConfirmLaunch?.addEventListener("click", launchHangarCampaign);
 replayIntroButton?.addEventListener("click", () => playCampaignOpening(false));
 for (const control of [pauseButton, menuButton, hangarLink]) {
   control?.addEventListener("mousedown", (event) => {
@@ -464,8 +476,12 @@ fullscreenButton.addEventListener("click", async () => {
 });
 function updateFullscreenDisplay() {
   const isFullscreen = document.fullscreenElement === app;
-  fullscreenButton.textContent = isFullscreen ? tr("⛶ 退出全屏", "⛶ Exit fullscreen") : tr("⛶ 全屏", "⛶ Fullscreen");
-  fullscreenButton.setAttribute("aria-pressed", String(isFullscreen));
+  const text = isFullscreen ? tr("⛶ 退出全屏", "⛶ Exit fullscreen") : tr("⛶ 全屏", "⛶ Fullscreen");
+  for (const button of [fullscreenButton, document.querySelector("#sortie-fullscreen")]) {
+    if (!button) continue;
+    button.textContent = text;
+    button.setAttribute("aria-pressed", String(isFullscreen));
+  }
 }
 document.addEventListener("fullscreenchange", () => {
   updateFullscreenDisplay();
