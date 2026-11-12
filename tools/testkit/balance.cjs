@@ -98,7 +98,7 @@ function installFixedClock() {
   };
 }
 
-async function createPage(browser, game, deterministic, { flightTraining = false, pageOptions = {} } = {}) {
+async function createPage(browser, game, deterministic, { flightTraining = false, campaignOpening = false, pageOptions = {} } = {}) {
   const page = await browser.newPage({ viewport: windowSize, deviceScaleFactor: 1, reducedMotion: "no-preference", ...pageOptions });
   const errors = [];
   page.on("pageerror", error => errors.push(error.stack ?? error.message));
@@ -127,6 +127,7 @@ async function createPage(browser, game, deterministic, { flightTraining = false
   });
   if (deterministic) await page.addInitScript(installFixedClock);
   if (!flightTraining) await page.addInitScript(() => localStorage.setItem("star-breaker-flight-training", "1"));
+  if (!campaignOpening) await page.addInitScript(() => localStorage.setItem("star-breaker-opening-seen", "1"));
   await page.goto(origin + "/", { waitUntil: "load" });
   await page.bringToFront();
   const guide = page.locator(".flight-guide-actions button").first();

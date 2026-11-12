@@ -83,7 +83,7 @@ async function main() {
       return file.startsWith(root + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()
         ? route.fulfill({ path: file, contentType: mime[path.extname(file)] }) : route.fulfill({ status: 404 });
     });
-    await page.goto(origin);
+    await page.goto(origin + "/?intro=0");
     const guide = page.locator(".flight-guide-actions button").first();
     if (await guide.isVisible()) await guide.click();
     await page.locator("#start-button").click();

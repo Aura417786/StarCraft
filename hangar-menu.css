@@ -1,0 +1,582 @@
+/* The hangar is a full-screen set behind the launch controls. */
+.battlefield:has(> #start-screen:not([hidden]))::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, #060b12 0%, #080e17f5 21%, #0b141de0 35%, #0a151b52 59%, #0a171e03 86%),
+    linear-gradient(0deg, #040a10ed, #09141932 38%, #14212800 67%, #0810179c),
+    url("assets/intro/hangar.webp") 65% 56% / cover no-repeat,
+    radial-gradient(ellipse at 88% 43%, #4d7177, #17262c 39%, #0b141c 66%, #060b12 88%);
+}
+
+.battlefield:has(> #start-screen:not([hidden])) > .masthead {
+  border-bottom: 1px solid #a0bec628;
+  background: linear-gradient(90deg, #091117f2, #0b1820a1 49%, #0a161ed1);
+}
+
+.battlefield:has(> #start-screen:not([hidden])) > .masthead .secondary-button {
+  background: #101c22c9;
+  border-color: #849fa14f;
+  border-radius: 2px;
+  color: #e4ebeb;
+}
+
+.battlefield:has(> #start-screen:not([hidden])) > .masthead .secondary-button:hover {
+  border-color: #bedbdc;
+}
+
+.battlefield:has(> #start-screen:not([hidden])) > .lesson-note {
+  display: none;
+}
+
+#start-screen {
+  --hangar-metal: #d7e7e8;
+  --hangar-muted: #a8bac3;
+  --hangar-surface: #0d1923cf;
+  --hangar-rule: #95bec948;
+  --hangar-display: "Barlow Condensed", "Bahnschrift SemiCondensed", "Arial Narrow", "Microsoft YaHei", sans-serif;
+  --hangar-mono: "IBM Plex Mono", Consolas, monospace;
+  --hangar-margin: clamp(26px, 6.2vw, 126px);
+  --hangar-ease: cubic-bezier(.19, 1, .22, 1);
+  inset: 90px 0 0;
+  z-index: 1;
+  isolation: isolate;
+  grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+  gap: clamp(24px, 5vw, 106px);
+  padding: 26px var(--hangar-margin) 32px;
+  overflow: auto;
+  align-content: safe center;
+  scrollbar-width: thin;
+  scrollbar-color: #536e77 transparent;
+  overscroll-behavior: contain;
+}
+
+#start-screen .start-copy {
+  min-width: 0;
+  max-width: 480px;
+  width: 100%;
+  z-index: 2;
+}
+
+.hangar-title {
+  position: relative;
+  padding: 0 0 clamp(10px, 2vh, 23px);
+  margin-bottom: clamp(12px, 2.2vh, 25px);
+  border-bottom: 1px solid var(--hangar-rule);
+  animation: hangar-ui-enter .65s var(--hangar-ease) both;
+}
+
+.hangar-title::after {
+  content: "";
+  position: absolute;
+  inset: auto auto -1px 0;
+  width: 44px;
+  height: 1px;
+  background: var(--hangar-accent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--hangar-accent) 45%, transparent);
+  transition: background .3s ease;
+}
+
+#start-screen .eyebrow {
+  color: #c0d3d7;
+  font: 600 clamp(10px, .9vw, 13px)/1.5 var(--hangar-mono);
+  letter-spacing: .17em;
+  gap: 12px;
+}
+
+#start-screen .eyebrow > span {
+  flex: 0 0 14px;
+  height: 8px;
+  background: transparent;
+  border-inline: 2px solid var(--hangar-accent);
+  transform: skewX(-25deg);
+}
+
+#start-screen h1,
+html[lang="en"] #start-screen h1 {
+  width: max-content;
+  max-width: 100%;
+  margin: 12px 0 9px;
+  font: 900 clamp(52px, 6.6vw, 116px)/.98 var(--hangar-display);
+  letter-spacing: -.035em;
+  color: #f0f7f6;
+  white-space: normal;
+  text-shadow: 0 6px 38px #04090fcf;
+}
+
+html[lang="en"] #start-screen h1 {
+  text-transform: uppercase;
+  font-style: italic;
+  font-size: clamp(44px, 6vw, 100px);
+  line-height: .83;
+  max-width: min(100%, 7ch);
+  letter-spacing: -.04em;
+  margin-bottom: 16px;
+}
+
+#start-screen h1 > span {
+  color: color-mix(in srgb, var(--hangar-accent) 75%, #fff3e8);
+  text-shadow: 0 0 42px color-mix(in srgb, var(--hangar-accent) 19%, transparent);
+  transition: color .35s ease, text-shadow .35s ease;
+}
+
+html[lang="en"] #start-screen h1 > span {
+  display: block;
+}
+
+#start-screen .intro {
+  margin: 0;
+  color: #c3ced4;
+  font-size: clamp(12px, 1.15vw, 17px);
+  letter-spacing: .10em;
+}
+
+#start-screen .fighter-picker,
+#start-screen .hangar-difficulty {
+  max-width: none;
+  margin-inline: 0;
+}
+
+#start-screen .fighter-picker {
+  margin-bottom: 15px;
+  animation: hangar-ui-enter .55s .08s var(--hangar-ease) both;
+}
+
+#start-screen .fighter-picker legend,
+#start-screen .hangar-difficulty legend {
+  color: #e1eaea;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .065em;
+}
+
+#start-screen .fighter-options {
+  gap: 7px;
+}
+
+#start-screen .fighter-option > span {
+  position: relative;
+  min-height: 47px;
+  padding: 5px 9px;
+  border-radius: 2px;
+  background: linear-gradient(115deg, #172531de, #111b26c9);
+  border-color: var(--hangar-rule);
+  transition: border-color .2s ease, background-color .2s ease, box-shadow .2s ease;
+}
+
+#start-screen .fighter-option > span::before {
+  height: 15px;
+  width: 2px;
+  margin-inline: 1px 3px;
+  border-radius: 0;
+  transform: skewX(-13deg);
+}
+
+#start-screen .fighter-option:hover > span {
+  border-color: var(--fighter-tint);
+}
+
+#start-screen .fighter-option input:checked + span {
+  border-color: var(--fighter-tint);
+  background: linear-gradient(116deg, color-mix(in srgb, var(--fighter-tint) 26%, #111923), #111b25ef);
+  box-shadow: inset 0 -2px var(--fighter-tint), 0 2px 14px #05091065;
+}
+
+#start-screen .fighter-option small {
+  color: #b8cbd4;
+}
+
+#start-screen .fighter-brief {
+  border-left: 1px solid var(--hangar-accent);
+  background: linear-gradient(112deg, color-mix(in srgb, var(--hangar-accent) 9%, #111c27), #111d28bd 88%);
+  padding: 9px 12px;
+  transition: border-color .2s ease;
+}
+
+#start-screen .fighter-stats dt {
+  font-size: 11px;
+  color: var(--hangar-muted);
+}
+
+#start-screen .fighter-stats dd {
+  font: 700 17px/1.15 var(--hangar-mono);
+}
+
+#start-screen .fighter-special {
+  font-size: 12px;
+  color: #c5d1db;
+}
+
+#start-screen .hangar-difficulty {
+  margin-bottom: 13px;
+}
+
+#start-screen .hangar-difficulty-options span {
+  border-color: var(--hangar-rule);
+  background: var(--hangar-surface);
+  border-radius: 2px;
+  transition: border-color .2s ease, color .2s ease;
+}
+
+#start-screen .hangar-difficulty-options label:hover span {
+  border-color: #acd4dcbd;
+}
+
+#start-screen .hangar-difficulty-options input:checked + span {
+  color: #e9f8f7;
+  border-color: #8dc3c8;
+  background: #21424a;
+  box-shadow: inset 0 -1px #8dc3c8;
+}
+
+#start-screen .hangar-difficulty p {
+  color: var(--hangar-muted);
+  font-size: 11px;
+}
+
+#start-screen .start-actions {
+  display: flex;
+  align-items: stretch;
+  justify-content: start;
+  gap: 7px;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+#start-screen .start-actions > .primary-button {
+  --launch-color: color-mix(in srgb, var(--hangar-accent) 57%, #fff4df);
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 150px;
+  min-height: 49px;
+  width: auto;
+  margin: 0;
+  padding: 8px 15px;
+  border: 0;
+  border-radius: 0;
+  white-space: nowrap;
+  color: #10212b;
+  background: none;
+  box-shadow: none;
+  font-weight: 800;
+  letter-spacing: .045em;
+  transition: color .22s ease;
+}
+
+#start-screen .start-actions > .primary-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  background:
+    linear-gradient(115deg, #ffffff00 28%, #ffffff89 49%, #ffffff00 71%) 140% 0 / 230% 100% no-repeat,
+    linear-gradient(104deg, var(--launch-color), #f3fbf6 90%);
+  transition: background-position .64s var(--hangar-ease);
+}
+
+#start-screen .start-actions > .primary-button:hover,
+#start-screen .start-actions > .primary-button:focus-visible {
+  transform: none;
+  box-shadow: none;
+}
+
+#start-screen .start-actions > .primary-button:is(:hover, :focus-visible)::before {
+  background-position: 0 0;
+}
+
+#start-screen .start-actions > .primary-button:active::before {
+  filter: brightness(.91);
+}
+
+#start-screen .primary-button > span {
+  font-size: 19px;
+  transition: transform .25s var(--hangar-ease);
+}
+
+#start-screen .primary-button:is(:hover, :focus-visible) > span {
+  transform: translate(2px, -2px);
+}
+
+#start-screen .secondary-button {
+  border-color: var(--hangar-rule);
+  border-radius: 2px;
+  color: var(--hangar-metal);
+  background: var(--hangar-surface);
+  transition: color .2s ease, background-color .2s ease, border-color .2s ease;
+}
+
+#start-screen .secondary-button:hover {
+  color: #fff;
+  border-color: #accbd2;
+  background: #29404a;
+}
+
+#start-screen .secondary-button:active {
+  background: #36505b;
+}
+
+#start-screen .start-actions > .secondary-button {
+  min-height: 44px;
+  padding: 6px 11px;
+}
+
+#start-screen .hangar-console-actions {
+  margin: 14px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--hangar-rule);
+  gap: 5px;
+}
+
+#start-screen .hangar-console-actions .secondary-button {
+  min-height: 31px;
+  padding: 4px 9px;
+}
+
+#start-screen .hangar-utility {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+#start-screen .hangar-utility .secondary-button {
+  min-height: 31px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+#start-screen .render-quality-control {
+  margin: 0;
+  color: var(--hangar-muted);
+}
+
+#start-screen .render-quality-control select {
+  border-color: var(--hangar-rule);
+  background: #111e28;
+  min-height: 31px;
+}
+
+#start-screen .hangar-art {
+  position: relative;
+  inset: auto;
+  align-self: stretch;
+  isolation: isolate;
+  min-height: 100%;
+  min-width: 0;
+  opacity: 1;
+  z-index: 1;
+  perspective: 900px;
+  animation: hangar-stage-enter 1s var(--hangar-ease) both;
+}
+
+#start-screen .hangar-art::before {
+  content: "";
+  position: absolute;
+  top: 68%;
+  left: 3%;
+  right: -5%;
+  height: 19%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #03090dd9 0%, #06141a9e 39%, transparent 74%);
+  transform: rotateZ(-4deg) rotateX(27deg);
+}
+
+.hangar-sight {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 51%;
+  width: min(88%, 550px);
+  height: min(58%, 420px);
+  transform: translate(-50%, -50%);
+  color: #a0d7df5c;
+  background:
+    linear-gradient(currentColor, currentColor) left top / 32px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) left top / 1px 22px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 32px 1px no-repeat,
+    linear-gradient(currentColor, currentColor) right bottom / 1px 22px no-repeat,
+    radial-gradient(ellipse, color-mix(in srgb, var(--hangar-accent) 13%, transparent), transparent 69%);
+}
+
+#start-screen .hangar-art img {
+  width: min(124%, 1080px, 116vh);
+  max-width: 110vw;
+  height: auto;
+  filter: drop-shadow(0 20px 18px #02070bb5) drop-shadow(0 -2px 7px #90d6ed33);
+  animation: hangar-drift 9s 1s ease-in-out infinite alternate;
+}
+
+#start-screen .ship-label {
+  display: flex;
+  left: auto;
+  right: 0;
+  bottom: 9%;
+  gap: 12px;
+  padding: 10px 13px 9px;
+  color: var(--hangar-metal);
+  background: linear-gradient(100deg, #101d26e8, #11202ad6);
+  border: 1px solid #a2c6cf52;
+  border-right: 2px solid var(--hangar-accent);
+  text-shadow: 0 1px 6px #03090f;
+}
+
+#start-screen .ship-label small {
+  margin-top: 3px;
+  color: #9ebac4;
+  font: 10px/1.45 var(--hangar-mono);
+  letter-spacing: .12em;
+}
+
+#start-screen .label-line {
+  width: 22px;
+  height: 1px;
+  transform: rotate(-28deg);
+}
+
+@keyframes hangar-ui-enter {
+  from { opacity: .5; transform: translateX(-13px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes hangar-stage-enter {
+  from { opacity: .4; transform: scale(.974) translateX(20px); }
+  to { opacity: 1; transform: scale(1) translateX(0); }
+}
+
+@keyframes hangar-drift {
+  from { transform: translate3d(0, 1px, 0) rotate(-.25deg); }
+  to { transform: translate3d(0, -7px, 0) rotate(.25deg); }
+}
+
+@media (max-width: 960px) {
+  #start-screen {
+    --hangar-margin: clamp(24px, 4.8vw, 56px);
+    grid-template-columns: minmax(0, min(49%, 445px)) minmax(0, 1fr);
+    gap: 22px;
+  }
+}
+
+@media (min-width: 561px) and (min-height: 481px) and (max-height: 800px) {
+  html[lang="en"] #start-screen h1 {
+    max-width: 100%;
+    font-size: clamp(34px, 4.6vw, 62px);
+    line-height: .97;
+    margin-bottom: 9px;
+  }
+  html[lang="en"] #start-screen h1 > span { display: inline; }
+}
+
+@media (max-height: 740px) and (min-width: 561px) {
+  #start-screen { inset-block-start: 74px; padding-block: 14px 19px; }
+  .battlefield:has(> #start-screen:not([hidden])) > .masthead { height: 74px; padding-block: 15px; }
+  .hangar-title { padding-bottom: 9px; margin-bottom: 12px; }
+  #start-screen h1 { font-size: clamp(42px, 6vw, 72px); margin-block: 8px 10px; }
+  #start-screen .fighter-picker { margin-bottom: 10px; }
+  #start-screen .hangar-console-actions { margin-top: 11px; padding-top: 9px; }
+}
+
+@media (max-height: 480px) and (min-width: 561px) {
+  #start-screen {
+    inset-block-start: 50px;
+    grid-template-columns: minmax(0, max(57%, 335px)) minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px clamp(12px, 3vw, 29px) 12px;
+    align-content: start;
+  }
+  .battlefield:has(> #start-screen:not([hidden])) > .masthead { height: 50px; padding-block: 7px; }
+  .battlefield:has(> #start-screen:not([hidden])) > .masthead .secondary-button { min-height: 31px; padding-block: 4px; }
+  .hangar-title { margin-bottom: 5px; padding-bottom: 4px; }
+  #start-screen .hangar-title .eyebrow { display: none; }
+  #start-screen h1, html[lang="en"] #start-screen h1 { font-size: clamp(27px, 5.8vh, 38px); margin-block: 3px 0; }
+  html[lang="en"] #start-screen h1 { max-width: 100%; line-height: 1; }
+  html[lang="en"] #start-screen h1 > span { display: inline; }
+  #start-screen .intro { display: none; }
+  #start-screen .fighter-picker { position: static; padding: 0; min-height: 0; margin-bottom: 6px; }
+  #start-screen .fighter-picker legend { margin-bottom: 4px; }
+  #start-screen .fighter-option > span { min-height: 27px; padding-block: 3px; }
+  #start-screen .fighter-brief { position: static; width: auto; padding: 4px 7px 4px; margin-top: 4px; }
+  #start-screen .fighter-stats dt { font-size: 9px; }
+  #start-screen .fighter-stats dd { font-size: 12px; margin-top: 1px; }
+  #start-screen .fighter-special { margin-top: 4px; font-size: 10px; line-height: 1.27; }
+  #start-screen .hangar-difficulty { margin-bottom: 6px; }
+  #start-screen .hangar-difficulty legend { line-height: 23px; }
+  #start-screen .hangar-difficulty-options span { padding-block: 0; line-height: 20px; }
+  #start-screen .hangar-difficulty p { margin-top: 3px; font-size: 9px; line-height: 1.25; }
+  #start-screen .start-actions { gap: 4px; }
+  #start-screen .start-actions > .primary-button { flex-basis: 108px; min-height: 33px; padding: 4px 9px; font-size: 13px; }
+  #start-screen .start-actions > .secondary-button { min-height: 33px; padding: 3px 7px; font-size: 11px; }
+  #start-screen .hangar-console-actions { margin-top: 6px; padding-top: 5px; }
+  #start-screen .hangar-console-actions .secondary-button { min-height: 25px; padding: 2px 6px; font-size: 10px; }
+  #start-screen .hangar-utility { margin-top: 4px; }
+  #start-screen .hangar-utility .secondary-button,
+  #start-screen .render-quality-control select { min-height: 25px; padding-block: 2px; font-size: 10px; }
+  #start-screen .hangar-art { grid-row: 1; grid-column: 2; }
+  #start-screen .hangar-art img { width: min(108%, 320px); }
+  #start-screen .ship-label { bottom: 5%; padding: 4px 6px; font-size: 9px; letter-spacing: .045em; }
+  #start-screen .ship-label small { font-size: 8px; letter-spacing: .045em; }
+  #start-screen .label-line { display: none; }
+}
+
+@media (max-width: 560px) {
+  .battlefield:has(> #start-screen:not([hidden]))::before {
+    background:
+      linear-gradient(0deg, #08111afc 25%, #0a151edb 54%, #0b151d16 81%, #101e279c),
+      url("assets/intro/hangar.webp") 70% top / auto 62% no-repeat,
+      #0b151e;
+  }
+  .battlefield:has(> #start-screen:not([hidden])) > .masthead { height: 54px; padding: 7px 12px; }
+  .battlefield:has(> #start-screen:not([hidden])) > .masthead .brand { gap: 6px; font-size: 11px; letter-spacing: .035em; }
+  .battlefield:has(> #start-screen:not([hidden])) > .masthead .brand-mark { font-size: 20px; }
+  .battlefield:has(> #start-screen:not([hidden])) > .masthead .edition { display: none; }
+  .battlefield:has(> #start-screen:not([hidden])) > .masthead .secondary-button { min-height: 30px; padding: 4px 6px; font-size: 10px; }
+  #start-screen {
+    inset: 54px 0 0;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 2px;
+    padding: 4px clamp(14px, 5vw, 25px) 18px;
+    text-align: left;
+  }
+  #start-screen .start-copy { max-width: none; }
+  #start-screen .eyebrow { margin-inline: 0; justify-content: start; }
+  #start-screen .hangar-art { grid-row: 1; height: clamp(93px, 19vh, 165px); }
+  #start-screen .hangar-art img { width: min(79vw, 47vh); }
+  .hangar-sight { height: 68%; }
+  #start-screen .ship-label { display: none; }
+  .hangar-title { padding-bottom: 8px; margin-bottom: 10px; }
+  #start-screen h1, html[lang="en"] #start-screen h1 { font-size: clamp(33px, 10.5vw, 53px); margin-block: 6px; }
+  html[lang="en"] #start-screen h1 { max-width: 100%; line-height: 1; }
+  html[lang="en"] #start-screen h1 > span { display: inline; }
+  #start-screen .fighter-picker { margin-bottom: 9px; }
+  #start-screen .fighter-option > span { min-height: 40px; }
+  #start-screen .fighter-brief { padding: 6px 9px; }
+  #start-screen .fighter-special { font-size: 11px; }
+  #start-screen .hangar-difficulty { margin-bottom: 8px; }
+  #start-screen .start-actions > .primary-button { flex-basis: 116px; min-height: 41px; padding-inline: 9px; }
+  #start-screen .start-actions > .secondary-button { min-height: 40px; padding-inline: 7px; font-size: 12px; }
+  #start-screen .hangar-console-actions { margin-top: 8px; padding-top: 8px; }
+}
+
+.app[data-quality="low"] #start-screen .hangar-art img {
+  animation: none;
+}
+
+.app[data-reduce-motion] #start-screen *,
+.app[data-reduce-motion] #start-screen *::before,
+.app[data-reduce-motion] #start-screen *::after {
+  animation: none;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #start-screen, #start-screen *, #start-screen *::before, #start-screen *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  #start-screen .primary-button:is(:hover, :focus-visible) > span { transform: none; }
+}

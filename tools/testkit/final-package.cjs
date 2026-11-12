@@ -39,7 +39,7 @@ async function main() {
     page.on("response", response => {
       if (response.status() >= 400 && !response.url().endsWith("/favicon.ico")) missing.push(response.url());
     });
-    await page.goto(origin, { waitUntil: "load" });
+    await page.goto(origin + "/?intro=0", { waitUntil: "load" });
     await page.bringToFront();
     await page.waitForFunction(() => windowActive && !document.hidden);
     assert.equal(await page.evaluate(() => starBreakerVersion), expectedVersion);

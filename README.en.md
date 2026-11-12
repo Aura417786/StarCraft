@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v33 Deep-space hangar and Dark Forest prologue.** Select Crimson, Azure, or Auric in the redesigned hangar. The first campaign launch plays a 2:26 cinematic with bilingual subtitles. When a returning signal gives away Earth, a research lead takes the prototype up to buy time for evacuation. The selected fighter's special carries the final shot into gameplay. Pause or skip the prologue, or choose **Replay prologue** from the hangar.
+
 **v32 Battlefield lighting.** Key light and ambient bounce change as you fly through the five sectors. Charged weapons, shields and explosions cast brief pools of light on nearby ships and aliens. Try the mirror boss in single-boss practice to see its cyan and violet beams, from the charge to the fading aftershock.
 
 **v31 Alien arrivals and combat effects.** Each of the eleven bosses has an individual roar and a distinct entrance built from light and particles. Starfields, engine wakes, shots, shields, evolution skills, ultimate attacks and detonations now share the same real-time effects treatment. Use single-boss practice to preview the different encounters. [Effects and checks](docs/v31-vfx.md)

@@ -40,6 +40,7 @@ async function open(browser, errors, held = true) {
   await page.addInitScript(() => {
     localStorage.setItem("star-breaker-guide-seen", "1");
     localStorage.setItem("star-breaker-flight-training", "1");
+    localStorage.setItem("star-breaker-opening-seen", "1");
     localStorage.setItem("star-breaker-muted", "true");
   });
   if (held) await page.addInitScript(installHeldClock);

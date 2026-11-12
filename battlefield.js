@@ -98,10 +98,9 @@ function updateBattlefield(seconds, cinematic = false) {
   battlefieldState.driftY += (y - battlefieldState.driftY) * ease;
   scenerySyncJourney();
 }
-function sceneryFrame(imageWidth, imageHeight, age, sector) {
+function sceneryFrame(imageWidth, imageHeight, age, sector, menu = state === "menu") {
   const w = viewport.width, h = viewport.height;
   const quiet = reducedMotion.matches;
-  const menu = state === "menu";
   const travel = quiet ? 0.55 : sceneryClamp(age / (sceneryRules.interval + sceneryRules.blend), 0, 1);
   const cover = Math.max(w / imageWidth, h / imageHeight);
   // A slight approach complements the faster movement of the nearby rock layer.

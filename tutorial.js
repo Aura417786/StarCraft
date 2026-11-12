@@ -177,6 +177,7 @@ function updateFlightTutorial(seconds) {
   updateShipVisuals(seconds);
   updateBattlefield(seconds);
   if (training.stage === 1) {
+    if (ultimate.shot?.presentationOnly) updateUltimate(seconds);
     updateShieldTraining(training, seconds);
     updateEnemyProjectiles(seconds);
     updateEnemyProjectileDamage();

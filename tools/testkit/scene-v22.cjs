@@ -34,6 +34,7 @@ async function main() {
     await page.addInitScript(() => {
       localStorage.setItem("star-breaker-guide-seen", "1");
       localStorage.setItem("star-breaker-flight-training", "1");
+      localStorage.setItem("star-breaker-opening-seen", "1");
     });
     await page.goto(origin);
     const guide = page.locator(".flight-guide-actions button").first();

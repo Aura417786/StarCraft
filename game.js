@@ -7,6 +7,7 @@ const app = document.querySelector("#game-app");
 const startScreen = document.querySelector("#start-screen");
 const battleScreen = document.querySelector("#battle-screen");
 const startButton = document.querySelector("#start-button");
+const replayIntroButton = document.querySelector("#replay-intro-button");
 const menuButton = document.querySelector("#menu-button");
 const pauseButton = document.querySelector("#pause-button");
 const hangarLink = document.querySelector(".masthead .brand");
@@ -57,6 +58,13 @@ let windowActive = true;
 let pauseView = "";
 let pauseReason = "";
 let pauseConfirmFromMenu = false;
+const campaignOpeningKey = "star-breaker-opening-seen";
+let campaignOpeningSeen = false;
+for (const kind of ["localStorage", "sessionStorage"]) {
+  try {
+    if (window[kind]?.getItem(campaignOpeningKey) === "1") campaignOpeningSeen = true;
+  } catch { /* In-memory fallback for embedded and local play. */ }
+}
 const fighterProfiles = {
   red: { id: "red", rate: 3.6, lanes: 1, damage: 2.2,
     label: ["赤焰 · 重装突击型", "Crimson · Heavy assault"], code: "CRIMSON / ASSAULT FIGHTER",
@@ -177,9 +185,14 @@ soundButton.addEventListener("click", () => {
   toggleGameSound();
   if (state === "battle" && !pauseView && !evolution.pending) canvas.focus({ preventScroll: true });
 });
+function flightLaunchPosition() {
+  return { x: clamp(viewport.width * 0.17, flightBounds.left, flightBounds.right),
+    y: (flightBounds.top + flightBounds.bottom) / 2 };
+}
 function resetPlayer() {
-  player.x = clamp(viewport.width * 0.17, flightBounds.left, flightBounds.right);
-  player.y = (flightBounds.top + flightBounds.bottom) / 2;
+  const position = flightLaunchPosition();
+  player.x = position.x;
+  player.y = position.y;
   player.previousX = player.x; player.previousY = player.y;
 }
 function resizeBattlefield() {
@@ -370,7 +383,55 @@ function startBattleWithSound(options = {}) {
   showScreen("battle", options);
   if (typeof beginFlightTutorial === "function") beginFlightTutorial(options);
 }
-startButton.addEventListener("click", () => startBattleWithSound());
+function rememberCampaignOpening() {
+  campaignOpeningSeen = true;
+  for (const kind of ["localStorage", "sessionStorage"]) {
+    try {
+      if (!window[kind]) continue;
+      window[kind].setItem(campaignOpeningKey, "1");
+      return;
+    } catch { /* Try the next store or retain the in-memory preference. */ }
+  }
+}
+function campaignOpeningLayout() {
+  const { x, y } = flightLaunchPosition();
+  const orbit = sceneryLayer(0);
+  let backdrop = null;
+  if (orbit?.ready) {
+    const frame = sceneryFrame(orbit.width, orbit.height, sceneryJourney(0).currentAge, 0, false);
+    backdrop = { image: orbit.image, x: frame.x / viewport.width, y: frame.y / viewport.height,
+      width: frame.width / viewport.width, height: frame.height / viewport.height };
+  }
+  return { x: x / viewport.width, y: y / viewport.height, width: player.width / viewport.width,
+    height: player.height / viewport.height, backdrop };
+}
+function playCampaignOpening(launch) {
+  const opening = window.campaignOpening;
+  if (!opening || state !== "menu") return false;
+  if (opening.active || document.querySelector("dialog[open]")) return true;
+  const fighter = selectedFighter;
+  const difficulty = sortieSettings.difficulty;
+  sceneryLayer(0);
+  gameAudio.unlock();
+  return opening.play({
+    fighter, launch, layout: campaignOpeningLayout, quiet: quietCombatMotion(), muted: gameAudio.muted,
+    onFinish(reason) {
+      if (reason === "completed" || (launch && reason === "skip")) rememberCampaignOpening();
+      if (!launch || state !== "menu" || reason === "cancel") return;
+      startBattleWithSound({ fighter, difficulty });
+      if (reason === "completed") {
+        movementHint.hidden = true;
+        ultimate.kind = currentUltimateId();
+        fireUltimate({ presentationOnly: true });
+      }
+    },
+  });
+}
+startButton.addEventListener("click", () => {
+  const skipOpening = window.campaignOpening && new URLSearchParams(window.location.search).get("intro") === "0";
+  if (skipOpening || campaignOpeningSeen || !playCampaignOpening(true)) startBattleWithSound();
+});
+replayIntroButton?.addEventListener("click", () => playCampaignOpening(false));
 for (const control of [pauseButton, menuButton, hangarLink]) {
   control?.addEventListener("mousedown", (event) => {
     if (event.button === 0 && battleHasFocus()) event.preventDefault();
@@ -1330,6 +1391,12 @@ function drawFrame(time) {
   if (resuming) combatStepRemainder = 0;
   previousTime = time;
   if (typeof pollFlightGamepad === "function") pollFlightGamepad();
+  if (window.campaignOpening?.active) {
+    previousTime = 0;
+    combatStepRemainder = 0;
+    window.requestAnimationFrame(drawFrame);
+    return;
+  }
   if (typeof updateBossScalingQa === "function") updateBossScalingQa();
   syncGameAudio();
   if (typeof drawCampaignVictoryFrame === "function" && drawCampaignVictoryFrame(realSeconds)) {
@@ -1420,6 +1487,11 @@ function updateGameCanvasLabel() {
   canvas.setAttribute("aria-label", label);
 }
 function refreshGameLanguage() {
+  if (replayIntroButton) {
+    replayIntroButton.hidden = !window.campaignOpening;
+    replayIntroButton.textContent = tr("重看序章", "Replay Prologue");
+  }
+  window.campaignOpening?.refreshLanguage?.();
   if (typeof refreshBossRetryUI === "function") refreshBossRetryUI();
   updateFighterSelection();
   if (state === "over") updateResultCopy(gameOverScreen.dataset.victory === "true");

@@ -14,6 +14,8 @@
   <link rel="stylesheet" href="sortie-ui.css">
   <link rel="stylesheet" href="controls.css">
   <link rel="stylesheet" href="campaign-victory.css">
+  <link rel="stylesheet" href="hangar-menu.css">
+  <link rel="stylesheet" href="opening.css">
   <script src="i18n.js" defer></script>
   <script src="render-quality.js" defer></script>
   <script src="audio-catalog.js" defer></script>
@@ -75,6 +77,10 @@
   <script src="tutorial.js" defer></script>
   <script src="controls.js" defer></script>
   <script src="qa-mode.js" defer></script>
+  <script src="opening-story.js" defer></script>
+  <script src="opening-art.js" defer></script>
+  <script src="opening-score.js" defer></script>
+  <script src="opening.js" defer></script>
   <script src="game.js" defer></script>
   <script src="boss-retry.js" defer></script>
   <script src="battle-rewind.js" defer></script>
@@ -94,9 +100,11 @@
       </header>
       <div id="start-screen" class="start-screen" data-fighter="red">
         <div class="start-copy">
-          <span class="eyebrow"><span></span> 深空机库 / HANGAR</span>
-          <h1>星际<span>突围</span></h1>
-          <p class="intro">选择战机，迎战群渊。</p>
+          <div class="hangar-title">
+            <span class="eyebrow"><span></span> 深空机库 / HANGAR</span>
+            <h1>星际<span>突围</span></h1>
+            <p class="intro">选择战机，迎战群渊。</p>
+          </div>
           <fieldset id="fighter-picker" class="fighter-picker" aria-describedby="fighter-brief">
             <legend>选择出击战机</legend>
             <div class="fighter-options">
@@ -123,9 +131,9 @@
             <p id="hangar-difficulty-note">仅调整 Boss 出招频率与弹速；血量由开战时 POWER 决定。</p>
           </fieldset>
           <div class="start-actions">
-            <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">→</span></button>
+            <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">↗</span></button>
+            <button id="replay-intro-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="campaign-opening" hidden>重看序章</button>
             <button id="guide-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="flight-guide">玩法说明</button>
-            <button id="language-button" class="secondary-button" type="button" aria-label="切换游戏语言为英文">English</button>
           </div>
           <nav class="hangar-console-actions" aria-label="机库终端">
             <button class="secondary-button" data-sortie-console="challenges" type="button" aria-haspopup="dialog">挑战</button>
@@ -134,12 +142,14 @@
             <button class="secondary-button" data-sortie-console="awards" type="button" aria-haspopup="dialog">徽章墙</button>
             <button class="secondary-button" data-sortie-console="settings" type="button" aria-haspopup="dialog">设置</button>
           </nav>
-          <label class="render-quality-control"><span id="render-quality-label">画质</span><select id="render-quality" aria-labelledby="render-quality-label"><option value="low">低</option><option value="medium">中</option><option value="high" selected>高</option></select></label>
-          <p class="start-caption">方向键 / WASD 操控 · 空格大招 · V 护盾<br>Shift 切换扩散 / 聚焦 · 连击开启暴走</p>
+          <div class="hangar-utility">
+            <button id="language-button" class="secondary-button" type="button" aria-label="切换游戏语言为英文">English</button>
+            <label class="render-quality-control"><span id="render-quality-label">画质</span><select id="render-quality" aria-labelledby="render-quality-label"><option value="low">低</option><option value="medium">中</option><option value="high" selected>高</option></select></label>
+          </div>
           <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>
         </div>
         <div class="hangar-art">
-          <div class="orbit" aria-hidden="true"></div>
+          <div class="hangar-sight" aria-hidden="true"></div>
           <img id="fighter-art" src="assets/ships/crimson-sleek.webp" alt="赤焰战机：流线红色涂装、深色座舱和冰蓝双引擎，机头朝右" draggable="false">
           <img id="hangar-variant-art" alt="" draggable="false" hidden>
           <div class="ship-label"><span class="label-line"></span><span><span id="fighter-label">赤焰 · 重装突击型</span><small id="fighter-code">CRIMSON / ASSAULT FIGHTER</small></span></div>

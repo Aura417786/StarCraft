@@ -144,7 +144,7 @@ async function main() {
     assert.equal(await page.locator("#restart-button").evaluate(button => document.activeElement === button), true);
     await page.keyboard.press("Enter");
     await page.waitForFunction(() => state === "battle" && sortieMode() === "practice");
-    await page.goto(pathToFileURL(path.join(root, "index.html")).href);
+    await page.goto(new URL("?intro=0", pathToFileURL(path.join(root, "index.html"))).href);
     if (await page.locator(".flight-guide-actions button").first().isVisible())
       await page.locator(".flight-guide-actions button").first().click();
     await page.locator("#start-button").click();

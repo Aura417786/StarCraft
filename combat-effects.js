@@ -46,10 +46,13 @@ const impactProfiles = {
 let reduceCombatMotion = false;
 try { reduceCombatMotion = window.localStorage.getItem("star-breaker-reduce-combat-motion") === "true"; }
 catch { /* 仅应用系统设置。 */ }
+const combatMotionRoot = typeof document !== "undefined" ? document.getElementById?.("game-app") : null;
+combatMotionRoot?.toggleAttribute?.("data-reduce-motion", reduceCombatMotion);
 
 function quietCombatMotion() { return reduceCombatMotion || reducedMotion.matches; }
 function toggleCombatMotion() {
   reduceCombatMotion = !reduceCombatMotion;
+  combatMotionRoot?.toggleAttribute?.("data-reduce-motion", reduceCombatMotion);
   try { window.localStorage.setItem("star-breaker-reduce-combat-motion", String(reduceCombatMotion)); }
   catch { /* 当前会话仍有效。 */ }
   if (typeof syncSortieEligibility === "function") syncSortieEligibility();

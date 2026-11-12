@@ -132,7 +132,9 @@ async function run() {
     return stats;
   }
   try {
-    await page.goto(entry);
+    const launch = new URL(entry);
+    launch.searchParams.set("intro", "0");
+    await page.goto(launch.href);
     assert.deepEqual(audioRequests, [], "The menu must not request any score or effect payload");
     const closeGuide = page.locator(".flight-guide-actions button").first();
     if (await closeGuide.isVisible()) await closeGuide.click();

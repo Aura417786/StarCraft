@@ -22,6 +22,7 @@ async function run() {
     localStorage.setItem("star-breaker-language", "en");
     localStorage.setItem("star-breaker-guide-seen", "1");
     localStorage.setItem("star-breaker-flight-training", "1");
+    localStorage.setItem("star-breaker-opening-seen", "1");
     const device = { index: 0, mapping: "standard", connected: false, axes: [0, 0],
       buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
     Object.defineProperty(navigator, "getGamepads", { value: () => device.connected ? [device] : [] });
