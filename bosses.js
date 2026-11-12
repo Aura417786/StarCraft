@@ -1,6 +1,6 @@
 "use strict";
 
-const bossRules = { firstArrival: 65, interval: 31, warning: 5, artLead: 20,
+const bossRules = { firstArrival: 65, interval: 31, warning: 5, roarLead: 1.8, artLead: 20,
   recovery: .78, grace: 1.1, maxProjectiles: 240, fusionSpecialMultiplier: .78, shellThreshold: .5,
   armoredMinimum: 0, exposedWindow: 2.4, coreMinimum: 0, finaleMinimum: 0, counterWindow: 1.5 };
 const bossTypes = [
@@ -23,6 +23,7 @@ let boss = null;
 let nextBossTime = bossRules.firstArrival;
 let bossDefeated = 0;
 let pendingBossType = null;
+let pendingBossRoared = false;
 let prefetchedBossType = null;
 // 普通敌机碰撞与 Boss 弹幕共用受伤保护时间。
 let bossHitGrace = 0;
@@ -164,6 +165,7 @@ function resetBossEncounter() {
   nextBossTime = typeof sortieAllowsWaves === "function" && !sortieAllowsWaves() ? sortieBossDelay() : bossRules.firstArrival;
   bossDefeated = typeof sortieStats !== "undefined" ? sortieStats?.rushStart ?? 0 : 0;
   pendingBossType = null;
+  pendingBossRoared = false;
   prefetchedBossType = null;
   bossHitGrace = 0;
   if (typeof resetFlightRadio === "function") resetFlightRadio();
@@ -259,6 +261,7 @@ function bossFireProtectionFor(type) {
 
 function spawnBoss(type = chooseBossType()) {
   if (!Number.isInteger(type) || !bossTypes[type]) return;
+  const alreadyRoared = pendingBossType === type && pendingBossRoared;
   if (typeof resetBattleRewind === "function") resetBattleRewind("boss-arrival");
   if (typeof captureBossRetryCheckpoint === "function") captureBossRetryCheckpoint(type);
   if (typeof warmBossVfxMaterial === "function" && type < 10) warmBossVfxMaterial(type);
@@ -284,13 +287,14 @@ function spawnBoss(type = chooseBossType()) {
   if (battlefieldEvents.objects.length || battlefieldEvents.transport) resetBattlefieldEvents(false);
   clearAlienThreats();
   pendingBossType = null;
+  pendingBossRoared = false;
   bossHitGrace = 1.7;
   setBossWarning();
   player.x = Math.min(player.x, bossPlayerRight());
   movementHint.hidden = true;
   setBossMessage(bossStageTitle(boss), tr("异形正在现身 · 留意攻击预警", "Alien emerging · Watch for attack warnings"));
   statusMessage.textContent = tr(boss.name + "出现，普通敌机暂停生成。", boss.name + " has arrived. Regular enemy spawns are paused.");
-  playEntrance(boss);
+  playEntrance(boss, alreadyRoared);
 }
 
 function updateAlienBossPose(target, seconds) {
@@ -343,6 +347,7 @@ function updateBossEncounter(seconds) {
       }
       if (prefetchedBossType !== null && typeof preloadAlienBossArt === "function") preloadAlienBossArt(prefetchedBossType);
       if (prefetchedBossType !== null) gameAudio.preloadBossScore?.(prefetchedBossType);
+      if (prefetchedBossType !== null) gameAudio.prepareBossRoar?.(prefetchedBossType);
       if (prefetchedBossType === 0 && typeof preloadHadalSurface === "function") preloadHadalSurface();
     }
     if (battleTime < nextBossTime - bossRules.warning) return;
@@ -354,11 +359,15 @@ function updateBossEncounter(seconds) {
       preloadBossFinaleArt(pendingBossType);
       enemies.length = 0;
       resetEnemyCombat(false);
-      gameAudio.warning();
     }
     const name = bossTypeName(pendingBossType);
     setBossWarning(name);
     const remaining = nextBossTime - battleTime;
+    if (!pendingBossRoared && remaining <= bossRules.roarLead + 1e-9) {
+      pendingBossRoared = true;
+      const arena = bossArena(pendingBossType);
+      gameAudio.bossRoar?.(pendingBossType, arena.x, arena.y);
+    }
     if (remaining > 0 && remaining <= 3 && typeof beginFlightRadio === "function") {
       beginFlightRadio("incoming", pendingBossType, remaining);
     }

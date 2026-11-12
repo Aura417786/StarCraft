@@ -58,7 +58,10 @@ function drawHostileProjectile(ctx, shot, color, quiet) {
   const shape = hostileShotShape(shot);
   ctx.save();
   ctx.translate(shot.x, shot.y);
-  if (shape.kind !== "circle") ctx.rotate(Math.atan2(shot.vy ?? 0, shot.vx ?? 0));
+  ctx.rotate(Math.atan2(shot.vy ?? 0, shot.vx ?? 0));
+  if (!quiet && typeof drawFlightBoltWake === "function" && (shot.radius >= 6 || shot.glyph))
+    drawFlightBoltWake(ctx, shot.radius * 1.2, shot.radius * .49, color,
+      (shot.vx ?? 0) * .073 + (shot.vy ?? 0) * .113, shot.age ?? 0, true);
   ctx.fillStyle = ctx.shadowColor = color;
   ctx.shadowBlur = quiet ? 0 : shot.burstAt ? 15 : 8;
   ctx.beginPath();

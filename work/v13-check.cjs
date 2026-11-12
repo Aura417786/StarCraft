@@ -454,7 +454,9 @@ check('the player hull keeps reflection after evolution and under reduced motion
       drawOperations.length=0;captureDraws=true;
       execute('drawPlayer();');
       captureDraws=false;
-      assert.equal(drawOperations.filter(op=>op.name==='set:globalCompositeOperation'&&op.args[0]==='screen').length,1);
+      const hull=drawOperations.findIndex(op=>op.name==='drawImage');
+      assert.ok(hull>=0);
+      assert.equal(drawOperations.slice(hull).filter(op=>op.name==='set:globalCompositeOperation'&&op.args[0]==='screen').length,1);
     }
   } finally {
     captureDraws=false;

@@ -106,6 +106,9 @@ function drawGravityTide() {
   if (state !== "battle" || !gravityTideBusy()) return;
   const g = gravityTide, warning = g.phase === "warning", quiet = quietCombatMotion();
   const color = warning ? "#d0b2ff" : "#b7a0ff";
+  if (typeof drawFlightLattice === "function")
+    drawFlightLattice(context, g.centerX, g.centerY, g.radiusX * .88, g.radiusY * .91,
+      color, quiet ? 0 : -g.elapsed * .85, warning ? .29 : .34 + g.strength * .24, .58);
   context.save();
   const field = context.createRadialGradient(g.centerX, g.centerY, 0, g.centerX, g.centerY, g.radiusX);
   field.addColorStop(0, "#aa7eff12"); field.addColorStop(1, "#8367db00");

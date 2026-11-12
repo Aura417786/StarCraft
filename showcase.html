@@ -23,6 +23,7 @@
   <script src="hadal-surface.js" defer></script>
   <script src="boss-attack-art.js" defer></script>
   <script src="boss-fragments-data.js" defer></script>
+  <script src="boss-arrival-vfx.js" defer></script>
   <script src="boss-presentation.js" defer></script>
   <script src="hostile-projectiles.js" defer></script>
   <script src="alien-attacks.js" defer></script>
@@ -37,6 +38,7 @@
   <script src="evolution.js" defer></script>
   <script src="momentum.js" defer></script>
   <script src="fire-control.js" defer></script>
+  <script src="flight-vfx.js" defer></script>
   <script src="combat-effects.js" defer></script>
   <script src="evolution-art.js" defer></script>
   <script src="space-props.js" defer></script>
@@ -121,7 +123,7 @@
           </div>
           <p id="boss-action" class="boss-action" role="status"></p>
         </div>
-        <div id="boss-warning" class="boss-warning" role="alert" hidden><div class="warning-band"><strong>WARNING</strong><span id="boss-warning-name"></span></div></div>
+        <p id="boss-warning" class="sr-only" role="status" aria-atomic="true" hidden><span id="boss-warning-name"></span></p>
         <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>Shift 切换扩散 / 聚焦 · 20 连击进入暴走<br>空格释放大招 · V 开启护盾</p><span class="flight-direction">蓝攻速 · 黄弹道 · 红伤害<br>绿生命（稀有） <span aria-hidden="true">→</span></span></div>
         <div id="pause-hint" class="pause-message" hidden><strong>已暂停</strong><span>点击战场继续战斗</span></div>
         <div class="battle-actions">

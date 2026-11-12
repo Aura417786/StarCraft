@@ -71,6 +71,12 @@ function drawCampaignGate(ctx, x, y, radius, age, alpha, calm) {
   ctx.fillStyle = aura;
   ctx.fillRect(-radius * 1.65, -radius * 1.65, radius * 3.3, radius * 3.3);
   const open = campaignSmooth(age, 3, 6.3);
+  if (typeof drawFlightLattice === "function") {
+    drawFlightLattice(ctx, 0, 0, radius * (.59 + .13 * open), radius * 1.15,
+      "#c0eaff", calm ? 0 : age, .58 + open * .26, .6);
+    if (open > 0) drawFlightLattice(ctx, 0, 0, radius * .36, radius * .81,
+      "#ffe1a2", calm ? 0 : -age * 1.3, open * .68, .48);
+  }
   if (open > 0) {
     const iris = ctx.createLinearGradient(-radius * .42, 0, radius * .42, 0);
     iris.addColorStop(0, "#2d63a015");

@@ -28,6 +28,7 @@
   <script src="hadal-surface.js" defer></script>
   <script src="boss-attack-art.js" defer></script>
   <script src="boss-fragments-data.js" defer></script>
+  <script src="boss-arrival-vfx.js" defer></script>
   <script src="boss-presentation.js" defer></script>
   <script src="hostile-projectiles.js" defer></script>
   <script src="alien-attacks.js" defer></script>
@@ -46,6 +47,7 @@
   <script src="evolution.js" defer></script>
   <script src="momentum.js" defer></script>
   <script src="fire-control.js" defer></script>
+  <script src="flight-vfx.js" defer></script>
   <script src="combat-effects.js" defer></script>
   <script src="boss-vfx-materials.js" defer></script>
   <script src="boss-pressure-art.js" defer></script>
@@ -184,7 +186,7 @@
           </div>
           <p id="boss-action" class="boss-action" role="status"></p>
         </div>
-        <div id="boss-warning" class="boss-warning" role="alert" hidden><div class="warning-band"><strong>WARNING</strong><span id="boss-warning-name"></span></div></div>
+        <p id="boss-warning" class="sr-only" role="status" aria-atomic="true" hidden><span id="boss-warning-name"></span></p>
         <aside id="flight-radio" class="flight-radio" hidden>
           <span class="radio-speaker" aria-hidden="true"></span><span class="radio-line" aria-hidden="true"></span>
           <span class="sr-only radio-announcement" role="status" aria-atomic="true"></span>

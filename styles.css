@@ -205,7 +205,7 @@ h1 > span { color: var(--red); }
 .app[data-boss-presentation]:not([data-boss-presentation=""]) .boss-hud { opacity: 0; }
 .app[data-boss-finale="true"] .boss-hud { border-color: #ad91eb9e; background: linear-gradient(120deg, #261631f5, #080f1eec); }
 .app[data-boss-finale="true"] .boss-stage { color: #f1d9ff; border-color: #bd90e280; }
-.battle-screen:has(.boss-warning:not([hidden])) .boss-hud { visibility: hidden; }
+.battle-screen:has(#boss-warning:not([hidden])) .boss-hud { visibility: hidden; }
 .app[data-boss-active="true"] .powerup-notice { top: 213px; }
 @media (min-width: 741px) and (max-width: 1000px) {
   .boss-hud { top: 140px; }
@@ -237,7 +237,6 @@ h1 > span { color: var(--red); }
 .header-actions { display: flex; gap: 8px; align-items: center; pointer-events: auto; }
 .sound-button { min-width: 88px; font-size: 12px; padding: 8px 12px; }
 .sound-button[aria-pressed="false"] { color: #8c95a6; }
-.boss-warning { position: absolute; inset: 0; display: grid; place-items: center; z-index: 5; pointer-events: none; background: linear-gradient(transparent 20%, #24020835 50%, transparent 80%); }
 .flight-radio {
   position: absolute; z-index: 6; right: 3.4vw; bottom: 65px;
   width: min(360px, 36vw); min-height: 47px; padding: 7px 13px 8px; pointer-events: none;
@@ -253,12 +252,6 @@ h1 > span { color: var(--red); }
   .radio-line { font-size: 11px; }
 }
 @media (max-width: 520px) { .flight-radio { bottom: 69px; width: min(252px, 65vw); } }
-.warning-band { position: relative; width: 100%; padding: 24px 22px 27px; text-align: center; color: #fff5f2; background: linear-gradient(90deg, #720d1af0, #c42032f5 24%, #df3542fa 50%, #c42032f5 76%, #720d1af0); border-top: 1px solid #ffa29b; border-bottom: 1px solid #ffa29b; box-shadow: 0 0 65px #f5203645, inset 0 0 34px #5c031c66; }
-.warning-band::before, .warning-band::after { content: ""; position: absolute; left: 0; right: 0; height: 6px; background: repeating-linear-gradient(125deg, #ffac944f 0 12px, transparent 12px 24px); }
-.warning-band::before { top: 0; }
-.warning-band::after { bottom: 0; }
-.warning-band strong { display: block; font: 900 clamp(32px, 5.4vw, 70px)/1.15 "Arial Black", Impact, sans-serif; letter-spacing: .2em; padding-left: .2em; text-shadow: 0 3px 0 #7e0b21, 0 0 22px #ffb68d45; }
-.warning-band span { display: block; margin-top: 10px; font-size: clamp(15px, 1.7vw, 23px); letter-spacing: .22em; font-weight: 700; }
 .pause-message { z-index: 6; }
 .ultimate-hud { position: absolute; left: 3.4vw; bottom: 76px; width: 232px; padding: 12px 15px 10px; border: 1px solid #a7435155; border-radius: 8px; background: linear-gradient(125deg, #21121dde, #0b1121e8); box-shadow: 0 7px 24px #02040c55; }
 .ultimate-heading { display: flex; align-items: center; gap: 10px; }
@@ -300,8 +293,7 @@ h1 > span { color: var(--red); }
 @media (max-height: 450px) and (min-width: 521px) { .ultimate-hud { bottom: 53px; width: 215px; padding: 7px 12px; } .ultimate-slots { margin: 6px 0 5px; height: 6px; } .ultimate-label { margin-top: 4px; } }
 @media (max-width: 520px) { .ultimate-hud, .shield-hud { bottom: 70px; width: calc((100vw - 38px) / 2); padding: 9px 10px; } .shield-hud { left: auto; right: 14px; } .ultimate-heading, .shield-heading { gap: 5px; } .ultimate-name, .shield-name { font-size: 10px; letter-spacing: 0; } .ultimate-heading strong, .shield-heading strong { font-size: 12px; } .ultimate-label, .shield-label { font-size: 9px; } }
 @media (max-height: 450px) and (min-width: 521px) { .shield-hud { left: calc(3.4vw + 225px); bottom: 53px; width: 195px; padding: 7px 12px; } .shield-slots { margin: 6px 0 5px; height: 6px; } .shield-label { margin-top: 4px; } }
-@media (max-width: 520px) { .header-actions { gap: 5px; } .sound-button { min-width: 72px; padding: 7px; font-size: 11px; } .fullscreen-button { padding: 7px; font-size: 11px; } .warning-band { padding: 22px 12px; } .warning-band span { letter-spacing: .1em; } }
-@media (max-height: 450px) and (min-width: 521px) { .warning-band { padding: 15px 12px; } .warning-band strong { font-size: 42px; } .warning-band span { font-size: 16px; margin-top: 5px; } }
+@media (max-width: 520px) { .header-actions { gap: 5px; } .sound-button { min-width: 72px; padding: 7px; font-size: 11px; } .fullscreen-button { padding: 7px; font-size: 11px; } }
 
 /* 进化选择独立于战斗层，停止战斗后再作出选择。 */
 .evolution-readout { position: absolute; left: 3.4vw; bottom: 194px; max-width: min(450px, 90%); color: #a8bbc9; font-size: 10px; letter-spacing: .06em; padding: 3px 8px; border-left: 2px solid #b76d7a; background: #0b1322c9; }

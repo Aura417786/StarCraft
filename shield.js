@@ -220,6 +220,11 @@ function drawShield() {
   context.lineWidth = 2;
   context.beginPath(); context.ellipse(x - rx * 0.03, y, rx * 0.93, ry * 0.9, 0, Math.PI * 1.07, Math.PI * 1.58); context.stroke();
   context.restore();
+  if (typeof drawFlightLattice === "function") {
+    drawFlightLattice(context, x, y, rx * 1.01, ry * 1.01, "#ffa080", age * 1.9, fade * .68);
+    if (shield.perfectRemaining > 1e-9 && !shield.perfectUsed)
+      drawFlightLattice(context, x, y, rx * 1.07, ry * 1.07, "#fff3cb", age * 1.2, .75, .4);
+  }
   drawPerfectShield();
 }
 
@@ -241,17 +246,32 @@ function drawPerfectShield() {
   context.shadowColor = "#ff173f"; context.shadowBlur = reducedMotion.matches ? 0 : 22;
   context.beginPath(); context.ellipse(effect.x, effect.y, player.width * (0.65 + progress * 0.8),
     player.height * (0.7 + progress * 0.7), 0, 0, Math.PI * 2); context.stroke();
-  // 弧形亮边和窄光带表现前向反击，不遮住整个战场。
-  const light = context.createLinearGradient(edge - 90, 0, edge + 24, 0);
-  light.addColorStop(0, "#ff284500"); light.addColorStop(0.8, "#ff284522"); light.addColorStop(1, "#ffd5c366");
+  // The counter front has feathered tips, with the bright contact edge
+  // strongest at the shield's centerline.
+  const half = effect.halfHeight, y = effect.y;
+  const light = context.createLinearGradient(edge - 92, 0, edge + 28, 0);
+  light.addColorStop(0, "#ff2a4400");
+  light.addColorStop(.60, "#ff472f21");
+  light.addColorStop(1, "#ffbd7d80");
   context.fillStyle = light;
-  context.fillRect(edge - 90, effect.y - effect.halfHeight, 114, effect.halfHeight * 2);
-  context.strokeStyle = "#ffe8de"; context.lineWidth = 2;
-  context.beginPath(); context.moveTo(edge - 20, effect.y - effect.halfHeight);
-  context.quadraticCurveTo(edge + 40, effect.y, edge - 20, effect.y + effect.halfHeight); context.stroke();
+  context.beginPath();
+  context.moveTo(edge - 38, y - half);
+  context.bezierCurveTo(edge + 19, y - half * .61, edge + 19, y + half * .61, edge - 38, y + half);
+  context.bezierCurveTo(edge - 18, y + half * .62, edge - 75, y + half * .25, edge - 79, y);
+  context.bezierCurveTo(edge - 75, y - half * .25, edge - 18, y - half * .62, edge - 38, y - half);
+  context.closePath(); context.fill();
+  const rim = context.createLinearGradient(0, y - half, 0, y + half);
+  rim.addColorStop(0, "#ffbd8e00"); rim.addColorStop(.20, "#ffbd8ea6");
+  rim.addColorStop(.50, "#fff0d9"); rim.addColorStop(.80, "#ffbd8ea6"); rim.addColorStop(1, "#ffbd8e00");
+  context.strokeStyle = rim; context.lineWidth = 1.55;
+  context.beginPath(); context.moveTo(edge - 38, y - half);
+  context.bezierCurveTo(edge + 19, y - half * .61, edge + 19, y + half * .61, edge - 38, y + half); context.stroke();
   context.shadowBlur = 0;
   context.font = "700 18px Microsoft YaHei, sans-serif"; context.textAlign = "center";
   context.fillStyle = "#ffe5d7";
   context.fillText(tr("完美格挡", "PERFECT GUARD"), player.x, player.y - player.height * 0.9 - (reducedMotion.matches ? 0 : progress * 18));
   context.restore();
+  if (typeof drawFlightLattice === "function")
+    drawFlightLattice(context, effect.x, effect.y, player.width * (.66 + progress * .71), player.height * (.72 + progress * .84),
+      "#ffb890", progress * 5, alpha * .81);
 }

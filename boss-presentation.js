@@ -81,7 +81,10 @@ function startBossPresentation(kind, target, motion = null) {
   updatePauseHint();
 }
 
-function playEntrance(target) { startBossPresentation("entry", target); }
+function playEntrance(target, alreadyRoared = false) {
+  if (!alreadyRoared) gameAudio.bossRoar?.(target.type, target.x, target.y);
+  startBossPresentation("entry", target);
+}
 function playRupture(target) { startBossPresentation("rupture", target); }
 function playFinaleTransform(target) { startBossPresentation("transform", target); }
 function playDeath(target, reward, motion) {
@@ -266,6 +269,67 @@ function drawBossPresentationBackdrop(ctx) {
   }
   ctx.fillStyle = glow;
   ctx.fillRect(-100, -100, viewport.width + 200, viewport.height + 200);
+  ctx.restore();
+}
+
+function drawBossEncounterFilaments(ctx) {
+  if (state !== "battle" || typeof drawBossArrivalVfx !== "function") return;
+  const scene = activeBossPresentation();
+  const quality = visualQuality;
+  const quiet = quietCombatMotion();
+  const viewWidth = viewport.width, viewHeight = viewport.height;
+  if (scene) {
+    const { kind, target, age, duration } = scene;
+    const progress = age / duration;
+    const arena = kind === "entry" ? bossArena(target.type) : target;
+    const follow = kind === "entry" ? presentationEase(progress, 0, .28) : 1;
+    const x = arena.x + (Math.min(target.x, viewWidth - target.width * .34) - arena.x) * follow;
+    const y = arena.y + (target.y - arena.y) * follow;
+    drawBossArrivalVfx(ctx, { type: target.type, x, y,
+      width: target.width, height: target.height, progress, phase: kind,
+      quality, quiet, clock: age, viewWidth, viewHeight });
+  } else if (pendingBossType !== null) {
+    const arena = bossArena(pendingBossType);
+    const progress = clamp(1 - (nextBossTime - battleTime) / bossRules.warning, 0, 1);
+    drawBossArrivalVfx(ctx, { type: pendingBossType, x: arena.x, y: arena.y,
+      width: arena.width, height: arena.height, progress, phase: "warning", quality, quiet,
+      clock: progress * bossRules.warning, viewWidth, viewHeight });
+  }
+}
+
+function drawBossPreludeCaption(ctx) {
+  if (state !== "battle" || boss || pendingBossType === null) return;
+  const { width, height } = viewport;
+  const type = pendingBossType;
+  const left = Math.max(22, width * .106), y = height * (height < 450 ? .48 : .365);
+  const size = clamp(width * .036, 19, 49);
+  const span = Math.min(width * .54, size * 10.5);
+  const profile = bossPresentationProfiles[type];
+  const remaining = Math.max(0, nextBossTime - battleTime);
+  ctx.save();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  const shade = ctx.createLinearGradient(left - 28, 0, left + span + 28, 0);
+  shade.addColorStop(0, "#03060d00");
+  shade.addColorStop(.1, "#03060dc7");
+  shade.addColorStop(.55, "#03060db8");
+  shade.addColorStop(1, "#03060d00");
+  ctx.fillStyle = shade;
+  ctx.fillRect(left - 28, y - size * 1.6, span + 56, size * 2.54);
+  ctx.fillStyle = profile.ink;
+  ctx.font = "700 " + clamp(size * .34, 10, 14) + "px Consolas, Microsoft YaHei, sans-serif";
+  ctx.fillText(tr("异形信号", "ALIEN SIGNAL") + "  /  " + String(type + 1).padStart(2, "0"), left, y - size * .91, span);
+  ctx.fillStyle = "#fff6e8";
+  ctx.font = "600 " + size + "px Georgia, Songti SC, SimSun, serif";
+  ctx.fillText(bossTypeName(type), left, y + size * .20, span);
+  ctx.strokeStyle = profile.ink;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = .68;
+  ctx.beginPath(); ctx.moveTo(left, y + size * .44); ctx.lineTo(left + Math.min(span * .64, 174), y + size * .44); ctx.stroke();
+  ctx.globalAlpha = .95;
+  ctx.fillStyle = "#e4dee2";
+  ctx.font = clamp(size * .3, 10, 13) + "px Consolas, Microsoft YaHei, sans-serif";
+  ctx.fillText(tr("预计抵达", "CONTACT IN") + "  " + remaining.toFixed(1) + " s", left, y + size * .87, span);
   ctx.restore();
 }
 
@@ -596,10 +660,11 @@ function drawBossPresentationBody(ctx, scene, quiet) {
   ctx.save();
   ctx.translate(target.x, target.y);
   if (kind === "entry") {
-    const approach = presentationEase(p, .06, .88);
+    const approach = presentationEase(p, .08, .88);
+    const reveal = presentationEase(p, .08, .53);
     drawPresentationMaterial(ctx, scene, .67 - approach * .51, endFade * .69, quiet);
     ctx.save();
-    ctx.globalAlpha *= .40 + approach * .60;
+    ctx.globalAlpha *= reveal;
     ctx.rotate(bank * (1 - approach));
     ctx.scale(.74 + approach * .26, .82 + approach * .18);
     drawBossShip(ctx, { ...target, x: 0, y: 0, cinematicPose: {

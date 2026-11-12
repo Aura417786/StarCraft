@@ -1007,10 +1007,13 @@ function drawPowerups() {
     context.lineWidth = 2;
     context.shadowColor = details.color;
     context.shadowBlur = reducedMotion.matches ? 0 : 16;
-    context.beginPath();
-    context.arc(0, 0, orb.radius, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
+    if (typeof drawFlightEnergyCrystal === "function") {
+      context.shadowBlur = 0;
+      drawFlightEnergyCrystal(context, orb.radius, details.color, battleTime + orb.y * .013);
+    } else {
+      context.beginPath(); context.arc(0, 0, orb.radius, 0, Math.PI * 2);
+      context.fill(); context.stroke();
+    }
     context.shadowBlur = 0;
     context.fillStyle = details.color;
     context.textAlign = "center";
@@ -1185,9 +1188,13 @@ function drawExplosions() {
 function drawBullets() {
   context.save();
   const glow = reducedMotion.matches ? 0 : visualQuality.glow;
-  for (const bullet of bullets) {
+  const tailBudget = visualQuality.id === "high" ? 104 : 54;
+  for (let index = 0; index < bullets.length; index++) {
+    const bullet = bullets[index];
     context.save(); context.translate(bullet.x, bullet.y); context.rotate(bullet.angle ?? 0);
     const half = bullet.halfHeight ?? 2.5, length = bullet.length ?? weapon.length;
+    if (index >= bullets.length - tailBudget && typeof drawFlightBoltWake === "function")
+      drawFlightBoltWake(context, length, half, bullet.color, index, battleTime);
     context.fillStyle = bullet.color;
     context.beginPath();
     if (bullet.visual === "lance" || bullet.visual === "counter") {
@@ -1233,6 +1240,8 @@ function drawMuzzleFlash() {
   context.shadowBlur = 8 * glow;
   for (const offset of shotOffsets()) {
     const y = muzzle.y + offset;
+    if (glow && typeof drawFlightLattice === "function")
+      drawFlightLattice(context, muzzle.x + 3, y, 4 + intensity * 5, 5 + intensity * 7, palette.color, battleTime, .44 * intensity);
     if (glow) {
       context.strokeStyle = palette.color; context.lineWidth = 1.5;
       context.globalAlpha = intensity * glow * .8;
@@ -1251,6 +1260,8 @@ function drawMuzzleFlash() {
 }
 function drawPlayer() {
   if (state !== "battle") return;
+  if (typeof drawFlightEngineWake === "function")
+    drawFlightEngineWake(context, player, fighterProfile().id, shipVisuals.clock, isOverdriveActive());
   context.save();
   if (player.hitFlash > 0) {
     context.strokeStyle = "#ff657b";
@@ -1344,9 +1355,11 @@ function drawFrame(time) {
     context.translate(-viewport.width / 2, -viewport.height / 2);
   }
   drawBattlefield(showCombat);
+  if (typeof drawCosmicFlightVfx === "function") drawCosmicFlightVfx(context, viewport, battlefieldState);
   if (typeof warmHadalDestination === "function") warmHadalDestination(context, state === "battle");
   drawActiveJourney("front");
   drawBossPresentationBackdrop(context);
+  if (showCombat) drawBossEncounterFilaments(context);
   if (showCombat && typeof drawBossPressureArt === "function") drawBossPressureArt("back");
   if (showCombat) drawCombatPostProcessing(context);
   context.globalAlpha = 1;
@@ -1381,6 +1394,7 @@ function drawFrame(time) {
   context.restore();
   if (showCombat) {
     drawBattlefieldEventNotice();
+    drawBossPreludeCaption(context);
     drawBossPresentationOverlay(context);
   }
   drawEvolutionChoicePreviews(time);

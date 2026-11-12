@@ -92,6 +92,7 @@ const gameAudio={ muted:false,
   shoot(){audioCalls.push({name:'shoot',args:[]});},
   explode(...args){audioCalls.push({name:'explode',args});},
   warning(){audioCalls.push({name:'warning',args:[]});},
+  bossRoar(...args){audioCalls.push({name:'bossRoar',args});},
   chargeUltimate(...args){audioCalls.push({name:'chargeUltimate',args});},
   fireUltimate(){audioCalls.push({name:'fireUltimate',args:[]});},
   stopUltimate(){audioCalls.push({name:'stopUltimate',args:[]});},
@@ -637,9 +638,10 @@ check('muzzle flashes share the exact symmetry axis of each emitted volley', () 
   for(const lanes of [1,2,3,4]) {
     execute(`weapon.lanes=${lanes};resetWeapons();updateShooting(0);`);
     captureDraws=true; drawOperations.length=0; execute('drawMuzzleFlash();'); captureDraws=false;
-    const flashes=drawOperations.filter(op=>op.name==='ellipse');
+    const flashes=drawOperations.filter(op=>op.name==='ellipse'&&op.args[0]>0);
     assert.equal(flashes.length,lanes);
     assert.deepEqual(flashes.map(op=>op.args[1]),emitted().map(b=>b.y));
+    assert.deepEqual(drawOperations.filter(op=>op.name==='translate').map(op=>op.args[1]),emitted().map(b=>b.y));
   }
 });
 
@@ -658,7 +660,7 @@ check('rendering mixed old and new bullets uses the color and core stored on eac
   isolatedBattle('battleTime=0;weapon.lanes=4;resetWeapons();updateShooting(0);applyPowerup("yellow");updateShooting(.2);');
   const mixed=emitted();
   captureDraws=true; drawOperations.length=0; execute('drawBullets();'); captureDraws=false;
-  const fills=drawOperations.filter(op=>op.name==='set:fillStyle').map(op=>op.args[0]);
+  const fills=drawOperations.filter(op=>op.name==='set:fillStyle'&&op.args[0]!=='#fff3df').map(op=>op.args[0]);
   assert.deepEqual(fills,mixed.flatMap(b=>[b.color,b.core]));
 });
 
@@ -1244,12 +1246,22 @@ check('Boss durability depends on identity and locked equipment bracket, never o
   readyBoss(10);
   assert.ok(bossState().boss.baseHealth>baseline);
 });
-check('full-screen warning shows the selected boss once and clears on spawn, defeat, death and menu', () => {
-  isolatedBattle(); execute('resetBossEncounter();battleTime=nextBossTime-bossRules.warning;'); audioCalls.length=0; execute('updateBossEncounter(0);');
-  assert.equal(nodes.get('#boss-warning').hidden,false); assert.ok(nodes.get('#boss-warning-name').textContent.includes('即将出现'));
-  assert.equal(audioCalls.filter(c=>c.name==='warning').length,1);
-  execute('updateBossEncounter(.05);updateBossEncounter(.05);'); assert.equal(audioCalls.filter(c=>c.name==='warning').length,1);
-  execute('battleTime=nextBossTime;updateBossEncounter(0);'); assert.equal(nodes.get('#boss-warning').hidden,true);
+check('all eleven bosses roar once before revealing their body and the caption clears with the encounter', () => {
+  for (let type=0; type<11; type++) {
+    isolatedBattle();
+    execute('resetBossEncounter();bossDefeated='+type+';battleTime=nextBossTime-bossRules.warning;');
+    audioCalls.length=0; execute('updateBossEncounter(0);');
+    assert.equal(nodes.get('#boss-warning').hidden,false);
+    assert.ok(nodes.get('#boss-warning-name').textContent.includes('即将出现'));
+    assert.equal(audioCalls.filter(c=>c.name==='bossRoar'||c.name==='warning').length,0);
+    execute('battleTime=nextBossTime-bossRules.roarLead;updateBossEncounter(0);updateBossEncounter(0);');
+    assert.deepEqual(audioCalls.filter(c=>c.name==='bossRoar').map(c=>c.args[0]),[type]);
+    assert.equal(execute('boss'),null);
+    execute('battleTime=nextBossTime;updateBossEncounter(0);');
+    assert.equal(nodes.get('#boss-warning').hidden,true);
+    assert.equal(execute('boss.type'),type);
+    assert.deepEqual(audioCalls.filter(c=>c.name==='bossRoar').map(c=>c.args[0]),[type]);
+  }
   execute('setBossWarning("测试");defeatBoss();'); assert.equal(nodes.get('#boss-warning').hidden,true);
   execute('setBossWarning("测试");endGame();'); assert.equal(nodes.get('#boss-warning').hidden,true);
   begin(); execute('setBossWarning("测试");'); leaveBattle(); assert.equal(nodes.get('#boss-warning').hidden,true);
@@ -1260,7 +1272,7 @@ check('warning countdown freezes while paused and resizing does not consume or r
   const selected=bossState().pendingBossType; audioCalls.length=0;
   emit(window,'blur'); frames(100); assert.equal(scene().battleTime,time); assert.equal(bossState().pendingBossType,selected);
   surface={width:640,height:360}; emit(window,'resize'); assert.equal(bossState().pendingBossType,selected);
-  assert.equal(nodes.get('#boss-warning').hidden,false); assert.equal(audioCalls.filter(c=>c.name==='warning').length,0);
+  assert.equal(nodes.get('#boss-warning').hidden,false); assert.equal(audioCalls.filter(c=>c.name==='bossRoar').length,0);
   focusAndConfirmResume(); step(); assert.equal(scene().battleTime,time);
 });
 check('audio lifecycle follows start, pause, resume, boss, enrage, defeat and game over', () => {

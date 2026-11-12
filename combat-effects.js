@@ -6,6 +6,12 @@ const combatEffects = { clock: 0, particles: [], impacts: [], wrecks: [], shockw
   directionalHit: null, hitPause: 0, nextHeavyPause: 0, nextContact: 0 };
 const spareDetonations = Array.from({ length: 8 }, () => ({}));
 const spareCombatParticles = Array.from({ length: 180 }, () => ({}));
+const detonationVolumes = new Map();
+const detonationStrands = Array.from({ length: 72 }, (_, i) => ({
+  angle: i * 2.39996322973,
+  depth: ((i + .5) * .75487766625) % 1,
+  onset: ((i + .5) * .61803398875) % 1,
+}));
 const detonationMaterials = {
   metal: { core: "#fff0c4", glow: "#ff9e62", haze: "#643933", axis: 1, life: .54 },
   water: { core: "#e0ffff", glow: "#73cff9", haze: "#236e96", axis: .67, life: 1.02 },
@@ -176,6 +182,85 @@ function detonationGlow(ctx, x, y, radius, core, rim, alpha) {
   ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
 }
 
+function detonationVolumeSprite(profile) {
+  if (detonationVolumes.has(profile)) return detonationVolumes.get(profile);
+  if (typeof shipRenderCanvas !== "function") return null;
+  const surface = shipRenderCanvas(144, 144);
+  const ctx = surface?.getContext?.("2d");
+  if (!ctx) return null;
+  // A stable, uneven density field shades the gas in depth. Bake these
+  // overlapping lobes once per material so no blur kernel runs during combat.
+  for (let i = 0; i < 21; i++) {
+    const grain = detonationStrands[i];
+    const spread = 10 + 34 * grain.depth;
+    const x = 72 + Math.cos(grain.angle) * spread, y = 72 + Math.sin(grain.angle) * spread * .8;
+    const radius = 12 + grain.onset * 21;
+    const cell = ctx.createRadialGradient(x - radius * .16, y - radius * .24, 0, x, y, radius);
+    cell.addColorStop(0, profile.glow + "52");
+    cell.addColorStop(.40, profile.haze + "8a");
+    cell.addColorStop(1, profile.haze + "00");
+    ctx.fillStyle = cell;
+    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+  detonationVolumes.set(profile, surface);
+  return surface;
+}
+
+function drawDetonationVolume(ctx, effect, p, volume, quality) {
+  const { profile, radius, rank, seed, material } = effect;
+  const sprite = detonationVolumeSprite(profile);
+  if (!sprite) return;
+  const retreat = material === "void";
+  const lobes = quality === "high" ? (rank > 1 ? 6 : 3) : (rank > 1 ? 3 : 2);
+  const spread = radius * (retreat ? 1 - p * .6 : .25 + .9 * p);
+  const drift = retreat ? -1 : 1;
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  for (let i = 0; i < lobes; i++) {
+    const seedPoint = detonationStrands[i + 11];
+    const phase = seed + seedPoint.angle + p * drift * .92;
+    const x = Math.cos(phase) * spread * (.12 + seedPoint.depth * .55);
+    const y = Math.sin(phase) * spread * profile.axis * .65 + p * p * radius * (material === "spores" ? -.34 : .17);
+    const span = radius * (.14 + seedPoint.onset * .22 + .50 * p);
+    ctx.globalAlpha = volume * (.49 + seedPoint.depth * .37);
+    ctx.drawImage(sprite, x - span, y - span, span * 2, span * 2);
+  }
+  ctx.restore();
+}
+
+function drawDetonationSparks(ctx, effect, p, quality) {
+  const { rank, radius, profile, material, seed } = effect;
+  const count = quality === "high" ? (rank > 1 ? 64 : 23) : (rank > 1 ? 32 : 13);
+  const inward = material === "void";
+  const ease = 1 - (1 - p) ** 2.75;
+  const momentum = inward ? 1 - ease * .82 : .10 + ease;
+  const fall = material === "spores" ? -.43 : material === "water" ? .29 : .13;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineCap = "round";
+  for (let layer = 0; layer < 3; layer++) {
+    ctx.beginPath();
+    for (let i = layer; i < count; i += 3) {
+      const strand = detonationStrands[i];
+      if (p < strand.onset * .15) continue;
+      const angle = strand.angle + seed + (layer - 1) * p * (inward ? -1.8 : .60);
+      const distance = radius * momentum * (.36 + strand.depth * (rank > 1 ? 1.1 : .94));
+      const dx = Math.cos(angle), dy = Math.sin(angle);
+      const x = dx * distance, y = dy * distance * profile.axis + p * p * radius * fall;
+      const length = radius * (.018 + strand.depth * (layer === 0 ? .16 : .07)) * (.42 + (1 - p) * .58);
+      const turn = length * (inward ? -.54 : .25) * Math.sin(strand.angle + p * 4);
+      const heading = inward ? -1 : 1;
+      ctx.moveTo(x - dx * length * heading, y - dy * length * heading);
+      ctx.quadraticCurveTo(x - dx * length * heading * .45 - dy * turn, y - dy * length * heading * .45 + dx * turn, x, y);
+    }
+    ctx.strokeStyle = layer === 0 ? profile.glow : layer === 1 ? profile.core : profile.glow;
+    ctx.lineWidth = layer === 0 ? 1.7 : layer === 1 ? .95 : .55;
+    ctx.globalAlpha = (1 - p) ** (layer === 2 ? 1.1 : 1.76) * (layer === 0 ? .72 : .91);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawDetonationMaterial(ctx, effect, p, quiet, quality) {
   const { material, profile, rank, radius, seed } = effect;
   const ionized = material === "charge" || material === "neural";
@@ -270,7 +355,7 @@ function drawDetonationMaterial(ctx, effect, p, quiet, quality) {
 function drawCombatDetonations(ctx) {
   const quiet = quietCombatMotion(), quality = visualQuality.id;
   for (const effect of combatEffects.detonations) {
-    const { x, y, radius, age, life, profile, material, rank } = effect;
+    const { x, y, radius, age, life, profile, rank } = effect;
     const p = age / life;
     ctx.save();
     ctx.translate(x, y);
@@ -280,13 +365,9 @@ function drawCombatDetonations(ctx) {
     const volume = Math.min(1, p * 6) * (1 - p) ** 2.45;
     const cloud = radius * (.21 + p * .83);
     detonationGlow(ctx, 0, 0, cloud, profile.glow, profile.haze + "8a", volume * (quiet ? .19 : rank > 1 ? .69 : .43));
-    if (!quiet && quality === "high" && rank > 1) {
-      detonationGlow(ctx, -cloud * .34, cloud * .19, cloud * .69, profile.haze, "#11102255", volume * .51);
-      if (material === "thermal" || material === "metal" || material === "spores") {
-        detonationGlow(ctx, cloud * .43, -cloud * .31, cloud * .61, profile.glow, profile.haze + "88", volume * .48);
-      }
-    }
+    if (!quiet && quality !== "low") drawDetonationVolume(ctx, effect, p, volume, quality);
     drawDetonationMaterial(ctx, effect, p, quiet, quality);
+    if (!quiet && quality !== "low") drawDetonationSparks(ctx, effect, p, quality);
     ctx.restore();
   }
 }
@@ -420,6 +501,7 @@ function recordSurfaceContact(target, bullet, bossHit, heavy) {
 
 function drawSurfaceContacts() {
   const quiet = quietCombatMotion();
+  const detail = typeof visualQuality === "undefined" ? "low" : visualQuality.id;
   for (const hit of combatEffects.contacts) {
     const p = Math.min(1, hit.age / hit.duration), fade = (1 - p) ** 2;
     const radius = hit.radius * (quiet ? .65 : .45 + p * 1.2);
@@ -441,11 +523,30 @@ function drawSurfaceContacts() {
     context.fillStyle = hit.core;
     context.beginPath(); context.ellipse(0, 0, hit.radius * .18, hit.radius * .59, 0, 0, Math.PI * 2);
     context.fill();
+    if (!quiet && detail !== "low") {
+      // A fast compression crest and several narrow side jets read even in a
+      // crowded volley. The finest strands last longer than the contact flash.
+      context.globalCompositeOperation = "lighter";
+      context.lineCap = "round";
+      const count = hit.heavy ? (detail === "high" ? 13 : 8) : 5;
+      context.beginPath();
+      for (let i = 0; i < count; i++) {
+        const strand = detonationStrands[i];
+        const sign = i % 2 ? -1 : 1;
+        const width = radius * (.30 + strand.depth * .85);
+        const side = sign * radius * (.14 + .79 * strand.onset);
+        const back = -width * (.45 + p * .64);
+        context.moveTo(back, side);
+        context.quadraticCurveTo(back + width * .46, side * .77, back + width * .72, side * .21);
+      }
+      context.strokeStyle = hit.color; context.lineWidth = hit.heavy ? 3.6 : 2.2; context.globalAlpha = fade * .24; context.stroke();
+      context.strokeStyle = hit.core; context.lineWidth = hit.heavy ? 1.15 : .74; context.globalAlpha = fade * .82; context.stroke();
+    }
     context.restore();
   }
 }
 function combatBurst(x, y, size = 1, color = "#ffb569", armor = false) {
-  const quiet = reducedMotion.matches;
+  const quiet = quietCombatMotion();
   pushCombatEffect(combatEffects.shockwaves, { x, y, age: 0, duration: quiet ? 0.3 : 0.5,
     radius: 32 * size, color }, 16);
   const count = quiet ? 3 : armor ? 14 : 10;
@@ -584,11 +685,18 @@ function updateCombatEffects(seconds) {
     detonation.age += seconds;
     if (detonation.age >= detonation.life) releaseCombatDetonation(i);
   }
+  const calm = quietCombatMotion();
+  const particleDrag = Math.exp(-seconds * 2.9);
   for (const name of ["particles", "impacts", "shockwaves", "contacts"]) {
     const list = combatEffects[name];
     for (let i = list.length - 1; i >= 0; i--) {
       const effect = list[i]; effect.age += seconds;
-      if (effect.vx !== undefined) { effect.x += effect.vx * seconds; effect.y += effect.vy * seconds; }
+      if (name === "particles" && !calm) {
+        effect.x += effect.vx * seconds;
+        effect.y += effect.vy * seconds;
+        effect.vx *= particleDrag;
+        effect.vy = effect.vy * particleDrag + seconds * (effect.smoke ? -27 : effect.armor ? 72 : 17);
+      }
       if (effect.age >= effect.duration) {
         if (name === "particles") spareCombatParticles.push(effect);
         list.splice(i, 1);
@@ -619,6 +727,8 @@ function updateCombatEffects(seconds) {
 }
 function drawCombatEffects() {
   if (state !== "battle") return;
+  const calm = quietCombatMotion();
+  const detail = typeof visualQuality === "undefined" ? "low" : visualQuality.id;
   if (isBossDeathPlaying()) {
     const quiet = reducedMotion.matches || (typeof visualQuality !== "undefined" && visualQuality.id === "low");
     drawBossPresentationBody(context, bossPresentation, quiet);
@@ -630,7 +740,7 @@ function drawCombatEffects() {
     for (let section = -1; section <= 1; section++) {
       context.save();
       context.translate(wreck.x, wreck.y);
-      if (!reducedMotion.matches) {
+      if (!calm) {
         context.translate(split * (section ? -14 : 24), section * split * wreck.height * 0.65);
         context.rotate(section * split * 0.26);
       }
@@ -646,10 +756,27 @@ function drawCombatEffects() {
   }
   for (const wave of combatEffects.shockwaves) {
     const progress = wave.age / wave.duration;
-    context.save(); context.globalAlpha = (1 - progress) * (reducedMotion.matches ? 0.25 : 0.65);
-    context.strokeStyle = wave.color; context.lineWidth = 1.5 + 3 * (1 - progress);
-    context.beginPath(); context.arc(wave.x, wave.y, wave.radius * (reducedMotion.matches ? 0.6 : 0.18 + progress), 0, Math.PI * 2); context.stroke();
-    if (!reducedMotion.matches && progress < 0.5) {
+    const r = wave.radius * (calm ? .6 : .18 + progress);
+    context.save(); context.globalAlpha = (1 - progress) * (calm ? .25 : .56);
+    context.strokeStyle = wave.color; context.lineWidth = calm ? 1.5 : 1.2 + 1.8 * (1 - progress);
+    context.beginPath(); context.arc(wave.x, wave.y, r, 0, Math.PI * 2); context.stroke();
+    if (!calm && detail !== "low") {
+      context.globalCompositeOperation = "lighter";
+      context.globalAlpha = (1 - progress) ** 1.5 * .57;
+      context.lineWidth = 1;
+      context.strokeStyle = "#fff5d3";
+      context.beginPath();
+      const parts = detail === "high" ? 7 : 4;
+      for (let i = 0; i < parts; i++) {
+        const seed = detonationStrands[i + 31];
+        const edge = r * (.71 + .26 * seed.depth);
+        const a = seed.angle + progress * .6;
+        context.moveTo(wave.x + Math.cos(a) * edge, wave.y + Math.sin(a) * edge);
+        context.arc(wave.x, wave.y, edge, a, a + .30 + seed.onset * .61);
+      }
+      context.stroke();
+    }
+    if (!calm && progress < .5) {
       const glow = context.createRadialGradient(wave.x, wave.y, 0, wave.x, wave.y, wave.radius * 0.65);
       glow.addColorStop(0, "#fff0c855"); glow.addColorStop(0.25, "#ff7b3540"); glow.addColorStop(1, "#ff551000");
       context.fillStyle = glow; context.beginPath(); context.arc(wave.x, wave.y, wave.radius * 0.65, 0, Math.PI * 2); context.fill();
@@ -660,17 +787,32 @@ function drawCombatEffects() {
   drawSurfaceContacts();
   for (const particle of combatEffects.particles) {
     const progress = particle.age / particle.duration;
-    context.save(); context.translate(particle.x, particle.y); context.rotate(particle.angle + particle.spin * particle.age);
+    context.save(); context.translate(particle.x, particle.y);
+    const angle = particle.armor ? particle.angle + particle.spin * particle.age : Math.atan2(particle.vy, particle.vx);
+    context.rotate(calm ? particle.angle : angle);
     context.globalAlpha = (1 - progress) * (particle.smoke ? 0.25 : 0.9);
     if (particle.smoke) {
-      context.fillStyle = "#8e7267"; context.beginPath(); context.arc(0, 0, particle.size * (1 + progress * 3), 0, Math.PI * 2); context.fill();
+      const span = particle.size * (calm ? 1.4 : 1.2 + progress * 3.4);
+      const sprite = detail === "low" || calm ? null : detonationVolumeSprite(detonationMaterials.metal);
+      if (sprite) context.drawImage(sprite, -span, -span, span * 2, span * 2);
+      else {
+        context.fillStyle = "#8e7267"; context.beginPath(); context.arc(0, 0, span, 0, Math.PI * 2); context.fill();
+      }
     } else if (particle.armor) {
       context.fillStyle = particle.color; context.strokeStyle = "#d0ad85"; context.lineWidth = 0.7;
       context.beginPath(); context.moveTo(-particle.size, -particle.size); context.lineTo(particle.size * 1.5, -particle.size * 0.4);
       context.lineTo(particle.size * 0.6, particle.size); context.lineTo(-particle.size * 0.8, particle.size * 0.8); context.closePath(); context.fill(); context.stroke();
+      context.fillStyle = "#d6a17b"; context.globalAlpha *= .6;
+      context.beginPath(); context.moveTo(-particle.size, -particle.size); context.lineTo(particle.size * 1.5, -particle.size * .4);
+      context.lineTo(particle.size * .43, particle.size * .08); context.closePath(); context.fill();
     } else {
-      context.strokeStyle = particle.color; context.lineWidth = particle.size * (1 - progress * 0.5);
-      context.beginPath(); context.moveTo(0, 0); context.lineTo(-particle.size * 4 * (1 - progress), 0); context.stroke();
+      const trail = calm ? particle.size : Math.min(20, particle.size * 1.7 + Math.hypot(particle.vx, particle.vy) * .057);
+      context.lineCap = "round"; context.strokeStyle = particle.color; context.lineWidth = particle.size * (1 - progress * .62);
+      context.beginPath(); context.moveTo(0, 0); context.lineTo(-trail, 0); context.stroke();
+      if (!calm && detail !== "low") {
+        context.strokeStyle = "#fff3ce"; context.globalAlpha *= .67; context.lineWidth = Math.max(.55, particle.size * .45);
+        context.beginPath(); context.moveTo(0, 0); context.lineTo(-trail * .37, 0); context.stroke();
+      }
     }
     context.restore();
   }

@@ -105,10 +105,6 @@
 .app[data-boss-phase="recover"] .boss-hud { --boss-signal: #7cdef0; }
 .app[data-boss-phase="finale"] .boss-hud,
 .app[data-boss-finale="true"] .boss-hud { --boss-signal: #d8b6ff; border-top-color: var(--boss-signal); }
-.warning-band {
-  background: linear-gradient(90deg, #2f0b18f5, #751523f8 22%, #931a28fa 50%, #751523f8 78%, #2f0b18f5);
-}
-.warning-band strong { text-shadow: 0 2px #6f0e1e, 0 0 22px #f08b614b; }
 .ultimate-hud, .shield-hud, .momentum-hud {
   border-radius: 3px 3px 8px 8px;
   background: linear-gradient(145deg, #172132f0, var(--hud-surface) 82%);
@@ -123,7 +119,7 @@
 .shield-hud[data-ready="true"] { border-top-color: #faafa6; }
 .momentum-hud[data-overdrive="true"] { border-top-color: var(--hud-gold); }
 .app[data-quality="low"] .evolution-screen { backdrop-filter: none; }
-.app[data-quality="low"] .boss-hud, .app[data-quality="low"] .warning-band { box-shadow: none; }
+.app[data-quality="low"] .boss-hud { box-shadow: none; }
 @media (max-width: 520px) {
   .field-edge::after { inset: 6px; }
   .boss-hud { padding: 6px 10px; }

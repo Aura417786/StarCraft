@@ -14,6 +14,108 @@ const signatureMaterials = {
   fusion: { dark: "#1d1247", mid: "#693aab", rim: "#ec9cff", spark: "#e9f7ff" },
 };
 
+// These streams are sampled from the visible attack geometry. The simulation
+// has no particle state to allocate, rewind or clear.
+const signatureCurrents = {
+  water: { turn: .86, curl: .54, drift: .20 },
+  bone: { turn: .34, curl: .20, drift: .29 },
+  magma: { turn: 1.32, curl: .40, drift: .53 },
+  silk: { turn: -.71, curl: .78, drift: .28 },
+  chitin: { turn: .49, curl: .31, drift: .36 },
+  glass: { turn: -.48, curl: .13, drift: .43 },
+  plasma: { turn: 1.66, curl: .64, drift: .72 },
+  spore: { turn: .48, curl: .66, drift: .23 },
+  void: { turn: -1.14, curl: .52, drift: -.40 },
+  nerve: { turn: .74, curl: .49, drift: .67 },
+  fusion: { turn: 1.08, curl: .76, drift: .49 },
+};
+const signatureFlowSeeds = Array.from({ length: 48 }, (_, i) => ({
+  start: ((i + .5) * .61803398875) % 1,
+  depth: ((i + .5) * .75487766625) % 1,
+  phase: i * 2.39996322973,
+}));
+const signatureTau = Math.PI * 2;
+
+function strokeSignatureCurrent(ctx, material, alpha, width) {
+  ctx.strokeStyle = material.mid; ctx.lineWidth = width * 5.4; ctx.globalAlpha = alpha * .23; ctx.stroke();
+  ctx.strokeStyle = material.rim; ctx.lineWidth = width * 2.1; ctx.globalAlpha = alpha * .64; ctx.stroke();
+  ctx.strokeStyle = material.spark; ctx.lineWidth = width; ctx.globalAlpha = alpha; ctx.stroke();
+}
+
+function drawSignatureOrbit(ctx, shape, name, time, alpha, stretch = 1, count = 24) {
+  const { x, y, radius, innerRadius = 0 } = shape;
+  const span = radius - innerRadius;
+  if (!(span > 3) || radius < 10 || x + radius < 0 || x - radius > viewport.width ||
+      y + radius < 0 || y - radius > viewport.height) return;
+  const material = signatureMaterials[name] || signatureMaterials.fusion;
+  const motion = signatureCurrents[name] || signatureCurrents.fusion;
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+  // The short, bright strands cross slower, wider ribbons. Both follow the
+  // same circulation, and remain inside the attack's outer and inner edges.
+  for (let layer = 0; layer < 2; layer++) {
+    ctx.beginPath();
+    for (let i = layer; i < count; i += 2) {
+      const seed = signatureFlowSeeds[i];
+      const advance = time * motion.turn * (.32 + .70 * seed.depth);
+      const angle = seed.phase + advance;
+      const length = layer === 0 ? .29 + seed.start * .76 : .055 + seed.start * .24;
+      const steps = layer === 0 ? 9 : 3;
+      for (let step = 0; step <= steps; step++) {
+        const t = step / steps;
+        const a = angle + Math.sign(motion.turn) * length * t;
+        const bend = Math.sin(a * 4 + seed.phase - time * motion.turn) * motion.curl;
+        const fraction = .15 + .67 * seed.depth + bend * .13 + (t - .5) * motion.drift * .32;
+        const r = innerRadius + span * fraction;
+        const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r * stretch;
+        if (step) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+    }
+    strokeSignatureCurrent(ctx, material, alpha * (layer === 0 ? .62 : 1), layer === 0 ? .67 : .88);
+  }
+  ctx.fillStyle = material.spark;
+  for (let i = 0; i < count; i++) {
+    const seed = signatureFlowSeeds[i];
+    const a = seed.phase + time * motion.turn * (.28 + seed.depth);
+    const r = innerRadius + span * (.2 + seed.depth * .62 + .10 * Math.sin(a * 2 + seed.phase));
+    const width = .56 + seed.depth * 1.05;
+    ctx.globalAlpha = alpha * (.38 + .59 * seed.start);
+    ctx.fillRect(x + Math.cos(a) * r, y + Math.sin(a) * r * stretch, width, width);
+  }
+  ctx.restore();
+}
+
+function drawSignatureStream(ctx, line, name, time, alpha, count = 22) {
+  const { x1, y1, x2, y2, width } = line;
+  const dx = x2 - x1, dy = y2 - y1, distance = Math.hypot(dx, dy);
+  if (!(width > 3 && distance > 15)) return;
+  if (Math.max(x1, x2) + width < 0 || Math.min(x1, x2) - width > viewport.width ||
+      Math.max(y1, y2) + width < 0 || Math.min(y1, y2) - width > viewport.height) return;
+  const material = signatureMaterials[name] || signatureMaterials.fusion;
+  const motion = signatureCurrents[name] || signatureCurrents.fusion;
+  const nx = -dy / distance, ny = dx / distance;
+  const flow = time * motion.drift;
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+  for (let layer = 0; layer < 2; layer++) {
+    ctx.beginPath();
+    for (let i = layer; i < count; i += 2) {
+      const seed = signatureFlowSeeds[i];
+      const phase = seed.start + flow * (.39 + seed.depth);
+      const start = phase - Math.floor(phase);
+      const reach = Math.min(1 - start, (layer === 0 ? .22 : .044) + seed.depth * .045);
+      if (reach < .009) continue;
+      const lateral = (seed.depth - .5) * width * .78;
+      for (let step = 0; step <= 4; step++) {
+        const t = start + reach * step / 4;
+        const ripple = width * .10 * motion.curl * Math.sin(t * 35 + seed.phase + time * motion.turn * 2);
+        const px = x1 + dx * t + nx * (lateral + ripple), py = y1 + dy * t + ny * (lateral + ripple);
+        if (step) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+    }
+    strokeSignatureCurrent(ctx, material, alpha * (layer === 0 ? .64 : 1), layer === 0 ? .63 : 1);
+  }
+  ctx.restore();
+}
+
 function signatureGlow(ctx, x, y, radius, material, alpha) {
   const light = ctx.createRadialGradient(x, y, 0, x, y, Math.max(1, radius));
   light.addColorStop(0, material.rim);
@@ -143,6 +245,22 @@ function drawWaterSection(ctx, crestAt, top, bottom, direction, age, width, mate
     ctx.beginPath();
     traceWaveEdge(ctx, crestAt, top, bottom, direction, age + offset * .16, width, offset, .28);
     ctx.stroke();
+  }
+  if (!quiet && visualQuality.id !== "low") {
+    const count = visualQuality.id === "high" ? 36 : 18;
+    ctx.beginPath();
+    for (let i = 0; i < count; i++) {
+      const seed = signatureFlowSeeds[i];
+      const along = (seed.start + age * (.09 + seed.depth * .17)) % 1;
+      const y = top + (bottom - top) * along;
+      const x = crestAt(y) + direction * width * (.68 - 3 * seed.depth);
+      const span = 5 + width * (.14 + seed.start * .41);
+      ctx.moveTo(x + span, y);
+      ctx.bezierCurveTo(x + span * .55, y - span * .9, x - span * .65, y - span * .47, x - span, y + span * .12);
+      ctx.bezierCurveTo(x - span * .35, y + span * .57, x + span * .43, y + span * .56, x + span, y);
+    }
+    ctx.globalCompositeOperation = "lighter";
+    strokeSignatureCurrent(ctx, material, warning ? .19 : .48, .68);
   }
   ctx.restore();
 
@@ -462,6 +580,10 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
     }
   }
   ctx.restore();
+  if (!quiet && visualQuality.id !== "low") {
+    drawSignatureStream(ctx, { x1, y1, x2, y2, width: Math.min(left, right) * 2 },
+      kind || "plasma", age, active ? .58 : .20 + phase * .12, visualQuality.id === "high" ? 22 : 12);
+  }
 }
 
 function drawSignatureFilament(ctx, hazard, active, progress, quiet) {
@@ -552,6 +674,10 @@ function drawSignatureVortex(ctx, hazard, material, active, progress, quiet) {
     }
     ctx.stroke();
   }
+  if (visualQuality.id !== "low") {
+    const count = visualQuality.id === "high" ? 32 : 18;
+    drawSignatureOrbit(ctx, { x, y, radius, innerRadius: core }, hazard.material, hazard.age, active ? .72 : .34, 1, count);
+  }
 }
 
 function drawSignatureRing(ctx, hazard, material, active, progress, quiet) {
@@ -567,13 +693,13 @@ function drawSignatureRing(ctx, hazard, material, active, progress, quiet) {
   ctx.globalAlpha = .96;
   ctx.strokeStyle = active ? material.spark : material.rim;
   ctx.lineWidth = active ? 3 : 1.5;
-  if (active && !quiet) {
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = material.rim;
-  }
   ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
-  ctx.shadowBlur = 0;
   if (quiet || !active) return;
+  if (visualQuality.id !== "low") {
+    drawSignatureOrbit(ctx, { x, y, radius: radius + hazard.thickness / 2,
+      innerRadius: Math.max(0, radius - hazard.thickness / 2) },
+      hazard.material, hazard.age, .71, 1, visualQuality.id === "high" ? 32 : 16);
+  }
   ctx.globalAlpha = .55;
   ctx.lineWidth = 1.8;
   ctx.strokeStyle = material.rim;
@@ -625,6 +751,11 @@ function drawSignatureImpact(ctx, hazard, material, active, progress, quiet) {
     ctx.lineTo(x + Math.cos(angle) * r, y + Math.sin(angle) * r);
   }
   ctx.stroke();
+  if (!quiet && visualQuality.id !== "low") {
+    const name = well ? "void" : hazard.material || (hazard.node === undefined ? "fusion" : "spore");
+    drawSignatureOrbit(ctx, { x, y, radius: radius * .98, innerRadius: radius * (well ? .69 : .21) },
+      name, hazard.age, active ? .65 : .21 + warning * .19, 1, visualQuality.id === "high" ? 25 : 13);
+  }
 }
 
 function drawAlienSignatureHazard(ctx, hazard, quiet) {

@@ -161,7 +161,7 @@ const gameAudio = (() => {
   }
   function limitVoices(bus) {
     const sameBus = Array.from(voices).filter(voice => voice.bus === bus);
-    const limit = bus === "music" ? 28 : bus === "ultimate" ? 8 : bus === "boss" || bus === "impact" ? 12 : 24;
+    const limit = bus === "music" ? 28 : bus === "ultimate" ? 8 : bus === "arrival" ? 1 : bus === "boss" || bus === "impact" ? 12 : 24;
     if (sameBus.length >= limit) retireVoice(sameBus[0], 0.008);
     if (voices.size >= MAX_VOICES) {
       // 蓄力与炮声有独立声部，密集射击和背景乐不会抢断它们。
@@ -284,6 +284,144 @@ const gameAudio = (() => {
   function bossVoice(options) {
     if (!Number.isInteger(bossType)) return false;
     return sample("boss_" + String(bossType + 1).padStart(2, "0"), { bus: "boss", ...options });
+  }
+  // 每条轮廓记录相对时间、基频、气息强度与呼吸噪声比例。共鸣频率塑造声腔，短音节塑造物种特征。
+  const arrivalRoars = [
+    // 渊潮母体：深水双声，带咽喉翻涌与气泡。
+    { duration: 1.38, throat: [142, 365, 760], flutter: [5.1, .34], grit: 1.3,
+      voice: [[0, 64, 0, .52], [.07, 66, .55, .28], [.27, 47, 1, .25], [.47, 42, .43, .48], [.62, 55, .92, .33], [1, 34, 0, .62]],
+      accents: [[.22, .47, 156, 79, .22, "ring"], [.73, .25, 109, 64, .18, "breath"], [.89, .36, 79, 42, .17, "ring"]] },
+    // 骨冠猎兽：破裂的短吼，颚骨先咬合再迅速退声。
+    { duration: 1.01, throat: [270, 920, 1990], flutter: [16.4, .61], grit: 2.4,
+      voice: [[0, 132, 0, .78], [.06, 150, .95, .45], [.24, 92, .66, .58], [.43, 77, .18, .82], [.54, 116, .78, .46], [.79, 69, .41, .65], [1, 45, 0, .85]],
+      accents: [[.015, .15, 341, 99, .31, "clack"], [.30, .12, 278, 91, .25, "clack"], [.50, .26, 199, 87, .32, "clack"]] },
+    // 灼核吞星兽：炽热蒸汽先泄出，厚重喉音随即上涌。
+    { duration: 1.37, throat: [197, 584, 1360], flutter: [8.2, .29], grit: 2.8,
+      voice: [[0, 48, 0, .96], [.07, 50, .31, .87], [.21, 60, .58, .56], [.43, 91, 1, .43], [.65, 75, .93, .43], [.83, 53, .63, .57], [1, 32, 0, .83]],
+      accents: [[.04, .84, 560, 1320, .33, "breath"], [.38, .80, 49, 35, .31, "grind"]] },
+    // 裂隙织母：丝线般的高嘶，伴随几次急促的颚部刮擦。
+    { duration: 1.22, throat: [431, 1160, 2850], flutter: [24, .47], grit: .8,
+      voice: [[0, 243, 0, .84], [.13, 281, .7, .76], [.31, 183, 1, .69], [.48, 210, .6, .88], [.71, 166, .73, .69], [1, 113, 0, .93]],
+      accents: [[.04, .47, 720, 1080, .24, "breath"], [.34, .19, 368, 192, .19, "clack"], [.57, .53, 635, 280, .23, "ring"]] },
+    // 锁脉巨螯：节肢三段钳鸣，最后一下坠入低处。
+    { duration: 1.18, throat: [228, 732, 1430], flutter: [11, .52], grit: 2.1,
+      voice: [[0, 89, 0, .38], [.07, 109, .81, .29], [.22, 83, .19, .51], [.35, 104, .93, .38], [.49, 74, .23, .55], [.62, 87, 1, .31], [.84, 45, .65, .43], [1, 38, 0, .67]],
+      accents: [[.04, .21, 222, 94, .33, "clack"], [.34, .19, 206, 79, .28, "clack"], [.62, .42, 158, 62, .36, "grind"]] },
+    // 星尘镜魟：干净的上滑鸣叫，与错位的反射谐波交叠。
+    { duration: 1.31, throat: [356, 899, 2100], flutter: [5.8, .16], grit: .74,
+      voice: [[0, 173, 0, .32], [.07, 179, .43, .26], [.30, 244, .81, .13], [.53, 309, .92, .15], [.75, 241, .67, .23], [1, 198, 0, .57]],
+      accents: [[.10, .94, 258, 408, .29, "ring"], [.38, .85, 539, 329, .24, "ring"], [.78, .46, 422, 548, .17, "ring"]] },
+    // 沉渊震鳗：先螺旋升鸣，突然折入带齿音的低雷。
+    { duration: 1.33, throat: [184, 516, 1750], flutter: [13.2, .40], grit: 1.7,
+      voice: [[0, 63, 0, .62], [.14, 80, .55, .38], [.37, 159, .91, .32], [.50, 172, .72, .45], [.57, 61, 1, .42], [.79, 43, .73, .54], [1, 31, 0, .80]],
+      accents: [[.13, .52, 211, 616, .21, "grind"], [.61, .64, 69, 33, .35, "grind"], [.76, .26, 943, 212, .16, "clack"]] },
+    // 裂梦孢皇：一串轻颤，随后菌囊喷吐湿润的气流。
+    { duration: 1.27, throat: [302, 640, 1110], flutter: [28, .48], grit: 1.08,
+      voice: [[0, 143, 0, .71], [.08, 147, .68, .42], [.25, 123, .28, .63], [.37, 152, .72, .47], [.52, 127, .43, .77], [.66, 94, .91, .65], [1, 61, 0, .92]],
+      accents: [[.02, .42, 264, 118, .22, "breath"], [.40, .31, 222, 107, .21, "ring"], [.71, .53, 655, 188, .37, "breath"]] },
+    // 维度噬口：收束的吸气、瞬间破口和压低的长鸣。
+    { duration: 1.44, throat: [109, 255, 566], flutter: [3.1, .36], grit: 2.4,
+      voice: [[0, 45, 0, .95], [.14, 50, .25, .93], [.37, 84, .51, .84], [.44, 39, 1, .41], [.63, 34, .93, .32], [.82, 28, .56, .52], [1, 23, 0, .81]],
+      accents: [[.04, .53, 322, 130, .39, "breath"], [.57, .78, 72, 26, .42, "grind"], [.65, .62, 114, 43, .23, "ring"]] },
+    // 无昼神经王：交替脉冲和两道失谐的神经尖鸣。
+    { duration: 1.34, throat: [371, 1080, 2390], flutter: [17.5, .53], grit: 1.2,
+      voice: [[0, 103, 0, .46], [.14, 188, .62, .23], [.29, 137, .49, .32], [.44, 209, .88, .22], [.62, 159, .57, .35], [.79, 220, .85, .25], [1, 110, 0, .69]],
+      accents: [[.10, .91, 384, 273, .28, "ring"], [.34, .91, 238, 393, .30, "grind"], [.70, .47, 817, 462, .20, "ring"]] },
+    // 群渊合生体：三道不同声腔叠吼，汇到同一个长而沉的尾声。
+    { duration: 1.47, throat: [159, 463, 1380], flutter: [9.3, .49], grit: 2.65,
+      voice: [[0, 53, 0, .74], [.08, 57, .54, .43], [.28, 70, 1, .32], [.45, 49, .58, .51], [.63, 67, .96, .32], [.83, 41, .68, .39], [1, 29, 0, .78]],
+      accents: [[.04, 1.26, 97, 49, .44, "grind"], [.15, .94, 157, 68, .32, "grind"], [.41, .92, 286, 118, .34, "ring"], [.87, .56, 461, 147, .29, "breath"]] },
+  ];
+  function renderRoarAccent(samples, rate, [offset, duration, initial, end, volume, kind], noise) {
+    const start = Math.round(offset * rate), frames = Math.min(samples.length - start, Math.round(duration * rate));
+    let phase = 0, coloredNoise = 0;
+    for (let index = 0; index < frames; index++) {
+      const t = index / frames;
+      const time = index / rate;
+      phase += Math.PI * 2 * (initial + (end - initial) * t) / rate;
+      let wave, envelope;
+      if (kind === "clack") {
+        wave = Math.sin(phase) + .32 * Math.sin(phase * 2.81) + .18 * noise();
+        envelope = Math.min(1, time / .005) * Math.exp(-t * 6) * (1 - t);
+      } else {
+        envelope = Math.sin(Math.PI * t) ** (kind === "ring" ? 1.25 : .85);
+        if (kind === "breath") {
+          const white = noise();
+          coloredNoise += .10 * (white - coloredNoise);
+          wave = coloredNoise * 2.7 * (.78 + .22 * Math.sin(phase)) + .14 * white;
+        } else if (kind === "grind") {
+          wave = Math.tanh(Math.sin(phase + .55 * Math.sin(phase * .483)) * 2.3)
+            * (.77 + .23 * Math.sin(time * 47)) + .10 * noise();
+        } else wave = Math.sin(phase + .15 * Math.sin(time * 39)) + .22 * Math.sin(phase * 2.015);
+      }
+      samples[start + index] += wave * envelope * volume;
+    }
+  }
+  function prepareBossRoar(index) {
+    if (!audio || disposed || !Number.isInteger(index) || !arrivalRoars[index]) return false;
+    const key = "arrival_roar_" + index;
+    if (buffers.has(key)) return true;
+    const profile = arrivalRoars[index], rate = Math.min(audio.sampleRate, 24000);
+    const buffer = audio.createBuffer(1, Math.ceil(profile.duration * rate), rate);
+    const samples = buffer.getChannelData(0);
+    let seed = 0x8c1c97 ^ Math.imul(index + 1, 0x9e3779b9);
+    const noise = () => {
+      seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+      return (seed >>> 0) / 2147483648 - 1;
+    };
+    // 三个带通共振峰模拟可发声的咽腔，让气声和脉冲共享同一具身体。
+    const resonators = profile.throat.map((frequency, band) => {
+      const omega = 2 * Math.PI * Math.min(frequency, rate * .38) / rate;
+      const alpha = Math.sin(omega) / (2 * (2.2 + band * .7));
+      return { b: alpha / (1 + alpha), a1: -2 * Math.cos(omega) / (1 + alpha), a2: (1 - alpha) / (1 + alpha),
+        s1: 0, s2: 0, mix: [1.15, .81, .58][band] };
+    });
+    let phase = 0, breath = 0, segment = 0;
+    const [flutter, depth] = profile.flutter;
+    for (let frame = 0; frame < samples.length; frame++) {
+      const t = frame / (samples.length - 1), time = frame / rate;
+      if (t > profile.voice[segment + 1][0]) segment++;
+      const from = profile.voice[segment], to = profile.voice[segment + 1];
+      const fraction = (t - from[0]) / (to[0] - from[0]);
+      const smooth = fraction * fraction * (3 - 2 * fraction);
+      const pitch = from[1] + (to[1] - from[1]) * smooth;
+      const strength = from[2] + (to[2] - from[2]) * smooth;
+      const air = from[3] + (to[3] - from[3]) * smooth;
+      const pulse = Math.sin(time * 2 * Math.PI * flutter + .46 * Math.sin(time * 7.7));
+      phase += (2 * Math.PI / rate) * pitch * (1 + .036 * pulse + .012 * noise());
+      const raw = Math.sin(phase) + .38 * Math.sin(2 * phase) + .23 * Math.sin(3 * phase + pulse);
+      const voice = Math.tanh(profile.grit * raw);
+      const white = noise();
+      breath += .13 * (white - breath);
+      const drive = voice * (1 - air) + (white * .34 + breath * 1.55) * air;
+      let resonance = 0;
+      for (const filter of resonators) {
+        const filtered = filter.b * drive + filter.s1;
+        filter.s1 = filter.s2 - filter.a1 * filtered;
+        filter.s2 = -filter.b * drive - filter.a2 * filtered;
+        resonance += filtered * filter.mix;
+      }
+      const undertone = .20 * Math.sin(phase * .501) * (1 - air);
+      samples[frame] = strength * (1 - depth * (.5 + .5 * pulse))
+        * (drive * .31 + resonance * .82 + undertone);
+    }
+    for (const accent of profile.accents) renderRoarAccent(samples, rate, accent, noise);
+    let peak = 0;
+    for (const value of samples) peak = Math.max(peak, Math.abs(value));
+    const gain = .82 / Math.max(.36, peak);
+    for (let frame = 0; frame < samples.length; frame++) {
+      const edge = Math.min(1, frame / (rate * .012), (samples.length - frame - 1) / (rate * .036));
+      samples[frame] *= gain * edge;
+    }
+    buffers.set(key, buffer);
+    return true;
+  }
+  function bossRoar(index, x = soundStage.bossX, y = soundStage.bossY) {
+    if (!canPlay() || paused || !visible || [...voices].some(voice => voice.bus === "arrival")) return false;
+    if (!prepareBossRoar(index)) return false;
+    const played = sample("arrival_roar_" + index, { bus: "arrival", level: .88, ...soundPosition(x, y, false) });
+    if (played) duckMusic(.23, arrivalRoars[index].duration + .27);
+    return played;
   }
   function matchLoopSeam(buffer) {
     // Lossy coding can leave a small discontinuity across an otherwise
@@ -747,6 +885,7 @@ const gameAudio = (() => {
     const next = !!value;
     if (muted === next) return;
     muted = next;
+    if (muted) stopVoices("arrival");
     smoothGain(master, muted ? 0 : 0.68 * volume ** 2);
     reconcile();
   }
@@ -778,6 +917,7 @@ const gameAudio = (() => {
       comboLayer !== nextComboLayer || warningActive !== nextWarning || cinematicActive !== nextCinematic ||
       overdriveMusic !== nextOverdrive || bossType !== nextType || bossPhase !== nextPhase || threat !== nextThreat
       || bossMusicTier !== nextTier || visible !== nextVisible;
+    if (changed && (!nextActive || nextPaused || !nextVisible || (warningActive && !nextWarning))) stopVoices("arrival");
     const wasActive = active;
     const wasInBossSequence = bossActive || warningActive || cinematicActive;
     active = !!nextActive;
@@ -804,7 +944,7 @@ const gameAudio = (() => {
       duckMusic(.39, 1.05);
       const position = soundPosition(soundStage.bossX, soundStage.bossY, false);
       sample("stage", { bus: "boss", level: .37, ...position });
-      bossVoice({ level: .47, rate: transforming ? .79 : 1, ...position });
+      if (transforming) bossVoice({ level: .47, rate: .79, ...position });
     }
   }
   function shoot(overdrive = false, tier = 1, fighter = "red") {
@@ -1213,5 +1353,5 @@ const gameAudio = (() => {
   }
   return { unlock, setMuted, get muted() { return muted; }, setVolume, get volume() { return volume; },
     sync, shoot, hit, hurt, overdrive, perfectShield, explode, warning, bossAttack, bossEnrage, fieldCue, radioCue,
-    bossPresentationCue, victorySequence, preloadBossScore, chargeUltimate, fireUltimate, stopUltimate, destroy };
+    bossRoar, prepareBossRoar, bossPresentationCue, victorySequence, preloadBossScore, chargeUltimate, fireUltimate, stopUltimate, destroy };
 })();

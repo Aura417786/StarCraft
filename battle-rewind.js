@@ -33,7 +33,7 @@ function battleRewindState() {
     // battlefield entities need identity retention for pending attack closures.
     introduced: enemyIntroduced, run: structuredClone(run), randomState: random.getState(),
     scalars: { battleTime, score, kills, shotCooldown, muzzleFlash, enemyCooldown, enemySpawnCount,
-      powerupCooldown, powerupSpawnCount, nextBossTime, bossDefeated, pendingBossType, prefetchedBossType,
+      powerupCooldown, powerupSpawnCount, nextBossTime, bossDefeated, pendingBossType, pendingBossRoared, prefetchedBossType,
       bossHitGrace, lastDamageMessage, upgradeNoticeTime },
     evolutionTransient: { frozenRemaining: evolution.frozenRemaining, skillFlash: evolution.skillFlash }
   };
@@ -192,9 +192,10 @@ function requestBattleRewind(secondsAgo, cooldownSeconds = 18) {
   clearMovement();
   const saved = restoreBattleRewindGraph(chosen.graph);
   ({ battleTime, score, kills, shotCooldown, muzzleFlash, enemyCooldown, enemySpawnCount,
-    powerupCooldown, powerupSpawnCount, nextBossTime, bossDefeated, pendingBossType, prefetchedBossType,
+    powerupCooldown, powerupSpawnCount, nextBossTime, bossDefeated, pendingBossType, pendingBossRoared, prefetchedBossType,
     bossHitGrace, lastDamageMessage, upgradeNoticeTime } = saved.scalars);
   boss = saved.boss;
+  setBossWarning(pendingBossType === null ? "" : bossTypeName(pendingBossType));
   sortieStats = { ...saved.run, ...retryMeta, random: sortieGenerator(saved.run.seed, saved.randomState), result: null,
     hitsTaken: Math.max(hits, saved.run.hitsTaken), assisted: true,
     assists: { ...saved.run.assists, ...assists, timeRewind: true }, bossRecords, unlocks };

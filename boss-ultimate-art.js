@@ -180,6 +180,36 @@ function ultimateArc(ctx, x1, y1, x2, y2, seed, mat, width, alpha) {
   ctx.restore();
 }
 
+function drawUltimateInterference(ctx, x, y, radius, charge, time, name, material) {
+  const high = visualQuality.id === "high";
+  const gap = radius * (.56 - charge * .24);
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+  // Two wave sources overlap around the charge point. Narrow, broken fronts
+  // show the buildup without turning the field into an opaque flash.
+  for (let side = -1; side <= 1; side += 2) {
+    ctx.beginPath();
+    const cy = y + side * radius * .16, cx = x + side * gap;
+    const bands = high ? 11 : 7;
+    const pulse = (time * .64 + (side < 0 ? .27 : 0)) % 1;
+    for (let ring = 0; ring < bands; ring++) {
+      const r = radius * (.13 + (ring + pulse) / bands * .92);
+      const a = ring * 1.92 + time * side * .38;
+      ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r * .72);
+      ctx.ellipse(cx, cy, r, r * .72, 0, a, a + 3.9);
+    }
+    strokeSignatureCurrent(ctx, material, .16 + charge * .28, .72);
+  }
+  ctx.restore();
+  const field = { x, y, radius: radius * 1.48, innerRadius: radius * .18 };
+  drawSignatureOrbit(ctx, field, name, time * 1.8, .50 + charge * .32, .69, high ? 46 : 30);
+  const glow = typeof pressureArtGlow === "function" ? pressureArtGlow(material.rim, true) : null;
+  if (glow) {
+    const r = radius * (.31 + charge * .24);
+    ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = .28 + charge * .39;
+    ctx.drawImage(glow, x - r, y - r * .72, r * 2, r * 1.44); ctx.restore();
+  }
+}
+
 // Element-specific anticipation: identifiable even before a hazard exists.
 function drawUltimateChargeIdentity(ctx, target, scene) {
   const charge = clamp(scene.age / Math.max(.01, scene.warning), 0, 1);
@@ -189,6 +219,9 @@ function drawUltimateChargeIdentity(ctx, target, scene) {
   const cx = target.x - target.width * .27, cy = target.y, r = viewport.height * (.15 + charge * .10);
   const fade = .3 + charge * .7;
   ctx.save();
+  if (!quiet && visualQuality.id !== "low") {
+    drawUltimateInterference(ctx, cx - r * .38, cy, r, charge, time, name, mat);
+  }
   if (kind === "boneNova") {
     for (let i = 0; i < 9; i++) {
       const a = Math.PI * .55 + i * Math.PI * .112;
@@ -519,6 +552,8 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
   const active = hazard.age >= hazard.warning;
   const alpha = active ? .88 : .19 + Math.min(1, hazard.age / hazard.warning) * .2;
   const kind = hazard.ultimateKind;
+  const flowing = !quietCombatMotion() && visualQuality.id !== "low";
+  const high = visualQuality.id === "high";
   ctx.save(); ctx.globalCompositeOperation = "source-over";
   ctx.save(); ultimateClipDanger(ctx, hazard);
   let rectIndex = 0;
@@ -531,6 +566,14 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
         x2: rect.x + (vertical ? rect.width / 2 : rect.width), y2: rect.y + (vertical ? rect.height : rect.height / 2), width: vertical ? rect.width : rect.height }, mat, time, alpha);
     } else {
       ctx.globalAlpha = alpha * .8; ctx.fillStyle = mat.dark; ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    }
+    if (flowing && kind !== "tideWalls" && rect.width > 6 && rect.height > 6) {
+      const vertical = rect.height > rect.width;
+      const x1 = rect.x + (vertical ? rect.width * .5 : 0);
+      const y1 = rect.y + (vertical ? 0 : rect.height * .5);
+      drawSignatureStream(ctx, { x1, y1, x2: x1 + (vertical ? 0 : rect.width),
+        y2: y1 + (vertical ? rect.height : 0), width: vertical ? rect.width : rect.height },
+        name, time, alpha * .67, high ? 24 : 12);
     }
     rectIndex++;
   }
@@ -550,8 +593,12 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
     } else if (kind === "mirrorArray") ultimatePrismBeam(ctx, line, mat, alpha);
     else if (kind === "stormRing") ultimateArc(ctx, line.x1, line.y1, line.x2, line.y2, Math.floor(time * 13) + segmentIndex, mat, Math.max(2, line.width * .42), alpha);
     else ultimateSilkLine(ctx, line, mat, time, alpha, true);
+    if (flowing && segmentIndex < (high ? 13 : 7)) {
+      drawSignatureStream(ctx, line, name, time + segmentIndex * .03, alpha * .73, high ? 12 : 7);
+    }
     segmentIndex++;
   }
+  let circleIndex = 0;
   for (const circle of geometry.circles || []) {
     if (kind === "boneNova") ultimateOssuaryRing(ctx, circle, mat, time, alpha);
     else if (kind === "sporeBloom" || kind === "voidCollapse") ultimateCloud(ctx, circle, mat, time, alpha, kind === "voidCollapse");
@@ -573,6 +620,10 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
       strokeUltimateArcPath(ctx, mat, 2.5, alpha);
       ctx.restore();
     } else ultimateDrawNode(ctx, circle.x, circle.y, circle.radius, name, alpha);
+    if (flowing && circleIndex++ < (high ? 8 : 4)) {
+      const innerRadius = circle.innerRadius || circle.radius * (kind === "voidCollapse" ? .62 : .18);
+      drawSignatureOrbit(ctx, { ...circle, innerRadius }, name, time, alpha * .72, 1, high ? 20 : 12);
+    }
   }
   ctx.restore();
   for (const node of geometry.nodes || []) {
@@ -627,6 +678,23 @@ function drawBossUltimateAftershock(ctx, scene) {
       ctx.beginPath(); ctx.moveTo(x + radius * .3, y - radius * .6);
       ctx.bezierCurveTo(x - radius * .13, y - radius * .2, x + radius * .35, y + radius * .2, x + radius * .08, y + radius * .6); ctx.stroke();
     }
+  }
+  if (!quiet && visualQuality.id !== "low") {
+    const high = visualQuality.id === "high";
+    const count = high ? 40 : 24;
+    ctx.beginPath();
+    for (let i = 0; i < count; i++) {
+      const seed = signatureFlowSeeds[i];
+      const y = h * seed.start;
+      const span = w * (.024 + seed.depth * .098) * (1 + travel * .42);
+      const x = front + (seed.depth - .5) * span * 2.6 + ((y - cy) / h) ** 2 * w * .12;
+      const curl = Math.sin(seed.phase + age * 5) * span * .33;
+      if (x + span < 0 || x - span > w) continue;
+      ctx.moveTo(x + span, y - curl * .16);
+      ctx.bezierCurveTo(x + span * .47, y - curl * .48, x - span * .22, y + curl, x - span * .31, y + curl * .24);
+    }
+    ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    strokeSignatureCurrent(ctx, mat, fade * .82, .94);
   }
   // White-hot release is local; the arena never becomes an opaque white rectangle.
   ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.max(0, 1 - age / .25) * .8;

@@ -44,8 +44,6 @@ body[data-ui-scale="115"] { --flight-ui-zoom: 1.15; }
 body[data-subtitle-scale="85"] .radio-line { font-size: clamp(9px, 1.45vw, 11px); }
 body[data-subtitle-scale="130"] .radio-line { font-size: clamp(12px, 1.9vw, 17px); -webkit-line-clamp: unset; }
 body[data-subtitle-scale="130"] #campaign-epilogue-line { font-size: 1.2em; }
-body[data-color-assist="true"] .boss-warning .warning-band { border: 2px dashed #ffedbd; }
-body[data-color-assist="true"] .warning-band strong::before { content: "△ "; }
 @media (max-width: 560px) {
   .flight-bindings-grid, .flight-controls-settings { grid-template-columns: 1fr; }
 }

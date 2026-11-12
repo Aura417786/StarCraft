@@ -529,6 +529,11 @@ function drawFinaleHazard(ctx, hazard, quiet) {
         ctx.strokeStyle = material.spark;
         const pulse = active ? radius : radius * (.12 + progress * .83);
         ctx.beginPath(); ctx.arc(hazard.x, hazard.y, Math.max(1, pulse), 0, Math.PI * 2); ctx.stroke();
+        if (active && !quiet && visualQuality.id !== "low") {
+          drawSignatureOrbit(ctx, { x: hazard.x, y: hazard.y, radius: radius + hazard.width,
+            innerRadius: Math.max(0, radius - hazard.width) }, "plasma", hazard.age, .63,
+            1, visualQuality.id === "high" ? 28 : 14);
+        }
       } else {
         drawSignatureImpact(ctx, hazard, material, active, active ? progress : 0, quiet);
       }
@@ -820,6 +825,13 @@ function drawBossFinale(ctx, target, quiet) {
   ctx.fillStyle = glow;
   finaleEllipse(ctx, target.x, target.y, target.width * .65, target.width * .65);
   ctx.fill();
+  if (!quiet && visualQuality.id !== "low") {
+    const size = Math.max(g.width * .67, g.height * .73);
+    const material = pressureMaterialNames[target.type];
+    const unveiled = f.openUntil > f.age;
+    drawSignatureOrbit(ctx, { x: target.x, y: target.y, radius: size * 1.21, innerRadius: size * .66 },
+      material, f.age, unveiled ? .55 : .33, .76, visualQuality.id === "high" ? 24 : 12);
+  }
   ctx.translate(target.x, target.y);
   drawFinaleShell(ctx, target, g.width, g.height, quiet);
   ctx.restore();

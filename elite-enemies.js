@@ -311,6 +311,9 @@ function drawEliteMines() {
     context.fillStyle = mine.hitFlash > 0 ? "#dcf7ff" : p > .76 ? "#fff4ca" : "#ffb568";
     context.fillRect(-2, -2, 4, 4);
     context.restore();
+    if (typeof drawFlightLattice === "function")
+      drawFlightLattice(context, mine.x, mine.y, radius * (.69 + p * .17), radius * (.69 + p * .17),
+        "#ffc389", p * 2.8, .24 + p * .32, .22);
   }
 }
 
@@ -332,6 +335,8 @@ function drawEliteEscortShield(enemy) {
     context.lineTo(enemy.x, enemy.y); context.stroke();
   }
   context.restore();
+  if (typeof drawFlightLattice === "function")
+    drawFlightLattice(context, enemy.x, enemy.y, enemy.width * .62, enemy.height * .74, hue, enemy.age, .44, .4);
 }
 
 function drawEliteHull(enemy) {

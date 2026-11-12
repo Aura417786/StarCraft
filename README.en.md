@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v31 Alien arrivals and combat effects.** Each of the eleven bosses has an individual roar and a distinct entrance built from light and particles. Starfields, engine wakes, shots, shields, evolution skills, ultimate attacks and detonations now share the same real-time effects treatment. Use single-boss practice to preview the different encounters. [Effects and checks](docs/v31-vfx.md)
+
 **v30.1 Perfect Guard and impact audio.** Press **V** as a projectile approaches. Blocking it within 0.25 seconds counterattacks and refunds the shield use. Gunfire is quieter, hits on enemy fighters crack like small blasts, and boss hits land with louder, deeper thuds before the final explosion.
 
 **v30: combat feedback and exclusive evolutions.** Shell cracks, low impacts and localized ripples distinguish ordinary hits from energy bursts. Heavy hits add a brief pause and directional camera kick. Easy, Normal and Hard change hostile attack frequency and projectile speed; boss durability follows your power at entrance. Commit to **Heartfire Detonation**, **Absolute Blizzard** or **Temporal Recall**, then level that route with subsequent boss victories without a rank cap. Press **F** for its skill. Space specials and V shields remain available. [Mechanics and checks](docs/v30-combat-evolution.md)

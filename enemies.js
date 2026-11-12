@@ -289,6 +289,9 @@ function drawEnemyThreats() {
     context.stroke();
     context.setLineDash([]);
     context.beginPath(); context.arc(enemy.aimX, enemy.aimY, 13, 0, Math.PI * 2); context.stroke();
+    if (typeof drawFlightLattice === "function")
+      drawFlightLattice(context, enemy.aimX, enemy.aimY, 17 - warningProgress * 3, 17 - warningProgress * 3,
+        tint || "#ffb2d0", warningProgress * 2, .66, .34);
     context.fillStyle = tint || "#ffd7e7";
     context.beginPath(); context.arc(muzzle.x, muzzle.y, 4 + 4 * warningProgress, 0, Math.PI * 2); context.fill();
   }

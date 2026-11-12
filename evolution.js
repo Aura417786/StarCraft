@@ -209,29 +209,51 @@ function drawEvolution() {
         const a = i / 8 * Math.PI * 2 + battleTime * (reducedMotion.matches ? 0 : .6);
         const x = target.x + Math.cos(a) * r * 1.3, y = target.y + Math.sin(a) * r;
         context.beginPath(); context.moveTo(x - 3, y + 5);
-        context.quadraticCurveTo(x + 6, y - 4, x, y - 12); context.stroke();
+        context.bezierCurveTo(x + 8, y - 3, x - 6, y - 7, x + 1, y - 13); context.stroke();
       }
+      if (target.emberStacks >= 4 && typeof drawFlightLattice === "function")
+        drawFlightLattice(context, target.x, target.y, r * 1.37, r, "#ff9971", battleTime, .42, .52);
     }
     if (evolutionIsFrozen()) {
-      context.fillStyle = "#8addff30"; context.strokeStyle = "#beefffa0"; context.lineWidth = 1.5;
+      const rx = target.width * .53, ry = target.height * .62;
+      const frost = context.createLinearGradient(target.x - rx, target.y - ry, target.x + rx, target.y + ry);
+      frost.addColorStop(0, "#8addff63"); frost.addColorStop(.46, "#aedbff12"); frost.addColorStop(1, "#8addff42");
+      context.fillStyle = frost; context.strokeStyle = "#beefffa0"; context.lineWidth = 1.3;
       context.beginPath();
       for (let i = 0; i < 6; i++) {
-        const a = i * Math.PI / 3, x = target.x + Math.cos(a) * target.width * .53, y = target.y + Math.sin(a) * target.height * .62;
+        const a = i * Math.PI / 3, x = target.x + Math.cos(a) * rx, y = target.y + Math.sin(a) * ry;
         if (!i) context.moveTo(x, y); else context.lineTo(x, y);
       }
       context.closePath(); context.fill(); context.stroke();
+      context.strokeStyle = "#d4f7ff83"; context.lineWidth = .76;
+      context.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        const px = Math.cos(a) * rx, py = Math.sin(a) * ry;
+        context.moveTo(target.x + px, target.y + py);
+        context.lineTo(target.x + px * .67 - py * .16, target.y + py * .7 + px * .13);
+        context.lineTo(target.x + px * .44, target.y + py * .46);
+      }
+      context.stroke();
+      if (typeof drawFlightLattice === "function")
+        drawFlightLattice(context, target.x, target.y, target.width * .51, target.height * .6,
+          "#c3edff", .8, .65, .32);
     }
   }
   if (evolution.skillFlash > 0) {
-    context.globalAlpha = Math.min(reducedMotion.matches ? .04 : .12, evolution.skillFlash * .2);
-    context.fillStyle = evolutionColors[evolution.route];
-    context.fillRect(0, 0, viewport.width, viewport.height); context.globalAlpha = 1;
+    if (typeof drawFlightSkillVeil === "function")
+      drawFlightSkillVeil(context, viewport, player, evolutionColors[evolution.route],
+        1 - evolution.skillFlash / .7, evolution.skillFlash / .7, evolution.route === "rewind");
   }
   for (const pulse of evolution.pulses) {
     const progress = Math.min(1, pulse.age / pulse.duration);
     context.globalAlpha = (1 - progress) * (reducedMotion.matches ? .3 : .7);
     context.strokeStyle = pulse.color; context.lineWidth = 2.5 - progress;
     context.beginPath(); context.arc(pulse.x, pulse.y, pulse.radius * (.22 + progress * .78), 0, Math.PI * 2); context.stroke();
+    if (typeof drawFlightLattice === "function") {
+      const radius = pulse.radius * (.28 + progress * .92);
+      drawFlightLattice(context, pulse.x, pulse.y, radius, radius * .88, pulse.color, progress * 6, .84);
+    }
   }
   context.restore();
 }

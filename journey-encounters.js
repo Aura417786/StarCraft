@@ -101,6 +101,9 @@ function drawJourneyCatapult() {
   const t = 1 - launch / 1.24;
   const opacity = Math.min(1, launch * 2.6) * (quietCombatMotion() ? .48 : 1);
   const size = player.width, tail = player.x - size * .45;
+  if (typeof drawFlightLattice === "function")
+    drawFlightLattice(context, tail - t * size * .55, player.y, size * .24, player.height * (.54 + t * .5),
+      "#a5e4ff", t * 7, opacity * .64);
   context.save();
   const railFront = tail + size * (.37 - t * .96);
   const railBack = railFront - size * 1.95;

@@ -88,6 +88,7 @@ async function run() {
   await check("unsupported browsers stay silent and every public method is safe", async () => {
     const { api } = world();
     api.sync(true, true, true); api.shoot(); api.explode(true); api.warning(); api.setMuted(true);
+    assert.equal(api.prepareBossRoar(0), false); assert.equal(api.bossRoar(0), false);
     api.shoot(true); api.overdrive(); api.perfectShield();
     api.chargeUltimate(); api.fireUltimate(); api.stopUltimate(); api.bossAttack("beam"); api.bossEnrage();
     assert.equal(api.muted, true); assert.equal(await api.unlock(), false); api.destroy();
@@ -744,6 +745,80 @@ async function run() {
   await check("perfect shield is safe and silent after audio destruction", () => {
     count = parryAudio.sources.length; parry.perfectShield();
     assert.equal(parryAudio.sources.length, count); assert.equal(parryWorld.timers.size, 0);
+  });
+  class RoarContext extends FakeContext {
+    createBuffer(channels, length, sampleRate) {
+      const data = Array.from({ length: channels }, () => new Float32Array(length));
+      const buffer = { length, duration: length / sampleRate, getChannelData: channel => data[channel] };
+      (this.buffers ??= []).push(buffer);
+      return buffer;
+    }
+    createBufferSource() {
+      return Object.assign(super.createBufferSource(), { playbackRate: new Parameter(1) });
+    }
+  }
+  const arrivalWorld = world(RoarContext), arrival = arrivalWorld.api;
+  arrival.sync(true, false, false, { warning: true });
+  await arrival.unlock();
+  const arrivalAudio = instances.at(-1);
+  await check("eleven arrival roars cache different bounded waveforms and play once each", () => {
+    const signatures = new Set();
+    const initial = arrivalAudio.buffers.length;
+    for (let index = 0; index < 11; index++) {
+      const count = arrivalAudio.sources.length;
+      assert.equal(arrival.prepareBossRoar(index), true);
+      assert.equal(arrival.prepareBossRoar(index), true);
+      assert.equal(arrivalAudio.buffers.length, initial + index + 1);
+      assert.equal(arrivalAudio.sources.length, count);
+      assert.equal(arrival.bossRoar(index, 1030, 340), true);
+      assert.equal(arrival.bossRoar(index, 1030, 340), false);
+      assert.equal(arrivalAudio.sources.length, count + 1);
+      const source = arrivalAudio.sources.at(-1), buffer = source.buffer;
+      assert.equal(buffer, arrivalAudio.buffers.at(-1));
+      assert.ok(buffer.duration >= 1 && buffer.duration < 1.5);
+      const data = buffer.getChannelData(0);
+      assert.equal(Math.abs(data[0]), 0);
+      assert.equal(Math.abs(data.at(-1)), 0);
+      let peak = 0, power = 0;
+      for (const value of data) {
+        peak = Math.max(peak, Math.abs(value));
+        power += value * value;
+      }
+      assert.ok(peak <= .820001 && peak > .2);
+      assert.ok(Math.sqrt(power / data.length) > .07);
+      signatures.add(Array.from({ length: 8 }, (_, i) => data[Math.floor(data.length * (i + 1) / 9)].toFixed(5)).join(","));
+      arrivalAudio.advance(1.6);
+      assert.equal(arrivalAudio.living, 0);
+    }
+    assert.equal(signatures.size, 11);
+    for (const type of [-1, 11, "4", 2.5, NaN]) assert.equal(arrival.bossRoar(type), false);
+    assert.equal(arrivalAudio.buffers.length, initial + 11);
+    assert.equal(arrivalWorld.timers.size, 0);
+  });
+  await check("pause, mute, hidden view and warning exit cancel roars with no replay", () => {
+    const warning = { warning: true };
+    for (const interrupt of [
+      () => arrival.sync(false, false, false, { ...warning, paused: true }),
+      () => arrival.setMuted(true),
+      () => arrival.sync(true, false, false, { ...warning, visible: false }),
+      () => arrival.sync(true, true),
+    ]) {
+      assert.equal(arrival.bossRoar(0), true);
+      const source = arrivalAudio.sources.at(-1);
+      arrivalAudio.advance(.1);
+      interrupt();
+      assert.ok(source.stopAt <= arrivalAudio.currentTime + .031);
+      arrivalAudio.advance(.08);
+      assert.equal(source.ended, true);
+      arrival.sync(true, false, false, warning);
+      const count = arrivalAudio.sources.length;
+      arrival.setMuted(false);
+      assert.equal(arrivalAudio.sources.length, count);
+    }
+    assert.equal(arrival.bossRoar(10), true);
+    arrival.destroy();
+    assert.equal(arrival.bossRoar(10), false);
+    assert.equal(arrival.prepareBossRoar(10), false);
   });
   process.stdout.write("All " + checks + " audio simulation checks passed; observed peak " + peak + " active/scheduled sources.\n");
 }

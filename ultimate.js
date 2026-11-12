@@ -444,6 +444,8 @@ function drawIonSwarm(shot) {
     context.save();
     context.translate(missile.x, missile.y);
     context.rotate(missile.angle);
+    if (detail && typeof drawFlightBoltWake === "function")
+      drawFlightBoltWake(context, 27, 4, "#71d8ff", Math.round(missile.y), ultimate.elapsed);
     const trail = context.createLinearGradient(-63, 0, 18, 0);
     trail.addColorStop(0, "#116bf100");
     trail.addColorStop(0.5, "#2b89ff99");
@@ -511,6 +513,11 @@ function drawCoronaBarrage(shot) {
       const lens = context.createLinearGradient(Math.max(0, front - 34), 0, front + 9, 0);
       lens.addColorStop(0, "#f98c2a00"); lens.addColorStop(.78, "#ffbe5133"); lens.addColorStop(1, "#fff1a300");
       context.fillStyle = lens; context.fillRect(front - 34, 0, 43, viewport.height);
+      if (typeof drawFlightLattice === "function") {
+        const phase = ultimate.elapsed * 6 + index;
+        drawFlightLattice(context, front - 8, viewport.height * .5, 23 + 8 * Math.sin(phase) ** 2,
+          viewport.height * .49, "#ffe29b", phase * .3, .46, .48);
+      }
     }
   }
 }
@@ -518,6 +525,9 @@ function drawCrimsonCharge(muzzle, progress, linked) {
   const radius = 9 + progress * Math.min(29, player.height * .25);
   const time = reducedMotion.matches ? 0 : ultimate.elapsed;
   context.globalCompositeOperation = "screen";
+  if (typeof drawFlightLattice === "function")
+    drawFlightLattice(context, muzzle.x, muzzle.y, radius * .86, radius * 1.34,
+      linked ? "#abe9ff" : "#ff9b68", time * 3, .54 + progress * .32);
   const lens = context.createRadialGradient(muzzle.x, muzzle.y, 0, muzzle.x, muzzle.y, radius * 2);
   lens.addColorStop(0, "#fff8d5f0");
   lens.addColorStop(.15, "#ffb58ec4");
@@ -621,6 +631,8 @@ function drawCrimsonBeam(shot) {
       }
       context.stroke();
     }
+    if (typeof drawFlightBeamFibers === "function")
+      drawFlightBeamFibers(context, left, right, y, radius, shot.linked ? "#ffc8a0" : "#ff705e", age);
   }
   if (age < .23) {
     const expansion = animate ? age / .23 : .3;
@@ -659,6 +671,9 @@ function drawUltimate() {
     const radius = 8 + progress * Math.min(32, player.height * 0.26);
     const color = ultimate.kind === "blue" ? ["#e6ffff", "#6ad8ff", "#1989ffbb", "#1481ff00", "#7ceaff"]
       : ["#fff9d1", "#ffd054", "#ffaf24bb", "#ffb01b00", "#ffde72"];
+    if (typeof drawFlightLattice === "function")
+      drawFlightLattice(context, muzzle.x, muzzle.y, radius * .95, radius * 1.34, color[4],
+        ultimate.elapsed * 3, .48 + progress * .37);
     const halo = context.createRadialGradient(muzzle.x, muzzle.y, 0, muzzle.x, muzzle.y, radius * 2.1);
     halo.addColorStop(0, color[0]); halo.addColorStop(0.22, color[1]);
     halo.addColorStop(0.5, color[2]); halo.addColorStop(1, color[3]);
