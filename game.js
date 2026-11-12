@@ -1187,8 +1187,9 @@ function drawExplosions() {
 }
 function drawBullets() {
   context.save();
-  const glow = reducedMotion.matches ? 0 : visualQuality.glow;
-  const tailBudget = visualQuality.id === "high" ? 104 : 54;
+  const glow = quietCombatMotion() ? 0 : visualQuality.glow;
+  const crowded = bullets.length + bossProjectiles.length + enemyProjectiles.length > 112;
+  const tailBudget = visualQuality.id === "high" ? (crowded ? 24 : 52) : (crowded ? 14 : 30);
   for (let index = 0; index < bullets.length; index++) {
     const bullet = bullets[index];
     context.save(); context.translate(bullet.x, bullet.y); context.rotate(bullet.angle ?? 0);
@@ -1212,8 +1213,10 @@ function drawBullets() {
       context.lineJoin = "round";
       context.globalAlpha = .18 * glow;
       context.lineWidth = half * 2.3; context.stroke();
-      context.globalAlpha = .38 * glow;
-      context.lineWidth = half * .8; context.stroke();
+      if (!crowded) {
+        context.globalAlpha = .38 * glow;
+        context.lineWidth = half * .8; context.stroke();
+      }
       context.globalAlpha = 1;
     }
     context.fill();
@@ -1375,7 +1378,8 @@ function drawFrame(time) {
     if (presentation?.motion) drawBossPresentationMotion(context, presentation);
     else drawEnemies();
     drawAceThreats(context);
-    drawEnemyThreats();
+    drawEnemyThreats(bossProjectiles.length, hostileShotDetailStride(bossProjectiles.length + enemyProjectiles.length),
+      quietCombatMotion() || visualQuality.id === "low");
     drawBossBattle();
     if (!isBossDeathPlaying()) drawPowerups();
     drawBullets();

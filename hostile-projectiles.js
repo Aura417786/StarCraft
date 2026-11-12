@@ -54,16 +54,24 @@ function hostileShotHitsHull(shot, target) {
   return false;
 }
 
-function drawHostileProjectile(ctx, shot, color, quiet) {
+function hostileShotDetailStride(count) {
+  const budget = visualQuality.id === "high" ? 36 : 22;
+  return Math.max(1, Math.ceil(count / budget));
+}
+
+function drawHostileProjectile(ctx, shot, color, quiet, detailed = true, crowded = false) {
   const shape = hostileShotShape(shot);
   ctx.save();
   ctx.translate(shot.x, shot.y);
-  ctx.rotate(Math.atan2(shot.vy ?? 0, shot.vx ?? 0));
-  if (!quiet && typeof drawFlightBoltWake === "function" && (shot.radius >= 6 || shot.glyph))
+  const wake = detailed && !quiet && (shot.radius >= 6 || shot.glyph) && typeof drawFlightBoltWake === "function";
+  if (shape.kind !== "circle" || wake) ctx.rotate(Math.atan2(shot.vy ?? 0, shot.vx ?? 0));
+  if (wake)
     drawFlightBoltWake(ctx, shot.radius * 1.2, shot.radius * .49, color,
       (shot.vx ?? 0) * .073 + (shot.vy ?? 0) * .113, shot.age ?? 0, true);
   ctx.fillStyle = ctx.shadowColor = color;
-  ctx.shadowBlur = quiet ? 0 : shot.burstAt ? 15 : 8;
+  // The crisp collision silhouette is always rendered. At saturation
+  // a small bright core reads better than hundreds of overlapping blurs.
+  ctx.shadowBlur = quiet || !detailed || crowded ? 0 : shot.burstAt ? 15 : 8;
   ctx.beginPath();
   if (shape.kind === "capsule") {
     const length = shape.spine + shape.radius;

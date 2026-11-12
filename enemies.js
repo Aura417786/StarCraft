@@ -240,7 +240,7 @@ function updateEnemyProjectileDamage() {
     : tr("被炮击机命中", "Hit by a gunship");
   damagePlayer(message, contact);
 }
-function drawEnemyThreats() {
+function drawEnemyThreats(bossShotCount = 0, detailStride = 1, quietShots = reducedMotion.matches) {
   context.save();
   for (const enemy of enemies) {
     if (enemy.scoutIntercept && !enemy.scoutIntercept.start) {
@@ -296,8 +296,11 @@ function drawEnemyThreats() {
     context.beginPath(); context.arc(muzzle.x, muzzle.y, 4 + 4 * warningProgress, 0, Math.PI * 2); context.fill();
   }
   context.globalAlpha = 1;
-  for (const shot of enemyProjectiles) {
-    drawHostileProjectile(context, shot, shot.formationTint || shot.tint || "#ff528c", reducedMotion.matches);
+  const hostileCount = bossShotCount + enemyProjectiles.length;
+  for (let index = 0; index < enemyProjectiles.length; index++) {
+    const shot = enemyProjectiles[index];
+    drawHostileProjectile(context, shot, shot.formationTint || shot.tint || "#ff528c", quietShots,
+      (bossShotCount + index) % detailStride === 0, hostileCount > 96);
   }
   context.restore();
 }

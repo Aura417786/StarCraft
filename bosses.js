@@ -566,7 +566,7 @@ function updateBossDamage() {
 
 function drawBossBattle() {
   updateBossHealthHud();
-  const quiet = reducedMotion.matches || (typeof visualQuality !== "undefined" && visualQuality.id === "low");
+  const quiet = quietCombatMotion() || visualQuality.id === "low";
   const scene = activeBossPresentation();
   if (scene && scene.kind !== "death") drawBossPresentationBody(context, scene, quiet);
   else if (boss?.finale) drawBossFinale(context, boss, quiet);
@@ -578,7 +578,12 @@ function drawBossBattle() {
     drawAlienHazard(context, hazard, quiet);
     if (typeof drawFlightDangerPattern === "function") drawFlightDangerPattern(context, hazard);
   }
-  for (const shot of bossProjectiles) drawHostileProjectile(context, shot, shot.color, quiet);
+  const hostileCount = bossProjectiles.length + enemyProjectiles.length;
+  const detailStride = hostileShotDetailStride(hostileCount);
+  for (let index = 0; index < bossProjectiles.length; index++) {
+    const shot = bossProjectiles[index];
+    drawHostileProjectile(context, shot, shot.color, quiet, index % detailStride === 0, hostileCount > 96);
+  }
   if (bossHitGrace > 0 && boss && state === "battle") {
     context.save();
     context.strokeStyle = "#c5e7ff";
