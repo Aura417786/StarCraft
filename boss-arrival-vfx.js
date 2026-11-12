@@ -166,6 +166,18 @@ function paintBossArrivalHalo(ctx, palette, type) {
   outer.addColorStop(1, palette.body + "00");
   ctx.fillStyle = outer;
   ctx.fillRect(-2.68, -2.5, 4.92, 5);
+  // An off-axis source creates a backlit opening instead of exposing the
+  // whole portal evenly. The event horizon is drawn over this light.
+  ctx.save();
+  ctx.scale(1, .46);
+  const spill = ctx.createRadialGradient(.39, -.11, .025, .32, -.04, 1.75);
+  spill.addColorStop(0, palette.edge + (type === 8 ? "31" : "95"));
+  spill.addColorStop(.17, palette.body + (type === 8 ? "26" : "77"));
+  spill.addColorStop(.47, palette.body + "25");
+  spill.addColorStop(1, palette.echo + "00");
+  ctx.fillStyle = spill;
+  ctx.fillRect(-1.45, -1.80, 3.55, 3.55);
+  ctx.restore();
   const aperture = ctx.createRadialGradient(.07, -.05, .035, .07, -.05, type === 8 ? 1.1 : .87);
   aperture.addColorStop(0, type === 8 ? "#03030aef" : palette.body + "45");
   aperture.addColorStop(.28, type === 8 ? "#06030ced" : palette.shadow + "53");

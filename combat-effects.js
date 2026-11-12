@@ -188,18 +188,26 @@ function detonationVolumeSprite(profile) {
   const surface = shipRenderCanvas(144, 144);
   const ctx = surface?.getContext?.("2d");
   if (!ctx) return null;
-  // A stable, uneven density field shades the gas in depth. Bake these
-  // overlapping lobes once per material so no blur kernel runs during combat.
+  // The left face is lit from the blast; the right face carries the smoke's
+  // density. Bake both faces once, then turn each cloud toward the source.
   for (let i = 0; i < 21; i++) {
     const grain = detonationStrands[i];
     const spread = 10 + 34 * grain.depth;
     const x = 72 + Math.cos(grain.angle) * spread, y = 72 + Math.sin(grain.angle) * spread * .8;
     const radius = 12 + grain.onset * 21;
-    const cell = ctx.createRadialGradient(x - radius * .16, y - radius * .24, 0, x, y, radius);
-    cell.addColorStop(0, profile.glow + "52");
-    cell.addColorStop(.40, profile.haze + "8a");
+    const cell = ctx.createRadialGradient(x + radius * .24, y + radius * .08, 0, x, y, radius);
+    cell.addColorStop(0, "#070910d8");
+    cell.addColorStop(.46, profile.haze + "ba");
+    cell.addColorStop(.73, profile.haze + "4d");
     cell.addColorStop(1, profile.haze + "00");
     ctx.fillStyle = cell;
+    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    const scatter = ctx.createRadialGradient(x - radius * .54, y - radius * .15, 0,
+      x - radius * .14, y, radius * .75);
+    scatter.addColorStop(0, profile.glow + "7a");
+    scatter.addColorStop(.41, profile.haze + "69");
+    scatter.addColorStop(1, profile.haze + "00");
+    ctx.fillStyle = scatter;
     ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
   }
   detonationVolumes.set(profile, surface);
@@ -223,7 +231,11 @@ function drawDetonationVolume(ctx, effect, p, volume, quality) {
     const y = Math.sin(phase) * spread * profile.axis * .65 + p * p * radius * (material === "spores" ? -.34 : .17);
     const span = radius * (.14 + seedPoint.onset * .22 + .50 * p);
     ctx.globalAlpha = volume * (.49 + seedPoint.depth * .37);
-    ctx.drawImage(sprite, x - span, y - span, span * 2, span * 2);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.atan2(y, x));
+    ctx.drawImage(sprite, -span, -span, span * 2, span * 2);
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -306,20 +318,36 @@ function drawDetonationMaterial(ctx, effect, p, quiet, quality) {
     ctx.stroke();
   } else if (material === "thermal") {
     const edge = span * .87;
-    const haze = ctx.createRadialGradient(-edge * .22, edge * .22, edge * .03, 0, 0, edge);
-    haze.addColorStop(0, "#ffe1a0e8"); haze.addColorStop(.29, "#ff934be3");
-    haze.addColorStop(.64, "#742832b4"); haze.addColorStop(1, "#34252a00");
-    ctx.fillStyle = haze;
-    ctx.lineJoin = "round";
-    for (let i = 0; i <= 16; i++) {
-      const a = i * Math.PI / 8;
-      const r = edge * (.79 + .14 * Math.sin(a * 5 + seed + p * 3) + .08 * Math.sin(a * 7 + .1));
-      const x = Math.cos(a) * r, y = Math.sin(a) * r * .83 - p * edge * .15;
-      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    ctx.save();
+    ctx.rotate(seed * .19 - .36);
+    ctx.scale(1, .74);
+    detonationGlow(ctx, -edge * .11, edge * .14, edge, "#ffd192", "#ed5a368a", opacity * .72);
+    if (!quiet && quality !== "low") {
+      // Unclosed, tapering seams trace the rolling front. Overlapping gas
+      // hides the rear surface and leaves only a few hot folds exposed.
+      const seam = ctx.createLinearGradient(-edge, -edge * .45, edge, edge * .37);
+      seam.addColorStop(0, "#ff4d3100");
+      seam.addColorStop(.32, "#ff7a4595");
+      seam.addColorStop(.48, "#ffdd91df");
+      seam.addColorStop(.65, "#fd753e83");
+      seam.addColorStop(1, "#7c293900");
+      ctx.strokeStyle = seam;
+      ctx.globalCompositeOperation = "screen";
+      ctx.lineCap = "round";
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = opacity * (1 - p * .65);
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const a = seed + i * 1.62 + p * .9;
+        const side = i % 2 ? 1 : -1, r = edge * (.49 + i * .14);
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        ctx.moveTo(x * .34 - y * .26 * side, y * .34 + x * .26 * side);
+        ctx.bezierCurveTo(x * .92 - y * .54 * side, y * .92 + x * .54 * side,
+          x * 1.17 - y * .29 * side, y * 1.17 + x * .29 * side, x, y);
+      }
+      ctx.stroke();
     }
-    ctx.closePath(); ctx.fill();
-    ctx.globalAlpha *= .60;
-    ctx.stroke();
+    ctx.restore();
   } else if (material === "metal") {
     ctx.ellipse(0, 0, span, span * profile.axis, -.14, 0, Math.PI * 2); ctx.stroke();
   }
@@ -361,11 +389,12 @@ function drawCombatDetonations(ctx) {
     ctx.translate(x, y);
     // A short core flash, a slower expanding volume, then fading directional debris.
     const flash = Math.max(0, 1 - age / (rank > 1 ? .14 : .085));
-    detonationGlow(ctx, 0, 0, radius * .46, profile.core, profile.glow + "83", flash * (quiet ? .20 : .66));
     const volume = Math.min(1, p * 6) * (1 - p) ** 2.45;
     const cloud = radius * (.21 + p * .83);
-    detonationGlow(ctx, 0, 0, cloud, profile.glow, profile.haze + "8a", volume * (quiet ? .19 : rank > 1 ? .69 : .43));
+    detonationGlow(ctx, 0, 0, cloud, profile.glow, profile.haze + "8a", volume * (quiet ? .19 : rank > 1 ? .58 : .37));
     if (!quiet && quality !== "low") drawDetonationVolume(ctx, effect, p, volume, quality);
+    detonationGlow(ctx, 0, 0, radius * .46, profile.glow, profile.glow + "65", flash * (quiet ? .17 : .51));
+    detonationGlow(ctx, 0, 0, radius * .16, profile.core, profile.glow + "ad", flash * (quiet ? .19 : .78));
     drawDetonationMaterial(ctx, effect, p, quiet, quality);
     if (!quiet && quality !== "low") drawDetonationSparks(ctx, effect, p, quality);
     ctx.restore();
@@ -519,7 +548,13 @@ function drawSurfaceContacts() {
       context.stroke();
     }
     const flash = Math.max(0, 1 - hit.age / (hit.heavy ? .068 : .041));
-    context.globalAlpha = flash * (quiet ? .30 : .91);
+    if (hit.heavy && !quiet && detail !== "low") {
+      const spill = hit.radius * .87;
+      context.globalCompositeOperation = "screen";
+      detonationGlow(context, -spill * .19, 0, spill, hit.color, hit.color + "4d", flash * .52);
+      context.globalCompositeOperation = "source-over";
+    }
+    context.globalAlpha = flash * (quiet ? .30 : .89);
     context.fillStyle = hit.core;
     context.beginPath(); context.ellipse(0, 0, hit.radius * .18, hit.radius * .59, 0, 0, Math.PI * 2);
     context.fill();

@@ -13,6 +13,7 @@ let starBreakerModelStage;
 let starBreakerModelLoad;
 let starBreakerModelPumpScheduled = false;
 let starBreakerModelsUnavailable = false;
+const bossWorldLightSample = {};
 // The sector plate motivates the key; the darker opposite hemisphere preserves shape.
 const bossSectorLights = [
   { id: "orbit", aim: [.68, .64, .58], rgb: [180, 218, 255], rim: [86, 151, 208] },
@@ -402,7 +403,7 @@ function bossModelStage() {
         starBreakerModelsUnavailable = false;
       } catch { /* Keep using 2D artwork. */ }
     });
-    starBreakerModelStage = { renderer, scene, camera, key, rim, bounce, emitter, spill, environment,
+    starBreakerModelStage = { renderer, scene, camera, ambience, key, rim, bounce, emitter, spill, environment,
       sectorMaps: new Map(), environmentGeneration: 0, current: null };
   } catch {
     starBreakerModelsUnavailable = true;
@@ -415,30 +416,60 @@ function bossModelRenderWidth(width, pixelRatio, quality = visualQuality) {
   return clamp(wanted, quality.modelMin, quality.modelMax);
 }
 
-function lightBossModel(stage, model, type, pose, x, y, width) {
-  const { scene, key, rim, bounce, emitter, spill } = stage;
+function bossWorldLightAnchor(type, x, y) {
+  if (x !== 0 || y !== 0) return null;
+  const alienType = type % bossEmitterLights.length;
+  const subject = typeof bossPresentation !== "undefined" ? bossPresentation?.target : null;
+  if (subject?.type === alienType) return subject;
+  return typeof boss !== "undefined" && boss?.type === alienType ? boss : null;
+}
+
+function sampleBossWorldLight(type, x, y) {
+  if (typeof sampleSceneLight !== "function") return null;
+  const anchor = bossWorldLightAnchor(type, x, y);
+  return sampleSceneLight(anchor?.x ?? x, anchor?.y ?? y, bossWorldLightSample);
+}
+
+function lightBossModel(stage, model, type, pose, x, y, width, incident) {
+  const { scene, ambience, key, rim, bounce, emitter, spill } = stage;
   const { current, next, blend } = sceneryJourney();
   const near = blend < .5 ? current : next;
   preloadBossEnvironment(stage, near);
   const map = stage.sectorMaps.get(near);
   scene.environment = map?.texture ?? stage.environment.texture;
   // A brief reduction in reflection hides the cubemap change during a sector dissolve.
-  scene.environmentIntensity = (map?.texture ? .73 : .54) * (.79 + Math.abs(.5 - blend) * .42);
-  const from = bossSectorLights[current], to = bossSectorLights[next];
-  const mix = (a, b) => a + (b - a) * blend;
-  const mixColor = (field, light) => light.color.setRGB(...from[field].map((channel, i) => mix(channel, to[field][i]) / 255),
-    StarBreaker3D.SRGBColorSpace);
-  mixColor("rgb", key); mixColor("rim", rim);
-  key.position.set(...from.aim.map((channel, i) => mix(channel, to.aim[i]) * 7));
-  rim.position.set(key.position.x * .64, key.position.y * .58 + 1.6, -4);
+  scene.environmentIntensity = (map?.texture ? .73 : .54) * (.79 + Math.abs(.5 - blend) * .42)
+    * (incident ? .86 + incident.fillStrength * .20 : 1);
+  if (incident) {
+    key.color.set(incident.keyColor);
+    bounce.color.set(incident.fillColor);
+    ambience.color.set(0xd0dceb).lerp(bounce.color, .41);
+    ambience.groundColor.set(incident.shadeColor);
+    ambience.intensity = .62 + incident.fillStrength * .18;
+    // Screen-space positive Y points down. The directional lights face the
+    // shaded model from that same sky direction after converting to world Y.
+    key.position.set(incident.keyDx * 5.8, -incident.keyDy * 5.8, 4.6);
+    rim.color.set(incident.fillColor);
+    rim.position.set(-key.position.x * .68, -key.position.y * .26 + 1.30, -4);
+    bounce.position.set(-key.position.x * .49, -key.position.y * .55, 3.3);
+    bounce.intensity = .40 + incident.fillStrength * .35 + pose.charge * .15;
+  } else {
+    const from = bossSectorLights[current], to = bossSectorLights[next];
+    const mix = (a, b) => a + (b - a) * blend;
+    const mixColor = (field, light) => light.color.setRGB(...from[field].map((channel, i) => mix(channel, to[field][i]) / 255),
+      StarBreaker3D.SRGBColorSpace);
+    mixColor("rgb", key); mixColor("rim", rim);
+    key.position.set(...from.aim.map((channel, i) => mix(channel, to.aim[i]) * 7));
+    rim.position.set(key.position.x * .64, key.position.y * .58 + 1.6, -4);
+    const light = shipReflectionLight();
+    bounce.color.setRGB(...light.channels.map(channel => channel / 255), StarBreaker3D.SRGBColorSpace);
+    bounce.position.set(-key.position.x * .54, -light.side * 4, 3);
+    bounce.intensity = .60 * (light.intensity ?? 1) + pose.charge * .17;
+  }
   if (pose.cooling) key.color.set("#a0eafa");
-  key.intensity = 2.17 + pose.hit * .43 + (pose.cooling ? .52 : 0);
-  rim.intensity = (1.38 + pose.charge * .45 + pose.ruptured * .22 + (pose.intensity ?? 0) * .34)
+  key.intensity = (incident ? 1.25 + incident.keyStrength * 1.14 : 2.17) + pose.hit * .27 + (pose.cooling ? .45 : 0);
+  rim.intensity = (1.25 + (incident?.fillStrength ?? .5) * .26 + pose.charge * .45 + pose.ruptured * .22 + (pose.intensity ?? 0) * .34)
     * (1 - (pose.action?.slack ?? 0) * .24);
-  const light = shipReflectionLight();
-  bounce.color.setRGB(...light.channels.map(channel => channel / 255), StarBreaker3D.SRGBColorSpace);
-  bounce.position.set(-key.position.x * .54, -light.side * 4, 3);
-  bounce.intensity = .60 * (light.intensity ?? 1) + pose.charge * .17;
 
   const [color, px, py, strength] = bossEmitterLights[type % bossEmitterLights.length];
   const unit = model.size.x;
@@ -452,15 +483,23 @@ function lightBossModel(stage, model, type, pose, x, y, width) {
   emitter.intensity = strength * unit * unit * (.11 + localCharge * .074 + pose.ruptured * .042
     + (type >= 11 ? .028 : 0)) * (pose.cooling ? .45 : 1) * (1 - (pose.action?.slack ?? 0) * .67);
 
+  if (incident) {
+    spill.distance = unit * 1.74;
+    spill.intensity = Math.min(1, incident.strength) * unit * unit * (pose.quiet ? .35 : .61);
+    if (spill.intensity > 0) {
+      spill.color.set(incident.color);
+      spill.position.set(incident.dx * unit * .69, -incident.dy * unit * .59, unit * .49);
+    }
+    return;
+  }
   const pulse = typeof activeCombatLight === "function" ? activeCombatLight() : null;
-  const subject = typeof bossPresentation !== "undefined" && bossPresentation?.target?.type === type % 11
-    ? bossPresentation.target : boss;
+  const subject = bossWorldLightAnchor(type, x, y);
   // Presentation shells render at a translated local origin, but the flash
   // remains in battlefield space. Sample both lights in the same space.
-  const worldX = x === 0 && y === 0 ? subject?.x ?? x : x;
-  const worldY = x === 0 && y === 0 ? subject?.y ?? y : y;
+  const worldX = subject?.x ?? x, worldY = subject?.y ?? y;
   const dx = pulse ? pulse.x - worldX : 0, dy = pulse ? pulse.y - worldY : 0;
   const falloff = pulse ? Math.max(0, 1 - Math.hypot(dx, dy) / Math.max(1, pulse.radius + width * .4)) : 0;
+  spill.distance = 0;
   spill.intensity = falloff * falloff * Math.min(1.2, pulse?.strength ?? 0) * unit * unit * .31;
   if (falloff > 0) {
     spill.color.set(pulse.color);
@@ -468,14 +507,19 @@ function lightBossModel(stage, model, type, pose, x, y, width) {
   }
 }
 
-function drawBossContactShadow(ctx, x, y, width, height) {
+function drawBossContactShadow(ctx, x, y, width, height, incident, quiet) {
   ctx.save();
   // Tight occlusion beneath the shell and a separate, softer shadow displaced
   // away from the key. Both affect the scenery beneath the opaque model only.
-  const { current, next, blend } = sceneryJourney();
-  const key = bossSectorLights[blend < .5 ? current : next].aim;
-  ctx.translate(x - key[0] * width * .095, y + height * (.24 + key[1] * .075));
-  ctx.rotate(key[0] * -.10);
+  let dx, dy;
+  if (incident) {
+    dx = incident.keyDx; dy = -incident.keyDy;
+  } else {
+    const { current, next, blend } = sceneryJourney();
+    [dx, dy] = bossSectorLights[blend < .5 ? current : next].aim;
+  }
+  ctx.translate(x - dx * width * .083, y + height * (.22 + dy * .085));
+  ctx.rotate(dx * -.13);
   ctx.scale(1, height / width * .64);
   const layer = (cy, radius, opacity) => {
     const shade = ctx.createRadialGradient(0, cy, radius * .08, 0, cy, radius);
@@ -485,9 +529,9 @@ function drawBossContactShadow(ctx, x, y, width, height) {
     ctx.fillStyle = shade;
     ctx.fillRect(-radius, cy - radius, radius * 2, radius * 2);
   };
-  layer(width * .08, width * .69, .75);
-  layer(-width * .075, width * .43, .78);
-  layer(-width * .13, width * .28, .48);
+  layer(width * .08, width * .61, .43);
+  layer(-width * .075, width * .38, .62);
+  if (!quiet && visualQuality.id === "high") layer(-width * .13, width * .27, .44);
   ctx.restore();
 }
 
@@ -528,8 +572,9 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
   camera.left = -fittedWidth / 2; camera.right = fittedWidth / 2;
   camera.top = fittedWidth / aspect / 2; camera.bottom = -camera.top;
   camera.updateProjectionMatrix();
-  lightBossModel(stage, model, type, pose, x, y, width);
-  drawBossContactShadow(ctx, x, y, width, height);
+  const incident = sampleBossWorldLight(type, x, y);
+  lightBossModel(stage, model, type, pose, x, y, width, incident);
+  drawBossContactShadow(ctx, x, y, width, height, incident, quiet);
   if (!quiet && visualQuality.glow) {
     const aura = ctx.createRadialGradient(x, y, 0, x, y, Math.max(width, height) * .53);
     aura.addColorStop(0, pose.color + "32"); aura.addColorStop(1, pose.color + "00");

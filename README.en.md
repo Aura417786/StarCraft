@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v32 Battlefield lighting.** Key light and ambient bounce change as you fly through the five sectors. Charged weapons, shields and explosions cast brief pools of light on nearby ships and aliens. Try the mirror boss in single-boss practice to see its cyan and violet beams, from the charge to the fading aftershock.
+
 **v31 Alien arrivals and combat effects.** Each of the eleven bosses has an individual roar and a distinct entrance built from light and particles. Starfields, engine wakes, shots, shields, evolution skills, ultimate attacks and detonations now share the same real-time effects treatment. Use single-boss practice to preview the different encounters. [Effects and checks](docs/v31-vfx.md)
 
 **v30.1 Perfect Guard and impact audio.** Press **V** as a projectile approaches. Blocking it within 0.25 seconds counterattacks and refunds the shield use. Gunfire is quieter, hits on enemy fighters crack like small blasts, and boss hits land with louder, deeper thuds before the final explosion.

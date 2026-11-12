@@ -192,7 +192,7 @@ function paintBroodmotherArtVessels(fx, width, height, pose) {
   }
 }
 
-function paintAlienArtFrame(texture, profile, target, color, time, charge, quiet, pose) {
+function paintAlienArtFrame(texture, profile, target, color, time, charge, quiet, pose, incident) {
   const { width, height } = texture;
   const pad = alienArtPadding;
   const frameWidth = width + 2 * pad, frameHeight = height + 2 * pad;
@@ -226,10 +226,15 @@ function paintAlienArtFrame(texture, profile, target, color, time, charge, quiet
 
   // Mask the light to the body, leaving the sprite's original transparency intact.
   fx.globalCompositeOperation = "source-atop";
-  const shade = fx.createLinearGradient(pad, pad, pad + width * 0.48, pad + height);
-  shade.addColorStop(0, "#a3dcf832");
-  shade.addColorStop(0.42, "#819dd800");
-  shade.addColorStop(1, "#0a142e46");
+  const lit = incident && !target.disabled;
+  const centerX = pad + width * .5, centerY = pad + height * .5;
+  const keyX = (lit ? incident.keyDx : -.48) * width * .58;
+  const keyY = (lit ? incident.keyDy : -.73) * height * .59;
+  const shade = fx.createLinearGradient(centerX + keyX, centerY + keyY, centerX - keyX, centerY - keyY);
+  shade.addColorStop(0, lit ? alienArtTint(incident.keyColor, .16 + incident.keyStrength * .19) : "#a3dcf832");
+  shade.addColorStop(.27, lit ? alienArtTint(incident.fillColor, .04 + incident.fillStrength * .05) : "#819dd800");
+  shade.addColorStop(.56, "#0a142e00");
+  shade.addColorStop(1, lit ? alienArtTint(incident.shadeColor, .40) : "#0a142e46");
   fx.fillStyle = shade;
   fx.fillRect(0, 0, frameWidth, frameHeight);
   if (target.disabled) {
@@ -257,6 +262,12 @@ function paintAlienArtFrame(texture, profile, target, color, time, charge, quiet
     }
     if (target.alienFinal) alienArtGlow(fx, pad + width * 0.72, pad + height * 0.35,
       width * 0.32, "#81d8ff", 0.17 + 0.1 * charge);
+    if (lit && incident.strength > .025) {
+      // The foreground flash lands on the face that is exposed to it, and
+      // cannot brighten transparent gaps between legs or membranes.
+      alienArtGlow(fx, centerX + incident.dx * width * .34, centerY + incident.dy * height * .37,
+        Math.max(width, height) * .62, incident.color, Math.min(.39, incident.strength * (quiet ? .22 : .42)));
+    }
     if (target.hitFlash > 0 && !quiet) {
       fx.fillStyle = alienArtTint("#ffe3cd", Math.min(0.18, target.hitFlash * 1.75));
       fx.fillRect(0, 0, frameWidth, frameHeight);
@@ -347,32 +358,49 @@ function drawBroodmotherTendrils(ctx, width, height, target, pose, time) {
   }
 }
 
-function drawAlienArtFallback(ctx, width, height, profile, color, time, charge, disabled) {
+function drawAlienArtFallback(ctx, width, height, profile, color, time, charge, disabled, quiet, incident) {
   ctx.save();
   ctx.scale(width, height);
-  const flesh = ctx.createLinearGradient(-0.2, -0.44, 0.17, 0.42);
-  flesh.addColorStop(0, disabled ? "#393341" : color);
+  const lit = incident && !disabled;
+  const sx = lit ? incident.keyDx * .48 : -.20;
+  const sy = lit ? incident.keyDy * .48 : -.44;
+  const flesh = ctx.createLinearGradient(sx, sy, -sx, -sy);
+  flesh.addColorStop(0, disabled ? "#393341" : lit ? incident.keyColor : color);
+  if (lit) flesh.addColorStop(.13, color);
   flesh.addColorStop(0.29, "#263140");
   flesh.addColorStop(0.68, "#181624");
-  flesh.addColorStop(1, "#090d18");
+  flesh.addColorStop(1, lit ? incident.shadeColor : "#090d18");
+  let pulse;
+  if (lit && incident.strength > .025) {
+    const x = incident.dx * .34, y = incident.dy * .36;
+    pulse = ctx.createRadialGradient(x, y, .02, x, y, .64);
+    pulse.addColorStop(0, alienArtTint(incident.color, Math.min(.40, incident.strength * (quiet ? .22 : .42))));
+    pulse.addColorStop(1, incident.color + "00");
+  }
+  const fillHull = () => {
+    ctx.fillStyle = flesh;
+    ctx.fill();
+    if (pulse) {
+      ctx.fillStyle = pulse;
+      ctx.fill();
+    }
+  };
   for (let i = 0; i < profile.fins; i++) {
     const bias = (i + 0.5) / profile.fins * 2 - 1;
     const tip = bias * 0.54 + Math.sin(time * 2.4 + i) * 0.035 * profile.flex;
-    ctx.fillStyle = flesh;
     ctx.beginPath();
     ctx.moveTo(0.14, bias * 0.19);
     ctx.bezierCurveTo(0.4, bias * 0.25, 0.35, tip * 0.9, 0.52, tip);
     ctx.bezierCurveTo(0.22, tip * 1.14, 0.03, bias * 0.35, -0.02, bias * 0.17);
     ctx.closePath();
-    ctx.fill();
+    fillHull();
   }
-  ctx.fillStyle = flesh;
   ctx.beginPath();
   ctx.moveTo(-0.49, 0.06);
   ctx.bezierCurveTo(-0.36, -0.39, -0.09, -0.51 + profile.rigid * 0.25, 0.19, -0.28);
   ctx.bezierCurveTo(0.42, -0.17, 0.34, 0.19, 0.14, 0.31);
   ctx.bezierCurveTo(-0.14, 0.44, -0.23, 0.22, -0.49, 0.06);
-  ctx.fill();
+  fillHull();
   if (!disabled) alienArtGlow(ctx, ...profile.core, 0.18, color, 0.32 + charge * 0.43);
   ctx.restore();
 }
@@ -400,11 +428,14 @@ function drawBossShip(ctx, target, reduceMotion = false) {
   const breath = pose ? pose.breath * 0.056 + pose.pulse * 0.027 : Math.sin(time * profile.tempo) * 0.018 * profile.flex;
   const postureX = pose ? pose.coil * 0.037 - pose.thrust * 0.072 + pose.dip * 0.017 - pose.lash * 0.022 : 0;
   const postureY = pose ? pose.dip * 0.05 + pose.side * pose.lash * 0.025 : 0;
+  const incident = !target.disabled && typeof sampleBossWorldLight === "function"
+    ? sampleBossWorldLight(target.type, target.x, target.y) : null;
 
   ctx.save();
   ctx.translate(target.x + (target.disabled ? 0 : width * (recoil + postureX + action.x)),
     target.y + height * (postureY + (target.disabled ? 0 : action.y)));
   if (!target.disabled) {
+    if (incident) drawBossContactShadow(ctx, 0, 0, width, height, incident, reduceMotion);
     ctx.rotate(Math.sin(time * 1.12) * 0.026 * profile.flex + (pose?.turn || 0) + action.bank);
     ctx.scale(action.scaleX * (1 + breath * (pose ? 0.64 : -0.45) - charge * 0.018 + (pose ? pose.thrust * 0.035 - pose.coil * 0.04 : 0)),
       action.scaleY * (1 + breath + charge * 0.025 + (pose ? pose.coil * 0.04 - pose.thrust * 0.03 : 0)));
@@ -416,11 +447,11 @@ function drawBossShip(ctx, target, reduceMotion = false) {
   if (pose && (pose.enraged || pose.lash > 0.06 || pose.thrust > 0.2)) {
     drawBroodmotherTendrils(ctx, width, height, target, pose, time);
   }
-  if (!layers.length) drawAlienArtFallback(ctx, width, height, profile, color, time, charge, target.disabled);
+  if (!layers.length) drawAlienArtFallback(ctx, width, height, profile, color, time, charge, target.disabled, reduceMotion, incident);
   for (const [layer, opacity] of layers) {
     const drawWidth = Math.min(width, height * layer.width / layer.height);
     const drawHeight = drawWidth * layer.height / layer.width;
-    const frame = paintAlienArtFrame(layer, profile, target, color, time, charge, reduceMotion, pose);
+    const frame = paintAlienArtFrame(layer, profile, target, color, time, charge, reduceMotion, pose, incident);
     const pad = drawWidth * alienArtPadding / layer.width;
     ctx.save();
     ctx.globalAlpha *= opacity;

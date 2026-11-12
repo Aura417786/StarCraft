@@ -208,6 +208,24 @@ function drawUltimateInterference(ctx, x, y, radius, charge, time, name, materia
     ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = .28 + charge * .39;
     ctx.drawImage(glow, x - r, y - r * .72, r * 2, r * 1.44); ctx.restore();
   }
+  // A narrow, saturated aperture appears only at the end of charge.
+  const opening = Math.max(0, (charge - .40) / .60);
+  if (opening > 0) {
+    const size = radius * (.10 + .14 * opening);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(.50, 1);
+    const aperture = ctx.createRadialGradient(-size * .18, -size * .16, 0, 0, 0, size);
+    aperture.addColorStop(0, material.spark + "cd");
+    aperture.addColorStop(.27, material.rim + "97");
+    aperture.addColorStop(.55, material.mid + "46");
+    aperture.addColorStop(1, material.mid + "00");
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = .82 * opening * opening;
+    ctx.fillStyle = aperture;
+    ctx.fillRect(-size, -size, 2 * size, 2 * size);
+    ctx.restore();
+  }
 }
 
 // Element-specific anticipation: identifiable even before a hazard exists.
@@ -487,16 +505,24 @@ function ultimatePrismBeam(ctx, line, mat, alpha) {
   if (!beam) {
     beam = document.createElement("canvas"); beam.width = 128; beam.height = 64;
     const brush = beam.getContext("2d"), spread = brush.createLinearGradient(0, 0, 0, 64);
-    spread.addColorStop(0, "#74adff00"); spread.addColorStop(.25, "#5486df09");
-    spread.addColorStop(.42, "#7cc9ff42"); spread.addColorStop(.49, "#dcf6ffb8");
-    spread.addColorStop(.5, "#ffffffec"); spread.addColorStop(.51, "#d4e6ffb8");
-    spread.addColorStop(.58, "#a08ee642"); spread.addColorStop(.75, "#757cdb09"); spread.addColorStop(1, "#74adff00");
+    spread.addColorStop(0, "#3b89ff00"); spread.addColorStop(.21, "#2e7cef0b");
+    spread.addColorStop(.36, "#449eff39"); spread.addColorStop(.46, "#79dcffc2");
+    spread.addColorStop(.49, "#e0fdffed"); spread.addColorStop(.51, "#b2c4ffb0");
+    spread.addColorStop(.54, "#7560c67a"); spread.addColorStop(.63, "#bb72ff52");
+    spread.addColorStop(.76, "#824bdd1d"); spread.addColorStop(1, "#542fac00");
     brush.fillStyle = spread; brush.fillRect(0, 0, 128, 64);
+    const transmission = brush.createLinearGradient(0, 0, 128, 0);
+    transmission.addColorStop(0, "#ffffffff");
+    transmission.addColorStop(.28, "#ffffffe7");
+    transmission.addColorStop(.77, "#ffffffa6");
+    transmission.addColorStop(1, "#ffffff73");
+    brush.globalCompositeOperation = "destination-in";
+    brush.fillStyle = transmission; brush.fillRect(0, 0, 128, 64);
     ultimateSurfaceCache.set(key, beam);
   }
   const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1), width = Math.max(8, line.width);
   ctx.save(); ctx.translate(line.x1, line.y1); ctx.rotate(Math.atan2(line.y2 - line.y1, line.x2 - line.x1));
-  ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = alpha * .9;
+  ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = alpha * .9;
   ctx.drawImage(beam, 0, -width * 1.3, length, width * 2.6);
   ctx.strokeStyle = mat.spark; ctx.lineWidth = 1; ctx.globalAlpha = alpha * .75;
   ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(length, 0); ctx.stroke();
@@ -680,6 +706,27 @@ function drawBossUltimateAftershock(ctx, scene) {
     }
   }
   if (!quiet && visualQuality.id !== "low") {
+    // Moving light grazes the leading folds; the wake keeps its darker tint.
+    // This follows the visual shockfront inside the existing danger clip.
+    const edge = h * .085;
+    if (front + w * .12 + edge > 0) {
+      const crest = ctx.createLinearGradient(front - edge, 0, front + edge * 1.8, 0);
+      crest.addColorStop(0, mat.dark + "00");
+      crest.addColorStop(.29, mat.rim + "56");
+      crest.addColorStop(.42, mat.spark + "80");
+      crest.addColorStop(.56, mat.rim + "44");
+      crest.addColorStop(1, mat.mid + "00");
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = fade * (name === "void" ? .25 : .56);
+      ctx.fillStyle = crest;
+      ctx.beginPath();
+      ctx.moveTo(front - edge, 0);
+      ctx.quadraticCurveTo(front - edge * 1.22, cy, front - edge, h);
+      ctx.lineTo(front + edge * 1.8, h);
+      ctx.quadraticCurveTo(front + edge * .56, cy, front + edge * 1.8, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
     const high = visualQuality.id === "high";
     const count = high ? 40 : 24;
     ctx.beginPath();
@@ -696,10 +743,18 @@ function drawBossUltimateAftershock(ctx, scene) {
     ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
     strokeSignatureCurrent(ctx, mat, fade * .82, .94);
   }
-  // White-hot release is local; the arena never becomes an opaque white rectangle.
-  ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = Math.max(0, 1 - age / .25) * .8;
-  const glow = pressureArtGlow(mat.rim, true), size = h * (.18 + age * .6);
-  ctx.drawImage(glow, cx - size, cy - size * .6, size * 2, size * 1.2);
+  // Keep the emission core brighter than the broad, colored spill.
+  const flash = Math.max(0, 1 - age / .25);
+  if (flash > 0) {
+    const size = h * (.18 + age * .6);
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = flash * (quiet ? .3 : .57);
+    ctx.drawImage(pressureArtGlow(mat.rim), cx - size, cy - size * .55, size * 2, size * 1.1);
+    if (!quiet && visualQuality.id !== "low") {
+      ctx.globalAlpha = flash * .74;
+      ctx.drawImage(pressureArtGlow(mat.rim, true), cx - size * .52, cy - size * .43, size * 1.04, size * .86);
+    }
+  }
   ctx.restore();
   return true;
 }

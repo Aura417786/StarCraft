@@ -13,6 +13,7 @@ const signatureMaterials = {
   nerve: { dark: "#331033", mid: "#8d316b", rim: "#fa8fba", spark: "#ffd9e8" },
   fusion: { dark: "#1d1247", mid: "#693aab", rim: "#ec9cff", spark: "#e9f7ff" },
 };
+const signatureRayLightSample = {};
 
 // These streams are sampled from the visible attack geometry. The simulation
 // has no particle state to allocate, rewind or clear.
@@ -523,16 +524,33 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
   const dx = x2 - x1, dy = y2 - y1;
   const length = Math.max(1, Math.hypot(dx, dy));
   const material = signatureMaterials[kind] || signatureMaterials.plasma;
+  const shaded = active && !quiet && visualQuality.id !== "low";
+  let litSide = -1;
+  if (shaded && typeof sampleSceneLight === "function") {
+    sampleSceneLight((x1 + x2) * .5, (y1 + y2) * .5, signatureRayLightSample);
+    const { keyDx, keyDy } = signatureRayLightSample;
+    if (-dy * keyDx + dx * keyDy > 0) litSide = 1;
+  }
   ctx.save();
   ctx.translate(x1, y1);
   ctx.rotate(Math.atan2(dy, dx));
   const width = Math.max(left, right, 1);
-  const depth = ctx.createLinearGradient(0, -width, 0, width);
+  const depth = ctx.createLinearGradient(0, width * litSide, 0, -width * litSide);
   depth.addColorStop(0, material.rim);
-  depth.addColorStop(.24, material.dark);
-  depth.addColorStop(.5, kind === "void" ? "#020108" : material.mid);
-  depth.addColorStop(.76, material.dark);
-  depth.addColorStop(1, material.rim);
+  if (shaded) {
+    // One surface catches the light. The opposite face keeps the material
+    // colour and depth even when several attacks overlap.
+    depth.addColorStop(.13, material.mid);
+    depth.addColorStop(.38, material.dark);
+    depth.addColorStop(.55, kind === "void" ? "#020108" : material.mid);
+    depth.addColorStop(.85, material.dark);
+    depth.addColorStop(1, material.mid);
+  } else {
+    depth.addColorStop(.24, material.dark);
+    depth.addColorStop(.5, kind === "void" ? "#020108" : material.mid);
+    depth.addColorStop(.76, material.dark);
+    depth.addColorStop(1, material.rim);
+  }
   ctx.globalAlpha = active ? .82 : .24 + phase * .27;
   ctx.fillStyle = depth;
   ctx.beginPath();
@@ -549,6 +567,20 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
 
   ctx.save();
   ctx.clip();
+  if (shaded) {
+    const glint = ctx.createLinearGradient(0, 0, length, 0);
+    glint.addColorStop(0, material.rim + "21");
+    glint.addColorStop(.18, material.rim + "d3");
+    glint.addColorStop(.66, material.rim + "7a");
+    glint.addColorStop(1, material.mid + "20");
+    ctx.strokeStyle = glint;
+    ctx.lineWidth = Math.min(3.5, width * .17);
+    ctx.globalAlpha = kind === "glass" || kind === "plasma" ? .88 : .51;
+    ctx.beginPath();
+    ctx.moveTo(0, left * litSide * .77);
+    ctx.lineTo(length, right * litSide * .77);
+    ctx.stroke();
+  }
   ctx.globalAlpha = active ? .94 : .48 + phase * .42;
   if (kind) {
     drawRayOrganic(ctx, kind, material, length, left, right, age, quiet);

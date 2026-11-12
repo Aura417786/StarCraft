@@ -1348,6 +1348,7 @@ function drawFrame(time) {
   }
   if (!battleHasFocus()) combatStepRemainder = 0;
   const showCombat = state !== "over" && !evolution.pending;
+  prepareSceneLighting(viewport);
   context.clearRect(0, 0, viewport.width, viewport.height);
   context.save();
   applyBossPresentationCamera(context);
@@ -1358,6 +1359,7 @@ function drawFrame(time) {
     context.translate(-viewport.width / 2, -viewport.height / 2);
   }
   drawBattlefield(showCombat);
+  drawSceneLightingBackdrop(context);
   if (typeof drawCosmicFlightVfx === "function") drawCosmicFlightVfx(context, viewport, battlefieldState);
   if (typeof warmHadalDestination === "function") warmHadalDestination(context, state === "battle");
   drawActiveJourney("front");
@@ -1365,6 +1367,7 @@ function drawFrame(time) {
   if (showCombat) drawBossEncounterFilaments(context);
   if (showCombat && typeof drawBossPressureArt === "function") drawBossPressureArt("back");
   if (showCombat) drawCombatPostProcessing(context);
+  if (showCombat) drawSceneLightScatter(context);
   context.globalAlpha = 1;
   if (showCombat) {
     const cameraOffset = combatShakeOffset();

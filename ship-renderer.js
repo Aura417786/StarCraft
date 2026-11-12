@@ -278,10 +278,12 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0, 
   ctx.save();
   if (ship.disabled) ctx.filter = "brightness(0.55) saturate(0.45)";
   else if (ship.hitFlash > 0 && !quiet) ctx.filter = "brightness(1.25) saturate(0.65)";
-  if (atlas) ctx.drawImage(atlas.image, atlas.sourceX, 0, atlas.sourceWidth, atlas.sourceHeight,
-    atlas.x, atlas.y, atlas.width, atlas.height);
-  else if (cached) ctx.drawImage(cached.body, geometry.x, geometry.y, geometry.width, geometry.height);
-  else ctx.drawImage(asset.image, ...asset.crop, geometry.x, geometry.y, geometry.width, geometry.height);
+  const source = atlas?.image ?? cached?.body ?? asset.image;
+  const crop = atlas ? [atlas.sourceX, 0, atlas.sourceWidth, atlas.sourceHeight] : cached ? null : asset.crop;
+  const shaded = typeof shadeSceneShip === "function" &&
+    shadeSceneShip(ctx, ship, source, crop, geometry, playerShip && ship === player);
+  if (!shaded && crop) ctx.drawImage(source, ...crop, geometry.x, geometry.y, geometry.width, geometry.height);
+  else if (!shaded) ctx.drawImage(source, geometry.x, geometry.y, geometry.width, geometry.height);
   ctx.restore();
   if (playerShip && ship === player && !ship.disabled && !(ship.hitFlash > 0)) {
     const reflections = atlas ? atlas.reflections.map((points, index) => ({ points, side: index ? 1 : -1, weight: .59 }))
