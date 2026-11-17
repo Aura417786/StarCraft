@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**New fighters and ultimate hit feedback.** Crimson carries a centerline cannon, Azure has twin forward prongs, and Auric has swept wings with paired gun arrays. Ion Swarm torpedoes leave blue-violet vapor trails, while Crimson Beam carries a hot core in turbulent orange plasma. The first boss hit from each ultimate pauses combat for 50 ms and sends light and fragments out from the contact point. Reduced motion keeps the softer local hit cue.
+
 **Nitrous boost.** Hold Shift for 38% faster directional movement and a blue-white exhaust plume. Release to coast at normal speed. Tap Shift to switch between spread and focused fire.
 
 **v35.5 Ten boss redesigns.** The Broodmother contracts its mantle when gathering the tide. The Marrow Stalker hinges its rib cage, the Rift Weaver draws threads with its legs, and the Pulse Binder closes its claws in sequence. Mirror Ray folds its fins, Thunder Wyrm passes current down its spine, and Spore Regent exhales through expanding sacs. The Dimensional Maw curls into its aperture, Neural King fires along its branches, and the Confluence uses three distinct organs for siphon, lance and burst.

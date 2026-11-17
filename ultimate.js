@@ -148,6 +148,7 @@ function cancelUltimate(refundCharge = false) {
   ultimate.kind = null;
   ultimate.elapsed = 0;
   ultimate.shot = null;
+  if (typeof PlayerVfx !== "undefined") PlayerVfx.reset();
   ultimate.audioActive = false;
   cannonLink.chargeDuration = ultimateRules.chargeTime;
   cannonLink.chargingLinked = false;
@@ -249,15 +250,21 @@ function ultimateBossContact(shot, target) {
   return regions.filter(region => ultimateHitsTarget(shot, region))
     .sort((a, b) => a.x - a.width * .45 - (b.x - b.width * .45))[0] ?? null;
 }
-function hitUltimateBoss(target, shot, cap, contact = shot) {
+function hitUltimateBoss(target, shot, cap, contact, point) {
   const damageLog = cap ? Math.min(shot.damageLog, target.healthLog + Math.log(cap)) : shot.damageLog;
-  applyBossHit({ source: "ultimate", damageLog, y: contact.y, finaleNode: contact.finaleNode }, target);
+  const x = point?.x ?? clamp(contact.x - contact.width * .31, 0, Math.min(viewport.width, shot.x));
+  const y = point?.y ?? contact.y;
+  const impact = { x, y, angle: shot.angle ?? 0, weapon: ultimate.kind, cast: ultimate.shot };
+  applyBossHit({ source: "ultimate", damageLog, y: contact.y, finaleNode: contact.finaleNode,
+    ultimateImpact: impact }, target);
 }
 function markCrimsonContact(shot, target) {
   if (!shot.contacts) return;
   if (shot.contacts.length >= 10) shot.contacts.shift();
-  shot.contacts.push({ x: clamp(target.x - target.width * .3, shot.startX, viewport.width),
-    y: clamp(target.y, shot.y - shot.radius, shot.y + shot.radius), time: ultimate.elapsed });
+  const contact = { x: clamp(target.x - target.width * .3, shot.startX, viewport.width),
+    y: clamp(target.y, shot.y - shot.radius, shot.y + shot.radius), time: ultimate.elapsed };
+  shot.contacts.push(contact);
+  return contact;
 }
 function resolveUltimateHits(shot = ultimate.shot, bossCap) {
   if (!shot) return;
@@ -277,8 +284,8 @@ function resolveUltimateHits(shot = ultimate.shot, bossCap) {
     const contact = ultimateBossContact(shot, target);
     if (!contact) continue;
     shot.hitTargets.add(target);
-    markCrimsonContact(shot, contact);
-    hitUltimateBoss(target, shot, bossCap, contact);
+    const point = markCrimsonContact(shot, contact);
+    hitUltimateBoss(target, shot, bossCap, contact, point);
     if (!isBattleActive()) return;
   }
 }
@@ -331,12 +338,17 @@ function resolveIonHit(missile, bursts, age) {
   }
   if (!Number.isFinite(time)) return;
   missile.done = true;
-  bursts.push({
+  const burst = {
     x: missile.previousX + (missile.x - missile.previousX) * time,
     y: missile.previousY + (missile.y - missile.previousY) * time, age,
-  });
+  };
+  bursts.push(burst);
   if (boss) {
-    hitUltimateBoss(boss, missile, ionSwarmRules.bossHitCap);
+    // The swept hit is recorded at the projectile centre. Attach the shell
+    // response at its leading tip while the approved detonation stays centred.
+    const nose = missile.length * .5;
+    const point = { x: burst.x + Math.cos(missile.angle) * nose, y: burst.y + Math.sin(missile.angle) * nose };
+    hitUltimateBoss(boss, missile, ionSwarmRules.bossHitCap, missile, point);
   } else {
     const enemy = enemies[index];
     applyEnemyHit(enemy, missile);
@@ -390,6 +402,7 @@ function updateCoronaBarrage(shot, before, after) {
 }
 function finishUltimate() {
   // 发射结束同帧恢复可用，没有额外后摇或冷却。
+  if (typeof PlayerVfx !== "undefined") PlayerVfx.finish(ultimate.kind, ultimate.shot, ultimate.elapsed);
   ultimate.phase = "idle";
   ultimate.kind = null;
   ultimate.elapsed = 0;

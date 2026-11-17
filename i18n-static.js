@@ -45,7 +45,7 @@ const gameStaticEnglish = new Map([
   ["交锋王牌 · 拆毁武装 · 截获补给", "Duel aces · Destroy weapons · Intercept supplies"],
   ["持续穿越五片星域 · 击破首领选择进化", "Cross five sectors · Defeat bosses to evolve"],
   ["战机图片加载失败，请确认 assets 文件夹完整后刷新页面。", "The fighter image failed to load. Check the assets folder and reload."],
-  ["赤焰战机：流线红色涂装、深色座舱和冰蓝双引擎，机头朝右", "Crimson fighter pointing right, with a sleek red hull, dark cockpit, and twin ice-blue engines"],
+  ["赤焰重炮战机，红色机身，机头朝右", "Red Crimson heavy fighter pointing right"],
   ["赤焰 · 重装突击型", "CRIMSON · HEAVY ASSAULT"],
   ["战场信息", "Battlefield information"],
   ["得分", "Score"],

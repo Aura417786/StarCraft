@@ -3,7 +3,7 @@
 // 视觉效果有独立容量和时钟，不参与命中、伤害或敌人刷新。
 const combatEffects = { clock: 0, particles: [], impacts: [], wrecks: [], shockwaves: [],
   detonations: [], contacts: [], shake: 0, shakeTime: 0, light: null,
-  directionalHit: null, hitPause: 0, nextHeavyPause: 0, nextContact: 0 };
+  directionalHit: null, hitPause: 0, holdDuringPresentation: false, nextHeavyPause: 0, nextContact: 0 };
 const spareDetonations = Array.from({ length: 8 }, () => ({}));
 const spareCombatParticles = Array.from({ length: 180 }, () => ({}));
 const detonationVolumes = new Map();
@@ -28,6 +28,12 @@ const detonationMaterials = {
 };
 const bossDetonationMaterials = ["water", "bone", "thermal", "silk", "keratin", "glass", "charge", "spores", "void", "neural", "fusion"];
 const ultimateDetonationMaterials = { red: "thermal", blue: "charge", yellow: "keratin" };
+const bossUltimateContactColors = {
+  red: { core: "#fff0be", glow: "#ff7946", shadow: "#b53729" },
+  blue: { core: "#d5f7ff", glow: "#79bfff", shadow: "#5a6aea" },
+  yellow: { core: "#fff6c7", glow: "#ffd069", shadow: "#c88430" },
+};
+const bossUltimateHitPause = .050;
 const combatLightProfiles = {
   hit: { life: .24, strength: .31, rank: 1 },
   impact: { life: .29, strength: .48, rank: 2 },
@@ -442,7 +448,9 @@ function resetCombatEffects() {
   while (combatEffects.detonations.length) releaseCombatDetonation(combatEffects.detonations.length - 1);
   combatEffects.clock = 0; combatEffects.shake = 0; combatEffects.shakeTime = 0; combatEffects.light = null;
   combatEffects.directionalHit = null; combatEffects.hitPause = 0;
+  combatEffects.holdDuringPresentation = false;
   combatEffects.nextHeavyPause = 0; combatEffects.nextContact = 0;
+  if (typeof PlayerVfx !== "undefined") PlayerVfx.reset();
   resetBossPresentation();
 }
 function resizeCombatEffects(oldWidth, oldHeight) {
@@ -451,6 +459,7 @@ function resizeCombatEffects(oldWidth, oldHeight) {
   while (combatEffects.detonations.length) releaseCombatDetonation(combatEffects.detonations.length - 1);
   combatEffects.shake = 0; combatEffects.shakeTime = 0;
   combatEffects.directionalHit = null; combatEffects.hitPause = 0;
+  combatEffects.holdDuringPresentation = false;
   combatEffects.light = null;
   if (!isBossDeathPlaying()) { combatEffects.wrecks.length = 0; return; }
   const finale = bossPresentation.target;
@@ -499,15 +508,18 @@ function combatShakeOffset() {
 
 // Called once per simulation step, before advancing the shared combat clock.
 // The whole simulation waits together, so projectiles cannot cross an unmoving
-// player. A single cannon can hold at most 24 ms in any 600 ms combat window.
+// player. Ultimates have one brief pause per cast, including a phase change.
 function combatImpactFrameSeconds(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return 0;
-  if (quietCombatMotion() || !canAnimateCombatEffects() || isBossPresentationPlaying()) {
+  if (quietCombatMotion() || !canAnimateCombatEffects()
+    || (isBossPresentationPlaying() && !combatEffects.holdDuringPresentation)) {
     combatEffects.hitPause = 0;
+    combatEffects.holdDuringPresentation = false;
     return seconds;
   }
   const held = Math.min(seconds, combatEffects.hitPause);
   combatEffects.hitPause = Math.max(0, combatEffects.hitPause - held);
+  if (combatEffects.hitPause === 0) combatEffects.holdDuringPresentation = false;
   return seconds - held;
 }
 
@@ -535,10 +547,92 @@ function recordSurfaceContact(target, bullet, bossHit, heavy) {
   }
 }
 
+function recordUltimateBossImpact(target, impact) {
+  const { x, y, angle, weapon, cast } = impact;
+  const colors = bossUltimateContactColors[weapon];
+  if (!colors || !cast || !Number.isFinite(x + y + angle)) return false;
+  const radius = clamp(target.height * .25, 20, 52);
+  const material = detonationMaterials[bossDetonationMaterials[target.type]] ?? detonationMaterials.metal;
+  const first = !cast.bossPauseUsed;
+  cast.bossPauseUsed = true;
+  pushCombatEffect(combatEffects.contacts, { x, y, angle, weapon, colors, material,
+    radius, heavy: first, age: 0, duration: .34 }, 20);
+
+  if (first) {
+    pulseCombatLight(x, y, radius * 1.85, colors.glow, "impact");
+    if (!quietCombatMotion()) {
+      combatEffects.hitPause = Math.max(combatEffects.hitPause, bossUltimateHitPause);
+      combatEffects.holdDuringPresentation = true;
+      combatEffects.nextHeavyPause = Math.max(combatEffects.nextHeavyPause, combatEffects.clock + .6);
+      combatEffects.directionalHit = { x: Math.cos(angle), y: Math.sin(angle), strength: 2.7, age: 0 };
+    }
+  }
+  return true;
+}
+
+function drawUltimateBossContact(hit, quiet, detail) {
+  const { radius, colors, material } = hit;
+  const progress = hit.age / hit.duration;
+  const spread = Math.sqrt(progress);
+  const fade = (1 - progress) ** 1.65 * (hit.heavy ? 1 : .64);
+  const height = radius * (quiet ? .62 : .38 + spread * .77);
+
+  context.save();
+  context.translate(hit.x, hit.y); context.rotate(hit.angle);
+  if (!quiet && detail !== "low") {
+    const vapor = detonationVolumeSprite(material);
+    if (vapor) {
+      const size = radius * (.51 + spread * .9);
+      context.globalAlpha = Math.sin(Math.PI * progress) * .45 * fade;
+      context.drawImage(vapor, -size * .57, -size * .92, size * 1.87, size * 1.84);
+    }
+  }
+
+  context.globalCompositeOperation = "screen";
+  const flash = Math.max(0, 1 - hit.age / .115);
+  detonationGlow(context, radius * .19, 0, radius * (quiet ? .52 : .71),
+    colors.core, colors.glow + "82", flash * (quiet ? .22 : .49) * fade);
+  context.globalAlpha = fade * (quiet ? .32 : .68);
+  context.strokeStyle = colors.glow; context.lineWidth = quiet ? 1.3 : 2.1;
+  context.beginPath();
+  context.ellipse(height * .17, 0, height * .53, height, 0, -1.46, 1.46);
+  context.stroke();
+
+  if (!quiet) {
+    const count = detail === "high" ? 14 : detail === "medium" ? 9 : 5;
+    for (let i = 0; i < count; i++) {
+      const fragment = detonationStrands[(i * 5 + 7) % detonationStrands.length];
+      const direction = 1.76 + fragment.depth * 2.74;
+      const reach = radius * (.25 + fragment.onset * 1.53) * spread;
+      const x = Math.cos(direction) * reach, y = Math.sin(direction) * reach;
+      const length = 3 + 8 * fragment.onset * fade;
+      context.globalAlpha = fade * (.48 + fragment.depth * .40);
+      context.strokeStyle = i % 3 ? colors.glow : colors.core;
+      context.lineWidth = .66 + fragment.onset * 1.05;
+      context.beginPath(); context.moveTo(x, y);
+      if (hit.weapon === "blue") context.lineTo(x + length * .47, y * .83 + (i % 2 ? 3 : -3));
+      context.lineTo(x - Math.cos(direction) * length, y - Math.sin(direction) * length);
+      context.stroke();
+
+      if (i % 3 === 0) {
+        const chip = 2 + fragment.depth * 3;
+        context.globalCompositeOperation = "source-over";
+        context.fillStyle = material.haze;
+        context.beginPath(); context.moveTo(x, y - chip); context.lineTo(x + chip, y + chip * .45);
+        context.lineTo(x - chip * 1.3, y + chip * .77); context.closePath(); context.fill();
+        context.strokeStyle = colors.shadow; context.lineWidth = .7; context.stroke();
+        context.globalCompositeOperation = "screen";
+      }
+    }
+  }
+  context.restore();
+}
+
 function drawSurfaceContacts() {
   const quiet = quietCombatMotion();
   const detail = typeof visualQuality === "undefined" ? "low" : visualQuality.id;
   for (const hit of combatEffects.contacts) {
+    if (hit.weapon) { drawUltimateBossContact(hit, quiet, detail); continue; }
     const p = Math.min(1, hit.age / hit.duration), fade = (1 - p) ** 2;
     const radius = hit.radius * (quiet ? .65 : .45 + p * 1.2);
     context.save();
@@ -629,6 +723,8 @@ function recordCombatFeedback(kind, target, bullet = null) {
 function recordCombatImpact(target, bullet, bossHit = false, category) {
   if (!target || !bullet || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
   const ultimateHit = bullet.source === "ultimate";
+  const localized = bossHit && ultimateHit && bullet.ultimateImpact
+    && recordUltimateBossImpact(target, bullet.ultimateImpact);
   const heavy = ultimateHit || bullet.source === "crimson-heavy" || bullet.source === "evolution-lance" || bullet.source === "evolution-ember";
   const kind = ultimateHit ? "ultimate" : category ?? (heavy || bullet.critical ? "critical" : "hit");
   const next = kind === "hit" ? "fxNextImpact" : "fxNextSpecialImpact";
@@ -639,6 +735,7 @@ function recordCombatImpact(target, bullet, bossHit = false, category) {
   // A Boss body reaching zero still has its final form, so it gets a body hit.
   const finalKill = Number.isFinite(target.hp) && target.hp <= 1e-12 && (!bossHit || !!target.finale);
   if (!finalKill) gameAudio.hit?.(bossHit, bullet.source, target.x, target.y);
+  if (localized) return;
   recordCombatFeedback(kind, target, bullet);
   recordSurfaceContact(target, bullet, bossHit, heavy);
 }

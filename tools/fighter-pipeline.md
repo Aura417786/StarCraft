@@ -1,22 +1,22 @@
 # 战机模型和浏览器图集
 
-`author-fighters.py` 在 Blender 中创建三架战机的封闭曲面机身、翼梁、装甲、发动机喷口和 PBR 材质，并从正交游戏镜头渲染五张侧倾图。Blender 脚本是可重新运行和编辑的资产源，游戏只需要生成的 WebP 图集与锚点数据。
+`render-kestrel-atlases.py` 读取定稿的 Blender 模型，从游戏的正交机位为每架战机渲染五张侧倾图。游戏使用导出的 WebP 图集、透明机库图和锚点数据。
 
 | 代号 | 模型识别特征 |
 | --- | --- |
-| `red` | 赤焰的红色流线机身、低轮廓驾驶舱和青白色双喷口 |
-| `blue` | 苍电的窄翼和独立感应翼尖，强调快速机动 |
-| `yellow` | 曜金的宽翼和翼内弹仓，强调覆盖火力 |
+| `red` | 赤焰以短叉翼和中轴重炮突出舰首 |
+| `blue` | 苍电使用淡蔚蓝长双叉和低轮廓座舱 |
+| `yellow` | 曜金以金黄宽翼和两组三联炮突出覆盖火力 |
 
-资产朝游戏右侧，Blender 的 `+X` 是机头方向，五个画面之间只绕飞行轴侧倾。浏览器采用五张固定视图和少量角度插值。每张图记录相机投影的机鼻、喷口与受光点，机鼻和主炮在五个姿态都共用同一个屏幕锚点。它们仅用于绘制，碰撞继续使用原来的二维规则。低画质、图集加载中和加载失败时使用已有战机图像。
+资产朝游戏右侧，Blender 的 `+X` 是机头方向，五个画面之间只绕飞行轴侧倾。每张图记录相机投影的中轴炮口、尾部喷口与受光点。战斗用原有的主炮坐标作为炮口锚点，推进尾焰跟随当前姿态的喷口。正中姿态另存为透明图，供机库、序章和低画质使用。碰撞使用原有的二维判定。
 
-在项目根目录执行以下命令。`blender` 是 Blender 4.5 LTS 或更高版本的可执行文件，打包脚本使用 Pillow。
+在项目根目录执行以下命令。`work/kestrel-models` 应包含定稿的 `kestrel-crimson.blend`、`kestrel-azure.blend` 和 `kestrel-auric.blend`。渲染使用 Blender 4.5 LTS，打包使用 Pillow。
 
 ```powershell
-blender --background --factory-startup --python-exit-code 1 --python tools/author-fighters.py -- work/fighter-render
-python tools/pack-fighter-atlas.py work/fighter-render .
+blender --background --factory-startup --python-exit-code 1 --python tools/render-kestrel-atlases.py -- work/kestrel-models work/fighter-render
+python tools/pack-fighter-atlas.py work/fighter-render . --kestrel
 ```
 
-可以在第一条命令末尾加 `--preview`，用三个中立姿态低分辨率图检查轮廓、材质和照明。正式图集需要完整运行五个姿态。遇到无法启动 EEVEE 的设备可追加 `--cycles` 走 CPU 渲染。打包会检查透明留边、机头坐标与画面边缘的偏差，再写入 `assets/fighters/atlas/` 和 `fighter-atlas-data.js`。临时 PNG 供评审使用，不随游戏发布。
+可以在第一条命令末尾加 `--cpu` 选择 Cycles CPU 渲染。打包会检查透明留边以及中轴炮口是否与可见机体对齐，然后写入 `assets/fighters/atlas/`、`assets/fighters/kestrel/` 和 `fighter-atlas-data.js`。
 
-浏览器测试可用 `node work/visual-qa.cjs` 运行，已安装系统 Chrome 时可设置 `CHROME_PATH`。可选命令行参数是截图输出目录。可切换高、中、低画质以验证图集与原画回退。
+打开游戏后可在出击配置中切换三架战机。分别用高、中、低画质出击，检查向上和向下移动时的侧倾、机头弹道和加速尾焰。通用浏览器测试见 [测试工具说明](testkit/README.md)。

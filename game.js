@@ -1396,7 +1396,7 @@ function drawPlayer() {
 function advanceCombatStep(realSeconds) {
   const cinematic = activeBossPresentation();
   if (cinematic) {
-    const seconds = bossPresentationFrameSeconds(cinematic, realSeconds);
+    const seconds = bossPresentationFrameSeconds(cinematic, combatImpactFrameSeconds(realSeconds));
     if (seconds > 0) {
       updateBattlefield(seconds, true);
       updateShipVisuals(seconds, true);

@@ -2,9 +2,12 @@
 
 // 预渲染的立体舰体 + 独立的喷流、受光和侧倾。所有数值只用于绘制。
 // tip 为素材机鼻坐标；将它固定到原枪口，侧倾也不会让弹道偏离机头。
+function fighterNeutralSource(id, previous) {
+  return typeof fighterAtlasCatalog === "undefined" ? previous : fighterAtlasCatalog[id]?.fallback ?? previous;
+}
 const shipRenderSources = {
-  crimson: { src: "assets/ships/crimson-sleek.webp", atlas: "red", crop: [69, 122, 1415, 800], tip: [1482, 494.5],
-    engines: [[96, 400], [94, 580]], direction: 1, color: "#b1e7f2" },
+  crimson: { ...fighterNeutralSource("red", { src: "assets/ships/crimson-sleek.webp", crop: [69, 122, 1415, 800],
+    tip: [1482, 494.5], engines: [[96, 400], [94, 580]] }), atlas: "red", direction: 1, color: "#b1e7f2" },
   scout: { src: "assets/ships/scout-sleek.webp", crop: [39, 102, 1431, 819], tip: [40, 508],
     engines: [[1442, 401], [1443, 587]], direction: -1, color: "#b1e7f2" },
   armored: { src: "assets/ships/armored-sleek.webp", crop: [47, 85, 1398, 856], tip: [48, 510],
@@ -344,7 +347,7 @@ function drawEvolutionWingCannons(ctx, ship, level, quiet = false, time = 0, tin
   ctx.restore();
 }
 
-// The same unmodified crimson raster gives companions a real, coherent hull.
+// Companions use the same neutral Crimson airframe as the battle renderer.
 function drawEvolutionDroneBody(ctx, drone, level = 1, quiet = false, time = 0) {
   if (!drone || !(drone.width > 0 && drone.height > 0)) return false;
   const ship = { ...drone, visualBank: 0, disabled: false };

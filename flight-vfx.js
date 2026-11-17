@@ -153,14 +153,14 @@ function drawFlightBoltWake(ctx, length, half, tint, index, time, hostile = fals
   ctx.globalAlpha = alpha;
 }
 
-function drawFlightNitrousWake(ctx, ship, time, overdrive) {
+function drawFlightNitrousWake(ctx, ship, time, overdrive, origin) {
   const still = flightVfxStill(), tier = flightVfxTier();
   const clock = still ? 0 : time;
   const length = ship.width * ((still ? 1.63 : 1.99) + (overdrive ? .17 : 0));
   const half = ship.height * (still ? .15 : .21);
   const bend = Math.sin(clock * 16) * half * .25;
   ctx.save();
-  ctx.translate(ship.x - ship.width * .40, ship.y);
+  ctx.translate(origin.x, origin.y);
   ctx.globalAlpha *= still ? .62 : .88;
   const plasma = ctx.createLinearGradient(-length, 0, 7, 0);
   plasma.addColorStop(0, "#507bff00");
@@ -209,12 +209,14 @@ function drawFlightNitrousWake(ctx, ship, time, overdrive) {
 }
 
 function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false) {
-  if (nitrous) return drawFlightNitrousWake(ctx, ship, time, overdrive);
+  const origin = typeof fighterWakeOrigin === "function"
+    ? fighterWakeOrigin(ship, kind) : { x: ship.x - ship.width * .40, y: ship.y };
+  if (nitrous) return drawFlightNitrousWake(ctx, ship, time, overdrive, origin);
   const still = flightVfxStill(), tier = flightVfxTier();
   const color = flightWakeColors[kind] ?? flightWakeColors.red;
   const extent = ship.width * (overdrive ? 1.52 : 1.04), half = ship.height * (overdrive ? .17 : .11);
   const clock = still ? 0 : time, alpha = still ? .42 : .78;
-  ctx.save(); ctx.translate(ship.x - ship.width * .40, ship.y);
+  ctx.save(); ctx.translate(origin.x, origin.y);
   const plume = ctx.createLinearGradient(-extent, 0, 5, 0);
   plume.addColorStop(0, color + "00"); plume.addColorStop(.48, color + "22");
   plume.addColorStop(.86, color + "b3"); plume.addColorStop(1, "#f3ffffe8");
