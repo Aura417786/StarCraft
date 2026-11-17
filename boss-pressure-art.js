@@ -218,6 +218,8 @@ function bossPressureCameraScale() {
 }
 
 function drawPressureConvergence(ctx, target, scene, color, quiet) {
+  // Hero elemental charge owns its silhouette; generic orbital scribbles are suppressed.
+  if (typeof NextgenVfx !== "undefined" && [0, 2, 8].includes(target.type)) return;
   const charge = clamp(scene.age / scene.warning, 0, 1);
   const cx = target.x - target.width * .27, cy = target.y;
   const reach = viewport.height * (.32 + charge * .11);

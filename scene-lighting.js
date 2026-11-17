@@ -41,6 +41,7 @@ function addSceneLightSource(x, y, radius, color, strength) {
 }
 
 function prepareSceneLighting(world) {
+  if (typeof NextgenVfx !== "undefined") NextgenVfx.beginFrame();
   const { current, next, blend } = sceneryJourney();
   const from = sceneLightSectors[current] ?? sceneLightSectors[0], to = sceneLightSectors[next] ?? from;
   const frame = sceneLightFrame;
@@ -84,6 +85,21 @@ function prepareSceneLighting(world) {
   if (shield.remaining > 0)
     addSceneLightSource(player.x + player.width * .12, player.y, shield.flash > 0 ? 190 : 115,
       "#ff9a80", (shield.flash > 0 ? .58 : .21) * calm);
+  // Environmental response follows an existing attack; it fades smoothly rather
+  // than strobes. Reserve remaining light slots for the two strongest hazards.
+  if (typeof bossHazards !== "undefined") {
+    for (const hazard of bossHazards) {
+      if (frame.count >= sceneLightSources.length || hazard.age < (hazard.tellAt || 0)) continue;
+      const active = hazard.age >= hazard.warning, material = hazard.material || (boss ? pressureMaterialNames[boss.type] : null);
+      if (!active || !material || !signatureMaterials[material]) continue;
+      const p = clamp((hazard.age - hazard.warning) / Math.max(.01, hazard.duration || 1), 0, 1);
+      const x = Number.isFinite(hazard.x) ? hazard.x : Number.isFinite(hazard.lockX) ? hazard.lockX : boss?.x;
+      const y = Number.isFinite(hazard.y) ? hazard.y : Number.isFinite(hazard.lockY) ? hazard.lockY : boss?.y;
+      if (!Number.isFinite(x + y)) continue;
+      const energy = material === "magma" ? .43 : material === "plasma" ? .32 : material === "void" ? .13 : .23;
+      addSceneLightSource(x, y, Math.min(world.height * .43, (hazard.radius || 100) * 2.4), signatureMaterials[material].rim, energy * Math.sin(Math.PI * Math.min(.98, .16 + p * .82)) * calm);
+    }
+  }
 }
 
 function sampleSceneLight(x, y, out = {}) {

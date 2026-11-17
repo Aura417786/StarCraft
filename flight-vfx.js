@@ -107,9 +107,28 @@ function drawFlightSkyArcs(ctx, width, height, clock, sector) {
 
 // The narrow bright head remains in the original collision silhouette. This
 // attenuated filament extends behind it to describe speed and direction.
-function drawFlightBoltWake(ctx, length, half, tint, index, time, hostile = false) {
+function drawFlightBoltWake(ctx, length, half, tint, index, time, hostile = false, bullet = null) {
   const tier = flightVfxTier();
   if (!tier || flightVfxStill()) return;
+  if (!hostile) {
+    const fighter = typeof selectedFighter === "string" ? selectedFighter : "red";
+    const auxiliary = !!bullet?.auxiliary, lance = bullet?.visual === "lance" || bullet?.visual === "counter";
+    const span = Math.min(auxiliary ? 32 : lance ? 92 : 66, length * (lance ? 2.2 : 1.5) + 10);
+    ctx.save(); ctx.strokeStyle = tint; ctx.fillStyle = tint; ctx.globalAlpha *= auxiliary ? .32 : .52;
+    if (lance || fighter === "red") {
+      const glow = ctx.createLinearGradient(-span,0,length*.20,0);glow.addColorStop(0,tint+"00");glow.addColorStop(.68,tint+"57");glow.addColorStop(1,tint+"c4");
+      ctx.fillStyle=glow;ctx.beginPath();ctx.moveTo(length*.20,-half*.52);ctx.lineTo(-span*.30,-half*.72);ctx.lineTo(-span,0);ctx.lineTo(-span*.30,half*.72);ctx.lineTo(length*.20,half*.52);ctx.closePath();ctx.fill();
+      if(lance){ctx.strokeStyle="#ffe8c5";ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(-span*.64,0);ctx.lineTo(length*.32,0);ctx.stroke();}
+    } else if (fighter === "blue") {
+      ctx.lineWidth=.75;
+      for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(-span,0);ctx.bezierCurveTo(-span*.66,side*half,-span*.22,-side*half*.25,length*.23,side*half*.28);ctx.stroke();}
+      if(!auxiliary){ctx.strokeStyle="#d7fbff";ctx.globalAlpha*=.65;const x=-span*((time*3+index*.37)%1);ctx.beginPath();ctx.moveTo(x-3,-half*.4);ctx.lineTo(x+2,0);ctx.lineTo(x-3,half*.4);ctx.stroke();}
+    } else {
+      ctx.lineWidth=.8;
+      for(let i=0;i<(auxiliary?2:4);i++){const x=-span*(i+.5)/4,w=3+half*.6,h=half*(1-i*.15);ctx.beginPath();ctx.moveTo(x-w,0);ctx.lineTo(x,-h);ctx.lineTo(x+w,0);ctx.lineTo(x,h);ctx.closePath();ctx.stroke();}
+    }
+    ctx.restore(); return;
+  }
   const span = Math.min(hostile ? 33 : 66, length * 1.45 + 8);
   const phase = time * 24 + index * 2.39;
   const alpha = ctx.globalAlpha;
@@ -135,41 +154,51 @@ function drawFlightBoltWake(ctx, length, half, tint, index, time, hostile = fals
 }
 
 function drawFlightEngineWake(ctx, ship, kind, time, boost) {
-  if (flightVfxStill()) return;
-  const tier = flightVfxTier(), color = flightWakeColors[kind] ?? flightWakeColors.red;
-  const x = ship.x - ship.width * .40, y = ship.y;
-  const extent = ship.width * (boost ? 1.49 : .96);
-  const half = ship.height * (boost ? .15 : .10);
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.globalCompositeOperation = "screen";
-  const fade = ctx.createLinearGradient(-extent, 0, 18, 0);
-  fade.addColorStop(0, color + "00");
-  fade.addColorStop(.52, color + "22");
-  fade.addColorStop(.86, color + "87");
-  fade.addColorStop(1, "#fff6db00");
-  ctx.strokeStyle = fade;
-  const strands = [2, 4, 7][tier];
-  for (let i = 0; i < strands; i++) {
-    const offset = (i / (strands - 1) - .5) * half * 1.5;
-    const drift = Math.sin(time * 5 + i * 1.46) * half * .9;
-    ctx.lineWidth = i % 2 ? 1.4 : 3.2;
-    ctx.beginPath(); ctx.moveTo(-extent, offset * 1.6 + drift);
-    ctx.bezierCurveTo(-extent * .54, offset * 1.8 - drift, -extent * .18, offset * .45 + drift * .25, 17, offset * .4);
-    ctx.stroke();
+  const still = flightVfxStill(), tier = flightVfxTier();
+  const color = flightWakeColors[kind] ?? flightWakeColors.red;
+  const extent = ship.width * (boost ? 1.52 : 1.04), half = ship.height * (boost ? .17 : .11);
+  const clock = still ? 0 : time, alpha = still ? .42 : .78;
+  ctx.save(); ctx.translate(ship.x - ship.width * .40, ship.y);
+  const plume = ctx.createLinearGradient(-extent, 0, 5, 0);
+  plume.addColorStop(0, color + "00"); plume.addColorStop(.48, color + "22");
+  plume.addColorStop(.86, color + "b3"); plume.addColorStop(1, "#f3ffffe8");
+  ctx.fillStyle = plume; ctx.globalAlpha = alpha;
+  if (kind === "red") {
+    // A heavy thermal nozzle has an opaque core, shear layers and shock diamonds.
+    ctx.beginPath(); ctx.moveTo(8, -half * .49);
+    ctx.bezierCurveTo(-extent * .23, -half, -extent * .64, -half * .44, -extent, Math.sin(clock * 11) * half * .20);
+    ctx.bezierCurveTo(-extent * .61, half * .48, -extent * .20, half, 8, half * .49); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#fff0c9"; ctx.globalAlpha = alpha * .74;
+    for (let i = 0; i < 3 + tier; i++) {
+      const u = (i + .7) / (4 + tier), x = -extent * u, w = extent * .065 * (1 - u * .4), h = half * .40 * (1 - u * .7);
+      ctx.beginPath(); ctx.moveTo(x - w, 0); ctx.lineTo(x, -h); ctx.lineTo(x + w, 0); ctx.lineTo(x, h); ctx.closePath(); ctx.fill();
+    }
+  } else if (kind === "blue") {
+    // Two distinct ion rails twist around a darker evacuated center.
+    ctx.strokeStyle = plume; ctx.lineWidth = half * .38; ctx.globalAlpha = alpha;
+    for (const side of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(8, side * half * .36);
+      ctx.bezierCurveTo(-extent * .18, side * half * .75, -extent * .69, side * half * .22 + Math.sin(clock * 4) * half * .15, -extent, 0); ctx.stroke();
+      ctx.strokeStyle = "#d0f8ff"; ctx.lineWidth = 1; ctx.globalAlpha = alpha * .64; ctx.stroke(); ctx.strokeStyle = plume; ctx.lineWidth = half * .38; ctx.globalAlpha = alpha;
+    }
+    if (!still) {
+      ctx.strokeStyle = "#69c5ff"; ctx.lineWidth = .75; ctx.globalAlpha = .55;
+      for (let i = 0; i < 3 + tier; i++) {
+        const u = flightVfxWrap(clock * .8 + i / (3 + tier), 1), x = -extent * u, h = half * (1 - u) * .52;
+        ctx.beginPath(); ctx.moveTo(x - 3, -h); ctx.lineTo(x + 2, 0); ctx.lineTo(x - 3, h); ctx.stroke();
+      }
+    }
+  } else {
+    // The Auric engine is magnetically collimated: a broad laminar ribbon with
+    // ordered diamond cells; it does not inherit the Crimson exhaust flicker.
+    ctx.beginPath(); ctx.moveTo(8, -half * .57); ctx.lineTo(-extent * .68, -half * .28);
+    ctx.lineTo(-extent, 0); ctx.lineTo(-extent * .68, half * .28); ctx.lineTo(8, half * .57); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#ffe9aa"; ctx.lineWidth = .8; ctx.globalAlpha = alpha * .66;
+    for (let i = 0; i < 3 + tier; i++) {
+      const u = (i + .5) / (4 + tier), x = -extent * u, h = half * .45 * (1 - u * .65), w = extent * .07;
+      ctx.beginPath(); ctx.moveTo(x - w, 0); ctx.lineTo(x, -h); ctx.lineTo(x + w, 0); ctx.lineTo(x, h); ctx.closePath(); ctx.stroke();
+    }
   }
-  ctx.fillStyle = color;
-  ctx.globalAlpha = boost ? .73 : .46;
-  ctx.beginPath();
-  const count = [6, 15, 27][tier];
-  for (let i = 0; i < count; i++) {
-    const d = flightVfxDust[i + 40];
-    const u = flightVfxWrap(d.x + time * (.8 + d.z * 1.6), 1);
-    const yy = (d.y - .5) * half * (1 + u * 2) + Math.sin(u * 5 + d.wobble) * u * half * .72;
-    const xx = -u * extent;
-    ctx.rect(xx, yy, (1 - u) * 5 * d.z + .5, .6 + d.z * .7);
-  }
-  ctx.fill();
   ctx.restore();
 }
 

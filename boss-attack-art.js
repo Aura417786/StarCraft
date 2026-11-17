@@ -203,6 +203,7 @@ function traceWaveShore(ctx, crestAt, y, direction, age, width, inward, reverse)
 }
 
 function drawWaterSection(ctx, crestAt, top, bottom, direction, age, width, material, warning, quiet) {
+  if (typeof NextgenVfx !== "undefined" && NextgenVfx.drawWaterSection(ctx, crestAt, top, bottom, direction, age, width, material, warning, quiet)) return;
   const midY = (top + bottom) / 2;
   const center = crestAt(midY);
   const frontX = center + direction * width;
@@ -584,6 +585,7 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
   ctx.globalAlpha = active ? .94 : .48 + phase * .42;
   if (kind) {
     drawRayOrganic(ctx, kind, material, length, left, right, age, quiet);
+    if (typeof NextgenVfx !== "undefined") NextgenVfx.drawRaySkin(ctx, length, left, right, kind, age, active ? .88 : .38);
   } else {
     const scan = active ? length : phase * length;
     const trace = ctx.createLinearGradient(0, 0, Math.max(1, scan), 0);
@@ -643,6 +645,14 @@ function drawSignatureFilament(ctx, hazard, active, progress, quiet) {
 }
 
 function drawSignatureVortex(ctx, hazard, material, active, progress, quiet) {
+  if (typeof NextgenVfx !== "undefined" && ["water", "void"].includes(hazard.material)) {
+    const core = alienVortexCore(hazard, progress);
+    NextgenVfx.drawVoid(ctx, { x: hazard.x, y: hazard.y, radius: hazard.radius }, material, quiet ? 0 : hazard.age, active ? .92 : .35, hazard.material === "water");
+    // The lethal core and pull field are distinct, even on reduced motion.
+    ctx.strokeStyle = material.spark; ctx.lineWidth = 1.8; ctx.globalAlpha = .82;
+    ctx.setLineDash(active ? [] : [7, 6]); ctx.beginPath(); ctx.arc(hazard.x, hazard.y, core, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    return;
+  }
   const { x, y, radius } = hazard;
   const core = alienVortexCore(hazard, progress);
   const field = ctx.createRadialGradient(x - radius * .12, y - radius * .12, 0, x, y, radius * 1.05);
@@ -749,6 +759,13 @@ function drawSignatureImpact(ctx, hazard, material, active, progress, quiet) {
   const { x, y, radius } = hazard;
   const warning = active ? 1 : clamp(hazard.age / hazard.warning, 0, 1);
   const well = hazard.type === "well";
+  if (typeof NextgenVfx !== "undefined" && (well || hazard.material === "void" || hazard.material === "magma")) {
+    if (hazard.material === "magma") NextgenVfx.drawEruption(ctx, hazard, material, hazard.age, active ? .92 : .36);
+    else NextgenVfx.drawVoid(ctx, hazard, material, hazard.age, active ? .94 : .35);
+    ctx.strokeStyle = material.rim; ctx.lineWidth = active ? 1.8 : 1.1; ctx.globalAlpha = .84;
+    ctx.setLineDash(active ? [] : [8, 7]); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    return;
+  }
   if (well) {
     const depth = ctx.createRadialGradient(x, y, 0, x, y, radius);
     depth.addColorStop(0, "#03020c");

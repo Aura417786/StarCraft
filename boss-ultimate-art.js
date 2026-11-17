@@ -236,6 +236,11 @@ function drawUltimateChargeIdentity(ctx, target, scene) {
   const quiet = quietCombatMotion(), time = quiet ? 0 : scene.age;
   const cx = target.x - target.width * .27, cy = target.y, r = viewport.height * (.15 + charge * .10);
   const fade = .3 + charge * .7;
+  if (typeof NextgenVfx !== "undefined" && ["tideWalls", "magmaRift", "voidCollapse"].includes(kind)) {
+    if (kind === "magmaRift") NextgenVfx.drawEruption(ctx, { x: cx, y: cy, radius: r * .85 }, mat, time, fade * .80);
+    else NextgenVfx.drawVoid(ctx, { x: cx, y: cy, radius: r }, mat, time, fade * .82, kind === "tideWalls");
+    return;
+  }
   ctx.save();
   if (!quiet && visualQuality.id !== "low") {
     drawUltimateInterference(ctx, cx - r * .38, cy, r, charge, time, name, mat);
@@ -308,10 +313,10 @@ function ultimateWaterWall(ctx, box, mat, time, alpha, direction = -1) {
   if (!(box.width > 0 && box.height > 0)) return;
   if (typeof drawWaterSection === "function") {
     const center = box.x + box.width / 2;
-    const top = box.y <= flightBounds.top + 1 ? 0 : box.y;
-    const bottom = box.y + box.height >= flightBounds.bottom - 1 ? viewport.height : box.y + box.height;
+    const top = box.y;
+    const bottom = box.y + box.height;
     drawWaterSection(ctx, () => center, top, bottom, direction, time, box.width / 2, mat, alpha < .7, quietCombatMotion());
-    if (typeof getBossVfxMaterial === "function") {
+    if (typeof NextgenVfx === "undefined" && typeof getBossVfxMaterial === "function") {
       const water = getBossVfxMaterial("water");
       if (water) {
         ctx.save(); ctx.beginPath(); ctx.rect(0, top, viewport.width, bottom - top); ctx.clip();
@@ -357,6 +362,7 @@ function ultimateWaterWall(ctx, box, mat, time, alpha, direction = -1) {
 }
 
 function ultimateLavaFissure(ctx, line, mat, time, alpha) {
+  if (typeof NextgenVfx !== "undefined" && NextgenVfx.drawMagmaFissure(ctx, line, mat, time, alpha)) return;
   const dx = line.x2 - line.x1, dy = line.y2 - line.y1, length = Math.hypot(dx, dy);
   const width = Math.max(3, line.width);
   ctx.save(); ctx.translate(line.x1, line.y1); ctx.rotate(Math.atan2(dy, dx));
@@ -530,6 +536,7 @@ function ultimatePrismBeam(ctx, line, mat, alpha) {
 }
 
 function ultimateCloud(ctx, circle, mat, time, alpha, vacuum = false) {
+  if (vacuum && typeof NextgenVfx !== "undefined" && NextgenVfx.drawVoid(ctx, circle, mat, time, alpha)) return;
   const radius = Math.max(1, circle.radius), inner = circle.innerRadius || 0;
   ctx.save();
   ctx.beginPath(); ctx.arc(circle.x, circle.y, radius, 0, Math.PI * 2);
@@ -593,7 +600,7 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
     } else {
       ctx.globalAlpha = alpha * .8; ctx.fillStyle = mat.dark; ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
     }
-    if (flowing && kind !== "tideWalls" && rect.width > 6 && rect.height > 6) {
+    if (flowing && !["tideWalls", "magmaRift"].includes(kind) && rect.width > 6 && rect.height > 6) {
       const vertical = rect.height > rect.width;
       const x1 = rect.x + (vertical ? rect.width * .5 : 0);
       const y1 = rect.y + (vertical ? 0 : rect.height * .5);
@@ -617,9 +624,10 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
           line.width * 1.3, line.width * .25, angle + side * 1.2, mat, alpha);
       }
     } else if (kind === "mirrorArray") ultimatePrismBeam(ctx, line, mat, alpha);
+    else if (kind === "voidCollapse" && typeof NextgenVfx !== "undefined") NextgenVfx.drawRift(ctx, line, mat, time, alpha);
     else if (kind === "stormRing") ultimateArc(ctx, line.x1, line.y1, line.x2, line.y2, Math.floor(time * 13) + segmentIndex, mat, Math.max(2, line.width * .42), alpha);
     else ultimateSilkLine(ctx, line, mat, time, alpha, true);
-    if (flowing && segmentIndex < (high ? 13 : 7)) {
+    if (flowing && !["voidCollapse", "magmaRift"].includes(kind) && segmentIndex < (high ? 13 : 7)) {
       drawSignatureStream(ctx, line, name, time + segmentIndex * .03, alpha * .73, high ? 12 : 7);
     }
     segmentIndex++;
@@ -628,7 +636,10 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
   for (const circle of geometry.circles || []) {
     if (kind === "boneNova") ultimateOssuaryRing(ctx, circle, mat, time, alpha);
     else if (kind === "sporeBloom" || kind === "voidCollapse") ultimateCloud(ctx, circle, mat, time, alpha, kind === "voidCollapse");
-    else if (kind === "magmaRift") ultimateDrawNode(ctx, circle.x, circle.y, circle.radius, name, alpha, "rock", time * .16);
+    else if (kind === "magmaRift") {
+      if (typeof NextgenVfx !== "undefined") NextgenVfx.drawEruption(ctx, circle, mat, time, alpha);
+      else ultimateDrawNode(ctx, circle.x, circle.y, circle.radius, name, alpha, "rock", time * .16);
+    }
     else if (kind === "stormRing") {
       const radius = circle.radius, inner = circle.innerRadius || Math.max(0, radius - 14);
       ctx.strokeStyle = mat.dark; ctx.globalAlpha = alpha; ctx.lineWidth = radius - inner;
@@ -646,7 +657,7 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
       strokeUltimateArcPath(ctx, mat, 2.5, alpha);
       ctx.restore();
     } else ultimateDrawNode(ctx, circle.x, circle.y, circle.radius, name, alpha);
-    if (flowing && circleIndex++ < (high ? 8 : 4)) {
+    if (flowing && !["voidCollapse", "magmaRift"].includes(kind) && circleIndex++ < (high ? 8 : 4)) {
       const innerRadius = circle.innerRadius || circle.radius * (kind === "voidCollapse" ? .62 : .18);
       drawSignatureOrbit(ctx, { ...circle, innerRadius }, name, time, alpha * .72, 1, high ? 20 : 12);
     }
@@ -665,7 +676,7 @@ function drawBossUltimateArt(ctx, target, scene, layer) {
   if (layer !== "back" || !scene?.ultimateKind || typeof bossUltimateGeometry !== "function") return;
   if (scene.stage === "charge") drawUltimateChargeIdentity(ctx, target, scene);
   for (const hazard of bossHazards) {
-    if (hazard.kind !== "ultimate" || hazard.age >= hazard.warning + hazard.duration) continue;
+    if (hazard.kind !== "ultimate" || hazard.age < (hazard.tellAt || 0) || hazard.age >= hazard.warning + hazard.duration) continue;
     drawBossUltimateGeometry(ctx, hazard, bossUltimateGeometry(hazard), target);
   }
 }

@@ -287,6 +287,10 @@ function drawDetonationMaterial(ctx, effect, p, quiet, quality) {
   ctx.lineWidth = rank === 3 ? 2.3 : 1.6;
   ctx.globalAlpha = opacity * .65;
   ctx.beginPath();
+  if (rank > 1 && typeof NextgenVfx !== "undefined") {
+    const atlasName = material === "thermal" ? "magma" : material === "water" ? "water" : material === "void" ? "void" : null;
+    if (atlasName) NextgenVfx.stamp(ctx, atlasName, effect.age * .8, 0, 0, span * 2.4, span * 1.9, opacity * .8, seed * .1);
+  }
   if (material === "water") {
     // A pressure sheet has a foamed leading lip and a shaded trailing body, with no flame silhouette.
     for (let i = 0; i < 2; i++) {
@@ -478,19 +482,19 @@ function spawnCombatParticle(x, y, angle, speed, duration, size, spin, color, ar
 }
 function addCombatShake(strength) {
   if (quietCombatMotion() || shakePreference === "off") return;
-  combatEffects.shake = Math.max(combatEffects.shake, strength);
+  combatEffects.shake = Math.min(8, Math.hypot(combatEffects.shake, strength * .88));
   combatEffects.shakeTime = 0.23;
 }
 function combatShakeOffset() {
   if (quietCombatMotion() || shakePreference === "off") return { x: 0, y: 0 };
   const maximum = shakePreference === "full" ? 6 : 2.5;
   const strength = Math.min(maximum,
-    combatEffects.shake * (shakePreference === "full" ? 1 : 0.42)) * combatEffects.shakeTime / 0.23;
+    combatEffects.shake * (shakePreference === "full" ? 1 : 0.42)) * (combatEffects.shakeTime / 0.23) ** 2;
   const hit = combatEffects.directionalHit;
   const kick = hit ? Math.cos(hit.age * 48) * Math.exp(-hit.age * 22)
     * hit.strength * (shakePreference === "full" ? 1 : .42) : 0;
-  return { x: clamp(Math.sin(combatEffects.clock * 109) * strength + (hit?.x ?? 0) * kick, -maximum, maximum),
-    y: clamp(Math.cos(combatEffects.clock * 83) * strength * .7 + (hit?.y ?? 0) * kick, -maximum, maximum) };
+  return { x: clamp((Math.sin(combatEffects.clock * 43) * .72 + Math.sin(combatEffects.clock * 67) * .28) * strength + (hit?.x ?? 0) * kick, -maximum, maximum),
+    y: clamp((Math.cos(combatEffects.clock * 37) * .65 + Math.sin(combatEffects.clock * 59) * .35) * strength * .7 + (hit?.y ?? 0) * kick, -maximum, maximum) };
 }
 
 // Called once per simulation step, before advancing the shared combat clock.
@@ -607,7 +611,8 @@ function recordCombatFeedback(kind, target, bullet = null) {
   const quiet = quietCombatMotion();
   const hold = quiet ? 0 : profile.hold ?? 0;
   pushCombatEffect(combatEffects.impacts, { x, y, age: 0, duration: profile.duration + hold, hold,
-    color: profile.color, size: bullet ? profile.size : Math.min(profile.size, h * .59), kind }, 32);
+    color: bullet?.color || profile.color, size: bullet ? profile.size : Math.min(profile.size, h * .59), kind,
+    fighter: bullet && typeof selectedFighter === "string" ? selectedFighter : null, auxiliary: !!bullet?.auxiliary }, 32);
   if (!quiet) {
     for (let i = 0; i < profile.sparks; i++) {
       const angle = bullet ? Math.PI * (.7 + Math.random() * .6) : i * Math.PI * 2 / profile.sparks + .1;
@@ -649,7 +654,29 @@ function drawCombatImpact(impact) {
   context.translate(impact.x, impact.y);
   context.lineWidth = 2;
   context.beginPath();
-  if (impact.kind === "hit" || impact.kind === "critical" || impact.kind === "ultimate") {
+  if (impact.fighter && (impact.kind === "hit" || impact.kind === "critical")) {
+    const strength = impact.auxiliary ? .68 : 1, radius = size * strength;
+    if (impact.fighter === "blue") {
+      context.lineWidth = 1.1;
+      for (let i=0;i<4;i++) {
+        const a=i*Math.PI*.5+.38, x=Math.cos(a)*radius, y=Math.sin(a)*radius;
+        context.moveTo(0,0);context.lineTo(x*.37-y*.12,y*.37+x*.12);
+        context.lineTo(x*.65+y*.15,y*.65-x*.15);context.lineTo(x,y);
+      }
+      context.stroke();
+    } else if (impact.fighter === "yellow") {
+      context.lineWidth=1.3;
+      for(let shell=0;shell<2;shell++){
+        const r=radius*(shell?.45:1);
+        context.beginPath();for(let i=0;i<6;i++){const a=i*Math.PI/3,x=Math.cos(a)*r,y=Math.sin(a)*r*.68;if(i)context.lineTo(x,y);else context.moveTo(x,y);}context.closePath();context.stroke();
+      }
+    } else {
+      context.moveTo(-radius*1.3,0);context.lineTo(-radius*.22,-radius*.16);context.lineTo(-radius*.03,-radius*.67);
+      context.lineTo(radius*.16,-radius*.15);context.lineTo(radius*.56,0);context.lineTo(radius*.13,radius*.18);
+      context.lineTo(-radius*.05,radius*.59);context.lineTo(-radius*.25,radius*.13);context.closePath();context.fill();
+      context.strokeStyle="#fff0ca";context.lineWidth=.8;context.beginPath();context.moveTo(-radius*.7,0);context.lineTo(radius*.18,0);context.stroke();
+    }
+  } else if (impact.kind === "hit" || impact.kind === "critical" || impact.kind === "ultimate") {
     const tall = size * (impact.kind === "critical" ? .83 : .38);
     context.moveTo(-size, 0); context.lineTo(0, -tall); context.lineTo(size * .64, 0);
     context.lineTo(0, tall); context.closePath();
