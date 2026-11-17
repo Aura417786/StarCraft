@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**Nitrous boost.** Hold Shift for 38% faster directional movement and a blue-white exhaust plume. Release to coast at normal speed. Tap Shift to switch between spread and focused fire.
+
 **v35.5 Ten boss redesigns.** The Broodmother contracts its mantle when gathering the tide. The Marrow Stalker hinges its rib cage, the Rift Weaver draws threads with its legs, and the Pulse Binder closes its claws in sequence. Mirror Ray folds its fins, Thunder Wyrm passes current down its spine, and Spore Regent exhales through expanding sacs. The Dimensional Maw curls into its aperture, Neural King fires along its branches, and the Confluence uses three distinct organs for siphon, lance and burst.
 
 **v35.4 Cinder Maw redesign.** Overlapping basalt plates frame a hinged jaw and a recessed furnace. The Cinder Rift erupts in sections, sends molten rock through the fractures, then cools as the embers disperse.
@@ -48,7 +50,7 @@ Choose **English** under **Settings**. The guide opens on your first visit and c
 | Key | Action |
 | --- | --- |
 | Arrow keys or WASD | Move and aim |
-| Shift | Switch spread and focused fire |
+| Shift | Tap to switch fire modes. Hold to boost. |
 | C | Hold and release Crimson’s charged primary |
 | J | Fire if autofire is disabled |
 | F | Use the selected evolution skill |

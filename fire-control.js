@@ -6,13 +6,13 @@ function updateFiringStyleDisplay() {
   const focus = firingStyle.mode === "focus";
   const key = typeof controlBindingLabel === "function" ? controlBindingLabel("stance") : "Shift";
   const lance = typeof evolution !== "undefined" && evolution.pierce >= 3;
+  const hint = tr(`轻点 ${key} 切换射击姿态，长按加速`, `Tap ${key} to switch fire modes. Hold to boost.`);
   stanceButton.textContent = (focus ? tr("聚焦 · 集中火力", "Focused fire") : tr("扩散 · 覆盖射击", "Spread fire")) + "  " + key;
-  if (lance) stanceButton.title = tr("轻按 " + key + " 切换，长按并松开发射翼刃", "Tap " + key + " to switch. Hold and release for a lance.");
-  else stanceButton.removeAttribute("title");
+  stanceButton.title = hint + (lance ? tr("。松开可发射蓄力翼刃。", " Release to fire a charged wing lance.") : "");
   stanceButton.dataset.mode = firingStyle.mode;
   stanceButton.setAttribute("aria-pressed", String(focus));
-  stanceButton.setAttribute("aria-label", focus ? tr("当前聚焦射击，快捷键 " + key, "Focused fire active. Switch modes with " + key + ".")
-    : tr("当前扩散射击，快捷键 " + key, "Spread fire active. Switch modes with " + key + "."));
+  stanceButton.setAttribute("aria-label", (focus ? tr("当前聚焦射击。", "Focused fire active. ")
+    : tr("当前扩散射击。", "Spread fire active. ")) + stanceButton.title);
 }
 function resetFiringStyle() { firingStyle.mode = "spread"; updateFiringStyleDisplay(); }
 function toggleFiringStyle() {

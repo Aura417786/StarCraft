@@ -10,7 +10,7 @@ const flightActionNames = Object.freeze({
   up: ["向上", "Move up"], down: ["向下", "Move down"], left: ["向左", "Move left"], right: ["向右", "Move right"],
   attack: ["主武器", "Main weapon"], special: ["大招", "Special"], shield: ["护盾", "Shield"],
   charge: ["赤焰蓄力", "Crimson charge"], focus: ["进化技能", "Evolution skill"],
-  stance: ["切换射击姿态", "Switch fire mode"], pause: ["暂停 / 继续", "Pause / Resume"],
+  stance: ["轻点切换姿态 / 长按加速", "Tap: fire mode / Hold: boost"], pause: ["暂停 / 继续", "Pause / Resume"],
 });
 const flightSettingsKey = "star-breaker-flight-controls";
 const flightBindingActions = Object.keys(defaultFlightBindings);
@@ -105,6 +105,7 @@ function resetFlightGamepad() {
   flightPad.actions.clear();
 }
 function refreshFlightControlHints() {
+  const stanceKey = controlBindingLabel("stance");
   const text = document.querySelector("#control-instructions");
   if (text?.firstChild && text.firstChild.nodeType === 3) {
     const movement = ["left", "up", "down", "right"].map(action => controlBindingLabel(action, true)).join(" · ");
@@ -112,8 +113,12 @@ function refreshFlightControlHints() {
     const note = text.querySelector(".training-note");
     if (note) note.textContent = tr(" · ", " · ") + (flightControls.autofire ? tr("自动射击", "Autofire") : tr("开火 ", "Fire ") + controlBindingLabel("attack"))
       + tr(" · 大招 ", " · Special ") + controlBindingLabel("special")
-      + tr(" · 护盾 ", " · Shield ") + controlBindingLabel("shield");
+      + tr(" · 护盾 ", " · Shield ") + controlBindingLabel("shield")
+      + tr(` · 长按 ${stanceKey} 加速`, ` · Hold ${stanceKey} to boost`);
   }
+  const readyHint = document.querySelector("#movement-hint p")?.firstChild;
+  if (readyHint?.nodeType === 3) readyHint.nodeValue = tr(`轻点 ${stanceKey} 切换扩散 / 聚焦 · 长按加速 · 20 连击进入暴走`,
+    `Tap ${stanceKey} to switch fire mode · Hold to boost · 20 combo triggers Overdrive`);
   for (const [selector, action] of [["#ultimate-hud kbd", "special"], ["#shield-hud kbd", "shield"], ["#pause-button kbd", "pause"]]) {
     const key = document.querySelector(selector);
     if (key) key.textContent = controlBindingLabel(action);
@@ -221,8 +226,8 @@ function renderFlightControlsDialog() {
   const status = flightControlNode("p", Array.isArray(flightBindingNotice) ? tr(...flightBindingNotice) : "", "flight-bindings-status");
   status.id = "flight-binding-status";
   status.setAttribute("role", "status");
-  const gamepad = flightControlNode("p", tr("手柄：左摇杆 / 十字键移动和选项导航；A / RT 开火，X 护盾，Y 大招，LT 蓄力，LB 姿态，RB 进化技能，Start 暂停。菜单用 A 确认、B 返回。",
-    "Gamepad: Left stick / D-pad moves and navigates. A / RT fires, X shields, Y uses the special, LT charges, LB changes fire mode, RB uses the evolution skill, Start pauses. A confirms and B goes back in menus."), "flight-controls-note");
+  const gamepad = flightControlNode("p", tr("手柄：左摇杆 / 十字键移动和选项导航。A / RT 开火，X 护盾，Y 大招，LT 蓄力，LB 轻点切换姿态或长按加速，RB 进化技能，Start 暂停。菜单用 A 确认、B 返回。",
+    "Gamepad: Left stick / D-pad moves and navigates. A / RT fires, X shields, Y uses the special, LT charges, LB taps to change fire mode or holds to boost, RB uses the evolution skill, Start pauses. A confirms and B goes back in menus."), "flight-controls-note");
   const reset = makeFlightControlButton(tr("恢复默认键位", "Restore default keys"), () => {
     flightControls.bindings = { ...defaultFlightBindings };
     flightBindingCapture = "";

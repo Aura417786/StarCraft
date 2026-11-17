@@ -124,7 +124,7 @@ const TacticalSystem = (() => {
       [tr("左摇杆 / 十字键", "Left stick / D-pad"), tr("移动 / 菜单导航", "Move / navigate")],
       ["A / RT", tr("主武器", "Main weapon")], ["X", tr("护盾", "Shield")],
       ["Y", tr("大招", "Special")], ["LT", tr("赤焰蓄力", "Crimson charge")],
-      ["LB", tr("射击姿态", "Fire mode")], ["RB", tr("进化技能", "Evolution skill")],
+      ["LB", tr("轻点切换姿态 / 长按加速", "Tap: Fire mode / Hold: Boost")], ["RB", tr("进化技能", "Evolution skill")],
       ["Start", tr("暂停", "Pause")], ["A / B", tr("菜单确认 / 返回", "Confirm / back")],
     ];
     for (const [key, label] of entries) {

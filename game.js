@@ -500,16 +500,36 @@ function togglePauseFromInput() {
   else pauseGame();
   return true;
 }
+let stanceHeldFor = null;
+const flightBoostMultiplier = 1.38;
+
+function flightBoostActive() {
+  return stanceHeldFor !== null && stanceHeldFor >= evolutionWeaponRules.shiftTap
+    && (flightKeyHeld("stance") || flightPad.actions.has("stance")) && isBattleActive();
+}
+
 function dispatchFlightAction(action, down) {
   if (action === "pause") return down && togglePauseFromInput();
   if (!isBattleActive()) return false;
+  if (action === "stance") {
+    if (down) {
+      stanceHeldFor = 0;
+      beginEvolutionLance();
+    } else if (stanceHeldFor !== null) {
+      const tap = stanceHeldFor < evolutionWeaponRules.shiftTap;
+      stanceHeldFor = null;
+      if (tap) {
+        cancelEvolutionLance();
+        toggleFiringStyle();
+      } else releaseEvolutionLance();
+    }
+    return true;
+  }
   if (!down) {
     if (action === "charge") releaseFighterCharge();
-    if (action === "stance") releaseEvolutionLance();
     return true;
   }
   if (action === "charge") beginFighterCharge();
-  else if (action === "stance" && !beginEvolutionLance()) toggleFiringStyle();
   else if (action === "focus") requestEvolutionSkill();
   else if (action === "shield") requestShield();
   else if (action === "special") { gameAudio.unlock(); requestUltimate(); }
@@ -527,6 +547,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (!isBattleActive()) return;
   event.preventDefault();
+  if (event.repeat && action === "stance") return;
   const alreadyHeld = flightKeyHeld(action) || flightPad.actions.has(action);
   pressedKeys.add(event.code);
   if (!alreadyHeld && !event.repeat) dispatchFlightAction(action, true);
@@ -540,6 +561,7 @@ window.addEventListener("keyup", (event) => {
 });
 function clearMovement() {
   pressedKeys.clear();
+  stanceHeldFor = null;
   cancelEvolutionLance();
   cancelFighterCharge();
   resetFlightGamepad();
@@ -698,7 +720,9 @@ function updatePlayer(seconds) {
   current.y += gravity.y + sortieDrift();
   if (!(horizontal || vertical || current.x || current.y)) return;
   const length = Math.max(1, Math.hypot(horizontal, vertical));
-  const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * (frozen ? 1 : alienMovementScale()) * sortiePlayerSpeed() * fighterMovementScale();
+  const boost = flightBoostActive();
+  const speed = player.speed * (ultimate.phase === "charging" ? 0.65 : 1) * (frozen ? 1 : alienMovementScale())
+    * sortiePlayerSpeed() * fighterMovementScale(boost) * (boost ? flightBoostMultiplier : 1);
   player.x = clamp(player.x + (horizontal / length * speed + current.x) * seconds, flightBounds.left, bossPlayerRight());
   player.y = clamp(player.y + (vertical / length * speed + current.y) * seconds, flightBounds.top, flightBounds.bottom);
   if (!frozen && typeof constrainAlienPlayer === "function") constrainAlienPlayer(player, player.previousX, player.previousY);
@@ -1349,7 +1373,7 @@ function drawMuzzleFlash() {
 function drawPlayer() {
   if (state !== "battle") return;
   if (typeof drawFlightEngineWake === "function")
-    drawFlightEngineWake(context, player, fighterProfile().id, shipVisuals.clock, isOverdriveActive());
+    drawFlightEngineWake(context, player, fighterProfile().id, shipVisuals.clock, isOverdriveActive(), flightBoostActive());
   context.save();
   if (player.hitFlash > 0) {
     context.strokeStyle = "#ff657b";
@@ -1381,6 +1405,7 @@ function advanceCombatStep(realSeconds) {
       if (typeof updateBossPressureArt === "function") updateBossPressureArt(seconds);
     }
   } else if (!pauseView) {
+    if (stanceHeldFor !== null) stanceHeldFor = Math.min(evolutionWeaponRules.shiftTap, stanceHeldFor + realSeconds);
     const seconds = shieldFrameSeconds(combatImpactFrameSeconds(realSeconds));
     if (realSeconds > 0 && seconds <= 0) return;
     if (typeof updateFlightTutorial === "function" && updateFlightTutorial(seconds)) return;

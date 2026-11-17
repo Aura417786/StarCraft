@@ -73,7 +73,7 @@
           <h1>星际<span>突围</span></h1>
           <p class="intro">穿过行星的晨昏线，深入敌舰的阴影。</p>
           <button id="start-button" class="primary-button" type="button" disabled>开始游戏 <span aria-hidden="true">→</span></button>
-          <p class="start-caption">方向键 / WASD 操控 · 空格贯星炮 · V 护盾<br>Shift 切换扩散 / 聚焦 · 连击开启暴走<br>打散敌军编队 · 拆毁首领武装 · 截获运输舰<br>持续穿越五片星域 · 击破首领选择进化</p>
+          <p class="start-caption">方向键 / WASD 操控 · 空格贯星炮 · V 护盾<br>轻点 Shift 切换扩散 / 聚焦 · 长按加速 · 连击开启暴走<br>打散敌军编队 · 拆毁首领武装 · 截获运输舰<br>持续穿越五片星域 · 击破首领选择进化</p>
           <p id="asset-status" class="asset-status" role="alert" hidden>战机图片加载失败，请确认 assets 文件夹完整后刷新页面。</p>
         </div>
         <div class="hangar-art">
@@ -99,7 +99,7 @@
           <div class="combo-value"><strong id="combo-count">0</strong><span class="rage-mark" aria-hidden="true">OVERDRIVE</span></div>
           <div id="combo-meter" class="combo-meter" role="progressbar" aria-label="下一次暴走进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="combo-fill"></span></div>
           <span id="rage-label" class="rage-label">再增加 20 连击进入暴走</span>
-          <button id="stance-button" class="stance-button" type="button" aria-pressed="false" title="Shift 切换扩散或聚焦射击">扩散模式 · Shift 切换</button>
+          <button id="stance-button" class="stance-button" type="button" aria-pressed="false" title="轻点 Shift 切换射击姿态，长按加速">扩散模式 · 轻点 Shift</button>
         </div>
         <div id="ultimate-hud" class="ultimate-hud" data-ready="false" data-phase="idle" aria-label="赤焰贯星炮状态">
           <div class="ultimate-heading"><span id="ultimate-name" class="ultimate-name">赤焰贯星炮</span><strong id="ultimate-count">0 / 5</strong><kbd>空格</kbd></div>
@@ -125,7 +125,7 @@
           <p id="boss-action" class="boss-action" role="status"></p>
         </div>
         <p id="boss-warning" class="sr-only" role="status" aria-atomic="true" hidden><span id="boss-warning-name"></span></p>
-        <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>Shift 切换扩散 / 聚焦 · 20 连击进入暴走<br>空格释放大招 · V 开启护盾</p><span class="flight-direction">蓝攻速 · 黄弹道 · 红伤害<br>绿生命（稀有） <span aria-hidden="true">→</span></span></div>
+        <div id="movement-hint" class="ready-message"><span class="eyebrow">TARGET PRACTICE</span><h2>敌机来袭，准备拦截</h2><p>轻点 Shift 切换扩散 / 聚焦 · 长按加速 · 20 连击进入暴走<br>空格释放大招 · V 开启护盾</p><span class="flight-direction">蓝攻速 · 黄弹道 · 红伤害<br>绿生命（稀有） <span aria-hidden="true">→</span></span></div>
         <div id="pause-hint" class="pause-message" hidden><strong>已暂停</strong><span>点击战场继续战斗</span></div>
         <div class="battle-actions">
           <button id="pause-button" class="secondary-button" type="button" aria-haspopup="dialog" aria-controls="pause-screen">暂停 <kbd>Esc</kbd></button>
@@ -211,7 +211,7 @@
           <p class="result-tip">躲开敌机碰撞 · 空格释放贯星炮 · 击破首领恢复生命</p>
         </div>
       </section>
-      <footer class="lesson-note"><span class="lesson-badge">正式出击</span><p id="control-instructions">方向键 / WASD 移动<span class="training-note"> · 自动射击 · Shift 切换姿态 · 空格大招 · V 护盾</span></p></footer>
+      <footer class="lesson-note"><span class="lesson-badge">正式出击</span><p id="control-instructions">方向键 / WASD 移动<span class="training-note"> · 自动射击 · 长按 Shift 加速 · 空格大招 · V 护盾</span></p></footer>
     </section>
     <p id="status" class="sr-only" role="status" aria-live="polite">开始画面已就绪。</p>
   </main>

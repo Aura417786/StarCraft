@@ -113,7 +113,6 @@ function releaseEvolutionLance() {
   const charging = evolutionWeapons.lanceCharging;
   cancelEvolutionLance();
   if (!charging || !isBattleActive()) return false;
-  if (held < evolutionWeaponRules.shiftTap) return toggleFiringStyle();
   if (!active) return false;
   const muzzle = muzzlePosition();
   const fraction = clamp(held / evolutionWeaponRules.lanceCharge, .3, 1);
@@ -347,8 +346,8 @@ function releaseFighterCharge() {
   updateFighterSystemsHud();
   return true;
 }
-function fighterMovementScale() {
-  return fighterCombat.redHeld ? .64 : evolutionLanceActive() ? .69 : 1;
+function fighterMovementScale(boost = false) {
+  return fighterCombat.redHeld ? .64 : !boost && evolutionLanceActive() ? .69 : 1;
 }
 function directFighterHit(target, shot, fraction, source, contact = null) {
   const value = Math.min(850, (shot.damage ?? Math.exp(shot.damageLog)) * fraction);

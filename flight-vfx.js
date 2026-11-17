@@ -153,10 +153,66 @@ function drawFlightBoltWake(ctx, length, half, tint, index, time, hostile = fals
   ctx.globalAlpha = alpha;
 }
 
-function drawFlightEngineWake(ctx, ship, kind, time, boost) {
+function drawFlightNitrousWake(ctx, ship, time, overdrive) {
+  const still = flightVfxStill(), tier = flightVfxTier();
+  const clock = still ? 0 : time;
+  const length = ship.width * ((still ? 1.63 : 1.99) + (overdrive ? .17 : 0));
+  const half = ship.height * (still ? .15 : .21);
+  const bend = Math.sin(clock * 16) * half * .25;
+  ctx.save();
+  ctx.translate(ship.x - ship.width * .40, ship.y);
+  ctx.globalAlpha *= still ? .62 : .88;
+  const plasma = ctx.createLinearGradient(-length, 0, 7, 0);
+  plasma.addColorStop(0, "#507bff00");
+  plasma.addColorStop(.27, "#4e75ff28");
+  plasma.addColorStop(.62, "#508eff9c");
+  plasma.addColorStop(.88, "#64dffff0");
+  plasma.addColorStop(1, "#d6fbff");
+  ctx.fillStyle = plasma;
+  ctx.beginPath();
+  ctx.moveTo(7, -half * .35);
+  ctx.bezierCurveTo(-length * .23, -half, -length * .70, -half * .53 + bend, -length, bend);
+  ctx.bezierCurveTo(-length * .69, half * .54 + bend, -length * .23, half, 7, half * .35);
+  ctx.closePath(); ctx.fill();
+
+  const core = ctx.createLinearGradient(-length * .77, 0, 6, 0);
+  core.addColorStop(0, "#8adfff00");
+  core.addColorStop(.43, "#8adfffa0");
+  core.addColorStop(.84, "#f6ffff");
+  core.addColorStop(1, "#ffffff");
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.moveTo(6, -half * .18);
+  ctx.quadraticCurveTo(-length * .25, -half * .50, -length * .78, bend * .70);
+  ctx.quadraticCurveTo(-length * .25, half * .50, 6, half * .18);
+  ctx.closePath(); ctx.fill();
+
+  if (!still) {
+    ctx.fillStyle = "#d5f8ff";
+    const cells = 4 + tier;
+    for (let i = 0; i < cells; i++) {
+      const u = .13 + .62 * flightVfxWrap(clock * 1.65 + i / cells, 1);
+      const x = -length * u, w = length * .036 * (1 - u), h = half * .53 * (1 - u);
+      ctx.globalAlpha = (1 - u) * .83;
+      ctx.beginPath(); ctx.moveTo(x - w, bend * u); ctx.lineTo(x, bend * u - h);
+      ctx.lineTo(x + w, bend * u); ctx.lineTo(x, bend * u + h); ctx.closePath(); ctx.fill();
+    }
+    ctx.strokeStyle = "#69ccff";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 4 + tier * 2; i++) {
+      const u = flightVfxWrap(clock * (1.25 + .54 * flightVfxNoise(i)) + flightVfxNoise(i * 11), 1);
+      const x = -length * u, y = bend * u + (flightVfxNoise(i * 7 + 3) - .5) * half * (1 + u);
+      ctx.globalAlpha = (1 - u) * .52;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - length * .070, y); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false) {
+  if (nitrous) return drawFlightNitrousWake(ctx, ship, time, overdrive);
   const still = flightVfxStill(), tier = flightVfxTier();
   const color = flightWakeColors[kind] ?? flightWakeColors.red;
-  const extent = ship.width * (boost ? 1.52 : 1.04), half = ship.height * (boost ? .17 : .11);
+  const extent = ship.width * (overdrive ? 1.52 : 1.04), half = ship.height * (overdrive ? .17 : .11);
   const clock = still ? 0 : time, alpha = still ? .42 : .78;
   ctx.save(); ctx.translate(ship.x - ship.width * .40, ship.y);
   const plume = ctx.createLinearGradient(-extent, 0, 5, 0);

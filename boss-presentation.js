@@ -74,7 +74,7 @@ function startBossPresentation(kind, target, motion = null) {
     profile: bossPresentationProfiles[target.type], impact: false,
   };
   app.dataset.bossPresentation = kind;
-  pressedKeys.clear();
+  clearMovement();
   // Even the first post-cinematic tick must not resolve a projectile from the previous phase.
   clearBossFinaleAttacks();
   if (kind === "death") resetCannonLink();
