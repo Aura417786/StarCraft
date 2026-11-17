@@ -1,113 +1,171 @@
 "use strict";
 
-// Each short combo has two authored, independently telegraphed contacts.
-// Complex arena signatures keep their full choreography between these attacks.
+// Each chain commits its geometry at the first tell. The three authored
+// stages establish a constraint, intercept its exit, then punish a stale
+// position. Node interactions remove real geometry; a clear recovery follows.
 const bossPressureCombos = [
   [
-    ["返潮涡心", "Undertow Heart", "wave-vortex", t => tideTell(t, { material:"water", gapY:t.gapY, thick:.40, bend:.22 }),
-      t => vortexTell(t, {at:.3,material:"water",x:t.comboAnchor.x,y:t.comboAnchor.y,duration:.35,strength:165,core:.42})],
-    ["深压回环", "Pressure Rebound", "vortex-ring", t => vortexTell(t,{material:"water",x:t.lockX,y:t.lockY,duration:.7,strength:155,core:.25}),
-      t => ringTell(t,{material:"water",at:.3,x:t.comboAnchor.x,y:t.comboAnchor.y,duration:.35,radius:1.1})],
+    ["返潮深压", "Undertow Reversal", "离开涡心，穿过浪墙，再横移躲开高压水柱", "Leave the well, cross the tide gap, then strafe off the pressure column",
+      t => vortexTell(t,{material:"water",x:t.lockX,y:t.lockY,duration:2.25,strength:145,core:.35}),
+      t => tideTell(t,{material:"water",gapY:t.gapY,direction:t.enraged?1:-1,thick:.66,bend:.28}),
+      t => queueAlienHazard(t,"seam",t.telegraphDuration,{x:t.lockX,thickness:player.width*.48,duration:1.1,material:"water",sound:"surge"})],
+    ["潮汐囚涡", "Tidal Undertow", "进浪墙缺口，横移脱离涡心，再换高度避开触须", "Enter the tide gap, strafe out of its well, then change altitude off the tentacle",
+      t => tideTell(t,{material:"water",gapY:t.gapY,direction:t.enraged?1:-1,thick:.56,bend:.34}),
+      t => vortexTell(t,{material:"water",x:t.lockX,y:t.gapY,duration:1.7,strength:150,core:.34}),
+      t => broodLash(t,t.gapY,t.telegraphDuration,t.side,1)],
   ],
   [
-    ["骨笼落冠", "Caged Crownfall", "cage-bonefall", t => ribCageTell(t,0,true),
-      t => mechanicAt(t,"bonefall",.3,.35,{x:t.comboAnchor.x,y:t.comboAnchor.y,width:player.width*.5,height:player.height*1.5,color:alienSignatureColors.bone,sound:"burst"})],
-    ["猎颅穿刺", "Hunting Skewer", "bone-ring-filament", t => ringTell(t,{material:"bone",at:0,x:t.lockX,y:t.lockY,duration:.7,close:true}),
-      t => edgeFilament(t,"bone",.3,{y:t.comboAnchor.y,anchorX:t.comboAnchor.x,tilt:-.32,duration:.35,thickness:.4})],
+    ["骨笼猎冠", "Cage and Crown", "从骨笼两端脱身，避开落骨后离开斜向骨矛", "Exit a rib end, clear the falling crown, then leave the diagonal skewer",
+      t => ribCageTell(t,0,t.enraged),
+      t => mechanicAt(t,"bonefall",0,1.15,{x:t.lockX,y:t.gapY,width:player.width*.65,height:player.height*1.6}),
+      t => edgeFilament(t,"bone",0,{y:t.gapY,anchorX:t.lockX,tilt:-t.side*.38,duration:1.1,thickness:.42})],
+    ["猎颅迁笼", "Hunting Reliquary", "冲出合拢骨环，绕过骨笼，再离开起始落点", "Escape the jaw ring, flank the ribs, then clear the original crownfall marker",
+      t => ringTell(t,{material:"bone",at:0,x:t.lockX,y:t.lockY,duration:1.8,close:true}),
+      t => ribCageTell(t,0,t.enraged),
+      t => {bonefallTell(t,0,true);if(t.enraged)ringTell(t,{material:"bone",at:.45,x:t.lockX,y:t.lockY,duration:1.2,radius:.9});}],
   ],
   [
-    ["熔壳回火", "Crust Backdraft", "cover-eruption", t => magmaCoverTell(t),
-      t => zoneTell(t,.3,t.comboAnchor.x,t.comboAnchor.y,.56,"magma")],
-    ["炉脊爆环", "Furnace Detonation", "furnace-ring", t => edgeFilament(t,"magma",0,{y:t.lockY,tilt:.08,duration:.7,thickness:.55,flare:true}),
-      t => ringTell(t,{material:"magma",at:.3,x:t.comboAnchor.x,y:t.comboAnchor.y,duration:.35,radius:1.3})],
+    ["熔壳回火", "Crust Backdraft", "借石脊挡热浪，离开背面喷发，再躲开炉口喷流", "Use the crust shadow, escape its eruption, then clear the furnace plume",
+      t => magmaCoverTell(t,0,true),
+      t => zoneTell(t,0,t.lockX,t.lockY,.6,"magma"),
+      t => t.enraged ? ringTell(t,{material:"magma",at:0,x:t.lockX,y:t.gapY,duration:1.5,radius:1.3})
+        : edgeFilament(t,"magma",0,{y:t.gapY,anchorX:t.lockX,tilt:t.side*.12,duration:1.2,thickness:.66,flare:true})],
+    ["炉脊升压", "Rising Furnace", "躲开喷流，利用新石脊，最后离开藏身处", "Clear the plume, use the new crust, then abandon its shelter",
+      t => edgeFilament(t,"magma",0,{y:t.lockY,tilt:0,duration:1.5,thickness:.64,flare:true}),
+      t => magmaCoverTell({...t,lockY:t.gapY},0,true),
+      t => zoneTell(t,0,t.lockX,t.gapY,.64,"magma")],
   ],
   [
-    ["缚网收魂", "Loom Snare", "loom-bind", t => loomTell(t,0,true),
-      t => ringTell(t,{material:"silk",at:.3,x:t.comboAnchor.x,y:t.comboAnchor.y,duration:.35,close:true,radius:1.15})],
-    ["剪丝合围", "Shearing Cocoon", "silk-cross", t => edgeFilament(t,"silk",0,{y:t.lockY,tilt:.48,duration:.7}),
-      t => edgeFilament(t,"silk",.3,{y:t.comboAnchor.y,anchorX:t.comboAnchor.x,flip:true,tilt:-.48,duration:.35,thickness:.35})],
+    ["经纬收魂", "Closing Loom", "割断丝结，冲出收紧的丝环，避开最后的剪线", "Cut a knot, escape the closing ring, then cross away from the final shear",
+      t => loomTell(t,0,t.enraged),
+      t => ringTell(t,{material:"silk",at:0,x:t.lockX,y:t.lockY,duration:1.85,close:true,radius:1.15}),
+      t => edgeFilament(t,"silk",0,{y:t.gapY,anchorX:t.lockX,tilt:-t.side*.56,duration:1.05,thickness:.3,flip:true})],
+    ["结丝截径", "Cocoon Interception", "离开黏丝，横穿斜线，射断新丝结避开落点", "Leave the bind, cross the strand, then sever the new knots and clear the marker",
+      t => bindTell(t,0,t.lockX,t.lockY,1.9,.64),
+      t => edgeFilament(t,"silk",0,{y:t.gapY,anchorX:t.lockX,tilt:t.side*.48,duration:1.4,thickness:.35}),
+      t => {loomTell(t,0,t.enraged);zoneTell(t,0,t.lockX,t.gapY,.43,"silk");}],
   ],
   [
-    ["双钳断层", "Pincer Fault", "pincer-seam", t => pincerTell(t,0,true),
-      t => queueAlienHazard(t,"seam",t.telegraphDuration+.3,{x:t.comboAnchor.x,thickness:player.width*.35,duration:.35,color:alienSignatureColors.chitin,sound:"beam"})],
-    ["锚核震荡", "Anchor Shock", "anchor-ring", t => vortexTell(t,{material:"chitin",x:t.lockX,y:t.lockY,strength:150,core:.25,duration:.7,spin:0}),
-      t => ringTell(t,{material:"chitin",at:.3,x:t.comboAnchor.x,y:t.comboAnchor.y,duration:.35,radius:1.1})],
+    ["双钳断层", "Pincer Fault", "穿过钳口，横移离开断层，再躲开扩张震环", "Cross the jaw gap, strafe off the fault, then skirt the expanding shock ring",
+      t => pincerTell(t,0,t.enraged),
+      t => queueAlienHazard(t,"seam",t.telegraphDuration,{x:t.lockX,thickness:player.width*.38,duration:1.1}),
+      t => ringTell(t,{material:"chitin",at:0,x:t.lockX,y:t.gapY,duration:1.4,radius:1.2})],
+    ["锚链绞杀", "Anchor Winch", "挣脱锚点，绕过钳壁，离开钳口高度", "Escape the anchor, flank the jaws, then leave their open altitude",
+      t => vortexTell(t,{material:"chitin",x:t.lockX,y:t.lockY,strength:140,core:.3,duration:2.1,spin:0}),
+      t => pincerTell(t,0,t.enraged),
+      t => edgeFilament(t,"chitin",0,{y:t.gapY,anchorX:t.lockX,tilt:0,duration:1.2,thickness:.42})],
   ],
   [
-    ["折镜夹光", "Reflection Crossfire", "mirror-portals", t => {mirrorShieldTell(t);beamTell(t,0,t.lockY,.7,.36);},
-      t => {portalTell(t,t.telegraphDuration+.3,-1,{...t.comboAnchor,radius:14});portalTell(t,t.telegraphDuration+.3,1,{x:t.comboAnchor.x,y:clamp(2*t.lockY-t.comboAnchor.y,alienLane(.08),alienLane(.92)),radius:14});}],
-    ["虚像刺镜", "Decoy Refraction", "decoys-beam", t => {mirrorDecoyTell(t,0,true);const h=bossHazards.at(-1);h.thickness*=1.5;for(const n of h.nodes)n.health=n.maxHealth=4;},
-      t => beamTell(t,.3,t.comboAnchor.y,.35,.65)],
+    ["三镜折光", "Triptych Refraction", "换高度避开镜盾，击碎假影，躲开反向镜光", "Change altitude off the mirror, shatter the decoys, then clear the reverse ray",
+      t => {mirrorShieldTell(t);beamTell(t,0,t.lockY,1.1,.38);},
+      t => {mirrorDecoyTell({...t,lockY:t.gapY},0,true);if(t.enraged)mirrorShieldTell(t);},
+      t => edgeFilament(t,"glass",0,{y:t.gapY,anchorX:t.lockX,flip:true,tilt:t.side*.4,duration:1.05,thickness:.43})],
+    ["虚像截光", "Decoy Interception", "打碎汇聚假影，横移躲开镜缝，再换射击角度", "Break the converging decoys, strafe off the mirror seam, then change firing angle",
+      t => mirrorDecoyTell(t,0,true),
+      t => queueAlienHazard(t,"seam",t.telegraphDuration,{x:t.lockX,thickness:player.width*.31,duration:1.2}),
+      t => {mirrorShieldTell(t);edgeFilament(t,"glass",0,{y:t.gapY,anchorX:t.lockX,tilt:-t.side*.33,duration:1.1,thickness:.4});}],
   ],
   [
-    ["尾雷贯流", "Conduit Surge", "conduit-plasma-tide", t => tailConduitTell(t),
-      t => tideTell(t,{material:"plasma",at:.3,gapY:t.comboAnchor.y,thick:.35,shift:.06})],
-    ["逆电回路", "Countercurrent Arc", "plasma-tide-filament", t => tideTell(t,{material:"plasma",gapY:t.gapY,bend:.24,thick:.35}),
-      t => edgeFilament(t,"plasma",.3,{y:t.comboAnchor.y,anchorX:t.comboAnchor.x,flip:true,tilt:.3,duration:.35,thickness:.3})],
+    ["尾雷贯流", "Conduit Surge", "射断电极或让雷段先过，跟住电潮缺口，再避开电环", "Cut the electrode or let the pulse pass, track the tide gap, then clear the ring",
+      t => tailConduitTell(t),
+      t => {tideTell(t,{material:"plasma",gapY:t.gapY,thick:.42,shift:t.side*.06});if(t.enraged)tailConduitTell(t,.65,true);},
+      t => ringTell(t,{material:"plasma",at:0,x:t.lockX,y:t.gapY,duration:1.45,radius:1.2})],
+    ["逆电回路", "Countercurrent", "穿过电潮，射断下侧电极，变向避开回弧", "Cross the current, sever the lower electrode, then turn off the return arc",
+      t => tideTell(t,{material:"plasma",gapY:t.gapY,bend:.24,thick:.38}),
+      t => tailConduitTell(t,0,true),
+      t => edgeFilament(t,"plasma",0,{y:t.gapY,anchorX:t.lockX,flip:true,tilt:t.side*.36,duration:1.1,thickness:.34})],
   ],
   [
-    ["孢巢疫环", "Germination Halo", "nests-pollen-ring", t => sporeNestsTell(t,0,true),
-      t => ringTell(t,{material:"spore",at:.3,x:t.comboAnchor.x,y:t.comboAnchor.y,duration:.35,radius:1.2})],
-    ["寄生洄游", "Parasitic Undertow", "spore-vortex-tide", t => vortexTell(t,{material:"spore",x:t.lockX,y:t.lockY,strength:108,core:.3,duration:.7}),
-      t => tideTell(t,{material:"spore",at:.3,gapY:t.comboAnchor.y,direction:1,thick:.4})],
+    ["孢巢换气", "Germination Front", "打碎孢囊，离开新生菌毯，迎向后方孢浪缺口", "Break the sacs, escape the new bloom, then enter the rear pollen gap",
+      t => sporeNestsTell(t,0,t.enraged),
+      t => vortexTell(t,{material:"spore",x:t.lockX,y:t.lockY,duration:1.8,strength:0,core:.72,grow:true}),
+      t => tideTell(t,{material:"spore",gapY:t.gapY,direction:1,thick:.62,bend:.18})],
+    ["寄生回巢", "Parasitic Return", "离开孢粉环，击破新孢囊，避开原地寄生爆发", "Leave the pollen ring, break new sacs, then clear the original infection burst",
+      t => ringTell(t,{material:"spore",at:0,x:t.lockX,y:t.lockY,duration:1.6,radius:1.05}),
+      t => sporeNestsTell(t,0,t.enraged),
+      t => mechanicAt(t,"sporeBlight",0,1.25,{x:t.lockX,y:t.lockY,radius:player.height*.9})],
   ],
   [
-    ["折界断星", "Folded Star", "rift-seam", t => riftFoldTell(t,0,true),
-      t => queueAlienHazard(t,"seam",t.telegraphDuration+.3,{x:t.comboAnchor.x,thickness:player.width*.30,duration:.35,color:alienSignatureColors.void,sound:"beam"})],
-    ["引力吞环", "Singularity Collapse", "void-well-ring", t => vortexTell(t,{material:"void",x:t.lockX,y:t.lockY,strength:170,core:.22,duration:.7,spin:-1}),
-      t => ringTell(t,{material:"void",at:.3,x:t.comboAnchor.x,y:t.comboAnchor.y,duration:.35,close:true,radius:1.25})],
+    ["折界吞星", "Folded Star", "逆流绕开折界，横移越过裂缝，冲出坍缩环", "Flank against the pull, strafe off the seam, then escape the collapsing ring",
+      t => riftFoldTell(t,0,t.enraged),
+      t => queueAlienHazard(t,"seam",t.telegraphDuration,{x:t.lockX,thickness:player.width*.34,duration:1.1}),
+      t => ringTell(t,{material:"void",at:0,x:t.lockX,y:t.gapY,duration:1.6,close:true,radius:1.3})],
+    ["无光回剪", "Lightless Shear", "挣脱引力心，穿过倾斜裂界，离开反向空间切线", "Escape the singularity, cross the folded seams, then leave the reverse spatial cut",
+      t => vortexTell(t,{material:"void",x:t.lockX,y:t.lockY,strength:160,core:.32,duration:1.9,spin:-1}),
+      t => riftFoldTell({...t,lockY:t.gapY},0,t.enraged),
+      t => edgeFilament(t,"void",0,{y:t.gapY,anchorX:t.lockX,flip:true,tilt:-t.side*.6,duration:1.15,thickness:.37})],
   ],
   [
-    ["神经回授", "Synaptic Feedback", "relay-nerve-tide", t => {neuralRelayTell(t,0,true);bossHazards.at(-1).thickness*=1.4;},
-      t => tideTell(t,{material:"nerve",at:.3,gapY:t.comboAnchor.y,thick:.35,bend:.35})],
-    ["记忆错相", "Mnemonic Desync", "nerve-ring-scan", t => ringTell(t,{material:"nerve",at:0,x:t.lockX,y:t.lockY,duration:.7,close:true}),
-      t => edgeFilament(t,"nerve",.3,{y:t.comboAnchor.y,anchorX:t.comboAnchor.x,tilt:.18,duration:.35,thickness:.4,flip:true})],
+    ["神经回授", "Synaptic Feedback", "按序拆节点，先横移再停稳躲扫描，离开爆发环", "Sever nodes in order, strafe then hold through the scan, and clear the pulse ring",
+      t => neuralRelayTell(t,0,t.enraged),
+      t => queueAlienHazard(t,"seam",t.telegraphDuration,{x:t.lockX,thickness:player.width*.32,duration:.85}),
+      t => ringTell(t,{material:"nerve",at:0,x:t.lockX,y:t.gapY,duration:1.3,radius:1.15})],
+    ["记忆错相", "Mnemonic Desync", "先退出神经环，再拆节点，最后离开记忆射线", "Exit the neural ring, sever the circuit, then leave the remembered ray",
+      t => ringTell(t,{material:"nerve",at:0,x:t.lockX,y:t.lockY,duration:1.7,close:true}),
+      t => neuralRelayTell({...t,lockY:t.gapY},0,false),
+      t => beamTell(t,0,t.gapY,1.15,.48)],
+  ],
+  [
+    ["群渊三相", "Confluence Triad", "先拆牵引肢和尖刺肢，沿潮汐缺口移动，再横移避开断层", "Sever siphon and lance limbs, move through the tide gap, then strafe off the fault",
+      t => fusionLimbsTell(t,0,t.enraged),
+      t => tideTell(t,{material:"fusion",gapY:t.gapY,direction:1,thick:.54,bend:.26}),
+      t => queueAlienHazard(t,"seam",t.telegraphDuration,{x:t.lockX,thickness:player.width*.42,duration:1.2})],
+    ["合生围猎", "Confluence Hunt", "离开牵引涡，拆除处刑肢，再转入未封锁高度", "Leave the siphon well, sever the execution limbs, then enter the unsealed altitude",
+      t => vortexTell(t,{material:"fusion",x:t.lockX,y:t.lockY,strength:140,core:.28,duration:1.9}),
+      t => fusionLimbsTell({...t,lockY:t.gapY},0,t.enraged),
+      t => {bandTell(t,0,1.25);queueAlienHazard(t,"seam",t.telegraphDuration+.55,{x:t.lockX,thickness:player.width*.26,duration:.7});}],
   ],
 ];
 
 function buildBossPressureCombo(target) {
   const ordinal = target.pressureComboIndex = (target.pressureComboIndex ?? -1) + 1;
-  const [cn,en,key,first,second] = bossPressureCombos[target.type][ordinal % 2];
-  const id = target.type + ":" + ordinal + ":" + key;
+  const variant = ordinal % 2;
+  const [cn,en,hint,enHint,...stages] = bossPressureCombos[target.type][variant];
+  const material = alienPressurePlans[target.type].material;
+  const id = target.type + ":" + ordinal;
   const begin = bossHazards.length;
-  first(target);
-  const firstHazards = bossHazards.slice(begin);
-  const primary = firstHazards[0];
-  target.comboAnchor = {x:primary.x ?? target.lockX, y:primary.gapY ?? primary.y ?? target.gapY};
-  if(primary.kind==="magmaCover")target.comboAnchor.x=primary.x-player.width;
-  if(primary.kind==="mirrorShield")target.comboAnchor={x:target.lockX,y:target.gapY};
-  const split = bossHazards.length;
-  second(target);
-  const secondHazards = bossHazards.slice(split);
-  for (const h of firstHazards) {h.comboId=id;h.comboRole="first";}
-  const secondaryColors=["#bcefff","#f2dfbc","#ffcc80","#e5baff","#ffc39a","#b8dcff","#c3f4ff","#d6fca2","#edc8ff","#ffd0df"];
-  const secondarySounds=["coil","whip","burst","beam","beam","volley","beam","hatch","beam","burst"];
-  for (const h of secondHazards) {
-    h.comboId=id;h.comboRole="second";h.comboAnchor={...target.comboAnchor};h.duration=Math.min(h.duration,.35);
-    h.color=secondaryColors[target.type];h.sound=secondarySounds[target.type];
+  target.attackLabel=[cn,en,hint,enHint];
+  target.attackMotion=["coil","lunge","recoil","sweep","lunge","sweep","sweep","recoil","coil","recoil","coil"][target.type];
+  const offsets = target.type===9 ? [0,1.08,3.65] : target.enraged ? [0,1.24,3.32] : [0,1.42,3.65];
+  const stageEnds=[];
+  for(let stage=0;stage<3;stage++) {
+    const start=bossHazards.length;
+    stages[stage](target);
+    const added=bossHazards.slice(start);
+    for(const h of added) {
+      h.warning += offsets[stage];
+      // Preserve the mechanic's full travel/interaction time. The old .35s
+      // truncation made an entire tide cross the screen between reactions.
+      if(stage===0 && h.duration>2.8)h.duration=2.8;
+      if(h.kind==="zone"||h.kind==="beam"||h.kind==="bonefall")h.duration=Math.max(h.duration,stage===2?1.05:.85);
+      h.comboId=id;h.comboStage=stage;h.comboRole=["setup","intercept","punish"][stage];
+      h.material??=material;h.color=alienSignatureColors[h.material];
+      h.tellAt=Math.max(0,h.warning-(stage===0?target.telegraphDuration:1.5));
+      h.attackLabel=target.attackLabel;
+      h.lockedAt=battleTime;
+    }
+    stageEnds.push(Math.max(...added.map(h=>h.warning+h.duration)));
   }
-  const secondStart = Math.min(...secondHazards.map(h=>h.warning));
-  // The primary zone stays active while the linked contact begins. This is
-  // authored overlap, not a cancelled follow-up or a late invisible lock.
-  for (const h of firstHazards) if(h.warning+h.duration<secondStart+.16) h.duration=secondStart+.16-h.warning;
-  const hints=typeof bossComboHints !== "undefined" ? bossComboHints[key] : null;
-  target.attackLabel=[cn,en,...(hints??["观察主攻击与连锁预警","Read the main and linked tells"])];
-  const record={id,type:target.type,index:ordinal%2,at:battleTime,firstKind:primary.kind,
-    secondKind:secondHazards.map(h=>h.kind).join("+"),lockX:target.lockX,lockY:target.lockY,
-    gapY:target.gapY,anchor:{...target.comboAnchor},firstWarning:primary.warning,secondWarning:secondStart,
-    firstEnd:Math.max(...firstHazards.map(h=>h.warning+h.duration)),secondStart,
-    overlap:Math.max(...firstHazards.map(h=>h.warning+h.duration))-secondStart};
-  target.attackEndFloor=Math.max(.4,...bossHazards.slice(begin).map(h=>h.warning+h.duration+.12-target.telegraphDuration));
+  target.comboAnchor={x:target.lockX,y:target.gapY};
+  target.attackEndFloor=Math.max(...stageEnds)+.18-target.telegraphDuration;
+  target.attackDuration=target.attackEndFloor;
+  const hazards=bossHazards.slice(begin);
+  const record={id,type:target.type,index:variant,at:battleTime,stages:3,
+    firstKind:hazards.find(h=>h.comboStage===0).kind,
+    secondKind:hazards.filter(h=>h.comboStage===1).map(h=>h.kind).join("+"),
+    thirdKind:hazards.filter(h=>h.comboStage===2).map(h=>h.kind).join("+"),
+    lockX:target.lockX,lockY:target.lockY,gapY:target.gapY,anchor:{...target.comboAnchor},
+    stageStarts:offsets.map(at=>at+target.telegraphDuration),stageEnds,
+    activeDuration:target.attackDuration};
   const log=target.comboLog??=[];if(log.length>=120)log.shift();log.push(record);
   logBossPressure(target,"combo",record);
   return [];
 }
 
-const quickAlienPlans = Object.fromEntries(Object.keys(alienPatterns).filter(key=>!key.startsWith("fusion")).map(key=>[key,buildBossPressureCombo]));
+const quickAlienPlans = Object.fromEntries(Object.keys(alienPatterns).map(key=>[key,buildBossPressureCombo]));
 
 
 function makeBossUltimate(target, warning, noShield) {
-  if(target.type>=10)return null;
   const room=mechanicRoom(),color=alienSignatureColors[alienPressurePlans[target.type].material];
   const h={kind:"ultimate",ultimateKind:bossUltimateKinds[target.type],age:0,warning,duration:1.6,
     lockX:target.lockX,lockY:target.lockY,gapY:target.gapY,gapSize:target.gapSize,
@@ -125,6 +183,11 @@ function makeBossUltimate(target, warning, noShield) {
   }else if(target.type===9){
     h.nodes=[[.28,.22],[.55,.77],[.82,.28]].map(([x,y])=>mechanicNode(room.left+x*room.width,alienLane(y),r,7,"neuron"));
   }
+  if(target.type===10)h.nodes=[
+    mechanicNode(room.right,alienLane(.22),r*1.2,7,"siphon"),
+    mechanicNode(room.right,alienLane(.78),r*1.2,7,"lance"),
+    mechanicNode(room.left+room.width*.68,alienLane(.5),r*1.1,6,"burst")];
+  h.material=alienPressurePlans[target.type].material;
   bossHazards.push(h);return h;
 }
 
@@ -140,7 +203,7 @@ function bossUltimateGeometry(h) {
   const band=(x,width,gap,size)=>{rect(x,room.top,width,Math.max(0,gap-size/2-room.top));rect(x,gap+size/2,width,Math.max(0,room.bottom-gap-size/2));};
   if(h.ultimateKind==="tideWalls") {
     const gap=h.gapY+Math.sin(p*Math.PI*2)*Math.min(h.gapSize*.24,hg*.055);
-    const x=viewport.width*(1-p*1.13),thick=Math.max(33,player.width*.58);
+    const x=viewport.width*(1-p*1.13),thick=Math.max(hg*.12,player.width*.85);
     band(x,thick,gap,h.gapSize*.9);
     if(p>.30)band(viewport.width*((p-.30)/.70)-thick,thick*.72,gap,h.gapSize*.9);
     g.safe.push({x:0,y:gap-h.gapSize*.45,width:viewport.width,height:h.gapSize*.9});
@@ -202,6 +265,16 @@ function bossUltimateGeometry(h) {
       if(i<=index)line(room.left,n.y,room.right,n.y,Math.max(8,player.height*.18));
     }
   }
+  if(h.ultimateKind==="fusion") {
+    const [siphon,lance,burst]=h.nodes;
+    if(siphon?.health>0)circle(cx,cy,Math.max(22,hg*.20)*(1-p*.45),Math.max(5,hg*.20*(1-p*.45)-14));
+    if(lance?.health>0&&p>.25)line(lance.x,lance.y,room.left,h.gapY,Math.max(12,player.height*.28));
+    if(burst?.health>0&&p>.62){
+      const width=Math.max(24,player.width*.42);
+      rect(cx-width/2,room.top,width,Math.max(0,h.gapY-h.gapSize/2-room.top));
+      rect(cx-width/2,h.gapY+h.gapSize/2,width,Math.max(0,room.bottom-h.gapY-h.gapSize/2));
+    }
+  }
   if(h.noShield)g.safe.push({x:0,y:h.gapY-h.gapSize/2,width:viewport.width,height:h.gapSize});
   return g;
 }
@@ -236,20 +309,22 @@ function prepareBossPressureSeal(target) {
   if (contacts < threshold) return false;
   target.pressureAttackCount = 0;
   target.pressureSequence = (target.pressureSequence ?? 0) + 1;
-  const noShield = typeof shieldDisabledForSortie === "function" && shieldDisabledForSortie();
-  const warning = 1.3 + (typeof sortieWarningBonus === "function" ? sortieWarningBonus() : 0);
+  const disabled = typeof shieldDisabledForSortie === "function" && shieldDisabledForSortie();
+  const warning = 1.4 + (typeof sortieWarningBonus === "function" ? sortieWarningBonus() : 0);
   const color = alienPressurePlans[target.type].material;
-  const pulseAt = warning + (target.type < 10 ? 1.58 : 0);
-  let supplied = false;
-  if (!noShield && !shield.charges && shield.remaining < pulseAt + .22) {
-    supplied = gainShieldEnergy(evolutionShieldChargeTime()) > 0;
-    updateShieldDisplay();
-  }
+  const activeDuration = 2.3;
+  // Separate the environmental attack from the seal by a readable breath.
+  // A late graze can no longer make the announced seal harmless through grace.
+  const pulseAt = warning + activeDuration + bossRules.grace + .12;
+  const noShield = disabled || !(shield.charges > 0 || shield.remaining >= pulseAt + .22);
+  // Capacity and route are committed when the tell begins; charging/spending
+  // a shield later never silently changes an already advertised safe region.
+  const supplied = false;
   target.quickAttack = false;
   target.alienAttack = "pressureSeal";
   target.attackMotion = "coil";
   target.telegraphDuration = warning;
-  target.attackDuration = target.type < 10 ? 1.8 : .6;
+  target.attackDuration = pulseAt + .34 - warning;
   target.phase = "telegraph";
   target.phaseTime = 0;
   target.attackEvents = [];
@@ -257,24 +332,27 @@ function prepareBossPressureSeal(target) {
   target.lockX = player.x;
   target.lockY = player.y;
   target.side = player.y < alienLane(.5) ? 1 : -1;
-  target.gapY = clamp(player.y, alienLane(.2), alienLane(.8));
-  target.gapSize = Math.max(player.height * 2.2, (flightBounds.bottom - flightBounds.top) * .25);
-  target.pressureState = { stage: "charge", age: 0, warning, duration: warning + target.attackDuration, armorDuration: 1.9, pulseAt, activeDuration:1.6, ultimateKind:bossUltimateKinds[target.type],
+  const span = flightBounds.bottom - flightBounds.top;
+  target.gapSize = Math.max(player.height * 1.55, span * .19);
+  const reach = Math.min(span * .25, player.speed * (warning - .25) * .65);
+  target.gapY = clamp(player.y + target.side * reach, flightBounds.top + target.gapSize / 2,
+    flightBounds.bottom - target.gapSize / 2);
+  target.pressureState = { stage: "charge", age: 0, warning, duration: warning + target.attackDuration, armorDuration: warning + .6, pulseAt, activeDuration, ultimateKind:bossUltimateKinds[target.type],
     gapY: target.gapY, gapSize: target.gapSize, fullSeal: !noShield,
     color: alienSignatureColors[color], sequence: target.pressureSequence };
   target.pressureArmor = true;
   const key = typeof controlBindingLabel === "function" ? controlBindingLabel("shield") : "V";
-  const cn = noShield ? "封域冲击 · 跟住发光缺口" : "全域封锁 · 冲击前按 " + key + " 开盾" + (supplied ? " · 应急护盾已充能" : "");
-  const en = noShield ? "Seal surge · Hold the marked gap" : "Arena seal · Press " + key + " before impact" + (supplied ? " · Emergency shield charged" : "");
+  const cn = noShield ? "封域冲击 · 跟住发光缺口" : "全域封锁 · 冲击前按 " + key + " 开盾";
+  const en = noShield ? "Seal surge · Hold the marked gap" : "Arena seal · Press " + key + " before impact";
   const names=typeof bossUltimateNames !== "undefined" ? bossUltimateNames[target.type]??["封域冲击","Arena Seal"] : ["封域冲击","Arena Seal"];
   target.attackLabel = [names[0], names[1], cn, en];
   bossHazards.length = 0;
-  makeBossUltimate(target, warning, noShield);
+  const ultimate = makeBossUltimate(target, warning, noShield);
+  if (ultimate) ultimate.duration = activeDuration;
   addBossHazard("pressureSeal", { warning:pulseAt, duration: .22, color: target.pressureState.color,
     gapY: target.gapY, gapSize: target.gapSize, fullSeal: !noShield, sound: "surge" });
   updateAlienAttackInterval(target);
   setBossMessage(bossStageTitle(target), tr(cn, en));
-  gameAudio.bossAttack("coil", target.x, target.y);
   logBossPressure(target, "charge", { warning, pulseAt, armorDuration:target.pressureState.armorDuration, ultimateKind:target.pressureState.ultimateKind, gapY: target.gapY, gapSize: target.gapSize, fullSeal: !noShield, shieldSupplied: supplied, triggerAttackCount: contacts, attackContacts: target.attackContacts ?? 0, comboCycles: target.completedComboCycles ?? 0 });
   return true;
 }
@@ -291,7 +369,6 @@ function updateBossPressure(target, seconds) {
     seal.age += seconds;
     seal.stage = seal.age < seal.warning ? "charge" : seal.age < seal.pulseAt ? "active" : seal.age < seal.pulseAt + .22 ? "burst" : "afterglow";
     if (previous < seal.pulseAt && seal.age >= seal.pulseAt) {
-      gameAudio.bossAttack("surge", target.x, target.y);
       logBossPressure(target, "impact", { x: player.x, y: player.y, fullSeal: seal.fullSeal });
     }
     if (target.pressureArmor && seal.age >= seal.armorDuration) {
@@ -301,40 +378,8 @@ function updateBossPressure(target, seconds) {
     }
     if (seal.age >= seal.duration) target.pressureState = null;
   }
-  // The fusion encounter keeps its bespoke limb/corridor contract. It is not
-  // one of the ten ordinary bosses receiving the ambient lattice.
-  if (target.type === finalAlienType) return;
-  // A slow, deterministic lattice persists between attacks. Its gap is shared
-  // by every live column, so crossing columns never creates accidental closure.
-  target.pressureFireTime = (target.pressureFireTime ?? 0) + seconds;
-  const span = flightBounds.bottom - flightBounds.top;
-  const gapY = seal?.fullSeal === false ? seal.gapY : alienLane(.5 + Math.sin(target.age * .82 + target.type * .4) * .36);
-  const gapSize = seal?.fullSeal === false ? seal.gapSize : Math.max(player.height * .84, span * .11);
-  target.pressureGapY = gapY;
-  target.pressureGapSize = gapSize;
-  for (const shot of bossProjectiles) {
-    if (!shot.backgroundPressure) continue;
-    const edge = gapY + shot.pressureSide * (gapSize / 2 + 8);
-    const boundary = shot.pressureSide < 0 ? flightBounds.top : flightBounds.bottom;
-    shot.y = edge + (boundary - edge) * shot.pressureLane;
-  }
-  const fireInterval = .48 / (typeof sortieRules === "function" ? sortieRules().attackTempo : 1);
-  if (target.pressureFireTime < fireInterval) return;
-  target.pressureFireTime %= fireInterval;
-  const count = Math.round(10 + 3 * Math.max(1, target.scaling?.hpMul ?? 1));
-  const activeCount = bossProjectiles.filter(shot => shot.backgroundPressure).length;
-  if (activeCount >= 76) return;
-  const x = Math.min(viewport.width - 10, target.x + target.width * .25);
-  const rows = Math.ceil(count / 2);
-  for (const side of [-1, 1]) for (let i = 0; i < rows; i++) {
-    const fraction = (i + .5) / rows;
-    const edge = gapY + side * (gapSize / 2 + 8);
-    const boundary = side < 0 ? flightBounds.top : flightBounds.bottom;
-    const y = edge + (boundary - edge) * fraction;
-    addBossProjectile(x, y, -Math.max(150, viewport.width * .32), 0,
-      { backgroundPressure: true, pressureLane: fraction, pressureSide: side, radius: 5, glyph: "orb",
-        color: alienSignatureColors[alienPressurePlans[target.type].material] });
-  }
+  // Arena pressure comes from the authored combo geometry. No ambient
+  // lattice or idle projectile emitter runs during tells, recovery or finales.
 }
 
 function pressureSealHitsPlayer(hazard) {

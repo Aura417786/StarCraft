@@ -255,6 +255,75 @@ const bossFinalePlans = {
   void: finaleVoid, synapse: finaleSynapse, fusion: finaleFusion,
 };
 
+// Final forms keep their apparatus, gates and HP pools. Each beat now follows
+// its identity move with an intercepted exit and a separate recovery punish.
+function buildBossFinaleCombo(target,bounds,side) {
+  const f=target.finale,begin=f.hazards.length;
+  const x=player.x,y=player.y,material=alienPressurePlans[target.type].material;
+  const gap=finaleGap(bounds,side),radius=Math.max(20,Math.min(62,bounds.height*.13));
+  bossFinalePlans[f.mode](target,bounds,side);
+  for(const h of f.hazards.slice(begin)) {
+    h.comboStage=0;h.comboRole="setup";h.material??=material;
+    if(["wire","blast","seam"].includes(h.type))h.duration=Math.max(.72,h.duration);
+  }
+  const stage=(number,type,values)=>{
+    const h=finaleHazard(target,type,{...values,material});
+    h.warning += number===1?1.2:2.85;
+    h.duration=Math.max(.8,h.duration);
+    h.comboStage=number;h.comboRole=number===1?"intercept":"punish";
+    h.tellAt=Math.max(0,h.warning-1.5);
+    return h;
+  };
+  const wire=(number,ax,ay,bx,by,width=15)=>stage(number,"wire",{ax,ay,bx,by,width});
+  if(f.mode==="egg") {
+    stage(1,"blast",{x,y:gap.center,radius:radius*.8,duration:1});
+    wire(2,target.x,target.y,bounds.left,y,player.height*.36);
+  } else if(f.mode==="bones") {
+    stage(1,"seam",{x,width:Math.max(14,player.width*.3)});
+    stage(2,"blast",{x,y:gap.center,radius:radius*1.1});
+  } else if(f.mode==="furnace") {
+    stage(1,"blast",{x,y:gap.center,radius,duration:1.1});
+    stage(2,"vent",{gap:{center:y,half:gap.half*1.15},duration:.85});
+  } else if(f.mode==="web") {
+    stage(1,"blast",{x,y,radius:radius*.9});
+    wire(2,target.x,bounds.top,bounds.left,f.gate?.y??gap.center,player.height*.34);
+  } else if(f.mode==="claws") {
+    stage(1,"seam",{x,width:Math.max(18,player.width*.36),duration:.95});
+    wire(2,bounds.right,gap.center,bounds.left,gap.center,player.height*.4);
+  } else if(f.mode==="mirror") {
+    stage(1,"blast",{x,y,radius:radius*.85});
+    const node=f.nodes[f.activeNode],g=finaleNodeGeometry(target,node);
+    wire(2,g.x,g.y,bounds.left,gap.center,17);
+  } else if(f.mode==="coil") {
+    wire(1,bounds.right,bounds.top,bounds.left,gap.center,16);
+    stage(2,"ring",{x,y:gap.center,radius:Math.max(60,bounds.height*.35),width:11,duration:1.25});
+  } else if(f.mode==="spores") {
+    stage(1,"tide",{x:target.x,gap,width:Math.max(25,player.width*.4),duration:1.5});
+    const node=f.nodes.find(n=>n.hp>0);
+    stage(2,"blast",{x,y:gap.center,radius:radius*.85,node:node?.index,duration:1});
+  } else if(f.mode==="void") {
+    wire(1,bounds.right,bounds.top,bounds.left,gap.center,17);
+    stage(2,"seam",{x,width:Math.max(18,player.width*.35),duration:1.15});
+  } else if(f.mode==="synapse") {
+    stage(1,"seam",{x,width:Math.max(15,player.width*.28)});
+    const h=stage(2,"blast",{x,y:gap.center,radius:radius*.8,node:f.activeNode>=0?f.activeNode:undefined});
+    h.material="nerve";
+  } else {
+    stage(1,"ring",{x,y,radius:Math.max(70,bounds.height*.3),width:12,duration:1.25});
+    stage(2,"vent",{gap,duration:.9});
+  }
+  const end=Math.max(...f.hazards.slice(begin).map(h=>h.warning+h.duration));
+  // Damage-sensitive forms expose their core after the whole chain. The web
+  // crossing reward remains immediate; node breaks retain their own payoff.
+  if(["furnace","claws","void","coil","fusion"].includes(f.mode)) {
+    f.ventOpenAt=f.age+end;f.openUntil=f.ventOpenAt+1.1;
+  }
+  f.comboLog??=[];
+  if(f.comboLog.length>=80)f.comboLog.shift();
+  f.comboLog.push({beat:f.beat,lockX:x,lockY:y,stages:3,end,
+    kinds:f.hazards.slice(begin).map(h=>[h.comboStage,h.type])});
+}
+
 function updateBossFinale(target, seconds) {
   const f = target.finale;
   if (!(seconds > 0)) return;
@@ -287,20 +356,26 @@ function updateBossFinale(target, seconds) {
         player.y = clamp(player.y + dy / distance * strength, flightBounds.top, flightBounds.bottom);
       }
     }
+    if (!hazard.tellSoundPlayed && hazard.age >= (hazard.tellAt??0)) {
+      hazard.tellSoundPlayed=true;playAlienHazardCue(hazard,"tell",target);
+    }
     if (crossed) {
       if (hazard.purge) clearBossFinaleAttacks();
-      gameAudio.bossAttack(hazard.type === "tide" ? "surge" : hazard.type === "well" ? "burst" : "beam",
-        target.x, target.y);
+      playAlienHazardCue(hazard,"active",target);
       if (hazard.purge || hazard.type === "well") addCombatShake(hazard.purge ? 6.7 : 4.5);
     }
   }
-  f.hazards = f.hazards.filter(hazard => hazard.age < hazard.warning + hazard.duration
-    && (hazard.node === undefined || f.nodes[hazard.node]?.hp > 0));
+  f.hazards = f.hazards.filter(hazard => {
+    const alive=hazard.age < hazard.warning + hazard.duration
+      && (hazard.node === undefined || f.nodes[hazard.node]?.hp > 0);
+    if(!alive)playAlienHazardCue(hazard,"tail",target);
+    return alive;
+  });
   if (f.age < f.next) return;
   f.beat++;
   const side = f.beat % 2 ? (player.y < (flightBounds.top + flightBounds.bottom) / 2 ? 1 : -1)
     : (player.y > (flightBounds.top + flightBounds.bottom) / 2 ? -1 : 1);
-  bossFinalePlans[f.mode](target, finaleBounds(), side);
+  buildBossFinaleCombo(target, finaleBounds(), side);
   const lastImpact = f.hazards.reduce(
     (latest, hazard) => Math.max(latest, hazard.warning + hazard.duration - hazard.age), 0);
   const cadence = bossFinaleStages[target.type].interval - (target.hp < .4 ? .24 : 0);
@@ -336,10 +411,12 @@ function finaleTideX(hazard, y, time) {
   return hazard.x + hazard.width + arc + swell - (hazard.x + hazard.width * 2.7 + Math.min(70, viewport.width * .06)) * p;
 }
 
-function bossFinaleHitsPlayer(target) {
+function bossFinaleHitsPlayer(target) { return !!bossFinaleContact(target); }
+
+function bossFinaleContact(target) {
   const radius = player.height * .16;
-  return target.finale.hazards.some(hazard => {
-    if (hazard.age < hazard.warning) return false;
+  return target.finale.hazards.find(hazard => {
+    if (hazard.hitPlayer || hazard.age < hazard.warning || hazard.age >= hazard.warning+hazard.duration) return false;
     if (hazard.type === "tide") {
       if (Math.abs(player.y - hazard.gap.center) <= Math.max(0, hazard.gap.half - radius)) return false;
       const delta = player.x - finaleTideX(hazard, player.y, hazard.age);
@@ -498,6 +575,7 @@ function drawFinaleWire(ctx, hazard, active, progress, quiet) {
 }
 
 function drawFinaleHazard(ctx, hazard, quiet) {
+  if (hazard.age < (hazard.tellAt??0)) return;
   const active = hazard.age >= hazard.warning;
   const progress = active ? clamp((hazard.age - hazard.warning) / hazard.duration, 0, 1)
     : clamp(hazard.age / hazard.warning, 0, 1);

@@ -46,7 +46,7 @@ function consumeShieldContacts() {
   for (const shots of [enemyProjectiles, bossProjectiles]) {
     for (let index = shots.length - 1; index >= 0; index--) {
       // 开盾只检查此刻接触，过去一帧已经飞过的弹不会补判。
-      if (consumeEvolutionShieldProjectile(shots[index], false)) { shots.splice(index, 1); intercepted = true; }
+      if (consumeEvolutionShieldProjectile(shots[index], false)) { shots.splice(index, 1); intercepted ||= shots === enemyProjectiles; }
     }
   }
   if (intercepted) tryPerfectShield();
@@ -144,6 +144,7 @@ function updateShieldDisplay() {
 function requestShield() {
   if (shieldDisabledForSortie() || !isBattleActive() || shield.charges <= 0 || shieldIsActive()) return false;
   shield.charges--;
+  gameAudio.fighterSkill?.(currentUltimateId(), "shield", {x:player.x,y:player.y});
   shield.duration = shieldRules.duration;
   shield.remaining = shield.duration;
   shield.perfectRemaining = shieldRules.perfectWindow;

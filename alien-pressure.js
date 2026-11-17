@@ -68,7 +68,7 @@ function beginAlienRupture(target) {
 
 function beginAlienRecovery(target) {
   if (target.phase === "attack" && target.alienAttack !== "pressureSeal") {
-    const contacts = target.quickAttack ? 2 : 1;
+    const contacts = target.quickAttack ? 3 : 1;
     target.pressureAttackCount = (target.pressureAttackCount ?? 0) + contacts;
     target.attackContacts = (target.attackContacts ?? 0) + contacts;
     if(target.quickAttack)target.completedComboCycles=(target.completedComboCycles??0)+1;

@@ -199,7 +199,7 @@ const movingAlienHazards = new Set(["tide", "ring", "ribCage", "pincerLock", "ta
 
 function alienWarningLead(target, key, pressure) {
   const wide = pressure ? widePressureMaterials.has(pressure.material) : wideAlienPatterns.has(key);
-  const base = target.quickAttack ? .9 : wide ? 1.68 : pressure || complexAlienPatterns.has(key) ? 1.54 : 1.4;
+  const base = target.quickAttack ? 1.3 : wide ? 1.68 : pressure || complexAlienPatterns.has(key) ? 1.54 : 1.4;
   const seen = target.seenAttacks ??= new Set();
   const teaching = target.quickAttack || seen.has(key) ? 0 : .4;
   seen.add(key);
@@ -217,7 +217,7 @@ function queueAlienHazard(target, kind, requestedWarning, options) {
   const warning = followup ? Math.max(minimum, requestedWarning) + adjustment : requestedWarning;
   const travels = movingAlienHazards.has(kind) || kind === "filament" && options.swingY
     || kind === "vortex" && options.grow;
-  const authoredDuration = target.quickAttack ? Math.min(.7, options.duration) : options.duration;
+  const authoredDuration = options.duration;
   const duration = travels ? authoredDuration / (target.scaling?.speedMul ?? 1) : authoredDuration;
   addBossHazard(kind, { ...options, warning, duration });
   const attackStart = followup ? target.phaseTime : -target.telegraphDuration;
@@ -495,7 +495,7 @@ function prepareAlienAttack(target, allowPressure = false) {
     : alienPatterns[key];
   target.attackLabel = [name, enName, hint, enHint];
   target.alienAttack = key;
-  target.quickAttack = target.type !== finalAlienType && !pressure && typeof quickAlienPlans !== "undefined" && !!quickAlienPlans[key];
+  target.quickAttack = typeof buildBossPressureCombo === "function";
   target.phase = "telegraph";
   target.phaseTime = 0;
   target.telegraphDuration = alienWarningLead(target, key, pressure);
@@ -515,11 +515,11 @@ function prepareAlienAttack(target, allowPressure = false) {
   const attackDensity = Math.max(1, target.scaling?.hpMul ?? 1);
   target.gapSize = Math.max(54, target.gapSize / (1 + (attackDensity - 1) * .3));
   bossHazards.length = 0;
-  target.attackEvents = (target.quickAttack ? quickAlienPlans[key](target) : plan(target)).filter(Boolean);
+  target.attackEvents = (target.quickAttack ? buildBossPressureCombo(target) : plan(target)).filter(Boolean);
   if (target.quickAttack) {
-    // Both linked contacts fit this authored action; their actual end times
-    // set the floor below. The full arena signature still runs separately.
-    target.attackDuration = .8;
+    // The complete chain, including every apparatus interaction and moving
+    // hazard, owns its duration. POWER never truncates its authored contacts.
+    target.attackDuration = target.attackEndFloor;
   }
   target.attackEvents.sort((a, b) => a.at - b.at);
   // Only the time around the authored actions is adjustable. Every tell,
@@ -529,7 +529,7 @@ function prepareAlienAttack(target, allowPressure = false) {
   const protectedTime = target.telegraphDuration + alienRecoveryDuration(target, true);
   const baseInterval = protectedTime + target.attackDuration;
   const requestedDuration = baseInterval / (target.scaling?.tempoMul ?? 1) - protectedTime;
-  target.attackDuration = Math.max(target.quickAttack ? .8 : requestedDuration, target.attackEndFloor, target.attackEvents.at(-1)?.at ?? 0);
+  target.attackDuration = Math.max(target.quickAttack ? target.attackEndFloor : requestedDuration, target.attackEndFloor, target.attackEvents.at(-1)?.at ?? 0);
   updateAlienAttackInterval(target);
   // Clear old projectiles before a marked corridor. Any follow-up inside it
   // is announced separately, with enough horizontal room to move.
@@ -605,29 +605,37 @@ function updateBossProjectiles(seconds) {
     const hazard = bossHazards[i];
     const crossing = hazard.age < hazard.warning;
     hazard.age += seconds;
+    if (!hazard.tellSoundPlayed && hazard.age >= (hazard.tellAt ?? 0)) {
+      hazard.tellSoundPlayed=true;playAlienHazardCue(hazard,"tell");
+    }
     if (crossing && hazard.age >= hazard.warning) {
       if (hazard.lash && boss) {
-        boss.lashPulse = 1;
-        boss.lashIndex = hazard.index;
-        boss.lashSide = hazard.side;
-        boss.lashY = hazard.y;
-        gameAudio.bossAttack("whip", boss.x, boss.y);
-      } else if (alienSignatureKinds.has(hazard.kind) || hazard.kind === "ultimate") {
-        gameAudio.bossAttack(hazard.sound, boss?.x, boss?.y);
-        if (hazard.kind === "tide" || hazard.kind === "ring") addCombatShake(hazard.kind === "tide" ? 3.8 : 2);
-      } else if (hazard.kind === "portal" && boss) {
-        firePortal(hazard);
-      } else if (alienMechanicKinds.has(hazard.kind) || hazard.kind === "beam" || hazard.kind === "band" || hazard.kind === "zone" || hazard.kind === "seam") {
-        gameAudio.bossAttack(hazard.sound || (hazard.kind === "zone" ? "burst" : "beam"), boss?.x, boss?.y);
+        boss.lashPulse=1;boss.lashIndex=hazard.index;boss.lashSide=hazard.side;boss.lashY=hazard.y;
       }
+      playAlienHazardCue(hazard,"active");
+      if (hazard.kind === "tide" || hazard.kind === "ring") addCombatShake(hazard.kind === "tide" ? 3.8 : 2);
+      if (hazard.kind === "portal" && boss) firePortal(hazard);
     }
     updateAlienMechanic(hazard, seconds);
-    if (hazard.age >= hazard.warning + hazard.duration) bossHazards.splice(i, 1);
+    if (hazard.age >= hazard.warning + hazard.duration) {
+      playAlienHazardCue(hazard,"tail");bossHazards.splice(i, 1);
+    }
   }
 }
 
+function playAlienHazardCue(hazard, phase, target = boss) {
+  if (!target) return;
+  const kind=hazard.ultimateKind??hazard.kind??hazard.type;
+  const x=hazard.x??hazard.lockX??target.x;
+  const y=hazard.y??hazard.lockY??hazard.gapY??target.y;
+  if (gameAudio.bossSkill) gameAudio.bossSkill(kind,{bossId:target.type+1,
+    material:hazard.material??alienPressurePlans[target.type].material,
+    x,y,phase,power:hazard.comboStage===2?1.2:1});
+  else if (phase==="active") gameAudio.bossAttack(hazard.sound??"beam",x,y);
+}
+
 function alienHazardHitsPlayer(hazard) {
-  if (hazard.age < hazard.warning) return false;
+  if (hazard.age < hazard.warning || hazard.age >= hazard.warning + hazard.duration) return false;
   if (hazard.kind === "pressureSeal") return pressureSealHitsPlayer(hazard);
   if (hazard.kind === "ultimate") return bossUltimateHitsPlayer(hazard);
   if (alienMechanicKinds.has(hazard.kind)) return alienMechanicHits(hazard, player);
@@ -665,6 +673,7 @@ function alienHazardHitsPlayer(hazard) {
 }
 
 function drawAlienHazard(ctx, hazard, quiet) {
+  if (hazard.age < (hazard.tellAt ?? 0)) return;
   if (hazard.kind === "ultimate") {
     if(typeof drawBossUltimateHazard === "function") drawBossUltimateHazard(ctx,hazard,quiet);
     return;

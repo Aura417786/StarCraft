@@ -106,7 +106,7 @@ async function main() {
           }
           case "mirrorShield": {
             h.nextReflect = 0;
-            return interceptAlienRound(shotAt(h.x, h.y)) && bossProjectiles.some(projectile => projectile.vx < 0 && projectile.glyph === "prism")
+            return interceptAlienRound(shotAt(h.x, h.y)) && bossHazards.some(reflection => reflection.kind === "filament" && reflection.reflection && reflection.warning >= 1.4)
               && !interceptAlienRound(shotAt(h.x, h.y, true));
           }
           case "tailConduit": {

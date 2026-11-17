@@ -547,20 +547,26 @@ function updateBossDamage() {
       contact = shot;
     }
   }
-  if (contact) tryPerfectShield();
   if (!isBattleActive()) return;
-  const hazard = bossHazards.find(area => !area.hitPlayer && alienHazardHitsPlayer(area));
+  const hazard = bossHazards.find(area => !area.hitPlayer && area.kind === "pressureSeal" && alienHazardHitsPlayer(area))
+    || bossHazards.find(area => !area.hitPlayer && alienHazardHitsPlayer(area));
   const seal = bossHazards.find(area => area.kind === "pressureSeal" && !area.pressureLogged && alienHazardHitsPlayer(area));
   if (seal && boss) {
     seal.pressureLogged = true;
     logBossPressure(boss, shieldIsActive() ? "guard" : bossHitGrace > 0 ? "grace" : "hit", { x: player.x, y: player.y, fullSeal: seal.fullSeal });
   }
-  const finale = boss?.finale && bossFinaleHitsPlayer(boss) ? boss : null;
+  const finaleContact = boss?.finale ? bossFinaleContact(boss) : null;
+  const finale = finaleContact ? boss : null;
   if (contact || hazard || finale) {
     // Lingering areas can hit once each. Repeated, newly telegraphed attacks
     // still damage the player even when they originate from the same move.
-    const damaged = damagePlayer(alienDamageExplanation(contact || hazard || {}, finale), contact || hazard || finale);
-    if (damaged && hazard && !contact) hazard.hitPlayer = true;
+    const damaged = damagePlayer(alienDamageExplanation(contact || hazard || {}, finale), contact || hazard || finaleContact);
+    if (damaged && hazard && !contact) {
+      hazard.hitPlayer = true;playAlienHazardCue(hazard,"impact");
+    }
+    if (damaged && finaleContact && !hazard && !contact) {
+      finaleContact.hitPlayer=true;playAlienHazardCue(finaleContact,"impact",finale);
+    }
   }
 }
 

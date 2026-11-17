@@ -308,13 +308,14 @@ function interceptAlienRound(bullet) {
       && roundTouchesMechanic(bullet, hazard.x, hazard.y, hazard.width * .87)) return true;
     if (hazard.kind === "mirrorShield" && mechanicActive(hazard) && !bullet.piercesShield
       && (bullet.previousX ?? bullet.x) <= hazard.x && bullet.x >= hazard.x && Math.abs(bullet.y - hazard.y) < hazard.height) {
-      if (hazard.age >= hazard.nextReflect) {
-        hazard.nextReflect = hazard.age + .34;
-        const speed = Math.max(215, Math.min(370, Math.abs(bullet.vx ?? 400) * .52));
-        // A violet return packet follows the incident lane. Leave that lane instead of feeding the mirror.
-        addBossProjectile(hazard.x, bullet.y, -speed, clamp((bullet.vy ?? 0) * .72, -130, 130),
-          { color: hazard.color, glyph: "prism", radius: 8, attackLabel: hazard.attackLabel });
-        gameAudio.bossAttack("coil", hazard.x, bullet.y);
+      if (hazard.age >= hazard.nextReflect && boss) {
+        hazard.nextReflect = hazard.age + 1.5;
+        // Reflection is an announced sheet of light, never a generic packet.
+        // Its captured incident lane stays fixed during the warning.
+        queueAlienHazard(boss,"filament",1.4,{originX:hazard.x,originY:bullet.y,
+          endX:flightBounds.left-12,endY:bullet.y,thickness:Math.max(12,player.height*.26),
+          swingY:0,duration:.65,material:"glass",color:hazard.color,sound:"beam",
+          reflection:true,attackLabel:hazard.attackLabel});
       }
       return true;
     }
@@ -403,6 +404,10 @@ function drawBoneRib(ctx, x, y, width, thickness, direction, color, active) {
 
 function drawMagmaLane(ctx, x, y, width, height, hazard, active, quiet) {
   drawMechanicZone(ctx, x, y, width, height, hazard.color, active, quiet);
+  if (active && typeof NextgenVfx !== "undefined" && width > 2 && height > 2) {
+    NextgenVfx.drawMagmaFissure(ctx,{x1:x,y1:y+height/2,x2:x+width,y2:y+height/2,width:height},
+      signatureMaterials.magma,quiet?0:hazard.age,.88);return;
+  }
   if (!active || quiet || width <= 2 || height <= 2) return;
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, width, height); ctx.clip();
