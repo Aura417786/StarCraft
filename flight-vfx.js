@@ -153,110 +153,176 @@ function drawFlightBoltWake(ctx, length, half, tint, index, time, hostile = fals
   ctx.globalAlpha = alpha;
 }
 
-function drawFlightNitrousWake(ctx, ship, time, overdrive, origin) {
-  const still = flightVfxStill(), tier = flightVfxTier();
-  const clock = still ? 0 : time;
-  const length = ship.width * ((still ? 1.63 : 1.99) + (overdrive ? .17 : 0));
-  const half = ship.height * (still ? .15 : .21);
-  const bend = Math.sin(clock * 16) * half * .25;
-  ctx.save();
-  ctx.translate(origin.x, origin.y);
-  ctx.globalAlpha *= still ? .62 : .88;
-  const plasma = ctx.createLinearGradient(-length, 0, 7, 0);
-  plasma.addColorStop(0, "#507bff00");
-  plasma.addColorStop(.27, "#4e75ff28");
-  plasma.addColorStop(.62, "#508eff9c");
-  plasma.addColorStop(.88, "#64dffff0");
-  plasma.addColorStop(1, "#d6fbff");
-  ctx.fillStyle = plasma;
-  ctx.beginPath();
-  ctx.moveTo(7, -half * .35);
-  ctx.bezierCurveTo(-length * .23, -half, -length * .70, -half * .53 + bend, -length, bend);
-  ctx.bezierCurveTo(-length * .69, half * .54 + bend, -length * .23, half, 7, half * .35);
-  ctx.closePath(); ctx.fill();
+const flightExhaustProfiles = {
+  red: { length: .52, radius: .10, split: .20, seed: 15, heat: [255, 242, 202],
+    color: [255, 106, 45], shade: [159, 27, 33], sparks: flightWakeColors.red },
+  blue: { length: .59, radius: .088, split: .30, seed: 83, heat: [221, 253, 255],
+    color: [65, 193, 255], shade: [55, 59, 167], sparks: flightWakeColors.blue },
+  yellow: { length: .47, radius: .105, split: .24, seed: 151, heat: [255, 247, 205],
+    color: [255, 194, 62], shade: [149, 64, 28], sparks: flightWakeColors.yellow },
+  nitrous: { length: .52, radius: .070, split: .24, seed: 217, heat: [225, 253, 255],
+    color: [132, 119, 255], shade: [48, 74, 184], sparks: "#a7b2ff" },
+};
+const flightExhaustCell = { width: 160, height: 56, count: 5 };
+const flightExhaustAtlases = new Map();
+const flightExhaustNoise = Float32Array.from({ length: 1024 }, (_, i) => flightVfxNoise(i + 4189));
+const flightExhaustFlow = { kind: "", time: 0, battleClock: 0, phase: 0, rage: 0, cast: 0, boost: 0 };
 
-  const core = ctx.createLinearGradient(-length * .77, 0, 6, 0);
-  core.addColorStop(0, "#8adfff00");
-  core.addColorStop(.43, "#8adfffa0");
-  core.addColorStop(.84, "#f6ffff");
-  core.addColorStop(1, "#ffffff");
-  ctx.fillStyle = core;
-  ctx.beginPath(); ctx.moveTo(6, -half * .18);
-  ctx.quadraticCurveTo(-length * .25, -half * .50, -length * .78, bend * .70);
-  ctx.quadraticCurveTo(-length * .25, half * .50, 6, half * .18);
-  ctx.closePath(); ctx.fill();
+function resetFlightExhaust() {
+  flightExhaustFlow.kind = "";
+  flightExhaustFlow.time = flightExhaustFlow.rage = flightExhaustFlow.cast = flightExhaustFlow.boost = 0;
+  flightExhaustFlow.battleClock = flightExhaustFlow.phase = 0;
+}
 
-  if (!still) {
-    ctx.fillStyle = "#d5f8ff";
-    const cells = 4 + tier;
-    for (let i = 0; i < cells; i++) {
-      const u = .13 + .62 * flightVfxWrap(clock * 1.65 + i / cells, 1);
-      const x = -length * u, w = length * .036 * (1 - u), h = half * .53 * (1 - u);
-      ctx.globalAlpha = (1 - u) * .83;
-      ctx.beginPath(); ctx.moveTo(x - w, bend * u); ctx.lineTo(x, bend * u - h);
-      ctx.lineTo(x + w, bend * u); ctx.lineTo(x, bend * u + h); ctx.closePath(); ctx.fill();
-    }
-    ctx.strokeStyle = "#69ccff";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 4 + tier * 2; i++) {
-      const u = flightVfxWrap(clock * (1.25 + .54 * flightVfxNoise(i)) + flightVfxNoise(i * 11), 1);
-      const x = -length * u, y = bend * u + (flightVfxNoise(i * 7 + 3) - .5) * half * (1 + u);
-      ctx.globalAlpha = (1 - u) * .52;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - length * .070, y); ctx.stroke();
+function flightExhaustGrain(x, y, seed) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix, fy = y - iy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const u = flightExhaustNoise[(ix + iy * 41 + seed) & 1023];
+  const v = flightExhaustNoise[(ix + iy * 41 + seed + 1) & 1023];
+  const a = flightExhaustNoise[(ix + iy * 41 + seed + 41) & 1023];
+  const b = flightExhaustNoise[(ix + iy * 41 + seed + 42) & 1023];
+  return (u + (v - u) * sx) * (1 - sy) + (a + (b - a) * sx) * sy;
+}
+
+function flightExhaustAtlas(name) {
+  if (flightExhaustAtlases.has(name)) return flightExhaustAtlases.get(name);
+  const profile = flightExhaustProfiles[name];
+  const { width, height, count } = flightExhaustCell;
+  const atlas = shipRenderCanvas(width, height * count);
+  const paint = atlas?.getContext("2d");
+  if (!paint) return null;
+  const image = paint.createImageData(width, height * count);
+  for (let cell = 0; cell < count; cell++) {
+    const turn = cell / count * flightVfxTau;
+    const flowX = 1.9 * Math.sin(turn), flowY = .8 * Math.cos(turn);
+    for (let px = 0; px < width; px++) {
+      const u = (px + .5) / width, tail = 1 - u;
+      const lift = Math.sin(turn + u * 12.5) * u * .14 + Math.sin(turn * 2 + u * 20) * u * .055;
+      const phase = turn * 1.0 - u * 23;
+      const widthPulse = .89 + Math.sin(phase) * .11 + Math.sin(phase * 2 + .8) * .07;
+      const sheath = (.46 + .75 * Math.sin(Math.PI * u) ** .72) * tail ** .63 * widthPulse;
+      const split = profile.split * u ** .70 * (.89 + .22 * Math.sin(phase + .55));
+      const passage = Math.max(.035, (.19 + .06 * Math.sin(phase + .7)) * tail ** .72);
+      const luminous = tail ** 1.42 * (.89 + .11 * Math.cos(phase));
+      const terminalFade = Math.min(1, tail * 22);
+      for (let py = 0; py < height; py++) {
+        const v = (py + .5) / height * 2 - 1;
+        const localY = v - lift;
+        const haze = flightExhaustGrain(u * 15 + flowX, localY * 7.5 + flowY, profile.seed);
+        const detail = flightExhaustGrain(u * 34 + flowX * 2.2 + v * 3, v * 19 + flowY * 1.7, profile.seed + 288);
+        const turbulentEdge = sheath * (.76 + .58 * haze + .18 * detail);
+        const band = Math.max(0, 1 - Math.abs(localY) / turbulentEdge);
+        const nearest = Math.min(Math.abs(localY - split), Math.abs(localY + split * .78));
+        const core = Math.exp(-2.4 * (nearest / passage) ** 2) * luminous * (.61 + .39 * detail);
+        const plasma = band ** 1.10 * (.46 + .43 * haze + .31 * detail);
+        const heat = Math.min(1, core ** .83 * (1.02 + .20 * detail));
+        const color = Math.min(1, (.12 + plasma * 1.35) * (.74 + .26 * tail));
+        const margin = Math.min(1, Math.max(0, (.94 - Math.abs(v)) * 9));
+        const alpha = Math.min(1, plasma * .94 * tail ** .48 + core * .84) * margin;
+        const k = 4 * ((cell * height + py) * width + px);
+        for (let channel = 0; channel < 3; channel++) {
+          const falloff = profile.shade[channel] + (profile.color[channel] - profile.shade[channel]) * color;
+          image.data[k + channel] = falloff + (profile.heat[channel] - falloff) * heat;
+        }
+        image.data[k + 3] = Math.round(alpha * terminalFade * 255);
+      }
     }
   }
-  ctx.restore();
+  paint.putImageData(image, 0, 0);
+  flightExhaustAtlases.set(name, atlas);
+  return atlas;
+}
+
+function drawFlightExhaustMaterial(ctx, palette, length, radius, phase, opacity, still, tier) {
+  if (opacity <= .005) return;
+  const { width, height, count } = flightExhaustCell;
+  const atlas = flightExhaustAtlas(palette);
+  if (!atlas) return;
+  const position = still ? 0 : flightVfxWrap(phase, count);
+  const frame = Math.floor(position), blend = tier ? position - frame : 0;
+  ctx.globalAlpha = opacity * (1 - blend);
+  ctx.drawImage(atlas, 0, frame * height, width, height, 0, -radius, length, radius * 2);
+  if (blend > .005) {
+    ctx.globalAlpha = opacity * blend;
+    ctx.drawImage(atlas, 0, ((frame + 1) % count) * height, width, height, 0, -radius, length, radius * 2);
+  }
+}
+
+function flightCastThrust(kind) {
+  if (typeof ultimate === "undefined" || ultimate.kind !== kind) return 0;
+  if (ultimate.phase === "charging") {
+    const progress = clamp(ultimate.elapsed / Math.max(.001, cannonLink.chargeDuration), 0, 1);
+    return .30 + progress * .71;
+  }
+  if (ultimate.phase === "firing" && !ultimate.shot?.presentationOnly) {
+    return .84 + .57 * Math.exp(-ultimate.elapsed * 7.8);
+  }
+  return 0;
+}
+
+function drawFlightExhaustSparks(ctx, profile, length, radius, clock, throttle, tier, opacity, boost) {
+  const count = Math.min(tier === 2 ? 19 : 11, Math.round((3 + throttle * 9) * tier * .62));
+  ctx.strokeStyle = profile.sparks;
+  ctx.lineCap = "round";
+  for (let i = 0; i < count; i++) {
+    const id = i + profile.seed * 13;
+    const speed = flightVfxNoise(id + 18), side = i % 2 ? -1 : 1;
+    const u = flightVfxWrap(clock * (.68 + speed * .85) + flightVfxNoise(id), 1);
+    const x = length * (.08 + .92 * u);
+    const drift = radius * (.18 + flightVfxNoise(id + 73) * 1.31);
+    const y = side * drift * (.44 + u * .88) + Math.sin(clock * 5 + id) * radius * .11 * u;
+    const reach = 1.7 + speed * (5 + 9 * boost) + throttle * 2.3;
+    ctx.globalAlpha = opacity * Math.sin(Math.PI * u) * (.35 + speed * .40);
+    ctx.lineWidth = .55 + speed * .65;
+    ctx.beginPath(); ctx.moveTo(x, y);
+    ctx.lineTo(x - reach, y * .88); ctx.stroke();
+  }
 }
 
 function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false) {
-  const origin = typeof fighterWakeOrigin === "function"
+  if (ship.disabled || !(ship.width > 0 && ship.height > 0)) return;
+  const actualShip = typeof player !== "undefined" && ship === player;
+  const origin = actualShip && typeof fighterWakeOrigin === "function"
     ? fighterWakeOrigin(ship, kind) : { x: ship.x - ship.width * .40, y: ship.y };
-  if (nitrous) return drawFlightNitrousWake(ctx, ship, time, overdrive, origin);
+  const palette = Object.hasOwn(flightExhaustProfiles, kind) ? kind : "red";
+  const profile = flightExhaustProfiles[palette];
   const still = flightVfxStill(), tier = flightVfxTier();
-  const color = flightWakeColors[kind] ?? flightWakeColors.red;
-  const extent = ship.width * (overdrive ? 1.52 : 1.04), half = ship.height * (overdrive ? .17 : .11);
-  const clock = still ? 0 : time, alpha = still ? .42 : .78;
-  ctx.save(); ctx.translate(origin.x, origin.y);
-  const plume = ctx.createLinearGradient(-extent, 0, 5, 0);
-  plume.addColorStop(0, color + "00"); plume.addColorStop(.48, color + "22");
-  plume.addColorStop(.86, color + "b3"); plume.addColorStop(1, "#f3ffffe8");
-  ctx.fillStyle = plume; ctx.globalAlpha = alpha;
-  if (kind === "red") {
-    // A heavy thermal nozzle has an opaque core, shear layers and shock diamonds.
-    ctx.beginPath(); ctx.moveTo(8, -half * .49);
-    ctx.bezierCurveTo(-extent * .23, -half, -extent * .64, -half * .44, -extent, Math.sin(clock * 11) * half * .20);
-    ctx.bezierCurveTo(-extent * .61, half * .48, -extent * .20, half, 8, half * .49); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#fff0c9"; ctx.globalAlpha = alpha * .74;
-    for (let i = 0; i < 3 + tier; i++) {
-      const u = (i + .7) / (4 + tier), x = -extent * u, w = extent * .065 * (1 - u * .4), h = half * .40 * (1 - u * .7);
-      ctx.beginPath(); ctx.moveTo(x - w, 0); ctx.lineTo(x, -h); ctx.lineTo(x + w, 0); ctx.lineTo(x, h); ctx.closePath(); ctx.fill();
-    }
-  } else if (kind === "blue") {
-    // Two distinct ion rails twist around a darker evacuated center.
-    ctx.strokeStyle = plume; ctx.lineWidth = half * .38; ctx.globalAlpha = alpha;
-    for (const side of [-1, 1]) {
-      ctx.beginPath(); ctx.moveTo(8, side * half * .36);
-      ctx.bezierCurveTo(-extent * .18, side * half * .75, -extent * .69, side * half * .22 + Math.sin(clock * 4) * half * .15, -extent, 0); ctx.stroke();
-      ctx.strokeStyle = "#d0f8ff"; ctx.lineWidth = 1; ctx.globalAlpha = alpha * .64; ctx.stroke(); ctx.strokeStyle = plume; ctx.lineWidth = half * .38; ctx.globalAlpha = alpha;
-    }
-    if (!still) {
-      ctx.strokeStyle = "#69c5ff"; ctx.lineWidth = .75; ctx.globalAlpha = .55;
-      for (let i = 0; i < 3 + tier; i++) {
-        const u = flightVfxWrap(clock * .8 + i / (3 + tier), 1), x = -extent * u, h = half * (1 - u) * .52;
-        ctx.beginPath(); ctx.moveTo(x - 3, -h); ctx.lineTo(x + 2, 0); ctx.lineTo(x - 3, h); ctx.stroke();
-      }
-    }
-  } else {
-    // The Auric engine is magnetically collimated: a broad laminar ribbon with
-    // ordered diamond cells; it does not inherit the Crimson exhaust flicker.
-    ctx.beginPath(); ctx.moveTo(8, -half * .57); ctx.lineTo(-extent * .68, -half * .28);
-    ctx.lineTo(-extent, 0); ctx.lineTo(-extent * .68, half * .28); ctx.lineTo(8, half * .57); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = "#ffe9aa"; ctx.lineWidth = .8; ctx.globalAlpha = alpha * .66;
-    for (let i = 0; i < 3 + tier; i++) {
-      const u = (i + .5) / (4 + tier), x = -extent * u, h = half * .45 * (1 - u * .65), w = extent * .07;
-      ctx.beginPath(); ctx.moveTo(x - w, 0); ctx.lineTo(x, -h); ctx.lineTo(x + w, 0); ctx.lineTo(x, h); ctx.closePath(); ctx.stroke();
-    }
+  const cast = actualShip ? flightCastThrust(kind) : 0;
+  let rage = overdrive ? 1 : 0, boost = nitrous ? 1 : 0, thrust = cast;
+  const flow = flightExhaustFlow;
+  let elapsed = 0;
+  if (actualShip) {
+    const battleClock = typeof battleTime === "number" ? battleTime : time;
+    if (flow.kind !== kind || time < flow.time || battleClock < flow.battleClock) resetFlightExhaust();
+    elapsed = flow.kind ? clamp(time - flow.time, 0, .07) : 1 / 60;
+    flow.kind = kind;
+    flow.time = time;
+    flow.battleClock = battleClock;
+    const blend = 1 - Math.exp(-elapsed * 24);
+    flow.rage += (rage - flow.rage) * blend;
+    flow.boost += (boost - flow.boost) * blend;
+    flow.cast += (thrust - flow.cast) * blend;
+    rage = flow.rage; boost = flow.boost; thrust = flow.cast;
   }
+  const energy = Math.max(rage, thrust, boost * 1.15) + Math.min(boost, Math.max(rage, thrust)) * .16;
+  const clock = still ? 0 : time;
+  const pace = 16 + 6 * energy;
+  if (actualShip) flow.phase = flightVfxWrap(flow.phase + elapsed * pace, flightExhaustCell.count);
+  const phase = still ? 0 : actualShip ? flow.phase : clock * pace;
+  const tremor = Math.sin(clock * 27) * .035 * (1 + energy * .83);
+  const length = ship.width * (profile.length + energy * .67 + tremor) * (still ? .88 : 1);
+  const radius = ship.height * (profile.radius + (.10 + .018 * rage) * energy) * (still ? .81 : 1);
+  const opacity = ctx.globalAlpha * (still ? .73 : .99);
+  ctx.save();
+  ctx.translate(origin.x + 2, origin.y);
+  if (actualShip && !still) ctx.rotate(shipVisuals.bank * .064);
+  ctx.scale(-1, 1);
+  ctx.globalCompositeOperation = "source-over";
+  drawFlightExhaustMaterial(ctx, palette, length, radius, phase, opacity * (1 - boost), still, tier);
+  drawFlightExhaustMaterial(ctx, "nitrous", length, radius, phase, opacity * boost, still, tier);
+  if (!still && tier) drawFlightExhaustSparks(ctx, boost > .5 ? flightExhaustProfiles.nitrous : profile,
+    length, radius, clock, energy, tier, opacity, boost);
   ctx.restore();
 }
 

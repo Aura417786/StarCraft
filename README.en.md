@@ -1,5 +1,9 @@
 # Star Breaker · 星际突围
 
+**High-resolution hangar fighters.** View Crimson, Azure and Auric at an angle to see the recessed barrels, armor seams and canopy reflections in fullscreen.
+
+**Fighter exhaust.** A compact hot plume stays on at normal thrust. In Overdrive or during an ultimate, the core extends into a turbulent plasma trail that sheds bright sparks.
+
 **New fighters and ultimate hit feedback.** Crimson carries a centerline cannon, Azure has twin forward prongs, and Auric has swept wings with paired gun arrays. Ion Swarm torpedoes leave blue-violet vapor trails, while Crimson Beam carries a hot core in turbulent orange plasma. The first boss hit from each ultimate pauses combat for 50 ms and sends light and fragments out from the contact point. Reduced motion keeps the softer local hit cue.
 
 **Nitrous boost.** Hold Shift for 38% faster directional movement and a blue-white exhaust plume. Release to coast at normal speed. Tap Shift to switch between spread and focused fire.

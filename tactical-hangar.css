@@ -136,6 +136,8 @@
 }
 #start-screen .hangar-art img {
   max-width: 109%;
+  max-height: 72vh;
+  object-fit: contain;
   filter: drop-shadow(0 26px 17px #030407b5) drop-shadow(0 -4px 12px #edca9b29);
 }
 #start-screen .ship-label {
@@ -524,7 +526,7 @@
   #start-screen { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   #start-screen h1, html[lang="en"] #start-screen h1 { font-size: clamp(37px, 10vw, 63px); max-width: 100%; }
   #start-screen .hangar-art { height: clamp(91px, 15.5vh, 145px); }
-  #start-screen .hangar-art img { width: min(80vw, 45vh); }
+  #start-screen .hangar-art img { width: min(80vw, 45vh); max-height: 100%; }
   #start-screen :is(.hangar-row, .fighter-option > span) { min-height: 44px; }
   #start-screen .fighter-option > span { padding-inline-end: 90px; }
   .game-over-screen { padding-inline: 20px; }

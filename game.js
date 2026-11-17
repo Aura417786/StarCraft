@@ -31,8 +31,8 @@ const pauseMotionButton = document.querySelector("#pause-motion");
 const pauseQualityControl = document.querySelector("#pause-quality");
 const pauseBackground = new Map();
 const statusMessage = document.querySelector("#status");
-const fighterImage = document.querySelector("#fighter-art");
-const hangarVariantImage = document.querySelector("#hangar-variant-art");
+const fighterImage = shipRenderAssets.crimson.image;
+const hangarFighterImage = document.querySelector("#fighter-art");
 const fighterOptions = document.querySelector("#fighter-picker")?.querySelectorAll?.("input") ?? [];
 const scoreDisplay = document.querySelector("#score");
 const battleClock = document.querySelector("#battle-clock");
@@ -297,10 +297,15 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
 }
 
 function readyFighter() {
-  const image = !fighterOptions.length || selectedFighter === "red" ? fighterImage : hangarVariantImage;
+  const image = hangarFighterImage;
   startButton.disabled = !image.complete || !image.naturalWidth;
   if (hangarConfirmLaunch) hangarConfirmLaunch.disabled = startButton.disabled;
   assetStatus.hidden = !image.complete || !!image.naturalWidth;
+}
+function restoreHangarFighter() {
+  const fallback = fighterVariantArt[hangarFighterImage.dataset.fighter].src;
+  if (hangarFighterImage.getAttribute("src") !== fallback) hangarFighterImage.src = fallback;
+  readyFighter();
 }
 function refreshHangarLoadoutSummary() {
   const summary = document.querySelector("#hangar-loadout-summary");
@@ -311,14 +316,13 @@ function refreshHangarLoadoutSummary() {
 function updateFighterSelection() {
   if (!fighterOptions.length) return;
   const fighter = fighterProfiles[selectedFighter];
-  const isRed = fighter.id === "red";
   startScreen.dataset.fighter = fighter.id;
   for (const option of fighterOptions) option.checked = option.value === fighter.id;
-  const preview = fighterVariantArt[fighter.id];
-  if (!isRed && hangarVariantImage.getAttribute("src") !== preview.src) hangarVariantImage.src = preview.src;
-  hangarVariantImage.alt = tr(...fighter.label);
-  hangarVariantImage.hidden = isRed;
-  fighterImage.hidden = !isRed;
+  if (hangarFighterImage.dataset.fighter !== fighter.id) {
+    hangarFighterImage.dataset.fighter = fighter.id;
+    hangarFighterImage.src = `assets/fighters/hangar/${fighter.id}.webp`;
+  }
+  hangarFighterImage.alt = tr(...fighter.label);
   document.querySelector("#fighter-label").textContent = tr(...fighter.label);
   document.querySelector("#fighter-code").textContent = fighter.code;
   document.querySelector("#fighter-rate").textContent = tr(`${fighter.rate} 次/秒`, `${fighter.rate}/s`);
@@ -336,12 +340,11 @@ for (const option of fighterOptions) option.addEventListener("change", () => {
   try { window.localStorage.setItem("star-breaker-fighter", selectedFighter); } catch { /* 仅保存偏好。 */ }
   updateFighterSelection();
 });
-fighterImage.addEventListener("load", readyFighter);
-fighterImage.addEventListener("error", readyFighter);
-hangarVariantImage?.addEventListener("load", readyFighter);
-hangarVariantImage?.addEventListener("error", readyFighter);
-if (fighterImage.complete) readyFighter();
+hangarFighterImage.addEventListener("load", readyFighter);
+hangarFighterImage.addEventListener("error", restoreHangarFighter);
 updateFighterSelection();
+if (hangarFighterImage.complete && !hangarFighterImage.naturalWidth) restoreHangarFighter();
+readyFighter();
 
 function showScreen(nextState, options = {}) {
   if (typeof resetBattleRewind === "function") resetBattleRewind("run", true);
@@ -1502,7 +1505,6 @@ function drawFrame(time) {
     drawBossBattle();
     if (!isBossDeathPlaying()) drawPowerups();
     drawBullets();
-    drawOverdrive();
     drawJourneyCatapult();
     drawPlayer();
     drawEvolutionWeapons(context);

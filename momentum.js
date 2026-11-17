@@ -143,27 +143,3 @@ function endMomentumBattle() {
   updateWeaponDisplay();
   updateMomentumDisplay();
 }
-function drawOverdrive() {
-  if (state !== "battle" || !isOverdriveActive()) return;
-  // 双喷口关于机头中心线对称；装饰不会改变战机或子弹的受击范围。
-  const pulse = reducedMotion.matches ? 1 : 0.94 + Math.sin(momentum.elapsed * 29) * 0.06;
-  const exhaustX = player.x - player.width * 0.4;
-  const length = player.width * 0.7 * pulse;
-  context.save();
-  context.globalAlpha = 0.85;
-  context.shadowColor = "#ff3928";
-  context.shadowBlur = reducedMotion.matches ? 0 : 16;
-  for (const side of [-1, 1]) {
-    const y = player.y + side * player.height * 0.17;
-    const fire = context.createLinearGradient(exhaustX - length, y, exhaustX, y);
-    fire.addColorStop(0, "#ff231500"); fire.addColorStop(0.45, "#ff462d88");
-    fire.addColorStop(0.8, "#ffb96dde"); fire.addColorStop(1, "#fff1d9");
-    context.fillStyle = fire;
-    context.beginPath();
-    context.moveTo(exhaustX, y - player.height * 0.08);
-    context.quadraticCurveTo(exhaustX - length * 0.45, y - player.height * 0.045, exhaustX - length, y);
-    context.quadraticCurveTo(exhaustX - length * 0.45, y + player.height * 0.045, exhaustX, y + player.height * 0.08);
-    context.closePath(); context.fill();
-  }
-  context.restore();
-}

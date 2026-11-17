@@ -92,7 +92,10 @@ function drawPlayerReflection(ctx, geometry, bank, surfaces) {
   ctx.restore();
 }
 
-function resetShipVisuals() { shipVisuals.clock = 0; shipVisuals.bank = 0; }
+function resetShipVisuals() {
+  shipVisuals.clock = 0; shipVisuals.bank = 0;
+  if (typeof resetFlightExhaust === "function") resetFlightExhaust();
+}
 function updateShipVisuals(seconds, cinematic = false) {
   if ((!cinematic && !isBattleActive()) || !Number.isFinite(seconds) || seconds <= 0) return;
   shipVisuals.clock += seconds;
@@ -267,7 +270,8 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0, 
   if (atlas) ctx.transform(1, 0, atlas.residual * .035, 1, 0, 0);
   else ctx.transform(1, 0, bank * 0.09, 1 - Math.abs(bank) * 0.10, 0, 0);
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-  if (!ship.disabled) {
+  const hasGameplayExhaust = playerShip && ship === player && typeof drawFlightEngineWake === "function";
+  if (!ship.disabled && !hasGameplayExhaust) {
     const boost = playerShip && (typeof flightMovementVector === "function" ? flightMovementVector().x > .2 : (pressedKeys.has("ArrowRight") || pressedKeys.has("KeyD")));
     const throttle = boost ? 1.45 : playerShip ? 1.16 : .89;
     for (const engine of (atlas?.engines ?? asset.engines)) {
