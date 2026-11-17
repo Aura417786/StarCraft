@@ -5,6 +5,68 @@
 const fs = require("node:fs"), path = require("node:path"), assert = require("node:assert/strict");
 const { chromium } = require("playwright");
 const { createPage } = require("./balance.cjs");
+async function checkCinderRift(page) {
+  await page.evaluate(() => {
+    showScreen("battle", { seed: 4225, difficulty: "veteran" });
+    enemies.length = bullets.length = bossHazards.length = 0;
+    spawnBoss(2);
+    resetBossPresentation();
+    Object.assign(boss, bossArena(2), { phase: "recover", phaseTime: 1 });
+    shield.charges = shield.remaining = 0;
+    boss.pressureAttackCount = 6;
+    prepareAlienAttack(boss, true);
+  });
+  // Wait for the new atlas in the real implementation, including its decode.
+  await page.waitForFunction(() => {
+    const context = document.createElement("canvas").getContext("2d");
+    return NextgenVfx.drawCinderCharge(context, 32, 32, 24, .5, 1, true);
+  });
+  return page.evaluate(() => {
+    const scene = boss.pressureState;
+    const hazard = bossHazards.find(h => h.kind === "ultimate" && h.ultimateKind === "magmaRift");
+    if (!scene || !hazard?.noShield) throw new Error("Expected Cinder Rift with an announced safe passage");
+    const layer = document.createElement("canvas");
+    layer.width = Math.ceil(viewport.width);
+    layer.height = Math.ceil(viewport.height);
+    const ctx = layer.getContext("2d", { willReadFrequently: true });
+    const results = [];
+    const stages = [
+      ["charge", hazard.warning * .82],
+      ["active", hazard.warning + hazard.duration * .45],
+      ["cooling", scene.warning + scene.activeDuration + .21],
+      ["cleared", scene.warning + scene.activeDuration + 1],
+    ];
+    const safeTop = Math.max(0, Math.ceil(hazard.gapY - hazard.gapSize / 2) + 2);
+    const safeBottom = Math.min(layer.height, Math.floor(hazard.gapY + hazard.gapSize / 2) - 2);
+    for (const quality of ["low", "medium", "high"]) {
+      setVisualQuality(quality, false);
+      reduceCombatMotion = quality === "low";
+      for (const [stage, age] of stages) {
+        ctx.clearRect(0, 0, layer.width, layer.height);
+        NextgenVfx.beginFrame();
+        scene.age = hazard.age = age;
+        if (stage === "charge" || stage === "active") {
+          drawBossUltimateGeometry(ctx, hazard, bossUltimateGeometry(hazard), boss);
+        } else {
+          drawCinderCoolingAsh(ctx, scene);
+        }
+        const pixels = ctx.getImageData(0, 0, layer.width, layer.height).data;
+        let visible = 0;
+        let inSafePassage = 0;
+        for (let y = 0; y < layer.height; y++) {
+          for (let x = 0; x < layer.width; x++) {
+            if (pixels[(y * layer.width + x) * 4 + 3] <= 5) continue;
+            visible++;
+            if (y >= safeTop && y < safeBottom) inSafePassage++;
+          }
+        }
+        results.push({ quality, stage, visible, inSafePassage, safeHeight: safeBottom - safeTop });
+      }
+    }
+    return results;
+  });
+}
+
 async function main() {
   const root = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]);
   fs.mkdirSync(out, { recursive: true });
@@ -81,6 +143,13 @@ async function main() {
         report.frames.push({...row,file});
       }
     }
+    report.cinderRift = await checkCinderRift(page);
+    for (const row of report.cinderRift) {
+      assert.ok(row.safeHeight > 0);
+      assert.equal(row.inSafePassage, 0, "Cinder Rift art must preserve the announced gap");
+      if (row.stage === "cleared") assert.equal(row.visible, 0, "Cooling material must expire");
+      else assert.ok(row.visible > 100, `Cinder Rift ${row.stage} must be visible at ${row.quality}`);
+    }
     // All eleven families and all three routine weapons are exercised through
     // their production drawing entry points in one explicitly isolated gallery.
     report.gallery = await page.evaluate(() => {
@@ -119,7 +188,7 @@ async function main() {
     report.missingAtlases=errors.filter(e=>e.includes("404 ")&&e.includes("/assets/vfx/nextgen/"));
     fs.writeFileSync(path.join(out,"report.json"),JSON.stringify(report,null,2));
     assert.deepEqual(report.errors,[]);
-    console.log(JSON.stringify({geometryChecks:report.geometry.length,frames:report.frames.length,errors:report.errors,missingAtlases:report.missingAtlases},null,2));
+    console.log(JSON.stringify({geometryChecks:report.geometry.length,frames:report.frames.length,cinderCases:report.cinderRift.length,errors:report.errors,missingAtlases:report.missingAtlases},null,2));
   } finally { await browser.close(); }
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

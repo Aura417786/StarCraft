@@ -21,7 +21,7 @@ from time import monotonic
 import bpy
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_boss_models import MODELS, PALETTES, Sculpt
+from build_boss_models import CINDER_MAW_PALETTE, MODELS, PALETTES, Sculpt
 
 
 # Scale and stretch of a material's structure, followed by relief, matte
@@ -106,8 +106,10 @@ class Graph:
                          Roughness=rough).outputs["Fac"]
 
 
-def design_material(material, index, glow, object_origin):
+def design_material(material, index, glow, object_origin, *, cinder_maw=False):
     family, stretch, scale, relief, matte, mineral, strength = PROFILES[index]
+    if cinder_maw:
+        matte, mineral = .82, .13
     graph = Graph(material)
     add = lambda a, b: graph.math("ADD", a, b)
     mul = lambda a, b: graph.math("MULTIPLY", a, b)
@@ -149,19 +151,23 @@ def design_material(material, index, glow, object_origin):
     # Weathered borders on keratin and localized red-orange oxidation on basalt.
     if bone:
         accent = (.55, .38, .24, 1) if index in {1, 2, 8} else (.31, .37, .47, 1)
+        if cinder_maw:
+            accent = (.32, .24, .17, 1)
         albedo = graph.mix("Old mineral highlights", mul(ridge, .21), albedo, accent)
     lava = None
     if index == 2:
         distance = graph.node("ShaderNodeVectorMath", "Distance from furnace")
         distance.operation = "DISTANCE"
         graph.set(distance.inputs[0], point)
-        distance.inputs[1].default_value = (-.56, -.24, .05)
+        furnace_origin = (-1.12, -.07, .095) if cinder_maw else (-.56, -.24, .05)
+        distance.inputs[1].default_value = furnace_origin
         warmth = subtract(1, graph.remap("Cooling away from the core", distance.outputs["Value"], .50, 1.82))
         heat = mul(warmth, graph.remap("Uneven heat transfer through the shell", broad, .27, .67))
         crack = subtract(1, graph.remap("Narrow radiant fissure", cells.outputs["Distance"], .010, .052))
         lava = mul(crack, heat)
         if not signal:
-            albedo = graph.mix("Dark outer basalt", mul(subtract(1, heat), .27), albedo, (.035, .017, .013, 1))
+            basalt = (.010, .014, .022, 1) if cinder_maw else (.035, .017, .013, 1)
+            albedo = graph.mix("Dark outer basalt", mul(subtract(1, heat), .27), albedo, basalt)
             albedo = graph.mix("Incandescent minerals close to the core", mul(lava, .48), albedo, (.66, .082, .006, 1))
     if index == 8 and not signal:
         albedo = graph.mix("Warm tissue below the blue scar", mul(cavity, .45), albedo, (.079, .008, .021, 1))
@@ -189,7 +195,7 @@ def design_material(material, index, glow, object_origin):
         mask = mul(strength, mul(subtract(1, mul(cavity, .74)), add(.16, mul(dense, .84))))
         albedo = graph.mix("Darker connective paths within the core", mul(cavity, .52), albedo, (.082, .021, .042, 1))
         if index == 2:
-            mask = add(mul(mask, .71), mul(lava, .62))
+            mask = add(mul(mask, 1.30 if cinder_maw else .71), mul(lava, .62))
     elif index in {2, 8, 10} and not bone:
         mask = mul(lava, .44) if index == 2 else mul(seams, .075)
     else:
@@ -199,6 +205,9 @@ def design_material(material, index, glow, object_origin):
         height_axis = graph.node("ShaderNodeSeparateXYZ", "Layered organ emission", Vector=point).outputs["Z"]
         violet = graph.remap("Independent organ tone", height_axis, -.55, .48)
         hue = graph.mix("Teal through magenta", violet, (.22, .74, 1.0, 1), hue)
+    if cinder_maw and signal:
+        heat_color = graph.remap("Mottled core temperature", broad, .33, .61)
+        hue = graph.mix("Orange to pale mineral heat", heat_color, (1.0, .16, .012, 1), (1.0, .66, .16, 1))
     emission = graph.mix("Independent bioluminescence", mask, (0, 0, 0, 1), hue)
     pass_node = graph.node("ShaderNodeEmission", "Linear bake pass")
     image_node = graph.node("ShaderNodeTexImage", "Bake target")
@@ -377,7 +386,7 @@ def build(index, output, size, threads, round_trip):
     scene.render.threads = threads
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
-    palette = PALETTES[index if index < 12 else index - 11]
+    palette = CINDER_MAW_PALETTE if index == 2 else PALETTES[index if index < 12 else index - 11]
     sculpt = AtlasSculpt(palette[:2], palette[2])
     sculpt_model(sculpt)
     objects = sculpt.organs(name)
@@ -387,7 +396,8 @@ def build(index, output, size, threads, round_trip):
     origin = bpy.data.objects.new("Material bake origin", None)
     bpy.context.collection.objects.link(origin)
     materials = [obj.data.materials[0] for obj in objects]
-    designs = [design_material(mat, identity, palette[2], origin) for mat in materials]
+    designs = [design_material(mat, identity, palette[2], origin, cinder_maw=index == 2)
+               for mat in materials]
     print(f"UV {name} {coverage:.3f} {size}px", flush=True)
     maps = {}
     resolutions = {"Albedo": size, "ORM": min(size, 1024), "Normal": min(size, 1024),

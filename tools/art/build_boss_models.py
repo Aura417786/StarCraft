@@ -14,6 +14,10 @@ from mathutils import Vector
 sys.path.insert(0, str(Path(__file__).parent))
 from boss_sculpt import Sculpt, TAU
 from boss_finale_sculpt import FINALES
+from cinder_maw_sculpt import furnace
+
+
+CINDER_MAW_PALETTE = ((.015, .021, .030), (.085, .098, .114), (1, .225, .022))
 
 
 PALETTES = [
@@ -93,24 +97,6 @@ def stalker(s):
         s.lobe((x + .05, .08, .50), (.17, .16, .35 + i * .018), "carapace", angle=.59, segment=16, rings=10)
     s.lobe((-1.08, -.52, .23), (.16, .06, .085), "signal", ridge=4)
     s.limb([(1.08, .2, -.1), (1.55, .14, -.28), (2.03, .16, -.13), (2.24, .09, .31)], .24, "membrane")
-
-
-def furnace(s):
-    s.lobe((.42, .18, -.02), (1.46, .80, .79), ridge=11, wrinkle=.24, segment=36)
-    s.lobe((-.49, -.37, .05), (.69, .41, .62), "signal", ridge=7, wrinkle=.43)
-    for i in range(8):
-        t = TAU * i / 8
-        z = cos(t) * .71
-        y = sin(t) * .61
-        s.limb([(.84, y * .74, z * .72), (.41, y, z), (-.20, y * 1.12, z * 1.1),
-                (-.76, y, z * .94), (-1.45, y * .65, z * .55)], .22, "carapace",
-               flatten=.72, motion=(.42, 1.45), ridge=5)
-        s.limb([(.46, y * 1.07, z * 1.07), (-.05, y * 1.16, z * 1.18), (-.77, y, z)],
-               .022, "signal", sides=5)
-    for z in (-.62, .58):
-        s.limb([(.48, -.33, z * .55), (.10, -.43, z * 1.1), (-.55, -.41, z),
-                (-1.42, -.27, z * .51)], .19, "rib", motion=(.32, 1.4))
-    s.limb([(.97, .18, 0), (1.51, .16, -.16), (1.99, .23, .18), (2.19, .23, .64)], .27)
 
 
 def weaver(s):
@@ -344,7 +330,7 @@ def build(index, out, review):
     scene = bpy.context.scene
     scene.frame_start, scene.frame_end = 1, 88
     scene.render.fps = 24
-    palette = PALETTES[index if index < 12 else index - 11]
+    palette = CINDER_MAW_PALETTE if index == 2 else PALETTES[index if index < 12 else index - 11]
     sculpt = Sculpt(palette[:2], palette[2])
     model(sculpt)
     organs = sculpt.organs(name)

@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v35.4 Cinder Maw redesign.** Overlapping basalt plates frame a hinged jaw and a recessed furnace. The Cinder Rift erupts in sections, sends molten rock through the fractures, then cools as the embers disperse.
+
 **v35.3 Cinematic UI.** Floating ability dials and edge-aligned readouts keep the battlefield open, while slender boss health tracks and timed cues mark threats. The hangar adds a fighter radar and revised refit, progress and sortie reports. Display, audio, controls and accessibility each have a settings tab, with separate master, music and effects levels.
 
 **v35.2 Boss effects update.** All eleven bosses have refreshed signature attacks and ultimates. Look for foaming tides, curved ribs, veined chitin, holographic decoys, prism flares and branching neural arcs. Layered beams and particles follow the original attack geometry, and illuminated edges mark escape corridors.

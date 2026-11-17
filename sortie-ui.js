@@ -8,7 +8,7 @@ const sortieConsoleButtons = document.querySelectorAll("[data-sortie-console]");
 const sortieModeBadge = document.querySelector("#sortie-mode-badge");
 const sortieResultSummary = document.querySelector("#sortie-result-summary");
 let sortieConsolePage = "";
-const starBreakerVersion = "v35.3";
+const starBreakerVersion = "v35.4";
 
 const sortieUiWords = {
   awards: ["徽章墙", "Badge Wall"],

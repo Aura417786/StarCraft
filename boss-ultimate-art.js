@@ -237,7 +237,11 @@ function drawUltimateChargeIdentity(ctx, target, scene) {
   const cx = target.x - target.width * .27, cy = target.y, r = viewport.height * (.15 + charge * .10);
   const fade = .3 + charge * .7;
   if (typeof NextgenVfx !== "undefined" && ["tideWalls", "magmaRift", "voidCollapse"].includes(kind)) {
-    if (kind === "magmaRift") NextgenVfx.drawEruption(ctx, { x: cx, y: cy, radius: r * .85 }, mat, time, fade * .80);
+    if (kind === "magmaRift") {
+      if (!NextgenVfx.drawCinderCharge(ctx, cx, cy, r, charge, time, quiet)) {
+        NextgenVfx.drawEruption(ctx, { x: cx, y: cy, radius: r * .85 }, mat, time, fade * .80);
+      }
+    }
     else if (kind === "voidCollapse") {
       ctx.save();ctx.translate(cx,cy);ctx.rotate(-.18);ctx.scale(1,.62);
       NextgenVfx.drawVoid(ctx, { x: 0, y: 0, radius: r }, mat, time, fade * .92);ctx.restore();
@@ -358,6 +362,14 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
   ultimateClipDanger(ctx, hazard);
+  if (kind === "magmaRift") {
+    const room = mechanicRoom();
+    const layout = active ? geometry : bossUltimateGeometry({ ...hazard, age: hazard.warning + hazard.duration * .5 });
+    if (NextgenVfx.drawCinderRift(ctx, layout, hazard, room.height * .31, quiet)) {
+      ctx.restore();
+      return;
+    }
+  }
   if (BossCreatureVfx.drawUltimate(ctx, hazard, geometry, target, { active, quiet, alpha })
       || BossEnergyVfx.drawUltimate(ctx, hazard, geometry, quiet)) {
     ctx.restore();
@@ -409,6 +421,22 @@ function drawBossUltimateArt(ctx, target, scene, layer) {
     if (hazard.kind !== "ultimate" || hazard.age < (hazard.tellAt || 0) || hazard.age >= hazard.warning + hazard.duration) continue;
     drawBossUltimateGeometry(ctx, hazard, bossUltimateGeometry(hazard), target);
   }
+  if (scene.ultimateKind === "magmaRift") drawCinderCoolingAsh(ctx, scene);
+}
+
+// Render-only wake following the 2.3s environmental attack. It has no hazard
+// entry, collision callback or impact cue and finishes before the seal pulse.
+function drawCinderCoolingAsh(ctx, scene) {
+  const cooling = scene.age - (scene.warning + scene.activeDuration);
+  if (!(cooling > 0 && cooling < .65)) return;
+  const room = mechanicRoom();
+  const tail = { ultimateKind: "magmaRift", warning: scene.warning, duration: scene.activeDuration,
+    age: scene.warning + scene.activeDuration * .895 + cooling * .14, gapY: scene.gapY, gapSize: scene.gapSize,
+    noShield: !scene.fullSeal };
+  ctx.save();
+  ultimateClipDanger(ctx, tail);
+  NextgenVfx.drawCinderRift(ctx, bossUltimateGeometry(tail), tail, room.height * .31, quietCombatMotion(), cooling / .65);
+  ctx.restore();
 }
 
 function drawBossUltimateAftershock(ctx, scene) {
@@ -419,6 +447,10 @@ function drawBossUltimateAftershock(ctx, scene) {
   const cx = pressureArt.coreX * w, cy = pressureArt.coreY * h, front = cx - travel * w * 1.17;
   ctx.save();
   if (!scene.fullSeal) ultimateClipDanger(ctx, { noShield: true, gapY: scene.gapY, gapSize: scene.gapSize });
+  if (scene.ultimateKind === "magmaRift" && NextgenVfx.drawCinderAftershock(ctx, cx, cy, w, h, age, quiet)) {
+    ctx.restore();
+    return true;
+  }
   const name = pressureArt.material;
   const texture = typeof getBossVfxMaterial === "function" ? getBossVfxMaterial(name) : null;
   const cloud = texture || pressureArtMist(mat.rim);

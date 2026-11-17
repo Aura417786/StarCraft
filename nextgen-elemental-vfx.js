@@ -106,6 +106,7 @@ const NextgenVfx = (() => {
     if (!work.length) return;
     scheduledMaterials.add(name);
     if (name !== "spore") atlas(name);
+    if (name === "magma") cinderMaterial();
     const schedule = typeof requestIdleCallback === "function"
       ? job => requestIdleCallback(job, { timeout: 1500 })
       : job => setTimeout(job, 32);
@@ -387,6 +388,245 @@ const NextgenVfx = (() => {
       c.putImageData(pixels, 0, 0); return tile;
     })();
   }
+
+  const cinderPlateWidth = 1536, cinderPlateDepth = 320, cinderSprite = 256;
+  let cinderImage, cinderHeatCanvas, cinderBankCanvas;
+
+  function cinderMaterial() {
+    if (!cinderImage) {
+      cinderImage = new Image();
+      cinderImage.src = "assets/vfx/nextgen/cinder-rift.webp";
+    }
+    return cinderImage.complete && cinderImage.naturalWidth === cinderPlateWidth ? cinderImage : null;
+  }
+
+  function cinderSpriteAt(ctx, image, source, x, y, w, h) {
+    ctx.drawImage(image, source * cinderSprite, 4 * cinderPlateDepth, cinderSprite, cinderSprite, x, y, w, h);
+  }
+
+  function cinderHeatPlate(image, lane, time, strength, quiet) {
+    if (!cinderHeatCanvas) {
+      cinderHeatCanvas = document.createElement("canvas");
+      cinderHeatCanvas.width = 768;
+      cinderHeatCanvas.height = 160;
+    }
+    const { width, height } = cinderHeatCanvas;
+    const c = cinderHeatCanvas.getContext("2d");
+    c.globalCompositeOperation = "source-over";
+    c.clearRect(0, 0, width, height);
+    c.drawImage(image, 0, (lane * 2 + 1) * cinderPlateDepth, cinderPlateWidth, cinderPlateDepth, 0, 0, width, height);
+    // An opacity front runs *through* the stationary cracks. The dark plates
+    // and their heat mask stay registered, including under reduced motion.
+    const current = c.createLinearGradient(0, 0, width, 0);
+    for (let stop = 0; stop <= 16; stop++) {
+      const x = stop / 16;
+      const front = ease((time * 1.18 - (1 - x) * .32 + .23) / .34);
+      const flow = quiet ? .68 : .63 + Math.cos((1 - x) * 28 - time * 5.5 + lane) * .28;
+      const alpha = clamp01(strength * front * flow);
+      current.addColorStop(x, `rgba(255,255,255,${alpha})`);
+    }
+    c.globalCompositeOperation = "destination-in";
+    c.fillStyle = current;
+    c.fillRect(0, 0, width, height);
+    return cinderHeatCanvas;
+  }
+
+  function cinderSparks(ctx, x, y, span, depth, age, alpha, salt, direction = 1) {
+    const count = stats.tier === "high" ? 15 : stats.tier === "medium" ? 10 : 5;
+    if (alpha < .02 || count === 0) return;
+    ctx.lineCap = "round";
+    for (let i = 0; i < count; i++) {
+      const t = fract(seed(i + salt) + age * (.68 + seed(i + salt + 51) * .62));
+      const launch = span * (.18 + seed(i + salt + 19) * .82);
+      const drift = direction * (t * 1.4 - t * t * .36) * launch;
+      const lift = Math.sin(t * Math.PI * .81) * depth * (.22 + .78 * seed(i + salt + 73));
+      const sx = x - drift, sy = y + lift * (i % 2 ? -1 : 1);
+      ctx.strokeStyle = i % 5 ? "#ff8638" : "#ffe1a0";
+      ctx.globalAlpha = alpha * Math.sin(t * Math.PI) ** 1.7 * (.27 + seed(i + salt + 10) * .64);
+      ctx.lineWidth = .65 + seed(i + salt + 30) * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + direction * (2 + launch * .080) * (1 - t * .3),
+        sy - (i % 2 ? -1 : 1) * depth * .10 * (1 - t * 1.5));
+      ctx.stroke();
+    }
+  }
+
+  function cinderBankPlate(image, lane, time, depth, height, offset, opacity, warm, quiet) {
+    if (!cinderBankCanvas) {
+      cinderBankCanvas = document.createElement("canvas");
+      cinderBankCanvas.width = 768;
+      cinderBankCanvas.height = 160;
+    }
+    const { width, height: rows } = cinderBankCanvas;
+    const c = cinderBankCanvas.getContext("2d");
+    c.globalCompositeOperation = "source-over";
+    c.clearRect(0, 0, width, rows);
+    const shift = rows * offset / depth;
+    c.globalAlpha = opacity;
+    c.drawImage(image, 0, lane * 2 * cinderPlateDepth, cinderPlateWidth, cinderPlateDepth, 0, shift, width, rows);
+    c.globalAlpha = 1;
+    c.drawImage(cinderHeatPlate(image, lane, time, warm, quiet), 0, shift);
+    const lip = clamp01(height / depth);
+    const feather = c.createLinearGradient(0, 0, 0, rows);
+    feather.addColorStop(0, "white");
+    feather.addColorStop(Math.max(.001, lip - .125), "white");
+    feather.addColorStop(lip, "transparent");
+    c.globalCompositeOperation = "destination-in";
+    c.fillStyle = feather;
+    c.fillRect(0, 0, width, rows);
+    return cinderBankCanvas;
+  }
+
+  function cinderBank(ctx, image, rect, lane, depth, time, intensity, warning, quiet, residue, hazard) {
+    const { width, height } = rect;
+    if (width <= 0 || height <= .45) return;
+    const origin = lane === 0 ? rect.y : rect.y + height;
+    const gapEdge = hazard.gapY + (lane === 0 ? -1 : 1) * hazard.gapSize / 2;
+    const visible = hazard.noShield ? Math.min(height, lane === 0 ? gapEdge - origin : origin - gapEdge) : height;
+    if (visible <= .45) return;
+    ctx.save();
+    ctx.translate(rect.x, origin);
+    if (lane !== 0) ctx.scale(1, -1);
+    ctx.beginPath(); ctx.rect(0, 0, width, visible); ctx.clip();
+    const contact = 1 - residue;
+    const open = warning ? .43 + intensity * .25 : clamp01(height / depth);
+    // The basalt moves from the edge of the arena. Its relief and cracks
+    // never stretch as the hazard rises. Feather the receiving edge after
+    // compositing so a shallow first frame does not show a rectangular slice.
+    const offset = -(1 - open) * depth * .72;
+    const opacity = residue ? contact ** 1.5 * .34 : warning ? .04 + intensity * .16 : .96;
+    const warm = residue ? contact ** 2 * .12 : warning ? intensity * .41 : intensity * 1.32;
+    const plate = cinderBankPlate(image, lane, quiet ? .65 : time, depth, visible, offset, opacity, warm, quiet);
+    ctx.globalAlpha = 1;
+    ctx.drawImage(plate, 0, 0, width, depth);
+    stats.atlasDraws++;
+    if (!quiet) {
+      if (!residue) {
+        const glands = stats.tier === "low" ? 3 : 5;
+        for (let i = 0; i < glands; i++) {
+          const key = lane * 47 + i * 11;
+          const u = .15 + i * .16 + (seed(key + 29) - .5) * .07;
+          const x = width * u, y = offset + depth * (.34 + seed(key + 18) * .20);
+          const breath = ease((time + u * .44 - .08) * 4);
+          cinderSparks(ctx, x, y, depth * .44, depth * .24, time, breath * intensity * .57, key);
+          if (stats.tier === "high" && i % 2 === lane && intensity > .3) {
+            const age = fract(time * .53 + seed(key + 41));
+            const fog = depth * (.40 + age * .58);
+            ctx.globalAlpha = intensity * Math.sin(age * Math.PI) * .33;
+            cinderSpriteAt(ctx, image, 2, x - fog * (.47 + age * .18), y - fog * .68, fog, fog);
+            stats.atlasDraws++;
+          }
+        }
+      } else if (residue < .83) {
+        cinderSparks(ctx, width * .59, Math.min(height * .64, depth * .24), depth * .71,
+          depth * .14, time, contact * .30, 94 + lane);
+      }
+    }
+    ctx.restore();
+  }
+
+  function cinderVent(ctx, image, circle, time, intensity, quiet, warning, salt) {
+    const { x, y, radius } = circle;
+    if (!(radius > 0)) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ringClip(ctx, 0, 0, radius);
+    ctx.rotate((seed(salt + 1) - .5) * .85);
+    const r = radius;
+    const heat = quiet ? .78 : .73 + .26 * Math.sin(time * 9.3 + salt * .79);
+    ctx.globalAlpha = warning ? .26 : .99;
+    cinderSpriteAt(ctx, image, 0, -r, -r, r * 2, r * 2);
+    ctx.globalAlpha = intensity * heat;
+    cinderSpriteAt(ctx, image, 1, -r, -r, r * 2, r * 2);
+    stats.atlasDraws += 2;
+    if (!quiet && !warning) {
+      const lift = fract(time * .56 + seed(salt));
+      ctx.globalAlpha = Math.sin(lift * Math.PI) * intensity * .72;
+      const swell = r * (.73 + lift * .66);
+      cinderSpriteAt(ctx, image, 2, -swell * .45, -swell * .47 - r * .88 * lift, swell, swell);
+      stats.atlasDraws++;
+      cinderSparks(ctx, 0, 0, r * .75, r * .68, time, intensity * .80, salt);
+    }
+    ctx.restore();
+  }
+
+  function drawCinderRift(ctx, geometry, hazard, maxDepth, quiet, residue = 0) {
+    const image = cinderMaterial();
+    if (!image) return false;
+    const warning = !residue && hazard.age < hazard.warning;
+    const age = warning ? hazard.age / hazard.warning - .56 : hazard.age - hazard.warning;
+    const cool = 1 - ease((geometry.progress - .61) / .37) * .79;
+    const charge = warning ? ease((age + .43) / .83) : cool;
+    stats.effects++;
+    for (const [i, rect] of geometry.rects.entries()) {
+      const lane = rect.y + rect.height / 2 < viewport.height / 2 ? 0 : 1;
+      // Clipped lanes can omit the upper rect on unusual playfields.
+      cinderBank(ctx, image, rect, geometry.rects.length === 2 ? i : lane,
+        maxDepth, age, charge, warning, quiet, residue, hazard);
+    }
+    if (!residue) {
+      for (const [i, circle] of geometry.circles.entries()) {
+        cinderVent(ctx, image, circle, age, warning ? charge * .40 : .48 + cool * .49,
+          quiet, warning, i * 37 + 13);
+      }
+    }
+    return true;
+  }
+
+  function drawCinderCharge(ctx, x, y, radius, charge, time, quiet) {
+    const image = cinderMaterial();
+    if (!image) return false;
+    const pulse = quiet ? 1 : .90 + Math.sin(time * 12) * .1;
+    const glow = radius * (.41 + charge * .21);
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const hot = ctx.createRadialGradient(x, y, 0, x, y, glow);
+    hot.addColorStop(0, "#ffba61bf"); hot.addColorStop(.21, "#bd491493");
+    hot.addColorStop(.53, "#96361872"); hot.addColorStop(1, "#ae462300");
+    ctx.globalAlpha = charge * .75 * pulse;
+    ctx.fillStyle = hot;
+    ctx.fillRect(x - glow, y - glow, glow * 2, glow * 2);
+    ctx.globalCompositeOperation = "source-over";
+    if (!quiet) cinderSparks(ctx, x - glow * .12, y, glow * 1.45, glow * .85,
+      1.4 - time, ease(charge) * .76, 722, -1);
+    ctx.restore();
+    return true;
+  }
+
+  function drawCinderAftershock(ctx, x, y, width, height, age, quiet) {
+    const image = cinderMaterial();
+    if (!image) return false;
+    const t = age / .7;
+    const front = quiet ? x - width * .26 : x - width * 1.15 * (1 - Math.exp(-t * 4.7));
+    const fade = (1 - t) ** 1.55;
+    ctx.save();
+    const count = stats.tier === "low" ? 6 : 12;
+    for (let i = 0; i < count; i++) {
+      const ly = height * (i + seed(i + 95) * .91) / count;
+      const sway = ((ly - y) / height) ** 2 * width * .30;
+      const lx = front + sway + width * .16 * seed(i + 29);
+      const r = height * (.12 + seed(i + 101) * .20) * (.76 + t * .58);
+      ctx.globalAlpha = fade * (.52 + seed(i + 201) * .44);
+      cinderSpriteAt(ctx, image, 2, lx - r * .55, ly - r * .58, r * 1.5, r);
+      stats.atlasDraws++;
+      if (!quiet && i % 3 === 1) cinderSparks(ctx, lx + r * .13, ly, r * .56, r * .49, age * 1.5, fade * .79, 399 + i);
+    }
+    if (!quiet && age < .25) {
+      const size = height * (.14 + age * .26);
+      const flare = ctx.createRadialGradient(x, y, 0, x, y, size);
+      flare.addColorStop(0, "#ffc473c2");
+      flare.addColorStop(.28, "#dd571b75");
+      flare.addColorStop(1, "#a6402700");
+      ctx.globalCompositeOperation = "screen";
+      ctx.globalAlpha = (1 - age / .25) * .72;
+      ctx.fillStyle = flare;
+      ctx.fillRect(x - size, y - size, size * 2, size * 2);
+    }
+    ctx.restore();
+    return true;
+  }
+
 
   function drawMagmaFissure(ctx, line, material, time, alpha) {
     const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1), width = line.width;
@@ -927,6 +1167,7 @@ const NextgenVfx = (() => {
     ctx.restore();
   }
   return Object.freeze({ beginFrame, phase, warmMaterial, drawWaterSection, drawMagmaFissure, drawEruption, drawMagmaShell,
+    drawCinderRift, drawCinderCharge, drawCinderAftershock,
     drawSporeCloud, drawSporePod, drawVortex, drawVoid, drawRift, drawWaterJet, drawRaySkin, stamp, rock,
     diagnostics: () => ({ ...stats, budget: tier(), atlasReady: [...atlases].filter(([, v]) => v.ready).map(([k]) => k), sampleSize: 224,
       extraWebGLContexts: typeof BlackHoleSurface === "undefined" ? 0 : BlackHoleSurface.diagnostics().extraWebGLContexts,
