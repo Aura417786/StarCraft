@@ -46,7 +46,12 @@ function updateMomentumDisplay() {
     "Overdrive: " + remaining.toFixed(1) + " seconds left") : nextOverdrive);
   momentumPanel.dataset.overdrive = String(active);
   momentumPanel.dataset.frozen = String(frozen);
-  comboCaption.textContent = frozen ? tr("连击保护 · 首领战", "Combo held · Boss fight") : tr("连击 / COMBO", "COMBO");
+  if (momentumPanel.classList.contains("tactical-momentum")) {
+    comboCaption.textContent = active ? tr("暴走", "Overdrive")
+      : frozen ? tr("连击保护", "Combo held") : tr("连击", "Combo");
+  } else {
+    comboCaption.textContent = frozen ? tr("连击保护 · 首领战", "Combo held · Boss fight") : tr("连击 / COMBO", "COMBO");
+  }
   rageLabel.textContent = active ? tr("暴走 " + remaining.toFixed(1) + " 秒 · 攻速 ×1.6",
     "Overdrive " + remaining.toFixed(1) + "s · Fire rate ×1.6") : nextOverdrive;
 }

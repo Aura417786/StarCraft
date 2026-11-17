@@ -8,7 +8,7 @@ const sortieConsoleButtons = document.querySelectorAll("[data-sortie-console]");
 const sortieModeBadge = document.querySelector("#sortie-mode-badge");
 const sortieResultSummary = document.querySelector("#sortie-result-summary");
 let sortieConsolePage = "";
-const starBreakerVersion = "v34";
+const starBreakerVersion = "v35.3";
 
 const sortieUiWords = {
   awards: ["徽章墙", "Badge Wall"],
@@ -280,24 +280,6 @@ function sortieCheckbox(id, checked, change) {
   control.addEventListener("change", () => change(control.checked));
   return control;
 }
-function sortieVolumeControl() {
-  const group = sortieElement("span", "", "sortie-volume-group");
-  const range = sortieElement("input");
-  range.id = "sortie-volume";
-  range.type = "range";
-  range.min = "0";
-  range.max = "100";
-  range.step = "1";
-  range.value = String(Math.round((gameAudio.volume ?? 1) * 100));
-  const output = sortieElement("output", range.value + "%");
-  output.setAttribute("for", range.id);
-  range.addEventListener("input", () => {
-    gameAudio.setVolume?.(Number(range.value) / 100);
-    output.value = range.value + "%";
-  });
-  group.append(range, output);
-  return group;
-}
 function sortieDifficultyTable() {
   const wrap = sortieElement("div", "", "sortie-difficulty-scroll");
   const table = sortieElement("table", "", "sortie-difficulty-table");
@@ -359,25 +341,17 @@ function renderSortieSettings() {
     document.querySelector("#guide-button")?.click();
   });
   const training = sortieButton(tr("重玩实战训练", "Replay flight training"), () => launchSortie({ flightTraining: "replay" }));
-  sortieConsoleBody.append(
-    sortieElement("h3", tr("显示与声音", "Display and audio"), "sortie-section-title"),
-    sortieSettingLine(tr("语言", "Language"), language),
-    sortieSettingLine(tr("画质", "Graphics"), quality),
-    sortieSettingLine(tr("显示模式", "Window mode"), fullscreen),
-    sortieSettingLine(tr("声音", "Sound"), sound),
-    sortieSettingLine(tr("主音量", "Master volume"), sortieVolumeControl()),
-    sortieSettingLine(tr("无线电播报", "Radio dispatches"), radio),
-    sortieElement("h3", tr("难度与辅助", "Difficulty and assists"), "sortie-section-title"),
-    sortieSettingLine(tr("战役难度", "Campaign difficulty"), difficulty),
+  const difficultyDetails = sortieElement("details", "", "tactical-credits");
+  difficultyDetails.id = "sortie-difficulty-details";
+  difficultyDetails.append(
+    sortieElement("summary", tr("查看难度差异", "Compare difficulty tiers")),
     sortieDifficultyTable(),
-    sortieElement("p", tr("在挑战页单独选首领连战难度。每日、单首领练习和每周种子连战使用困难难度。三档生命算法相同，首领生命在入场时按战机战力锁定。", "Choose Boss Rush difficulty in Challenges. Daily, Boss Practice and Weekly Rush use Hard. All three tiers share the same Boss health calculation, locked to fighter power on arrival."), "sortie-explainer"),
-    sortieSettingLine(tr("延长攻击预警 +0.35 秒", "Extend attack warnings by 0.35s"), extended),
-    sortieSettingLine(tr("画面震动", "Screen shake"), shake),
-    sortieSettingLine(tr("减少演出动态", "Reduce effects motion"), motion),
-    sortieElement("p", tr("延长攻击预警或使用 F 时隙回溯计入辅助纪录；阵亡后的 Boss 回溯不登记本局成绩与成就。关闭震动、减少动态和显示辅助不影响正式成绩。旧版纪录保持原样。", "Longer attack warnings or using the F Temporal Recall skill put a sortie in assisted records. Retrying a boss after death stops score and achievement recording for that run. Shake, reduced motion and display preferences do not affect ranked records. Older records are preserved."), "sortie-explainer"),
-    sortieElement("h3", tr("玩法与制作名单", "Flight manual and credits"), "sortie-section-title"),
-    guide,
-    training,
+    sortieElement("p", tr("在挑战页可独立选择首领连战难度。其余挑战使用困难难度。首领生命始终在入场时按战机战力锁定。",
+      "Boss Rush has its own difficulty in Challenges. Other challenges use Hard. Boss health is locked to fighter power on arrival."), "sortie-explainer")
+  );
+  const credits = sortieElement("details", "", "tactical-credits");
+  credits.append(
+    sortieElement("summary", tr("制作名单与存档说明", "Credits and local saves")),
     sortieElement("p", tr(`星际突围 / Star Breaker · ${starBreakerVersion} · 项目 Aura417786 · 开发协作 Codex`,
       `Star Breaker · ${starBreakerVersion} · Project by Aura417786 · Development with Codex`), "sortie-explainer"),
     sortieElement("p", tr("模型与材质使用 Blender 制作。配乐使用 FluidSynth 与 FFmpeg 渲染和混音。游戏使用 Three.js 和 Web Audio。",
@@ -385,14 +359,42 @@ function renderSortieSettings() {
     sortieElement("p", tr("存档、徽章和设置保存在当前浏览器，并保留一份本机备份。更换浏览器、网页地址或清除网站数据会切换或移除存档。游戏没有账号或在线排行榜。",
       "Saves, badges, and settings stay in this browser with a local backup. A different browser or URL uses a different save. Clearing site data removes the save. The game has no accounts or online leaderboard."), "sortie-explainer")
   );
+  TacticalSystem.settings(sortieConsoleBody, {
+    display: [
+      sortieSettingLine(tr("语言", "Language"), language),
+      sortieSettingLine(tr("画质", "Graphics"), quality),
+      sortieSettingLine(tr("显示模式", "Window mode"), fullscreen),
+      sortieSettingLine(tr("战役难度", "Campaign difficulty"), difficulty),
+      difficultyDetails,
+      credits,
+    ],
+    audio: [
+      sortieSettingLine(tr("声音", "Sound"), sound),
+      ...TacticalSystem.audioRows("sortie"),
+      sortieSettingLine(tr("无线电播报", "Radio dispatches"), radio),
+    ],
+    controls: [TacticalSystem.flightSetting("sortie", "autofire", "自动开火", "Autofire"), TacticalSystem.mapping(), guide, training],
+    assists: [
+      sortieSettingLine(tr("延长攻击预警 +0.35 秒", "Extend attack warnings by 0.35s"), extended),
+      sortieSettingLine(tr("画面震动", "Screen shake"), shake),
+      sortieSettingLine(tr("减少演出动态", "Reduce effects motion"), motion),
+      ...TacticalSystem.displayAssists("sortie"),
+      sortieElement("p", tr("延长攻击预警或使用 F 时隙回溯计入辅助纪录；阵亡后的 Boss 回溯不登记本局成绩与成就。关闭震动、减少动态和显示辅助不影响正式成绩。旧版纪录保持原样。", "Longer attack warnings or using the F Temporal Recall skill put a sortie in assisted records. Retrying a boss after death stops score and achievement recording for that run. Shake, reduced motion and display preferences do not affect ranked records. Older records are preserved."), "sortie-explainer"),
+    ],
+  });
   updateFullscreenDisplay();
-  if (typeof appendFlightControlsSettings === "function") appendFlightControlsSettings(sortieConsoleBody);
+  if (typeof appendFlightControlsSettings === "function") {
+    const footer = sortieElement("div", "", "tactical-settings-footer");
+    appendFlightControlsSettings(footer);
+    sortieConsoleBody.append(footer);
+  }
 }
 
 function renderSortieConsole() {
   const focusedId = sortieConsoleBody.contains(document.activeElement) ? document.activeElement.id : "";
   const profile = sortieProfile.data;
   refreshAwardLook(profile);
+  sortieConsole.dataset.sortiePage = sortieConsolePage;
   sortieConsole.dataset.archiveTheme = (sortieConsolePage === "archive" || sortieConsolePage === "awards")
     ? profile.awards.active.theme ?? "" : "";
   sortieConsoleTitle.textContent = sortieWord(sortieConsolePage);

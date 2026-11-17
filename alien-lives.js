@@ -23,8 +23,17 @@ function collectPlayerLifePowerup() {
 
 function updateLifeDisplay() {
   const { lives, maxLives } = player;
-  lifeDisplay.textContent = maxLives > startingPlayerLives
-    ? `♥ ${lives} / ${maxLives}`
-    : Array.from({ length: startingPlayerLives }, (_, index) => index < lives ? "♥" : "♡").join(" ");
+  const pips = lifeDisplay.parentElement.querySelector(".tactical-life-pips");
+  if (pips) {
+    lifeDisplay.textContent = `${lives}/${maxLives}`;
+    pips.hidden = maxLives > startingPlayerLives;
+    Array.from(pips.children).forEach((pip, index) => {
+      pip.dataset.filled = String(index < lives);
+    });
+  } else {
+    lifeDisplay.textContent = maxLives > startingPlayerLives
+      ? `♥ ${lives} / ${maxLives}`
+      : Array.from({ length: startingPlayerLives }, (_, index) => index < lives ? "♥" : "♡").join(" ");
+  }
   lifeDisplay.setAttribute("aria-label", tr(`生命 ${lives} / ${maxLives}`, `Lives ${lives} / ${maxLives}`));
 }

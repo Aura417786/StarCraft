@@ -554,6 +554,7 @@ function isBattleActive() {
 }
 function refreshPauseCopy() {
   if (!pauseScreen || !pauseView) return;
+  pauseScreen.dataset.pauseView = pauseView;
   const copy = {
     menu: [tr("战斗暂停", "Combat paused"), pauseReason === "focus"
       ? tr("已离开游戏窗口，本局自动暂停。准备好后点击继续战斗。", "The game lost focus and paused automatically. Resume when ready.")
@@ -584,6 +585,7 @@ function refreshPauseCopy() {
     const labels = { low: tr("低", "Low"), medium: tr("中", "Medium"), high: tr("高", "High") };
     for (const option of pauseQualityControl.options) option.textContent = labels[option.value];
   }
+  if (typeof TacticalSystem !== "undefined") TacticalSystem.refreshPauseSettings();
 }
 function pauseGame(view = "menu", reason = "") {
   if (state !== "battle" || evolution.pending) return;
@@ -604,6 +606,7 @@ function pauseGame(view = "menu", reason = "") {
     pauseSettings.hidden = view !== "settings";
     pauseConfirmPanel.hidden = view !== "exit" && view !== "restart";
     refreshPauseCopy();
+    if (typeof TacticalSystem !== "undefined") TacticalSystem.refreshPauseSettings(view === "settings");
     pauseScreen.hidden = false;
     const focusTarget = view === "menu" ? pauseResumeButton : view === "settings" ? pauseSoundButton : pauseCancelButton;
     focusTarget.focus({ preventScroll: true });
@@ -628,7 +631,7 @@ function resumeGame() {
 }
 pauseButton?.addEventListener("click", () => pauseGame());
 pauseResumeButton?.addEventListener("click", resumeGame);
-pauseCancelButton?.addEventListener("click", resumeGame);
+pauseCancelButton?.addEventListener("click", togglePauseFromInput);
 document.querySelector("#pause-settings")?.addEventListener("click", () => pauseGame("settings"));
 document.querySelector("#pause-back")?.addEventListener("click", () => pauseGame());
 document.querySelector("#pause-restart")?.addEventListener("click", () => pauseGame("restart"));
@@ -644,7 +647,9 @@ pauseQualityControl?.addEventListener("change", () => setVisualQuality(pauseQual
 pauseScreen?.addEventListener("keydown", (event) => {
   if (event.code !== "Tab") return;
   const panel = pauseView === "menu" ? pauseMenu : pauseView === "settings" ? pauseSettings : pauseConfirmPanel;
-  const controls = panel.querySelectorAll("button, select");
+  const controls = Array.from(panel.querySelectorAll("button, select, input"))
+    .filter(control => !control.disabled && control.tabIndex >= 0 && !control.closest("[hidden]"));
+  if (!controls.length) return;
   const first = controls[0], last = controls[controls.length - 1];
   if (event.shiftKey ? document.activeElement !== first : document.activeElement !== last) return;
   event.preventDefault();

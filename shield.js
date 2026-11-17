@@ -119,6 +119,7 @@ function updateShieldDisplay() {
   shieldDisplayKey = key;
   shieldCount.textContent = shield.charges + " / " + shieldRules.maxCharges;
   shieldFill.style.width = percent.toFixed(1) + "%";
+  if (shieldMeter.classList.contains("tactical-dial")) shieldMeter.style.setProperty("--charge-points", percent.toFixed(1));
   shieldMeter.setAttribute("aria-valuenow", String(Math.floor(percent)));
   shieldMeter.setAttribute("aria-valuetext", full ? tr("护盾已储满 2 次", "Both shield charges stored")
     : tr("护盾充能 " + Math.floor(percent) + "%", "Shield charge " + Math.floor(percent) + "%"));

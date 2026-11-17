@@ -1,0 +1,181 @@
+/* Shared exposure and typography for the game, including native dialogs. */
+.app {
+  --tac-ink: #0b1018;
+  --tac-plate: #151a23;
+  --tac-line: #daccb33d;
+  --tac-cyan: #72e8d8;
+  --tac-light: #f4eee2;
+  --tac-text: #f4eee2;
+  --tac-muted: #c2bbac;
+  --tac-alert: #ffa29a;
+  --tac-gold: #e6c388;
+  --tac-font: system-ui, "Microsoft YaHei", "PingFang SC", sans-serif;
+  --tac-display: Georgia, "Noto Serif SC", "STZhongsong", "Songti SC", "Microsoft YaHei", serif;
+  --tac-mono: "IBM Plex Mono", Consolas, monospace;
+  --tac-ease: cubic-bezier(.16, 1, .3, 1);
+  --tac-safe-x: clamp(10px, 2.15vw, 36px);
+  --tac-safe-y: clamp(9px, 2.1vh, 26px);
+  font-family: var(--tac-font);
+}
+
+.app .field-edge::after { content: none; }
+.app .field-edge {
+  box-shadow: none;
+  background: linear-gradient(180deg, #04060c99 0, transparent 17%, transparent 83%, #04060cbc 100%);
+}
+
+.app .brand-mark { color: #f9e1b6; text-shadow: 0 0 12px #f3cf8d65; }
+.app .brand .edition { color: #e1d6bf; }
+.app .masthead { background: linear-gradient(#06070b9e, transparent); border: 0; }
+
+.app :where(button, a, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--tac-gold);
+  outline-offset: 2px;
+}
+
+.app :where(.secondary-button, .primary-button) {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--tac-text);
+  box-shadow: none;
+  clip-path: none;
+  letter-spacing: .008em;
+  transition: color 150ms var(--tac-ease), opacity 150ms var(--tac-ease);
+}
+
+.app :where(button.primary-button) { color: #f8dfb4; }
+.app :where(.secondary-button, .primary-button):is(:hover, :focus-visible) {
+  color: #ffdfab;
+}
+
+.app :where(.danger-button):is(:hover, :focus-visible) { color: #ffc5b8; }
+
+.app .flight-guide {
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tac-text);
+  box-shadow: none;
+}
+
+.app .flight-guide::backdrop {
+  background: radial-gradient(ellipse at 84% 19%, #231d2080, transparent 49%),
+    linear-gradient(110deg, #080a10f7, #080a10eb 52%, #10131bc4);
+}
+
+.app .flight-guide-content {
+  --manual-gutter: clamp(18px, 5vw, 80px);
+  display: grid;
+  grid-template-columns: minmax(230px, .73fr) minmax(0, 1.27fr);
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
+  grid-template-areas:
+    "heading pages"
+    "heading navigation"
+    "heading hint"
+    "heading actions";
+  gap: 14px clamp(32px, 6vw, 112px);
+  width: min(1440px, 100%);
+  max-height: 100%;
+  min-height: min(590px, 100%);
+  padding: clamp(24px, 11vh, 108px) var(--manual-gutter);
+  margin: 0 auto;
+}
+
+.app .flight-guide-heading { grid-area: heading; margin: 0; }
+.app .flight-guide-heading .eyebrow { color: var(--tac-gold); }
+.app .flight-guide-heading .eyebrow > span { background: var(--tac-gold); }
+.app .flight-guide-heading p { color: var(--tac-muted); line-height: 1.7; max-width: 28ch; }
+.app .flight-guide h2 {
+  margin: 13px 0 20px;
+  font: 700 clamp(32px, 5.3vw, 83px)/1.1 var(--tac-display);
+  letter-spacing: -.035em;
+}
+.app .flight-guide h3 {
+  color: #f4dcc0;
+  font: 700 clamp(18px, 2.5vw, 32px)/1.15 var(--tac-display);
+  letter-spacing: 0;
+  margin: 0 0 17px;
+}
+
+.app .flight-guide-pages {
+  grid-area: pages;
+  padding: 4px 10px 3px 2px;
+  scrollbar-color: #af9d7b #090b10;
+}
+
+.app .flight-guide-section { border: 0; border-radius: 0; background: none; padding: 0; }
+.app .flight-guide-keys > div {
+  grid-template-columns: minmax(92px, .52fr) minmax(0, 1.48fr);
+  gap: 18px;
+  padding: 0 0 9px;
+  border-bottom: 1px solid #ebd7ad29;
+}
+.app .flight-guide-keys dd, .app .flight-guide-tips { color: #e5e2dc; }
+
+.app :is(.flight-guide, .flight-training) kbd {
+  background: none;
+  color: #f6d39b;
+  border: 0;
+  padding-inline: 1px;
+  font-family: var(--tac-mono);
+}
+
+.app .flight-guide-navigation { grid-area: navigation; color: #ddc9aa; margin: 0; }
+.app .guide-scroll-hint { grid-area: hint; color: #e0c398; }
+.app .flight-guide-actions { grid-area: actions; margin: 0; }
+.app .flight-guide-actions .primary-button { width: auto; padding-inline: 8px; gap: 17px; }
+
+.app .flight-training {
+  border: 0;
+  border-radius: 0;
+  background: radial-gradient(ellipse at 45% 48%, #03060eea, #03060e99 58%, transparent 78%);
+  box-shadow: none;
+  padding: 18px 21px;
+}
+.app .flight-training .eyebrow { color: var(--tac-gold); }
+.app .flight-training h2 { color: #fff4dc; font-family: var(--tac-display); }
+.app .flight-training p { color: #e5e1db; text-shadow: 0 1px 4px #000; }
+.app .flight-training .secondary-button { white-space: nowrap; color: #f1d3ac; }
+.app[data-flight-training="1"] #shield-hud,
+.app[data-flight-training="2"] #ultimate-hud { filter: drop-shadow(0 0 8px #f4d79272); }
+
+@media (max-height: 500px) {
+  .app .flight-guide-content { padding-block: 18px; gap: 5px 24px; }
+  .app .flight-guide h2 { font-size: clamp(23px, 5vw, 44px); margin: 6px 0 9px; }
+  .app .flight-guide h3 { font-size: 17px; margin-bottom: 7px; }
+  .app .flight-training { padding: 9px 12px; }
+}
+
+@media (max-width: 570px) {
+  .app .flight-guide-content {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas: "heading" "pages" "navigation" "hint" "actions";
+    min-height: min(520px, 100%);
+    padding-block: clamp(16px, 5vh, 46px);
+  }
+  .app .flight-guide-heading p { max-width: 38ch; }
+  .app .flight-guide-keys > div { grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+  .app .flight-training { align-items: start; }
+}
+
+.app[data-reduce-motion] :is(.flight-training, .flight-guide, .masthead, .start-screen,
+  .pause-screen, .sortie-console, .evolution-screen, .game-over-screen, .campaign-victory-report) * {
+  animation-duration: .001ms !important;
+  transition-duration: .001ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app :is(.flight-training, .flight-guide, .masthead, .start-screen, .pause-screen,
+    .sortie-console, .evolution-screen, .game-over-screen, .campaign-victory-report) * {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+  }
+}

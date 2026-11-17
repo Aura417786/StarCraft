@@ -42,6 +42,7 @@ function updateUltimateDisplay() {
   const progress = full ? 100 : ultimate.energy;
   ultimateCount.textContent = ultimate.charges + " / " + ultimateRules.maxCharges;
   ultimateFill.style.width = progress + "%";
+  if (ultimateMeter.classList.contains("tactical-dial")) ultimateMeter.style.setProperty("--charge-points", progress);
   ultimateMeter.setAttribute("aria-valuenow", String(Math.floor(progress)));
   ultimateMeter.setAttribute("aria-valuetext", full ? tr("已储满 5 次", "All 5 shots stored")
     : tr("积能 " + Math.floor(progress) + "%", "Energy " + Math.floor(progress) + "%"));

@@ -16,6 +16,10 @@
   <link rel="stylesheet" href="campaign-victory.css">
   <link rel="stylesheet" href="hangar-menu.css">
   <link rel="stylesheet" href="opening.css">
+  <link rel="stylesheet" href="tactical-ui.css">
+  <link rel="stylesheet" href="tactical-hangar.css">
+  <link rel="stylesheet" href="tactical-hud.css">
+  <link rel="stylesheet" href="tactical-system.css">
   <script src="i18n.js" defer></script>
   <script src="render-quality.js" defer></script>
   <script src="audio-catalog.js" defer></script>
@@ -93,7 +97,9 @@
   <script src="battle-rewind.js" defer></script>
   <script src="awards-ui.js" defer></script>
   <script src="sortie-ui.js" defer></script>
+  <script src="tactical-system.js" defer></script>
   <script src="campaign-victory.js" defer></script>
+  <script src="tactical-hangar.js" defer></script>
 </head>
 <body>
   <main class="app" id="game-app">
@@ -190,46 +196,105 @@
         </div>
       </div>
       <div id="battle-screen" class="battle-screen" hidden>
-        <div class="hud" aria-label="战场信息">
-          <div><span class="hud-label">得分</span><strong id="score">000000</strong></div>
-          <div class="life"><span class="hud-label">生命</span><span id="player-lives" class="hearts" aria-label="3 点生命">♥ ♥ ♥</span></div>
+        <div class="hud tactical-status" aria-label="战场信息">
+          <div class="life">
+            <span class="hud-label">生命</span>
+            <span class="tactical-lives">
+              <span class="tactical-life-pips" aria-hidden="true"><i data-filled="true"></i><i data-filled="true"></i><i data-filled="true"></i></span>
+              <span id="player-lives" class="hearts" aria-label="3 点生命">3/3</span>
+            </span>
+          </div>
+          <div class="tactical-score"><span class="hud-label">得分</span><strong id="score">000000</strong></div>
+          <div class="difficulty-readout" aria-label="战斗时间"><span>战斗 <time id="battle-clock">00:00</time></span><span id="sortie-mode-badge"></span></div>
         </div>
-        <div class="difficulty-readout" aria-label="战斗时间"><span>战斗 <time id="battle-clock">00:00</time></span><span id="sortie-mode-badge"></span></div>
-        <div class="weapon-readout" aria-label="当前武器强化">
-          <span class="weapon-stat blue">蓝 · 攻速 <strong id="weapon-speed">1级 · 3.6次/秒</strong></span>
-          <span class="weapon-stat yellow">黄 · 弹道 <strong id="weapon-lanes">1阶 · 1/4条</strong></span>
-          <span class="weapon-stat red">红 · 伤害 <strong id="weapon-damage">2.2点/发</strong></span>
+        <div class="weapon-readout tactical-weapons" aria-label="当前武器强化">
+          <span class="weapon-stat blue">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 5 4 5-4 5m6-10 4 5-4 5"/></svg>
+            <span class="tactical-weapon-label">蓝 · 攻速</span><strong id="weapon-speed">1级 · 3.6次/秒</strong>
+          </span>
+          <span class="weapon-stat yellow">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 10h14M4 6h9M4 14h9"/></svg>
+            <span class="tactical-weapon-label">黄 · 弹道</span><strong id="weapon-lanes">1阶 · 1/4条</strong>
+          </span>
+          <span class="weapon-stat red">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 2.1 5.9L18 10l-5.9 2.1L10 18l-2.1-5.9L2 10l5.9-2.1Z"/></svg>
+            <span class="tactical-weapon-label">红 · 伤害</span><strong id="weapon-damage">2.2点/发</strong>
+          </span>
         </div>
         <div id="evolution-readout" class="evolution-readout" aria-label="本局战机进化" hidden></div>
-        <div id="momentum-hud" class="momentum-hud" data-overdrive="false" data-frozen="false" aria-label="连击与暴走状态">
+        <div id="momentum-hud" class="momentum-hud tactical-momentum" data-overdrive="false" data-frozen="false" aria-label="连击与暴走状态">
           <div class="combo-heading"><span id="combo-caption">连击 / COMBO</span><span id="combo-best">最高 0</span></div>
           <div class="combo-value"><strong id="combo-count">0</strong><span class="rage-mark" aria-hidden="true">OVERDRIVE</span></div>
           <div id="combo-meter" class="combo-meter" role="progressbar" aria-label="下一次暴走进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="combo-fill"></span></div>
           <span id="rage-label" class="rage-label">再增加 20 连击进入暴走</span>
           <button id="stance-button" class="stance-button" type="button" aria-pressed="false" title="Shift 切换扩散或聚焦射击">扩散模式 · Shift 切换</button>
         </div>
-        <div id="ultimate-hud" class="ultimate-hud" data-ready="false" data-phase="idle" aria-label="大招状态">
-          <div class="ultimate-heading"><span id="ultimate-name" class="ultimate-name">赤焰贯星炮</span><strong id="ultimate-count">0 / 5</strong><kbd>空格</kbd></div>
-          <div class="ultimate-slots" aria-hidden="true"><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i></div>
-          <div id="ultimate-meter" class="ultimate-meter" role="progressbar" aria-label="下一次大招能量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="ultimate-fill"></span></div>
-          <span id="ultimate-label" class="ultimate-label">命中敌军积能</span>
-        </div>
-        <div id="shield-hud" class="shield-hud" data-ready="false" data-active="false" aria-label="赤焰护盾状态">
-          <div class="shield-heading"><span class="shield-name">赤焰护盾</span><strong id="shield-count">0 / 2</strong><kbd>V</kbd></div>
-          <div class="shield-slots" aria-hidden="true"><i class="shield-slot"></i><i class="shield-slot"></i></div>
-          <div id="shield-meter" class="shield-meter" role="progressbar" aria-label="下一次护盾能量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="shield-fill"></span></div>
-          <span id="shield-label" class="shield-label">自动充能 · 25 秒</span>
+        <div class="tactical-loadout">
+          <div id="ultimate-hud" class="ultimate-hud tactical-skill" data-ready="false" data-phase="idle" aria-label="大招状态">
+            <div id="ultimate-meter" class="ultimate-meter tactical-dial" role="progressbar" aria-label="下一次大招能量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <svg class="tactical-dial-graphic" viewBox="0 0 80 80" aria-hidden="true">
+                <circle class="tactical-dial-track" cx="40" cy="40" r="33"/>
+                <circle class="tactical-dial-fill" cx="40" cy="40" r="33" pathLength="100" transform="rotate(-90 40 40)"/>
+                <circle class="tactical-dial-trim" cx="40" cy="40" r="28"/>
+                <circle class="tactical-corona-trim" cx="40" cy="40" r="37"/>
+                <path class="tactical-skill-icon tactical-icon-red" d="m40 17 12 11-12 11-12-11Zm-19 11h8m22 0h8m-19-13v6m0 14v6"/>
+                <path class="tactical-skill-icon tactical-icon-blue" d="m30 25 6 10 8-16m-21 9 6-4m19 3 6 4m-16 7 4-4"/>
+                <path class="tactical-skill-icon tactical-icon-yellow" d="M40 18v5m0 10v5m10-10h-5m-10 0h-5m16-6-2 2m-8 8-2 2m0-12 2 2m8 8 2 2M40 25a3 3 0 1 0 0 6 3 3 0 1 0 0-6Z"/>
+              </svg>
+              <strong id="ultimate-count" class="tactical-dial-count">0 / 5</strong>
+              <span id="ultimate-fill" hidden></span>
+            </div>
+            <div class="tactical-skill-copy">
+              <div class="ultimate-heading"><span id="ultimate-name" class="ultimate-name">赤焰贯星炮</span><kbd>空格</kbd></div>
+              <div class="ultimate-slots" aria-hidden="true"><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i><i class="ultimate-slot"></i></div>
+              <span id="ultimate-label" class="ultimate-label">命中敌军积能</span>
+            </div>
+          </div>
+          <div id="shield-hud" class="shield-hud tactical-skill" data-ready="false" data-active="false" aria-label="赤焰护盾状态">
+            <div id="shield-meter" class="shield-meter tactical-dial" role="progressbar" aria-label="下一次护盾能量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <svg class="tactical-dial-graphic" viewBox="0 0 80 80" aria-hidden="true">
+                <path class="tactical-dial-track" d="m40 5 29 17v36L40 75 11 58V22Z"/>
+                <path class="tactical-dial-fill" d="m40 5 29 17v36L40 75 11 58V22Z" pathLength="100"/>
+                <path class="tactical-dial-trim" d="m40 11 24 14v30L40 69 16 55V25Z"/>
+                <path class="tactical-skill-icon" d="m40 18 11 4v5c0 6-5 10-11 13-6-3-11-7-11-13v-5Zm-4 10 3 3 5-6"/>
+              </svg>
+              <strong id="shield-count" class="tactical-dial-count">0 / 2</strong>
+              <span id="shield-fill" hidden></span>
+            </div>
+            <div class="tactical-skill-copy">
+              <div class="shield-heading"><span class="shield-name">赤焰护盾</span><kbd>V</kbd></div>
+              <div class="shield-slots" aria-hidden="true"><i class="shield-slot"></i><i class="shield-slot"></i></div>
+              <span id="shield-label" class="shield-label">自动充能 · 25 秒</span>
+            </div>
+          </div>
         </div>
         <div id="powerup-notice" class="powerup-notice" hidden></div>
-        <div id="boss-hud" class="boss-hud" hidden>
-          <div class="boss-heading"><strong id="boss-name"></strong><span id="boss-stage" class="boss-stage"></span></div>
-          <div id="boss-health" hidden>
-            <div id="boss-track" class="boss-track" role="meter" aria-labelledby="boss-name" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
-              <i class="boss-health-lag" aria-hidden="true"></i><i class="boss-health-fill" aria-hidden="true"></i><i class="boss-break-point" aria-hidden="true"></i>
+        <div id="boss-hud" class="boss-hud tactical-boss" hidden>
+          <svg class="tactical-boss-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path class="tactical-boss-rune" d="m16 2 12 7v14l-12 7-12-7V9Z"/>
+            <g data-mark="0"><path d="M8 13q8-12 16 0-2 6-8 6t-8-6Zm3 5-4 6m8-5-2 7m5-7 2 7m2-8 3 6"/></g>
+            <g data-mark="1"><path d="m8 13 2-6 6-2 6 2 2 6-3 7v4H11v-4Zm3 1h2m6 0h2m-7 5 2-3 2 3M14 22v2m4-2v2"/></g>
+            <g data-mark="2"><path d="M17 5c5 7 7 10 7 14a8 8 0 1 1-16 0c0-4 2-7 6-10l1 6Z"/><path d="M16 16c-2 2-3 3-3 5a3 3 0 1 0 6 0Z"/></g>
+            <g data-mark="3"><path d="m16 8 6 8-6 8-6-8Zm-6 5-4-4m4 7H5m5 3-4 4m16-10 4-4m-4 7h5m-5 3 4 4"/></g>
+            <g data-mark="4"><path d="M9 9 5 15l4 7 4 1-3-7 3-4Zm14 0 4 6-4 7-4 1 3-7-3-4Zm-7 5v8"/></g>
+            <g data-mark="5"><path d="m16 5 10 12-10 10-10-10Zm0 0v22M6 17h20"/></g>
+            <g data-mark="6"><path d="m18 6-9 12h7l-2 8 9-12h-7Z"/><path d="M8 8h4m8 16h4"/></g>
+            <g data-mark="7"><path d="M8 16a8 8 0 1 1 16 0c0 5-4 7-8 9-4-2-8-4-8-9Zm8 6v-9m0 5-4-3m4 2 4-3"/></g>
+            <g data-mark="8"><circle cx="16" cy="16" r="4"/><ellipse cx="16" cy="16" rx="12" ry="5" transform="rotate(-30 16 16)"/></g>
+            <g data-mark="9"><circle cx="16" cy="16" r="4"/><path d="m16 12-3-5m6 6 5-3m-4 7 6 2m-8 1 2 6m-6-6-4 5m2-9-6-1"/></g>
+            <g data-mark="10"><path d="m16 8 8 15H8Zm0 0v10m-8 5 8-5 8 5"/><circle cx="16" cy="18" r="2"/></g>
+          </svg>
+          <div class="tactical-boss-data">
+            <div class="boss-heading"><strong id="boss-name"></strong><span id="boss-stage" class="boss-stage"></span></div>
+            <div id="boss-health" hidden>
+              <div id="boss-track" class="boss-track" role="meter" aria-labelledby="boss-name" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <div class="tactical-boss-armor" aria-hidden="true"><i class="tactical-armor-lag"></i><i class="tactical-armor-fill"></i></div>
+                <div class="tactical-boss-core" aria-hidden="true"><i class="boss-health-lag"></i><i class="boss-health-fill"></i><i class="boss-break-point"></i></div>
+              </div>
+              <div class="boss-health-labels" aria-hidden="true"><span id="boss-core-life"></span><span id="boss-shell-life"></span><span id="boss-finale-label"></span></div>
             </div>
-            <div class="boss-health-labels" aria-hidden="true"><span id="boss-core-life"></span><span id="boss-shell-life"></span><span id="boss-finale-label"></span></div>
+            <p id="boss-action" class="boss-action" role="status"></p>
           </div>
-          <p id="boss-action" class="boss-action" role="status"></p>
         </div>
         <p id="boss-warning" class="sr-only" role="status" aria-atomic="true" hidden><span id="boss-warning-name"></span></p>
         <aside id="flight-radio" class="flight-radio" hidden>

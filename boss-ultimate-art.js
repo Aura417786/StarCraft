@@ -527,7 +527,43 @@ function drawBossUltimateHazard(ctx, hazard, quiet) {
     ctx.lineWidth = 1.5;
     ctx.globalAlpha = .68;
     ctx.setLineDash([7, 6]);
-    for (const rect of geometry.rects) ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+    for (const rect of geometry.rects) {
+      const { x, y, width, height } = rect;
+      const vertical = height > width;
+      const length = vertical ? height : width;
+      const depth = vertical ? width : height;
+      ctx.save();
+      ctx.translate(vertical ? x + width : x, y);
+      if (vertical) ctx.rotate(Math.PI / 2);
+      const gradient = ctx.createLinearGradient(0, 0, 0, depth);
+      gradient.addColorStop(0, mat.rim + "28");
+      gradient.addColorStop(.16, mat.rim + "09");
+      gradient.addColorStop(.77, "transparent");
+      gradient.addColorStop(1, mat.rim + "16");
+      const opacity = .50 + .23 * Math.min(1, hazard.age / Math.max(.01, hazard.warning));
+      ctx.globalAlpha = opacity;
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(0, depth * .25);
+      ctx.bezierCurveTo(length * .11, 0, length * .86, 0, length, depth * .14);
+      ctx.quadraticCurveTo(length * .92, depth * .96, length * .81, depth);
+      ctx.lineTo(length * .12, depth);
+      ctx.quadraticCurveTo(0, depth * .85, 0, depth * .25);
+      ctx.fill();
+      const rail = ctx.createLinearGradient(0, 0, length, 0);
+      rail.addColorStop(0, "transparent");
+      rail.addColorStop(.21, mat.rim);
+      rail.addColorStop(.79, mat.rim);
+      rail.addColorStop(1, "transparent");
+      ctx.strokeStyle = rail;
+      ctx.lineWidth = 1.15;
+      ctx.setLineDash([2, 11]);
+      ctx.beginPath();
+      ctx.moveTo(0, .7); ctx.lineTo(length, .7);
+      ctx.moveTo(0, depth - .7); ctx.lineTo(length, depth - .7);
+      ctx.stroke();
+      ctx.restore();
+    }
     for (const circle of geometry.circles) {
       ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2); ctx.stroke();
       if (circle.innerRadius > 0) {

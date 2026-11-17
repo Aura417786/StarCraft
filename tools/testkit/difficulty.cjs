@@ -151,11 +151,13 @@ async function main() {
     });
     assert.deepEqual(ui.values, ["easy", "normal", "hard"]);
     assert.equal(ui.rows.length, 3);
+    await page.locator("#sortie-difficulty-details:not([open]) > summary").click();
     await page.locator(".sortie-difficulty-table").scrollIntoViewIfNeeded();
     assert.ok((await page.locator(".sortie-difficulty-scroll").boundingBox()).height > 100,
       "The difficulty comparison must not collapse inside the scrollable settings grid");
     await page.screenshot({ path: path.join(out, "difficulty-zh.png") });
     await page.evaluate(() => setGameLanguage("en"));
+    await page.locator("#sortie-difficulty-details:not([open]) > summary").click();
     await page.locator(".sortie-difficulty-table").scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(out, "difficulty-en.png") });
     assert.deepEqual(errors, []);

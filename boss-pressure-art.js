@@ -500,61 +500,68 @@ function drawPressureSealWarning(ctx, hazard, quiet) {
   const top = flightBounds.top, bottom = flightBounds.bottom;
   const left = Math.max(6, flightBounds.left - player.width * .25);
   const right = width - 9;
+  const color = hazard.fullSeal ? "#ffa29a" : "#9eebda";
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
-  ctx.lineWidth = active ? 2.6 : 1.5;
-  ctx.strokeStyle = active ? "#fff4e7" : "#c7b9ad";
-  ctx.fillStyle = "#b9927e";
-  ctx.globalAlpha = active ? .075 : .035 + progress * .025;
   if (hazard.fullSeal) {
+    const rail = ctx.createLinearGradient(0, top, 0, bottom);
+    const edge = active ? "#ff50744b" : "#ff507426";
+    rail.addColorStop(0, edge);
+    rail.addColorStop(.19, "transparent");
+    rail.addColorStop(.81, "transparent");
+    rail.addColorStop(1, edge);
+    ctx.fillStyle = rail;
     ctx.fillRect(left, top, right - left, bottom - top);
-    ctx.globalAlpha = .8;
-    ctx.strokeRect(left, top, right - left, bottom - top);
-    // Closing corner brackets make the arena-wide extent readable without text.
-    const length = 13 + progress * 24;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(left, top + length); ctx.lineTo(left, top); ctx.lineTo(left + length, top);
-    ctx.moveTo(right - length, top); ctx.lineTo(right, top); ctx.lineTo(right, top + length);
-    ctx.moveTo(left, bottom - length); ctx.lineTo(left, bottom); ctx.lineTo(left + length, bottom);
-    ctx.moveTo(right - length, bottom); ctx.lineTo(right, bottom); ctx.lineTo(right, bottom - length);
-    ctx.stroke();
   } else {
-    const gapTop = hazard.gapY - hazard.gapSize / 2;
-    const gapBottom = hazard.gapY + hazard.gapSize / 2;
-    const shade = ctx.createLinearGradient(0, top, 0, bottom);
-    const areaHeight = Math.max(1, bottom - top);
-    shade.addColorStop(0, "transparent");
-    shade.addColorStop(clamp((gapTop - top) / areaHeight, 0, 1), "#59b5ac20");
-    shade.addColorStop(clamp((gapBottom - top) / areaHeight, 0, 1), "#59b5ac20");
-    shade.addColorStop(1, "transparent");
-    ctx.fillStyle = shade;
-    ctx.globalAlpha = active ? .40 : .74;
-    ctx.fillRect(left, top, right - left, Math.max(0, gapTop - top));
-    ctx.fillRect(left, gapBottom, right - left, Math.max(0, bottom - gapBottom));
     signatureGuide(ctx, hazard.gapY, hazard.gapSize, active, -1, right, quiet ? 0 : hazard.age);
   }
+
   const key = typeof controlBindingLabel === "function" ? controlBindingLabel("shield") : "V";
-  const seconds = Math.max(0, hazard.warning - hazard.age).toFixed(1);
   const title = hazard.fullSeal
-    ? active ? tr("冲击 · 护盾抵挡", "IMPACT · SHIELD") : tr("全域冲击 " + seconds + "s · " + key + " 开盾", "ARENA SEAL " + seconds + "s · " + key + " SHIELD")
-    : active ? tr("保持在缺口内", "HOLD THE GAP") : tr("冲击 " + seconds + "s · 进入缺口", "IMPACT " + seconds + "s · ENTER GAP");
-  const fontSize = width < 600 ? 11 : 14;
-  ctx.font = "700 " + fontSize + "px system-ui";
-  const labelWidth = Math.min(width - 24, ctx.measureText(title).width + 32);
-  const labelX = (width - labelWidth) * .5;
-  const labelY = Math.max(top + 16, viewport.height * .31);
-  ctx.globalAlpha = .94;
-  ctx.fillStyle = "#0b1019";
-  ctx.fillRect(labelX, labelY - 16, labelWidth, 34);
-  ctx.strokeStyle = "#b8b0a9";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(labelX, labelY - 16, labelWidth, 34);
-  ctx.fillStyle = active ? "#fff5dc" : "#ece8e3";
+    ? active ? tr("冲击 · 护盾抵挡", "IMPACT · SHIELD") : tr("全域冲击 · " + key + " 开盾", "ARENA SEAL · " + key + " SHIELD")
+    : active ? tr("保持在缺口内", "HOLD THE GAP") : tr("外域冲击 · 进入缺口", "SURGE · ENTER GAP");
+  const timer = active ? "" : Math.max(0, hazard.warning - hazard.age).toFixed(1) + "s";
+  const compact = viewport.height <= 430 || width < 680;
+  const fontSize = compact ? 12 : 15;
+  const center = width / 2;
+  const y = viewport.height * (viewport.height <= 430 ? .365 : .249);
+  const haze = ctx.createRadialGradient(center, y + 4, 0, center, y + 4, Math.min(width * .45, 220));
+  haze.addColorStop(0, "#05080dc7");
+  haze.addColorStop(.46, "#05080d91");
+  haze.addColorStop(1, "transparent");
+  ctx.save();
+  ctx.translate(center, y + 4);
+  ctx.scale(1, .29);
+  ctx.translate(-center, -y - 4);
+  ctx.fillStyle = haze;
+  ctx.fillRect(center - width / 2, y - 200, width, 408);
+  ctx.restore();
+
+  ctx.fillStyle = "#fff2df";
+  ctx.font = `650 ${fontSize}px system-ui`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(title, width * .5, labelY, labelWidth - 14);
-  ctx.fillStyle = "#d8c1a1";
-  ctx.fillRect(labelX, labelY + 16, labelWidth * progress, 2);
+  ctx.fillText(title, center, y, width - 24);
+  if (timer) {
+    ctx.fillStyle = color;
+    ctx.font = `700 ${fontSize + 3}px Consolas, monospace`;
+    ctx.fillText(timer, center, y + fontSize * 1.26);
+    const reach = Math.min(73, width * .16);
+    const timerY = y + fontSize * 1.26;
+    const rule = ctx.createLinearGradient(center - reach, 0, center + reach, 0);
+    rule.addColorStop(0, "transparent");
+    rule.addColorStop(.35, color + "a9");
+    rule.addColorStop(.65, color + "a9");
+    rule.addColorStop(1, "transparent");
+    ctx.strokeStyle = rule;
+    ctx.lineWidth = 1.1;
+    const remaining = Math.max(.12, 1 - progress);
+    ctx.beginPath();
+    ctx.moveTo(center - 31 - (reach - 31) * remaining, timerY);
+    ctx.lineTo(center - 31, timerY);
+    ctx.moveTo(center + 31, timerY);
+    ctx.lineTo(center + 31 + (reach - 31) * remaining, timerY);
+    ctx.stroke();
+  }
   ctx.restore();
 }

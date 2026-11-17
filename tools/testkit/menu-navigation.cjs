@@ -29,7 +29,14 @@ async function verifyRoot(page) {
   await pageIs(page, "home");
   for (const selector of primaryEntries) assert.ok(await page.locator(selector).isVisible(), selector);
   for (const selector of nestedEntries) assert.equal(await page.locator(selector).isVisible(), false, selector);
-  for (const selector of ["#shake-button", "#sound-button", "#fullscreen-button", "#language-button", "#render-quality"])
+  for (const selector of ["#shake-button", "#sound-button"]) {
+    const tool = page.locator(selector);
+    assert.ok(await tool.isVisible(), selector);
+    assert.ok(await tool.getAttribute("aria-label"), selector + " needs an accessible name");
+  }
+  const fullscreenAvailable = await page.evaluate(() => Boolean(document.fullscreenEnabled && document.querySelector("#game-app").requestFullscreen));
+  assert.equal(await page.locator("#fullscreen-button").isVisible(), fullscreenAvailable);
+  for (const selector of ["#language-button", "#render-quality"])
     assert.equal(await page.locator(selector).isVisible(), false, selector);
   return page.evaluate(() => {
     const launch = document.querySelector("#start-button");
@@ -108,7 +115,9 @@ async function checkSettings(page) {
   await entry.click();
   await page.locator("#sortie-language").selectOption("en");
   await page.locator("#sortie-quality").selectOption("low");
+  await page.locator("#system-tab-audio").click();
   await page.locator("#sortie-sound").uncheck();
+  await page.locator("#system-tab-display").click();
   const fullscreen = page.locator("#sortie-fullscreen");
   const fullscreenAvailable = await fullscreen.isVisible() && await fullscreen.isEnabled();
   if (fullscreenAvailable) {
@@ -123,6 +132,7 @@ async function checkSettings(page) {
   await page.locator("#sortie-console").waitFor({ state: "hidden" });
   await focusIs(page, '[data-sortie-console="settings"]');
   await entry.click();
+  await page.locator("#system-tab-controls").click();
   await page.getByRole("button", { name: "Open flight manual" }).click();
   await page.locator("#flight-guide").waitFor();
   await page.keyboard.press("Escape");

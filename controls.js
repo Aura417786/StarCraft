@@ -323,8 +323,10 @@ function flightMenuScope() {
   return null;
 }
 function flightMenuItems(scope) {
-  return Array.from(scope.querySelectorAll("button, select, input, a[href], [tabindex='0']")).filter(item =>
-    !item.disabled && !item.closest("[hidden],[inert]") && item.getClientRects().length);
+  const items = Array.from(scope.querySelectorAll("button, select, input, summary, a[href], [tabindex='0']"));
+  if (scope.id === "start-screen") items.push(...document.querySelectorAll(".masthead .header-actions button"));
+  return items.filter(item => !item.disabled && !item.closest("[hidden],[inert]")
+    && item.getClientRects().length && getComputedStyle(item).visibility !== "hidden");
 }
 function navigateFlightMenu(scope, direction, confirm) {
   const items = flightMenuItems(scope);

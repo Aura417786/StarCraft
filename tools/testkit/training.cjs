@@ -64,8 +64,10 @@ async function main() {
     const noRepeat = await page.evaluate(() => !flightTutorial);
     await page.evaluate(() => showScreen("menu"));
     await page.locator('[data-sortie-console="settings"]').click();
+    await page.locator("#sortie-difficulty-details > summary").click();
     await page.locator(".sortie-difficulty-table tbody tr").first().waitFor();
     const difficultyRows = await page.locator(".sortie-difficulty-table tbody tr").allTextContents();
+    await page.locator("#system-tab-controls").click();
     await page.getByRole("button", { name: /重玩实战训练|Replay flight training/ }).click();
     await page.waitForFunction(() => flightTutorial?.replay === true);
     await page.locator("#flight-training-skip").click();

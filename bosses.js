@@ -125,7 +125,7 @@ function updateBossHealthHud() {
   const shell = percentOf((life - bossRules.shellThreshold) / (1 - bossRules.shellThreshold));
   const percent = percentOf(life);
   const feedback = boss.hitFlash > 0;
-  const key = `${phase}/${gameLanguage}/${finale}/${life.toFixed(3)}/${lag.toFixed(3)}/${feedback}`;
+  const key = `${boss.type}/${phase}/${gameLanguage}/${finale}/${life.toFixed(3)}/${lag.toFixed(3)}/${feedback}`;
   if (track.dataset.valueKey === key) return;
   track.dataset.valueKey = key;
   health.dataset.finale = String(finale);
@@ -133,6 +133,14 @@ function updateBossHealthHud() {
   track.style.setProperty("--boss-break", bossRules.shellThreshold * 100 + "%");
   track.style.setProperty("--boss-hp", life * 100 + "%");
   track.style.setProperty("--boss-lag", lag * 100 + "%");
+  if (bossHud.panel.classList.contains("tactical-boss")) {
+    bossHud.panel.dataset.bossType = String(boss.type);
+    const threshold = bossRules.shellThreshold;
+    track.style.setProperty("--tactical-core", finale ? life : clamp(life / threshold, 0, 1));
+    track.style.setProperty("--tactical-core-lag", finale ? lag : clamp(lag / threshold, 0, 1));
+    track.style.setProperty("--tactical-armor", clamp((life - threshold) / (1 - threshold), 0, 1));
+    track.style.setProperty("--tactical-armor-lag", clamp((lag - threshold) / (1 - threshold), 0, 1));
+  }
   stage.textContent = phase;
   const coreText = finale ? tr("终局核心", "Finale core") + " " + percent + "%" : tr("核心", "Core") + " " + core + "%";
   const shellText = tr("护壳", "Shell") + " " + shell + "%";

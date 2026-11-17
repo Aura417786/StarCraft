@@ -1,0 +1,574 @@
+/* Floating instruments establish hierarchy with type, light and space. */
+.battle-screen:has(.tactical-status) {
+  --hud-edge: clamp(16px, 2.5vw, 48px);
+  --hud-top: clamp(15px, 2.05vw, 34px);
+  --hud-bottom: clamp(16px, 2vw, 32px);
+  --hud-readable: var(--tac-text, #f4eee2);
+  --hud-secondary: var(--tac-muted, #c2bbac);
+  --hud-gold: var(--tac-gold, #e6c388);
+  --hud-shadow: 0 1px 3px #010207, 0 2px 8px #010207b5;
+}
+.app:has(.tactical-status):has(.battle-screen:not([hidden])) .masthead .brand { visibility: hidden; }
+.app:has(.tactical-status):has(.battle-screen:not([hidden])) .lesson-note { display: none; }
+
+.battle-screen .tactical-status,
+.battle-screen .tactical-weapons,
+.battle-screen .tactical-skill,
+.battle-screen .tactical-momentum,
+.battle-screen .tactical-boss {
+  border: 0;
+  border-radius: 0;
+  clip-path: none;
+  background: none;
+  color: var(--hud-readable);
+  box-shadow: none;
+  text-shadow: var(--hud-shadow);
+}
+.battle-screen :is(.tactical-status, .tactical-weapons, .tactical-boss, .tactical-momentum, .tactical-loadout) {
+  isolation: isolate;
+}
+.battle-screen .tactical-status::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -24px -32px;
+  background: radial-gradient(ellipse at center, #03060d82 10%, #03060d48 39%, #03060d16 62%, transparent 78%);
+  pointer-events: none;
+}
+.app .battle-screen .hud.tactical-status {
+  top: max(var(--hud-top), env(safe-area-inset-top));
+  left: max(var(--hud-edge), env(safe-area-inset-left));
+  right: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: clamp(9px, 1.35vw, 24px);
+  min-height: 55px;
+  padding: 2px 0;
+}
+.tactical-status .life,
+.tactical-status .tactical-score {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 3px;
+  text-align: start;
+}
+.tactical-status .hud-label {
+  display: inline-block;
+  color: var(--hud-secondary);
+  font: 570 11px/1.2 var(--tac-font, system-ui), sans-serif;
+  letter-spacing: .14em;
+}
+.tactical-status .tactical-score,
+.tactical-status .difficulty-readout { padding-inline-start: 0; }
+.tactical-status #score {
+  min-width: 5.3ch;
+  color: var(--hud-readable);
+  font: 500 clamp(23px, 2.2vw, 38px)/.95 var(--tac-font, system-ui), sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .025em;
+}
+.tactical-status .tactical-lives { display: flex; align-items: center; gap: 6px; }
+.tactical-life-pips { display: inline-flex; gap: 4px; }
+.tactical-life-pips[hidden] { display: none; }
+.tactical-life-pips i {
+  display: block;
+  width: 12px;
+  height: 13px;
+  clip-path: polygon(15% 0, 100% 0, 86% 100%, 0 100%);
+  border: 1px solid #cdbaa169;
+  background: #aa997829;
+  transition: background 150ms ease;
+}
+.tactical-life-pips i[data-filled="true"] { border-color: #f7e2b5; background: linear-gradient(#fff2ce, #d7ae6b); }
+.tactical-lives #player-lives {
+  color: var(--hud-readable);
+  font: 650 12px/1 var(--tac-mono, Consolas), monospace;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.app .battle-screen .tactical-status .difficulty-readout {
+  position: static;
+  max-width: min(19vw, 185px);
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 3px;
+  color: var(--hud-secondary);
+  font-size: 11px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.tactical-status .difficulty-readout time { margin-inline-start: 3px; color: var(--hud-readable); font-weight: 650; }
+.tactical-status #sortie-mode-badge { color: var(--hud-secondary); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tactical-status #sortie-mode-badge:empty { display: none; }
+
+.app .battle-screen .weapon-readout.tactical-weapons {
+  top: max(var(--hud-top), env(safe-area-inset-top));
+  right: calc(max(3.4vw, var(--hud-edge), env(safe-area-inset-right)) + 134px);
+  left: auto;
+  min-height: 55px;
+  max-width: calc(100% - 540px);
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  padding: 6px 9px;
+  border: 0;
+  color: var(--hud-secondary);
+}
+.tactical-weapons .weapon-stat {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 5px;
+  padding: 0 6px;
+  border: 0;
+  white-space: nowrap;
+}
+.tactical-weapon-label { font-size: 10px; }
+.tactical-weapons .weapon-stat strong { margin: 0; grid-column: 2; font-size: 12px; line-height: 1.25; }
+.tactical-weapons svg {
+  width: 16px; height: 16px;
+  grid-row: 1 / span 2;
+  fill: none; stroke: currentColor;
+  stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round;
+}
+.tactical-weapons .weapon-stat.blue svg { color: #59ceff; }
+.tactical-weapons .weapon-stat.yellow svg { color: #ffda81; }
+.tactical-weapons .weapon-stat.red svg { color: #ff8093; }
+.tactical-weapons .fighter-systems-readout { max-width: 23ch; min-width: 0; font-size: 10px; border: 0; }
+
+.battle-screen #boss-hud.tactical-boss {
+  --boss-sigil: #8fd6e6;
+  --boss-core-color: #f7dfc0;
+  --boss-shell-color: #edbf79;
+  top: calc((var(--hud-top) + 65px) / var(--flight-ui-zoom, 1));
+  left: 50%;
+  right: auto;
+  width: min(586px, 62vw);
+  gap: 10px;
+  padding: 2px 8px 4px;
+  background: none;
+  border: 0;
+}
+.app[data-boss-phase="rupture"] #boss-hud.tactical-boss,
+.app[data-boss-phase="frenzy"] #boss-hud.tactical-boss { --boss-core-color: #f4abb4; }
+.battle-screen #boss-hud.tactical-boss:not([hidden]) { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; }
+.tactical-boss .tactical-boss-mark {
+  display: block;
+  width: 31px;
+  height: 31px;
+  align-self: center;
+  color: var(--boss-sigil);
+  stroke: currentColor;
+  stroke-width: 1.55;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, currentColor 36%, transparent));
+}
+.tactical-boss-mark .tactical-boss-rune { display: none; }
+.tactical-boss-mark > g { display: none; }
+.tactical-boss[data-boss-type="0"] [data-mark="0"],
+.tactical-boss[data-boss-type="1"] [data-mark="1"],
+.tactical-boss[data-boss-type="2"] [data-mark="2"],
+.tactical-boss[data-boss-type="3"] [data-mark="3"],
+.tactical-boss[data-boss-type="4"] [data-mark="4"],
+.tactical-boss[data-boss-type="5"] [data-mark="5"],
+.tactical-boss[data-boss-type="6"] [data-mark="6"],
+.tactical-boss[data-boss-type="7"] [data-mark="7"],
+.tactical-boss[data-boss-type="8"] [data-mark="8"],
+.tactical-boss[data-boss-type="9"] [data-mark="9"],
+.tactical-boss[data-boss-type="10"] [data-mark="10"] { display: inline; }
+.battle-screen #boss-hud[data-boss-type="0"] { --boss-sigil: #58e4f1; }
+.battle-screen #boss-hud[data-boss-type="1"] { --boss-sigil: #e7dac1; }
+.battle-screen #boss-hud[data-boss-type="2"] { --boss-sigil: #ff9c55; }
+.battle-screen #boss-hud[data-boss-type="3"] { --boss-sigil: #cb8dff; }
+.battle-screen #boss-hud[data-boss-type="4"] { --boss-sigil: #89e2a8; }
+.battle-screen #boss-hud[data-boss-type="5"] { --boss-sigil: #a1daff; }
+.battle-screen #boss-hud[data-boss-type="6"] { --boss-sigil: #72afff; }
+.battle-screen #boss-hud[data-boss-type="7"] { --boss-sigil: #d2e784; }
+.battle-screen #boss-hud[data-boss-type="8"] { --boss-sigil: #bc9cff; }
+.battle-screen #boss-hud[data-boss-type="9"] { --boss-sigil: #ff9ddc; }
+.battle-screen #boss-hud[data-boss-type="10"] { --boss-sigil: #dfafff; }
+.tactical-boss .boss-heading { display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline; gap: 6px; }
+.tactical-boss .boss-heading strong {
+  grid-column: 2; text-align: center;
+  color: var(--hud-readable);
+  font-family: var(--tac-display, Georgia), "Noto Serif SC", "Songti SC", SimSun, serif;
+  font-size: clamp(15px, 1.18vw, 22px);
+  line-height: 1.2;
+  letter-spacing: .045em;
+}
+.tactical-boss .boss-stage {
+  grid-column: 3; justify-self: end;
+  color: var(--hud-gold);
+  border: 0;
+  border-radius: 0;
+  padding: 0 0 0 7px;
+  font: 610 11px/1.2 var(--tac-font, system-ui), sans-serif;
+  text-align: end;
+}
+.tactical-boss #boss-track {
+  display: grid;
+  grid-template-rows: 2px 5px;
+  gap: 4px;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  margin: 6px 0 0;
+}
+.tactical-boss-core,
+.tactical-boss-armor {
+  position: relative;
+  overflow: hidden;
+  background: #caa98b47;
+  border: 0;
+  mask-image: linear-gradient(90deg, transparent, black 1.6%, black 98.4%, transparent);
+}
+.tactical-boss-armor {
+  background: #c9ae7353;
+  margin-inline: 1%;
+}
+.tactical-boss :is(.boss-health-fill, .boss-health-lag, .tactical-armor-fill, .tactical-armor-lag) {
+  position: absolute;
+  inset: 0;
+  clip-path: none;
+  transform-origin: left;
+}
+.tactical-boss .boss-health-fill {
+  transform: scaleX(var(--tactical-core, 1));
+  background: linear-gradient(90deg, #ba716f, var(--boss-core-color) 75%);
+  transition: filter 110ms ease;
+}
+.tactical-boss .boss-health-lag { transform: scaleX(var(--tactical-core-lag, 1)); background: #ffd7d9; opacity: .78; }
+.tactical-boss .tactical-armor-fill {
+  transform: scaleX(var(--tactical-armor, 1));
+  background: linear-gradient(90deg, #a97c48, var(--boss-shell-color));
+}
+.tactical-boss .tactical-armor-lag { transform: scaleX(var(--tactical-armor-lag, 1)); background: #ffe7b4; opacity: .88; }
+.tactical-boss .boss-break-point {
+  inset: 0;
+  width: auto;
+  backdrop-filter: none;
+  background: repeating-linear-gradient(90deg, transparent 0 9.8%, #120b1a7a 9.8% 10%);
+  box-shadow: none;
+}
+.tactical-boss #boss-health[data-finale="true"] :is(.tactical-boss-armor, .boss-break-point) { display: none; }
+.tactical-boss #boss-health[data-finale="true"] #boss-track { grid-template-rows: 5px; }
+.tactical-boss #boss-health[data-hit="true"] .tactical-armor-fill { filter: brightness(1.5); }
+.tactical-boss .boss-health-labels { display: flex; justify-content: start; gap: 10px; margin-top: 4px; }
+.tactical-boss .boss-health-labels span { font-size: 11px; line-height: 1.12; }
+.tactical-boss #boss-shell-life { color: #ffd690; }
+.tactical-boss #boss-finale-label { margin-inline-start: auto; }
+.tactical-boss .boss-action { text-align: center; color: var(--hud-secondary); font-size: 11px; line-height: 1.24; margin-top: 4px; }
+.app[data-boss-phase="rupture"] .tactical-boss .tactical-boss-armor::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background: repeating-linear-gradient(110deg, #fff3c7 0 7px, transparent 9px 14px);
+  transform-origin: left;
+  animation: tactical-armor-break 330ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes tactical-armor-break { from { opacity: 1; transform: scaleX(.6); } to { opacity: 0; transform: scaleX(1.11); } }
+.app[data-boss-phase="rupture"] .tactical-boss::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  top: 21px;
+  left: 10%;
+  width: 86%;
+  height: 28px;
+  background:
+    radial-gradient(ellipse, #ffedbd 0 38%, transparent 74%) 8% 21% / 8px 3px,
+    radial-gradient(ellipse, #fff7d5 0 36%, transparent 73%) 18% 40% / 4px 4px,
+    radial-gradient(ellipse, #fac57d 0 31%, transparent 74%) 34% 63% / 11px 3px,
+    radial-gradient(ellipse, #fff2b8 0 32%, transparent 80%) 47% 22% / 3px 4px,
+    radial-gradient(ellipse, #ffe4a6 0 42%, transparent 73%) 61% 77% / 6px 4px,
+    radial-gradient(ellipse, #ffbc70 0 34%, transparent 78%) 76% 13% / 8px 3px,
+    radial-gradient(ellipse, #fff4d2 0 30%, transparent 78%) 92% 68% / 7px 4px;
+  background-repeat: no-repeat;
+  animation: tactical-shell-fragments 400ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes tactical-shell-fragments {
+  0% { opacity: .12; transform: scale(.90, .14); }
+  24% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(8px) scale(1.05, 1.23); }
+}
+
+.battle-screen .tactical-loadout {
+  position: absolute;
+  left: max(var(--hud-edge), env(safe-area-inset-left));
+  bottom: max(var(--hud-bottom), env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  --fighter-signal: #f7a090;
+  --fighter-light: #ffe7d0;
+}
+.tactical-loadout:has(.ultimate-hud[data-fighter="blue"]) { --fighter-signal: #87d8ef; --fighter-light: #e5faff; }
+.tactical-loadout:has(.ultimate-hud[data-fighter="yellow"]) { --fighter-signal: #f8ca77; --fighter-light: #fff1d1; }
+.battle-screen .tactical-loadout > .tactical-skill {
+  position: relative;
+  inset: auto;
+  width: clamp(164px, 14vw, 236px);
+  min-height: 72px;
+  display: grid;
+  align-items: center;
+  grid-template-columns: clamp(52px, 4.4vw, 76px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 1px 6px 1px 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  --ability-signal: var(--fighter-signal);
+  --ability-light: var(--fighter-light);
+}
+.battle-screen .tactical-loadout > .shield-hud { --ability-signal: #79ddcd; --ability-light: #e1fff6; }
+.tactical-loadout .tactical-dial {
+  display: grid;
+  position: relative;
+  align-self: center;
+  aspect-ratio: 1;
+  height: auto;
+  margin: 0;
+  width: 100%;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+}
+.tactical-loadout .tactical-dial > span { display: none; }
+.tactical-dial-graphic { width: 100%; height: 100%; overflow: visible; fill: none; pointer-events: none; filter: drop-shadow(0 2px 2px #0009); }
+.tactical-dial-track { stroke: #d3bda16b; stroke-width: 1.4; fill: none; }
+.tactical-dial-trim { stroke: #e7dabc67; stroke-dasharray: .9 3.2; stroke-width: .9; }
+.tactical-corona-trim { display: none; stroke: var(--ability-signal); stroke-opacity: .48; stroke-width: 1.2; stroke-dasharray: 5 3; }
+.ultimate-hud[data-fighter="yellow"] .tactical-corona-trim { display: inline; }
+.ultimate-hud[data-fighter="blue"] .tactical-dial-trim { stroke: #6ddeff; stroke-width: 2.3; stroke-dasharray: 4 31.19; }
+.tactical-dial-fill {
+  stroke: var(--ability-signal);
+  stroke-width: 2.7;
+  stroke-dasharray: var(--charge-points, 0) 100;
+  stroke-linecap: round;
+  transition: stroke-dasharray 150ms ease, stroke 120ms linear;
+}
+.tactical-skill-icon {
+  color: var(--ability-light);
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tactical-skill-icon:is(.tactical-icon-blue, .tactical-icon-yellow) { display: none; }
+.ultimate-hud:is([data-fighter="blue"], [data-fighter="yellow"]) .tactical-icon-red { display: none; }
+.ultimate-hud[data-fighter="blue"] .tactical-icon-blue,
+.ultimate-hud[data-fighter="yellow"] .tactical-icon-yellow { display: inline; }
+.tactical-dial-count {
+  position: absolute;
+  bottom: 26%;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  color: var(--hud-readable);
+  font: 750 clamp(11px, 1vw, 17px)/1 var(--tac-mono, Consolas), monospace;
+  font-variant-numeric: tabular-nums;
+}
+.tactical-skill-copy { min-width: 0; }
+.tactical-loadout :is(.ultimate-heading, .shield-heading) {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2px 5px; align-items: center;
+}
+.tactical-loadout :is(.ultimate-name, .shield-name) {
+  color: var(--hud-readable);
+  font: 620 clamp(11px, .92vw, 15px)/1.18 var(--tac-font, system-ui), sans-serif;
+  letter-spacing: .045em;
+}
+.tactical-loadout kbd {
+  border: 0;
+  border-radius: 0;
+  padding: 0 0 0 2px;
+  color: var(--hud-secondary);
+  background: none;
+  font: 650 11px/1.5 var(--tac-font, system-ui), sans-serif;
+  letter-spacing: .055em;
+  white-space: nowrap;
+}
+.tactical-loadout .tactical-skill[data-ready="true"] kbd { color: var(--ability-light); background: none; }
+.tactical-loadout :is(.ultimate-slots, .shield-slots) { display: none; }
+.tactical-loadout :is(.ultimate-label, .shield-label) {
+  color: var(--hud-secondary);
+  font: 500 11px/1.18 var(--tac-font, system-ui), sans-serif;
+  letter-spacing: 0;
+  margin: 4px 0 0;
+}
+.tactical-skill[data-ready="true"] .tactical-dial-track {
+  stroke: var(--ability-signal);
+  animation: tactical-ready 260ms cubic-bezier(.16, 1, .3, 1);
+}
+.tactical-skill[data-phase="charging"] .tactical-dial-trim { animation: tactical-charge 1.25s linear infinite; stroke: var(--ability-light); }
+.tactical-skill[data-phase="firing"] .tactical-dial-trim { animation: tactical-charge 570ms linear infinite reverse; stroke: var(--ability-light); }
+.tactical-skill[data-phase="firing"] .tactical-dial-track,
+.tactical-skill[data-active="true"] .tactical-dial-track { stroke: var(--ability-light); stroke-width: 5; }
+.tactical-skill[data-perfect="true"] .tactical-dial-graphic { animation: tactical-parry 330ms ease-out both; }
+.tactical-skill[data-perfect="true"] .tactical-dial-count { color: #fff0c7; }
+.tactical-skill[data-linked="true"] .tactical-dial-track { stroke: #acfeff; stroke-width: 4; }
+@keyframes tactical-ready { from { stroke-width: 7; stroke-opacity: .20; } to { stroke-width: 3; stroke-opacity: 1; } }
+@keyframes tactical-charge { to { stroke-dashoffset: -31; } }
+@keyframes tactical-parry { 0% { filter: drop-shadow(0 0 1px #fff); } 35% { filter: drop-shadow(0 0 7px #d9ffff); } 100% { filter: drop-shadow(0 0 3px #73f0ff); } }
+
+.battle-screen #momentum-hud.tactical-momentum {
+  bottom: calc(var(--hud-bottom) / var(--flight-ui-zoom, 1));
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: clamp(159px, 22vw, 300px);
+  padding: 6px 10px;
+  background: none;
+  border: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 9px;
+  row-gap: 3px;
+}
+#momentum-hud.tactical-momentum .combo-heading { display: flex; grid-column: 1 / -1; grid-row: 1; color: var(--hud-secondary); font-size: 11px; }
+#momentum-hud.tactical-momentum #combo-best { display: inline; color: var(--hud-secondary); }
+#momentum-hud.tactical-momentum .combo-value { grid-column: 1; grid-row: 2; margin: 0; justify-content: start; }
+#momentum-hud.tactical-momentum .combo-value::after { display: none; }
+#momentum-hud.tactical-momentum .combo-value > strong { color: var(--hud-readable); font-size: 24px; }
+#momentum-hud.tactical-momentum .rage-mark { display: none; }
+#momentum-hud.tactical-momentum .combo-meter { grid-column: 1; grid-row: 3; height: 2px; border-radius: 0; background: #dbc5a344; }
+.tactical-momentum #combo-fill { background: linear-gradient(90deg, #b49b75, #f0dfbb); }
+#momentum-hud.tactical-momentum .rage-label { display: block; grid-column: 1 / -1; grid-row: 4; min-height: 0; margin: 0; color: var(--hud-secondary); line-height: 1.15; }
+.tactical-momentum #stance-button {
+  grid-column: 2; grid-row: 2 / 4;
+  margin: 0;
+  min-height: 26px;
+  width: auto;
+  padding: 3px 6px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: var(--hud-readable);
+  font-size: 10px;
+  line-height: 1.12;
+}
+.tactical-momentum #stance-button:focus-visible { outline: none; text-decoration: underline 2px #95eee0; text-underline-offset: 5px; }
+.tactical-momentum #stance-button:hover { text-decoration: underline; text-underline-offset: 5px; }
+.tactical-momentum #stance-button[aria-pressed="true"] { background: none; color: #a3eee0; }
+#momentum-hud.tactical-momentum[data-overdrive="true"] .combo-value > strong { color: #f4cc87; }
+.tactical-momentum[data-overdrive="true"] #combo-fill { background: linear-gradient(90deg, #e15a42, #ffcb79); }
+.battle-screen .tactical-loadout ~ .powerup-notice { top: max(146px, calc(var(--hud-top) + 105px)); }
+.app[data-boss-active="true"] .battle-screen:has(.tactical-status) .powerup-notice { top: max(190px, calc(var(--hud-top) + 156px)); }
+.battle-screen:has(.tactical-status) .evolution-readout { left: var(--hud-edge); bottom: calc(var(--hud-bottom) + 112px); }
+.app .battle-screen:has(.tactical-status) :is(.evolution-readout, .powerup-notice, .boss-scaling-qa) {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  text-shadow: var(--hud-shadow);
+}
+
+@media (min-width: 761px) and (max-width: 1050px) {
+  .app .battle-screen .weapon-readout.tactical-weapons { top: calc(var(--hud-top) + 51px); right: var(--hud-edge); max-width: 48%; }
+  .battle-screen #boss-hud.tactical-boss { top: calc((var(--hud-top) + 113px) / var(--flight-ui-zoom, 1)); }
+}
+@media (max-width: 760px), (max-height: 495px) {
+  .battle-screen:has(.tactical-status) { --hud-edge: 10px; --hud-top: 9px; --hud-bottom: 10px; }
+  .app .battle-screen .hud.tactical-status { min-height: 39px; padding: 4px 7px; gap: 7px; }
+  .tactical-status .life, .tactical-status .tactical-score { display: grid; gap: 2px; }
+  .battle-screen .tactical-status .hud-label { display: inline; font-size: 11px; }
+  .tactical-status .tactical-score, .tactical-status .difficulty-readout { padding-inline-start: 5px; }
+  .tactical-status #score { font-size: 17px; }
+  .tactical-status .tactical-lives { gap: 4px; }
+  .tactical-life-pips { gap: 2px; }
+  .tactical-life-pips i { width: 7px; height: 10px; }
+  .tactical-lives #player-lives { font-size: 11px; }
+  .app .battle-screen .tactical-status .difficulty-readout { max-width: 12em; letter-spacing: 0; }
+  .tactical-status #sortie-mode-badge { display: none; }
+  .app .battle-screen .weapon-readout.tactical-weapons {
+    top: var(--hud-top);
+    right: calc(max(3.4vw, var(--hud-edge)) + 130px);
+    min-height: 34px;
+    max-width: calc(100% - 378px);
+    padding: 3px 5px;
+    gap: 3px;
+  }
+  .tactical-weapons .weapon-stat { display: flex; column-gap: 3px; padding: 0 3px; }
+  .tactical-weapons svg { width: 12px; height: 12px; }
+  .tactical-weapons .weapon-stat strong { font-size: 11px; }
+  .tactical-weapons :is(.tactical-weapon-label, .fighter-systems-readout) { display: none; }
+  .battle-screen #boss-hud.tactical-boss {
+    top: calc(51px / var(--flight-ui-zoom, 1));
+    width: min(480px, 72vw);
+    padding: 4px 7px;
+    gap: 5px;
+  }
+  .battle-screen #boss-hud.tactical-boss:not([hidden]) { grid-template-columns: 24px minmax(0, 1fr) 24px; }
+  .battle-screen #boss-hud.tactical-boss .boss-heading strong,
+  .battle-screen #boss-hud.tactical-boss .boss-stage { font-size: max(11px, calc(11px / var(--flight-ui-zoom, 1))); }
+  .tactical-boss .tactical-boss-mark { width: 24px; height: 24px; }
+  .battle-screen #boss-hud.tactical-boss #boss-track { margin-top: 4px; grid-template-rows: 2px 4px; gap: 2px; }
+  .battle-screen #boss-hud.tactical-boss #boss-health[data-finale="true"] #boss-track { grid-template-rows: 4px; }
+  .tactical-boss .boss-health-labels { gap: 6px; margin-top: 2px; }
+  .battle-screen #boss-hud.tactical-boss :is(.boss-health-labels span, .boss-action) { font-size: max(11px, calc(11px / var(--flight-ui-zoom, 1))); }
+  .tactical-boss #boss-finale-label { display: none; }
+  .battle-screen #boss-hud.tactical-boss .boss-action { margin-top: 3px; }
+  .battle-screen .tactical-loadout { gap: 3px; }
+  .battle-screen .tactical-loadout > .tactical-skill {
+    width: 68px;
+    min-height: 47px;
+    grid-template-columns: 41px 1fr;
+    gap: 2px;
+    padding: 4px 3px;
+  }
+  .battle-screen .tactical-loadout > .ultimate-hud { width: 86px; }
+  .tactical-dial-count { font-size: max(11px, calc(11px / var(--flight-ui-zoom, 1))); bottom: 21%; }
+  .tactical-loadout :is(.ultimate-name, .shield-name, .ultimate-label, .shield-label, .ultimate-slots, .shield-slots) { display: none; }
+  .tactical-loadout kbd { font-size: 9px; line-height: 1.3; padding-inline: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .tactical-loadout .tactical-skill-copy { display: block; }
+  .battle-screen #momentum-hud.tactical-momentum { width: clamp(149px, 26vw, 222px); min-height: 43px; padding: 5px 6px; gap: 2px 5px; }
+  #momentum-hud.tactical-momentum .combo-heading { font-size: 10px; }
+  #momentum-hud.tactical-momentum .combo-heading > :first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #momentum-hud.tactical-momentum .combo-value > strong { font-size: 17px; }
+  .tactical-momentum #stance-button { min-height: 27px; font-size: 10px; padding: 2px 3px; }
+  #momentum-hud.tactical-momentum .rage-label { display: none; }
+  .battle-screen:has(.tactical-status) .evolution-readout { bottom: 68px; }
+  .app[data-boss-active="true"] .battle-screen:has(.tactical-status) .powerup-notice { top: 122px; }
+  .battle-screen .tactical-loadout ~ .powerup-notice { top: 72px; }
+}
+@media (min-width: 521px) and (max-height: 495px) {
+  .tactical-boss #boss-health:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: center; gap: 7px; }
+  .battle-screen #boss-hud.tactical-boss #boss-track { margin-top: 2px; }
+  .tactical-boss .boss-health-labels { margin-top: 0; }
+}
+@media (min-width: 521px) and (max-width: 585px) {
+  .battle-screen #boss-hud.tactical-boss { top: calc(66px / var(--flight-ui-zoom, 1)); }
+}
+@media (max-width: 520px) {
+  .app .battle-screen .hud.tactical-status { top: 12px; }
+  .app .battle-screen .weapon-readout.tactical-weapons { top: 58px; left: var(--hud-edge); right: var(--hud-edge); max-width: none; justify-content: space-around; }
+  .battle-screen #boss-hud.tactical-boss { top: calc(99px / var(--flight-ui-zoom, 1)); width: 82vw; }
+  .tactical-boss .boss-heading { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .tactical-boss .boss-heading :is(#boss-name, .boss-stage) { grid-column: 1; justify-self: center; padding: 0; text-align: center; }
+  .battle-screen #momentum-hud.tactical-momentum { bottom: calc(66px / var(--flight-ui-zoom, 1)); left: auto; right: var(--hud-edge); transform: none; }
+  .battle-screen .tactical-loadout { bottom: 66px; }
+  .app[data-boss-active="true"] .battle-screen:has(.tactical-status) .powerup-notice { top: 170px; }
+  .battle-screen:has(.tactical-status) .evolution-readout { bottom: 128px; }
+}
+@media (max-width: 365px) {
+  .tactical-life-pips { display: none; }
+  .tactical-status .difficulty-readout > :first-child { font-size: 0; }
+  .tactical-status .difficulty-readout time { font-size: 11px; margin-inline-start: 0; }
+  .battle-screen #momentum-hud.tactical-momentum { bottom: calc(132px / var(--flight-ui-zoom, 1)); }
+}
+.app[data-reduce-motion] .tactical-boss *,
+.app[data-reduce-motion] .tactical-boss::after,
+.app[data-reduce-motion] .tactical-skill *,
+.app[data-reduce-motion] .tactical-life-pips * { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .tactical-boss *, .tactical-boss::after, .tactical-skill *, .tactical-life-pips * { animation: none !important; }
+}
+.app[data-reduce-motion] .tactical-boss::after,
+.app[data-reduce-motion] .tactical-boss-armor::after { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tactical-boss::after, .tactical-boss-armor::after { display: none; }
+}

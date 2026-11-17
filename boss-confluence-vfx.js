@@ -376,40 +376,52 @@ const BossConfluenceVfx = (() => {
   function safeGuide(ctx, x, y, width, height, active, time = 0, direction = -1) {
     if (width < 1 || height < 1) return;
     ctx.save();
-    ctx.globalCompositeOperation = "source-over";
-    const g = ctx.createLinearGradient(0, y, 0, y + height);
-    g.addColorStop(0, active ? "#43dfd535" : "#43dfd55c");
-    g.addColorStop(.115, "#2bafac0d");
-    g.addColorStop(.885, "#2bafac0d");
-    g.addColorStop(1, active ? "#43dfd535" : "#43dfd55c");
-    ctx.fillStyle = g;
-    ctx.fillRect(x, y, width, height);
-    const edge = ctx.createLinearGradient(x, 0, x + width, 0);
-    const sweep = .18 + ((time * .28 % 1 + 1) % 1) * .64;
-    edge.addColorStop(0, "#46dacf28");
-    edge.addColorStop(Math.max(.05, sweep - .12), "#5bdfcf91");
-    edge.addColorStop(sweep, "#b8fff0");
-    edge.addColorStop(Math.min(.95, sweep + .12), "#5bdfcf91");
-    edge.addColorStop(1, "#46dacf28");
-    ctx.strokeStyle = edge;
-    ctx.lineWidth = active ? 1.1 : 1.7;
-    ctx.globalAlpha = active ? .60 : .92;
-    ctx.beginPath();
+    ctx.globalCompositeOperation = "lighter";
+    const count = width < 720 ? 3 : 5;
+    const edgeWidth = width / count;
+    const glow = Math.min(24, height * .17);
     for (const side of [0, 1]) {
-      const yy = y + side * height, inward = side ? -1 : 1;
-      ctx.moveTo(x, yy);
-      ctx.lineTo(x + width, yy);
-      for (let i = 0; i < 3; i++) {
-        const mx = x + width * (.22 + i * .28), my = yy + inward * Math.min(9, height * .16);
-        ctx.moveTo(mx - direction * 6, my - 4);
+      const edge = y + side * height;
+      const inward = side ? -1 : 1;
+      for (let i = 0; i < count; i++) {
+        const start = x + (i + .12) * edgeWidth;
+        const end = start + edgeWidth * (.58 + .18 * Math.sin(i * 2.3 + side));
+        const middle = (start + end) * .5;
+        const rail = ctx.createLinearGradient(start, 0, end, 0);
+        rail.addColorStop(0, "transparent");
+        rail.addColorStop(.43, active ? "#87e9d894" : "#a6ffe2c4");
+        rail.addColorStop(.72, "#60b8ae6f");
+        rail.addColorStop(1, "transparent");
+        ctx.strokeStyle = rail;
+        ctx.fillStyle = rail;
+        ctx.lineWidth = active ? 1 : 1.25;
+        ctx.beginPath();
+        ctx.moveTo(start, edge);
+        ctx.lineTo(end, edge);
+        ctx.stroke();
+        ctx.globalAlpha = active ? .25 : .3;
+        ctx.beginPath();
+        ctx.moveTo(start, edge);
+        ctx.quadraticCurveTo(middle, edge + inward * glow, end, edge);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        const sweep = time * .42 + i / count;
+        const phase = sweep - Math.floor(sweep);
+        const mx = middle + direction * phase * edgeWidth * .16;
+        const my = edge + inward * Math.min(10, height * .16);
+        const alpha = (.55 + .35 * Math.sin(phase * Math.PI)) * (active ? .76 : 1);
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = "#c6fff0";
+        ctx.beginPath();
+        ctx.moveTo(mx - direction * 6, my - 3);
         ctx.lineTo(mx, my);
-        ctx.lineTo(mx - direction * 6, my + 4);
+        ctx.lineTo(mx - direction * 6, my + 3);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       }
     }
-    ctx.stroke();
     ctx.restore();
   }
-
   function safeContact(ctx, geometry, center, height, color, time) {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";

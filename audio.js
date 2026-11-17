@@ -14,6 +14,10 @@ const gameAudio = (() => {
   let musicDuck = null;
   let warningBus = null;
   let effectsDuck = null;
+  const mixControls = {
+    music: { level: 1, key: "star-breaker-music-volume", node: null },
+    effects: { level: 1, key: "star-breaker-effects-volume", node: null },
+  };
   let noiseBuffer = null;
   let muted = false;
   let volume = 1;
@@ -21,6 +25,10 @@ const gameAudio = (() => {
   try {
     const saved = window.localStorage.getItem(volumeKey);
     if (saved !== null && Number.isFinite(Number(saved))) volume = Math.max(0, Math.min(1, Number(saved)));
+    for (const control of Object.values(mixControls)) {
+      const level = window.localStorage.getItem(control.key);
+      if (level !== null && Number.isFinite(Number(level))) control.level = mixClamp(Number(level), 0, 1);
+    }
   } catch { /* Settings still work for this session. */ }
   let active = false;
   let paused = false;
@@ -935,6 +943,11 @@ const gameAudio = (() => {
     musicDuck = audio.createGain();
     warningBus = audio.createGain();
     effectsDuck = audio.createGain();
+    for (const control of Object.values(mixControls)) {
+      control.node = audio.createGain();
+      control.node.gain.value = control.level ** 2;
+      control.node.connect(master);
+    }
     const limiter = audio.createDynamicsCompressor();
     master.gain.value = muted ? 0 : 0.68 * volume ** 2;
     sfxBus.gain.value = 0.65;
@@ -945,8 +958,8 @@ const gameAudio = (() => {
     limiter.ratio.value = 4;
     limiter.attack.value = 0.003;
     limiter.release.value = 0.18;
-    sfxBus.connect(effectsDuck); effectsDuck.connect(master); warningBus.connect(master);
-    musicBus.connect(musicDuck); musicDuck.connect(master);
+    sfxBus.connect(effectsDuck); effectsDuck.connect(mixControls.effects.node); warningBus.connect(mixControls.effects.node);
+    musicBus.connect(musicDuck); musicDuck.connect(mixControls.music.node);
     master.connect(limiter); limiter.connect(audio.destination);
     noiseBuffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * 2), audio.sampleRate);
     const data = noiseBuffer.getChannelData(0);
@@ -987,6 +1000,13 @@ const gameAudio = (() => {
     volume = mixClamp(value, 0, 1);
     try { window.localStorage.setItem(volumeKey, String(volume)); } catch { /* Keep the session level. */ }
     smoothGain(master, muted ? 0 : .68 * volume ** 2);
+  }
+  function setChannelVolume(channel, value) {
+    const control = Object.hasOwn(mixControls, channel) ? mixControls[channel] : null;
+    if (!control || !Number.isFinite(value)) return;
+    control.level = mixClamp(value, 0, 1);
+    try { window.localStorage.setItem(control.key, String(control.level)); } catch { /* Keep the session level. */ }
+    smoothGain(control.node, control.level ** 2);
   }
   function sync(nextActive, nextBossActive, nextEnraged = false, context = {}) {
     context ??= {};
@@ -1525,6 +1545,7 @@ const gameAudio = (() => {
     audio = null;
   }
   return { unlock, setMuted, get muted() { return muted; }, setVolume, get volume() { return volume; },
+    setChannelVolume, get musicVolume() { return mixControls.music.level; }, get effectsVolume() { return mixControls.effects.level; },
     get diagnostics() {
       return { voices: voices.size + fadingVoices.size, decodedBytes: [...buffers.values()]
         .reduce((bytes, buffer) => bytes + (buffer.length || 0) * (buffer.numberOfChannels || 1) * 4, 0),

@@ -1,0 +1,536 @@
+/* Hangar and report typography sit directly on the scene. Warm highlights
+   mark current choices, while each craft retains its own material accent. */
+#start-screen {
+  --hangar-gold: #e9ca93;
+  --hangar-paper: #fff5e4;
+  --hangar-muted: #c8c2b9;
+  --hangar-margin: clamp(24px, 6vw, 100px);
+  grid-template-columns: minmax(0, min(43%, 470px)) minmax(0, 1fr);
+  gap: clamp(32px, 5.4vw, 100px);
+  scrollbar-gutter: stable;
+}
+.battlefield:has(> #start-screen:not([hidden]))::before {
+  background:
+    linear-gradient(90deg, #0b0b0ce8 0%, #101113c4 31%, #141a2050 59%, #242b3021 100%),
+    linear-gradient(0deg, #0d1013f0, #10151a00 44%, #100f0f57 100%),
+    url("assets/intro/hangar.webp") 66% 52% / cover no-repeat;
+}
+#start-screen .start-copy { max-width: 470px; }
+#start-screen .hangar-title {
+  border: 0;
+  margin-bottom: clamp(21px, 3.2vh, 36px);
+  padding-bottom: 0;
+}
+#start-screen .hangar-title::after { display: none; }
+#start-screen .eyebrow { color: #d0c8ba; letter-spacing: .17em; }
+#start-screen .eyebrow > span {
+  width: 18px;
+  flex-basis: 18px;
+  height: 1px;
+  border: 0;
+  transform: none;
+  background-color: var(--hangar-gold);
+}
+#start-screen h1, html[lang="en"] #start-screen h1 {
+  color: var(--hangar-paper);
+  font-style: normal;
+  font-size: clamp(49px, 6.2vw, 106px);
+  letter-spacing: -.028em;
+  line-height: .95;
+  margin-block: 13px 0;
+  text-shadow: 0 6px 45px #050403dc;
+}
+#start-screen h1 > span { color: #eacfa5; text-shadow: none; }
+#start-screen .hangar-launch {
+  grid-template-columns: 1fr auto;
+  gap: 11px;
+  align-items: center;
+  padding-bottom: 10px;
+  border: 0;
+  border-bottom: 1px solid #e4d0af38;
+  background: transparent;
+  box-shadow: none;
+  clip-path: none;
+}
+#start-screen :is(.hangar-start, .hangar-configure, .hangar-row, .hangar-back) {
+  box-shadow: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  clip-path: none;
+}
+#start-screen :is(.hangar-start, .hangar-configure, .hangar-back):is(:hover, :focus):not(:disabled) {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--hangar-paper);
+}
+#start-screen .hangar-start {
+  min-height: 61px;
+  justify-content: flex-start;
+  gap: 15px;
+  padding: 5px 0 7px 22px;
+  position: relative;
+  color: var(--hangar-paper);
+}
+#start-screen .hangar-start::before {
+  position: absolute;
+  inset: 12px auto 12px 2px;
+  width: 2px;
+  content: "";
+  background: var(--hangar-gold);
+  box-shadow: 0 0 15px #ffde9d47;
+}
+#start-screen .hangar-start strong { font-size: clamp(21px, 2.3vw, 34px); font-weight: 760; }
+#start-screen .hangar-start small { margin-top: 3px; color: #d2c3ad; font-size: 12px; }
+#start-screen .hangar-start-arrow { color: var(--hangar-gold); font-size: 23px; }
+#start-screen .hangar-configure, #start-screen .hangar-back {
+  min-height: 42px;
+  padding-inline: 4px;
+  color: #d6c9b3;
+}
+#start-screen .hangar-configure:hover, #start-screen .hangar-back:hover { text-decoration: underline; text-underline-offset: 7px; }
+#start-screen .hangar-menu-list { border: 0; padding-top: 7px; }
+#start-screen .hangar-row {
+  min-height: 46px;
+  gap: 10px;
+  padding-inline: 22px 4px;
+  justify-content: flex-start;
+  color: #dfd9cf;
+  font-size: clamp(17px, 1.55vw, 23px);
+  font-weight: 510;
+  letter-spacing: .02em;
+}
+#start-screen .hangar-row::after { display: none; }
+#start-screen .hangar-row::before {
+  left: 2px;
+  width: 2px;
+  background: var(--hangar-gold);
+  box-shadow: 0 0 10px #ffdf9d53;
+}
+#start-screen .hangar-row:is(:hover, :focus) { color: var(--hangar-paper); background: transparent; box-shadow: none; }
+#start-screen :is(.hangar-start, .hangar-configure, .hangar-back, .hangar-row):focus-visible {
+  outline: 0;
+  color: #fff9ec;
+  text-decoration: underline;
+  text-decoration-color: var(--hangar-gold);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 7px;
+}
+
+#start-screen .hangar-sight {
+  inset: 47% auto auto 55%;
+  width: min(95%, 730px);
+  height: min(54%, 420px);
+  background: radial-gradient(ellipse closest-side, color-mix(in srgb, var(--hangar-accent) 14%, transparent), transparent 93%);
+}
+#start-screen .hangar-art::before {
+  left: 7%;
+  right: 0;
+  top: 73%;
+  height: 29%;
+  border: 0;
+  box-shadow: none;
+  background: radial-gradient(ellipse, #030607e8 2%, #080b0eb8 33%, transparent 69%);
+  transform: rotateZ(-7deg) rotateX(37deg);
+}
+#start-screen .hangar-art img {
+  max-width: 109%;
+  filter: drop-shadow(0 26px 17px #030407b5) drop-shadow(0 -4px 12px #edca9b29);
+}
+#start-screen .ship-label {
+  border: 0;
+  border-bottom: 1px solid #e9ca9364;
+  padding-inline: 0;
+  color: #f4eadb;
+  box-shadow: none;
+  background: transparent;
+  clip-path: none;
+}
+#start-screen .ship-label small { color: #c1b8aa; }
+#start-screen .label-line { transform: none; background: var(--hangar-gold); }
+
+#start-screen[data-hangar-page="loadout"] .hangar-title { display: none; }
+#start-screen .hangar-subhead h2 { color: var(--hangar-paper); font-size: clamp(26px, 3vw, 48px); line-height: 1.03; }
+#start-screen .hangar-loadout-panel { padding: 0; background: none; border: 0; box-shadow: none; clip-path: none; }
+#start-screen .fighter-options { grid-template-columns: minmax(0, 1fr); gap: 0; }
+#start-screen .fighter-option > span {
+  position: relative;
+  min-height: clamp(38px, 6vh, 57px);
+  padding: 5px 95px 5px 19px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid #ead6b324;
+  box-shadow: none;
+  clip-path: none;
+  color: #e8ded0;
+}
+#start-screen .fighter-option > span::before {
+  left: 2px;
+  width: 2px;
+  background: var(--fighter-tint);
+  transform: none;
+  opacity: .5;
+}
+#start-screen .fighter-option input:checked + span, #start-screen .fighter-option:hover > span {
+  background: linear-gradient(90deg, #e2c29115, #e2c29100 82%);
+  border-color: #ebca9666;
+  color: #fff8e8;
+  box-shadow: none;
+}
+#start-screen .fighter-option input:is(:checked, :focus-visible) + span::before { opacity: 1; background: var(--hangar-gold); }
+#start-screen .fighter-option input:focus-visible + span { outline: 1px solid #f3d9ac; outline-offset: -2px; }
+.hangar-option-preview {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: min(30%, 94px);
+  height: 92%;
+  object-fit: contain;
+  pointer-events: none;
+  transform: translateY(-50%);
+  opacity: .67;
+  filter: drop-shadow(0 4px 6px #010307bf);
+}
+.fighter-option input:checked + span .hangar-option-preview { opacity: 1; }
+#start-screen .fighter-brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(86px, 9vw, 143px);
+  align-items: center;
+  gap: 3px 10px;
+  margin-top: 8px;
+  padding: 4px 0 5px;
+  border: 0;
+  border-bottom: 1px solid #ead6b333;
+  background: transparent;
+}
+#start-screen .fighter-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 8px; }
+#start-screen .fighter-stats > div { border: 0; padding: 4px 0; }
+#start-screen .fighter-stats dt { color: #c4bbb0; letter-spacing: 0; overflow-wrap: anywhere; }
+#start-screen .fighter-stats dd { color: #f5e5cb; white-space: nowrap; }
+#start-screen .fighter-special { grid-row: 2; grid-column: 1 / -1; color: #d4c7b7; font-size: 12px; line-height: 1.4; }
+.hangar-radar { display: block; grid-row: 1; grid-column: 2; width: 100%; max-height: 113px; }
+.hangar-radar-grid { fill: none; stroke: #e6cc9e55; stroke-width: 1; }
+.hangar-radar-value { fill: color-mix(in srgb, var(--hangar-accent) 26%, transparent); stroke: var(--hangar-accent); stroke-width: 1.3; }
+.hangar-radar text { fill: #ddd1ba; font: 9px system-ui, sans-serif; }
+#start-screen .hangar-difficulty-options span {
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid #dac5a633;
+  box-shadow: none;
+  color: #cbbfac;
+  background: transparent;
+}
+#start-screen .hangar-difficulty-options input:checked + span {
+  border-color: var(--hangar-gold);
+  color: #ffebc7;
+  box-shadow: none;
+  background: transparent;
+}
+#start-screen .hangar-loadout-panel > .hangar-start { min-height: 42px; }
+
+/* Sortie consoles retain native dialog focus and scroll behavior. */
+.sortie-console:is([data-section="archive"], [data-section="awards"], [data-section="challenges"], [data-section="upgrades"]) {
+  --archive-paper: #f5e9d9;
+  --archive-line: #d3b98b41;
+  color: var(--archive-paper);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  width: min(1040px, calc(100% - 40px));
+  max-height: calc(100dvh - 40px);
+}
+.sortie-console:is([data-section="archive"], [data-section="awards"], [data-section="challenges"], [data-section="upgrades"])::backdrop {
+  background: linear-gradient(105deg, #100e0de8, #0a0d14d9 60%, #090e16ec);
+  backdrop-filter: blur(13px);
+}
+.sortie-console[data-section]:not([data-section="settings"]) .sortie-console-heading {
+  padding-block: 5px 13px;
+  background: transparent;
+  border-bottom: 1px solid var(--archive-line);
+}
+.sortie-console[data-section]:not([data-section="settings"]) .sortie-console-heading h2 {
+  color: var(--archive-paper);
+  font-size: clamp(28px, 4.3vw, 63px);
+  font-weight: 650;
+  letter-spacing: -.035em;
+}
+.sortie-console[data-section]:not([data-section="settings"]) .sortie-console-body { gap: clamp(14px, 2.5vw, 31px); }
+.sortie-console[data-section]:not([data-section="settings"]) :is(.sortie-module, .sortie-metric, .award-boss, .award-badge) {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  border-top: 1px solid var(--archive-line);
+}
+.sortie-console[data-section]:not([data-section="settings"]) .sortie-module { padding: 12px 3px 7px; }
+.sortie-console[data-section]:not([data-section="settings"]) .sortie-module h3 { color: var(--archive-paper); font-size: clamp(18px, 2vw, 26px); }
+.sortie-console[data-section]:not([data-section="settings"]) :is(.sortie-explainer, .sortie-module p) { color: #d0c6b7; }
+.sortie-console[data-section]:not([data-section="settings"]) :is(.sortie-module > .secondary-button, #sortie-console-close, .sortie-practice-grid button) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-bottom: 1px solid #d5b68666;
+  color: #f3d8a8;
+  border-radius: 0;
+  clip-path: none;
+}
+.sortie-console[data-section]:not([data-section="settings"]) :is(.sortie-module > .secondary-button, #sortie-console-close, .sortie-practice-grid button):is(:hover, :focus-visible):not(:disabled) {
+  background: transparent;
+  color: #fff2d6;
+  border-color: #ffdc98;
+}
+.sortie-console[data-section]:not([data-section="settings"]) .sortie-metric { padding: 7px 3px; }
+.sortie-console[data-section]:not([data-section="settings"]) .sortie-metric :is(strong, span) { color: #e9d6b8; }
+#sortie-console[data-section="upgrades"] .sortie-refit-list {
+  list-style: none;
+  padding-inline-start: 17px;
+  margin-block: 13px;
+  border-inline-start: 1px solid #d6bb8955;
+}
+#sortie-console[data-section="upgrades"] .sortie-refit-list > li {
+  position: relative;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding-block: 4px;
+  color: #bdafa0;
+}
+#sortie-console[data-section="upgrades"] .sortie-refit-list > li::before {
+  position: absolute;
+  inset-inline-start: -21px;
+  width: 7px;
+  aspect-ratio: 1;
+  content: "";
+  transform: rotate(45deg);
+  background: #5a5247;
+}
+#sortie-console[data-section="upgrades"] .sortie-refit-list > li[data-active="true"] { color: #ffe6bd; }
+#sortie-console[data-section="upgrades"] .sortie-refit-list > li[data-active="true"]::before { background: #efce92; box-shadow: 0 0 8px #ebcb8b7a; }
+.tactical-campaign-route, .tactical-rush-route {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 5px 0;
+  list-style: none;
+  background: linear-gradient(90deg, #d8bb867a, #d8bb861f) center 13px / 94% 1px no-repeat;
+}
+.tactical-campaign-route > li, .tactical-rush-route > li {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #b0a491;
+  font: 600 11px/1.2 var(--tac-mono, Consolas, monospace);
+}
+.tactical-campaign-route > li::before, .tactical-rush-route > li::before {
+  content: "";
+  width: 6px;
+  aspect-ratio: 1;
+  margin-block: 5px 0;
+  transform: rotate(45deg);
+  background: #71655a;
+}
+.tactical-campaign-route > li[data-status="cleared"]::before, .tactical-rush-route > li[data-cleared="true"]::before { background: #fce3ac; }
+.tactical-campaign-route > li[data-status="unlocked"]::before, .tactical-rush-route > li[data-resume="true"]::before {
+  background: #eeb878;
+  box-shadow: 0 0 10px #ffc47c7a;
+}
+.tactical-daily-time { display: block; color: #efd5a5; margin: 7px 0; font: 600 13px/1.4 var(--tac-mono, Consolas, monospace); }
+#sortie-console[data-section="challenges"] .sortie-mode-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(13px, 3vw, 35px); }
+#sortie-console[data-section="challenges"] .sortie-rules { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 3px 8px; }
+#sortie-console[data-section="challenges"] .sortie-rules li { margin: 0; color: #d9bea1; }
+#sortie-console[data-section="challenges"] .sortie-rules li::before { content: "· "; color: #efdaba; }
+#sortie-console[data-section="archive"] .sortie-archive-table thead { color: #f2dcba; background: #100e115b; }
+#sortie-console[data-section="archive"] .sortie-archive-table :is(td,th) { border-color: #dcc39b23; }
+#sortie-console[data-section="awards"] .award-badge { grid-template-columns: 22px minmax(0, 1fr); gap: 4px; padding-inline: 2px; }
+#sortie-console[data-section="awards"] .award-badge b { grid-row: 1 / span 2; color: #b7a894; }
+#sortie-console[data-section="awards"] .award-badge[data-earned="true"] b { color: #f6d69f; text-shadow: 0 0 9px #f4cf8a71; }
+
+.evolution-screen {
+  background: radial-gradient(ellipse at 48% 50%, #090a11a3, #080b12e8), #10111b60;
+  backdrop-filter: blur(11px);
+}
+.evolution-screen .evolution-panel { width: min(1110px, 100%); }
+.evolution-screen .evolution-heading h2 { color: #f5e9db; font-size: clamp(26px, 4vw, 52px); letter-spacing: -.02em; }
+.evolution-screen .evolution-eyebrow { color: #c6b99d; }
+.evolution-screen .evolution-card {
+  --evolution-color: #ef9e74;
+  background: transparent;
+  color: #f4e6d6;
+  box-shadow: none;
+  border: 0;
+  border-block: 1px solid #eecc9e45;
+  border-radius: 0;
+  clip-path: none;
+}
+.evolution-screen .evolution-card[data-tone="blast"] { --evolution-color: #9ed9e8; }
+.evolution-screen .evolution-card[data-tone="aegis"] { --evolution-color: #c8b2ef; }
+.evolution-screen .evolution-card:not(:disabled):is(:hover, :focus-visible) {
+  background: linear-gradient(0deg, #e9c59110, #e9c59100 76%);
+  outline-color: #efd09c;
+  border-color: #efd09c;
+}
+.evolution-screen .evolution-card-preview { border: 0; border-radius: 0; background: transparent; }
+.evolution-screen :is(.evolution-card-title,.evolution-card-effect) { color: #f1e5d7; }
+.evolution-screen .evolution-card-art { color: #c5b8aa; }
+
+/* The ship itself carries the report scene. The text hierarchy stays open. */
+.battlefield { --hangar-report-ship: url("assets/ships/crimson-sleek.webp"); }
+.battlefield:has(#ultimate-hud[data-fighter="blue"]) { --hangar-report-ship: url("assets/fighters/azure.webp"); }
+.battlefield:has(#ultimate-hud[data-fighter="yellow"]) { --hangar-report-ship: url("assets/fighters/auric.webp"); }
+.game-over-screen {
+  --report-accent: #e19883;
+  isolation: isolate;
+  display: grid;
+  place-items: safe center start;
+  padding: clamp(18px, 5vh, 66px) clamp(28px, 8vw, 136px);
+  background: linear-gradient(90deg, #0d0b0ff5 4%, #130d13c7 50%, #0c101ac7 100%);
+}
+.game-over-screen[data-victory="true"] {
+  --report-accent: #ebcd98;
+  background: linear-gradient(90deg, #0d0d10f0 4%, #11161cc5 52%, #081019ca 100%);
+}
+.game-over-screen::before {
+  content: "";
+  z-index: -1;
+  position: absolute;
+  pointer-events: none;
+  inset: 9% 2% 8% 41%;
+  background: var(--hangar-report-ship) center / contain no-repeat;
+  opacity: .52;
+  filter: saturate(.68) brightness(.75) drop-shadow(0 35px 30px #000a);
+  transform: rotate(-5deg);
+}
+.game-over-screen .result-card, .campaign-victory-report .campaign-report-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  clip-path: none;
+}
+.game-over-screen .result-card { width: min(590px, 100%); margin: 0; padding: 4px 0; text-align: left; }
+.game-over-screen .result-heading { justify-items: start; text-align: left; gap: 5px; }
+.game-over-screen .result-heading :is(.eyebrow,h2) { color: var(--report-accent); }
+.game-over-screen .result-heading h2 { font-size: clamp(29px, 5.65vw, 84px); font-weight: 670; letter-spacing: -.026em; }
+.game-over-screen .result-intro { color: #d3c7be; }
+.game-over-screen .result-score { margin: clamp(12px, 3vh, 30px) 0 0; }
+.game-over-screen .result-score > strong { color: #ffdb9f; font-size: clamp(34px, 5.2vw, 75px); letter-spacing: .035em; }
+.game-over-screen .result-details { margin: 9px 0 15px; justify-content: start; flex-wrap: wrap; gap: 12px 30px; }
+.game-over-screen .result-details strong { color: #eae0d5; }
+.game-over-screen .sortie-result-summary { margin: 6px 0; padding: 8px 0; background: transparent; border: 0; border-top: 1px solid #e3c3934b; }
+.tactical-result-boss {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 9px;
+  margin: 5px 0 9px;
+  padding: 4px 0;
+  color: #efbbb0;
+  font-size: 13px;
+}
+.tactical-result-boss progress {
+  grid-column: 1 / -1;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  background: #e8b2a32d;
+  accent-color: #e19883;
+}
+.tactical-result-boss progress::-webkit-progress-bar { background: #e8b2a32d; }
+.tactical-result-boss progress::-webkit-progress-value { background: #e19883; }
+.tactical-result-boss progress::-moz-progress-bar { background: #e19883; }
+.game-over-screen .result-card > :is(.primary-button,.secondary-button), .campaign-report-actions > button {
+  width: auto;
+  min-height: 42px;
+  max-width: 100%;
+  margin: 1px 12px 2px 0;
+  padding: 0 7px 0 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: none;
+  color: #ebd4af;
+  border-bottom: 1px solid #ead0a166;
+}
+.game-over-screen .result-card > :is(.primary-button,.secondary-button):is(:hover,:focus-visible), .campaign-report-actions > button:is(:hover,:focus-visible) {
+  background: transparent;
+  color: #fff2d2;
+  border-color: #ffdc98;
+}
+.game-over-screen .result-tip { color: #b6b0a7; }
+.campaign-victory-report {
+  background: linear-gradient(100deg, #0a0a0df6, #0a101ad2 65%, #10141ba6), url("assets/scenery/orbit-galaxy.webp") center / cover;
+}
+.campaign-victory-report .campaign-report-card { width: min(100%, 1120px); }
+.campaign-report-heading { border-bottom: 1px solid #e8c7924b; padding-bottom: 12px; }
+.campaign-report-heading h2 { color: #f4e4ce; font-size: clamp(29px, 5vw, 67px); font-weight: 680; }
+.campaign-report-heading .eyebrow { color: #dec59a; }
+.campaign-report-grade, .campaign-report-grade[data-grade="S"] {
+  border: 0;
+  border-radius: 0;
+  min-width: min(15vw, 114px);
+  color: #f1d5a7;
+  background: transparent;
+  clip-path: none;
+  font-size: clamp(40px, 8vw, 101px);
+  text-shadow: 0 0 28px #d3ac695a;
+}
+.campaign-report-card .sortie-metric, .campaign-boss-card {
+  border: 0;
+  border-radius: 0;
+  padding-inline: 3px;
+  background: transparent;
+  border-top: 1px solid #e8c79236;
+}
+.campaign-report-card .sortie-metric strong { color: #efddba; font-size: clamp(17px, 2.45vw, 30px); }
+.campaign-report-card .sortie-metric:first-child strong { color: #ffd482; }
+
+@media (max-width: 850px) {
+  #start-screen { grid-template-columns: minmax(0, 53%) minmax(0, 1fr); gap: 15px; }
+  #sortie-console[data-section="challenges"] .sortie-mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 590px) {
+  #sortie-console:is([data-section="challenges"], [data-section="upgrades"]) .sortie-mode-grid { grid-template-columns: minmax(0, 1fr); }
+  .game-over-screen::before { inset: 13% 0 19% 26%; opacity: .24; }
+}
+@media (max-height: 720px) {
+  #start-screen .hangar-start { min-height: 49px; }
+  #start-screen .hangar-row { min-height: 37px; }
+  #start-screen .fighter-option > span { min-height: clamp(31px, 6.2vh, 43px); }
+  .hangar-radar { max-height: 90px; }
+}
+@media (max-height: 475px) and (min-width: 561px) {
+  #start-screen { grid-template-columns: minmax(0, 62%) minmax(0, 1fr); }
+  #start-screen h1, html[lang="en"] #start-screen h1 { font-size: 37px; }
+  #start-screen .hangar-title { margin-bottom: 12px; }
+  #start-screen .hangar-start, #start-screen .hangar-row { min-height: 32px; }
+  #start-screen .hangar-configure, #start-screen .hangar-back { min-height: 30px; }
+  #start-screen .fighter-options { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  #start-screen .fighter-option > span { padding-inline: 11px 27px; }
+  #start-screen .fighter-option strong { font-size: 12px; }
+  #start-screen .fighter-option small { font-size: 8px; overflow-wrap: anywhere; }
+  .hangar-option-preview { right: 3px; width: 28%; }
+  #start-screen .fighter-brief { grid-template-columns: minmax(0, 1fr) 72px; max-height: none; overflow: visible; }
+  .hangar-radar { max-height: 60px; }
+  #start-screen .fighter-special { margin: 2px 0; font-size: 10px; }
+  #start-screen .hangar-loadout-panel > .hangar-start { min-height: 33px; }
+}
+@media (max-width: 560px) {
+  #start-screen { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  #start-screen h1, html[lang="en"] #start-screen h1 { font-size: clamp(37px, 10vw, 63px); max-width: 100%; }
+  #start-screen .hangar-art { height: clamp(91px, 15.5vh, 145px); }
+  #start-screen .hangar-art img { width: min(80vw, 45vh); }
+  #start-screen :is(.hangar-row, .fighter-option > span) { min-height: 44px; }
+  #start-screen .fighter-option > span { padding-inline-end: 90px; }
+  .game-over-screen { padding-inline: 20px; }
+}
+
+.app[data-reduce-motion] :is(.evolution-panel,.evolution-card,.result-card,.campaign-report-card) { animation: none; transform: none; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .app :is(.evolution-panel,.evolution-card,.result-card,.campaign-report-card) { animation: none; transform: none; transition: none; }
+}
