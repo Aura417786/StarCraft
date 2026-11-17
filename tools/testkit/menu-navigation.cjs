@@ -72,21 +72,12 @@ async function checkNavigation(page) {
   await focusIs(page, "#hangar-loadout");
   assert.equal(await page.locator("#hangar-loadout-summary").textContent(), "苍电 · 简单");
 
-  await page.locator("#hangar-records").click();
-  await pageIs(page, "records");
-  await page.screenshot({ path: path.join(output, "records.png") });
-  for (const [section, title] of [["upgrades", "改装"], ["archive", "战役档案"], ["awards", "徽章墙"]]) {
-    const entry = `[data-sortie-console="${section}"]`;
-    await page.locator(entry).click();
-    assert.equal(await page.locator("#sortie-console-title").textContent(), title);
-    await page.keyboard.press("Escape");
-    await page.locator("#sortie-console").waitFor({ state: "hidden" });
-    await pageIs(page, "records");
-    await focusIs(page, entry);
-  }
-  await page.locator("#hangar-back-records").click();
-  await pageIs(page, "home");
-  await focusIs(page, "#hangar-records");
+  await checkRecords(page);
+  await page.locator("#fullscreen-button").click();
+  await page.waitForFunction(() => document.fullscreenElement?.id === "game-app");
+  await checkRecords(page, true);
+  await page.locator("#fullscreen-button").click();
+  await page.waitForFunction(() => !document.fullscreenElement);
 
   await page.locator("#hangar-manual").click();
   await pageIs(page, "manual");
@@ -108,6 +99,28 @@ async function checkNavigation(page) {
   assert.equal(await page.locator("#sortie-console-title").textContent(), "挑战");
   await page.locator("#sortie-console-close").click();
   await pageIs(page, "home");
+}
+
+async function checkRecords(page, fullscreen = false) {
+  await page.locator("#hangar-records").click();
+  await pageIs(page, "records");
+  await page.screenshot({ path: path.join(output, fullscreen ? "records-fullscreen.png" : "records.png") });
+  for (const [section, title] of [["upgrades", "改装"], ["archive", "战役档案"], ["awards", "徽章墙"]]) {
+    const entry = `[data-sortie-console="${section}"]`;
+    await page.locator(entry).click();
+    await page.locator("#sortie-console:modal").waitFor();
+    assert.equal(await page.locator("#sortie-console-title").textContent(), title);
+    assert.ok(await page.locator("#sortie-console-body > *").count(), title);
+    if (fullscreen) await page.locator("#sortie-console-close").click();
+    else await page.keyboard.press("Escape");
+    await page.locator("#sortie-console").waitFor({ state: "hidden" });
+    await pageIs(page, "records");
+    await focusIs(page, entry);
+  }
+  await page.locator("#hangar-back-records").click();
+  await pageIs(page, "home");
+  await focusIs(page, "#hangar-records");
+
 }
 
 async function checkSettings(page) {

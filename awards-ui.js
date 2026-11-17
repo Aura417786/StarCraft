@@ -13,7 +13,10 @@ function activeAwardFilter(ship) {
 }
 
 function applyHangarAwardSkin(ship) {
-  hangarFighterImage.style.filter = activeAwardFilter(ship);
+  const filter = activeAwardFilter(ship);
+  for (const image of document.querySelectorAll("#fighter-art, #hangar-variant-art")) {
+    image.style.filter = filter;
+  }
 }
 
 function drawAwardWake(ctx, ship) {

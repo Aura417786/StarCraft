@@ -2,6 +2,8 @@
 
 **High-resolution hangar fighters.** View Crimson, Azure and Auric at an angle to see the recessed barrels, armor seams and canopy reflections in fullscreen.
 
+**Hangar navigation fix.** Refits, Campaign Archive and Badge Wall open in both windowed and fullscreen play.
+
 **Fighter exhaust.** A compact hot plume stays on at normal thrust. In Overdrive or during an ultimate, the core extends into a turbulent plasma trail that sheds bright sparks.
 
 **New fighters and ultimate hit feedback.** Crimson carries a centerline cannon, Azure has twin forward prongs, and Auric has swept wings with paired gun arrays. Ion Swarm torpedoes leave blue-violet vapor trails, while Crimson Beam carries a hot core in turbulent orange plasma. The first boss hit from each ultimate pauses combat for 50 ms and sends light and fragments out from the contact point. Reduced motion keeps the softer local hit cue.
