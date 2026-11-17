@@ -522,9 +522,17 @@ function drawPressureSealWarning(ctx, hazard, quiet) {
   } else {
     const gapTop = hazard.gapY - hazard.gapSize / 2;
     const gapBottom = hazard.gapY + hazard.gapSize / 2;
+    const shade = ctx.createLinearGradient(0, top, 0, bottom);
+    const areaHeight = Math.max(1, bottom - top);
+    shade.addColorStop(0, "transparent");
+    shade.addColorStop(clamp((gapTop - top) / areaHeight, 0, 1), "#59b5ac20");
+    shade.addColorStop(clamp((gapBottom - top) / areaHeight, 0, 1), "#59b5ac20");
+    shade.addColorStop(1, "transparent");
+    ctx.fillStyle = shade;
+    ctx.globalAlpha = active ? .40 : .74;
     ctx.fillRect(left, top, right - left, Math.max(0, gapTop - top));
     ctx.fillRect(left, gapBottom, right - left, Math.max(0, bottom - gapBottom));
-    signatureGuide(ctx, hazard.gapY, hazard.gapSize, active, -1, right);
+    signatureGuide(ctx, hazard.gapY, hazard.gapSize, active, -1, right, quiet ? 0 : hazard.age);
   }
   const key = typeof controlBindingLabel === "function" ? controlBindingLabel("shield") : "V";
   const seconds = Math.max(0, hazard.warning - hazard.age).toFixed(1);

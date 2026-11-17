@@ -81,5 +81,7 @@ function getBossVfxMaterial(name) {
 function warmBossVfxMaterial(type) {
   const names = ["water", "bone", "magma", "silk", "chitin", "glass", "plasma", "spore", "void", "nerve"];
   const name = names[type];
-  if (name) getBossVfxMaterial(name);
+  if (!name) return;
+  getBossVfxMaterial(name);
+  NextgenVfx.warmMaterial(name);
 }

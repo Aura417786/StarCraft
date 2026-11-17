@@ -379,235 +379,76 @@ function drawMechanicZone(ctx, x, y, width, height, color, active, quiet) {
   ctx.setLineDash([]);
 }
 
-function drawBoneRib(ctx, x, y, width, thickness, direction, color, active) {
-  if (!active) {
-    ctx.setLineDash([9, 5]);
-    ctx.strokeStyle = color;
-    drawMechanicLine(ctx, x - width / 2, y, x + width / 2, y, 2);
-    ctx.setLineDash([]);
-    return;
-  }
-  const tooth = width / 9;
-  const surface = ctx.createLinearGradient(0, y - thickness * direction, 0, y + thickness * direction);
-  surface.addColorStop(0, "#372939"); surface.addColorStop(.51, "#9e796e"); surface.addColorStop(1, "#ffedd0");
-  ctx.strokeStyle = color;
-  ctx.fillStyle = surface;
-  ctx.lineWidth = 1.5;
-  for (let index = 0; index < 9; index++) {
-    const start = x - width / 2 + tooth * index;
-    const tip = start + tooth * (.61 + Math.sin(index * 3.7) * .10);
-    ctx.beginPath(); ctx.moveTo(start, y - thickness * direction * .72);
-    ctx.quadraticCurveTo(start + tooth * .55, y - thickness * direction, start + tooth, y - thickness * direction * .53);
-    ctx.quadraticCurveTo(start + tooth * .87, y + thickness * direction * .11, tip, y + thickness * direction * .52);
-    ctx.quadraticCurveTo(start + tooth * .27, y + thickness * direction * .14, start, y - thickness * direction * .72);
-    ctx.fill(); ctx.stroke();
-  }
-}
-
-function drawMagmaLane(ctx, x, y, width, height, hazard, active, quiet) {
-  drawMechanicZone(ctx, x, y, width, height, hazard.color, active, quiet);
-  if (active && typeof NextgenVfx !== "undefined" && width > 2 && height > 2) {
-    NextgenVfx.drawMagmaFissure(ctx,{x1:x,y1:y+height/2,x2:x+width,y2:y+height/2,width:height},
-      signatureMaterials.magma,quiet?0:hazard.age,.88);return;
-  }
-  if (!active || quiet || width <= 2 || height <= 2) return;
-  ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, width, height); ctx.clip();
-  const tide = hazard.age * 11;
-  const lava = ctx.createLinearGradient(0, y, 0, y + height);
-  lava.addColorStop(0, "#ff9953b0"); lava.addColorStop(.26, "#d748316f");
-  lava.addColorStop(.55, "#ffc57712"); lava.addColorStop(.84, "#ffb15a76");
-  lava.addColorStop(1, "#a54436d0");
-  ctx.fillStyle = lava;
-  ctx.fillRect(x, y, width, height);
-  for (let stream = 0; stream < 5; stream++) {
-    const center = y + height * (.16 + stream * .17), amp = height * (.055 + stream % 3 * .021);
-    ctx.strokeStyle = stream % 2 ? "#ffe1aa83" : "#742937a0";
-    ctx.lineWidth = 1.4 + stream % 3;
-    ctx.beginPath();
-    for (let i = 0; i <= 9; i++) {
-      const sx = x + width * i / 9;
-      const sy = center + amp * (Math.sin(i * .9 + tide + stream) + .41 * Math.sin(i * 2.4 + tide * .81));
-      if (i) ctx.lineTo(sx, sy); else ctx.moveTo(sx, sy);
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
 function drawMagmaCover(ctx, hazard, active, quiet) {
   const { x, y, width, height, coverHalf } = hazard;
-  const right = Math.max(x + width, (boss?.x ?? viewport.width) - (boss?.width ?? 0) * .15), left = x - width;
-  drawMagmaLane(ctx, left, y - height, right - left, 2 * height, hazard, active, quiet);
-  drawMagmaLane(ctx, 0, y - height, left, height - coverHalf, hazard, active, quiet);
-  drawMagmaLane(ctx, 0, y + coverHalf, left, height - coverHalf, hazard, active, quiet);
-  ctx.fillStyle = "#211d23b8";
-  ctx.fillRect(0, y - coverHalf, left, coverHalf * 2);
-  ctx.strokeStyle = "#c6d9dd";
-  ctx.setLineDash([5, 5]);
-  drawMechanicLine(ctx, 0, y - coverHalf, left, y - coverHalf);
-  drawMechanicLine(ctx, 0, y + coverHalf, left, y + coverHalf);
-  ctx.setLineDash([]);
-  for (let mark = 1; mark < 5; mark++) {
-    const mx = left * mark / 5;
-    ctx.beginPath(); ctx.moveTo(mx + 4, y - 5); ctx.lineTo(mx - 3, y); ctx.lineTo(mx + 4, y + 5); ctx.stroke();
-  }
-  const stone = ctx.createLinearGradient(x - width, y - coverHalf, x + width, y + coverHalf);
-  stone.addColorStop(0, "#b76842"); stone.addColorStop(.24, "#453642"); stone.addColorStop(.58, "#272531"); stone.addColorStop(1, "#ef8a48");
-  ctx.fillStyle = active ? stone : "#65575d8c";
-  ctx.strokeStyle = active ? "#ffc082" : "#ffe0af";
-  ctx.lineWidth = 2.2;
-  ctx.beginPath(); ctx.moveTo(x - width * .68, y - coverHalf * .86); ctx.lineTo(x + width * .29, y - coverHalf);
-  ctx.lineTo(x + width, y - coverHalf * .30); ctx.lineTo(x + width * .84, y + coverHalf * .51);
-  ctx.lineTo(x + width * .13, y + coverHalf); ctx.lineTo(x - width * .88, y + coverHalf * .71);
-  ctx.lineTo(x - width, y - coverHalf * .28); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#120f1b70";
-  ctx.beginPath(); ctx.moveTo(x - width, y - coverHalf * .28); ctx.lineTo(x - width * .17, y - coverHalf * .10);
-  ctx.lineTo(x + width * .13, y + coverHalf); ctx.lineTo(x - width * .88, y + coverHalf * .71); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = active ? "#ffb97690" : "#c38c6e70";
-  ctx.beginPath(); ctx.moveTo(x - width * .68, y - coverHalf * .86);
-  ctx.lineTo(x - width * .17, y - coverHalf * .10); ctx.lineTo(x + width * .18, y + coverHalf * .04);
-  ctx.lineTo(x + width * .13, y + coverHalf); ctx.moveTo(x + width * .29, y - coverHalf);
-  ctx.lineTo(x + width * .36, y - coverHalf * .22); ctx.lineTo(x + width * .18, y + coverHalf * .04);
-  ctx.lineTo(x + width * .67, y + coverHalf * .32); ctx.stroke();
-}
-
-function drawArenaNode(ctx, node, color, live = true, number = null, showRadius = false) {
-  if (!node.health) return;
-  const r = showRadius ? node.radius * .36 : node.radius;
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = live ? 2.2 : 1.15;
-  if (showRadius) {
-    const glow = ctx.createRadialGradient(node.x, node.y, r, node.x, node.y, Math.max(r + 1, node.radius));
-    glow.addColorStop(0, color + "5d"); glow.addColorStop(1, color + "10");
-    ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2); ctx.fill();
-    ctx.setLineDash([4, 5]); ctx.stroke(); ctx.setLineDash([]);
-  }
-  if (node.role !== "decoy") {
-    const core = ctx.createRadialGradient(node.x - r * .21, node.y - r * .29, r * .03, node.x, node.y, r * .85);
-    core.addColorStop(0, live ? "#f9fcf4" : color + "b8");
-    core.addColorStop(.29, live ? color : "#413a56");
-    core.addColorStop(.66, live ? color + "8a" : "#242434");
-    core.addColorStop(1, "#171426");
-    ctx.fillStyle = core;
-    ctx.beginPath(); ctx.ellipse(node.x, node.y, r * .68, r * .76, -.33, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = color + "9a";
-    ctx.lineWidth = Math.max(1.4, r * .075);
-    for (let rib = 0; rib < 5; rib++) {
-      const b = rib - 2;
-      ctx.beginPath(); ctx.moveTo(node.x - r * .46, node.y + b * r * .16);
-      ctx.quadraticCurveTo(node.x + r * .02, node.y + (b * .24 - .23) * r, node.x + r * .51, node.y + (b * .15 - .14) * r);
-      ctx.stroke();
+  const left = x - width;
+  const right = Math.max(x + width, (boss?.x ?? viewport.width) - (boss?.width ?? 0) * .15);
+  const time = quiet ? 0 : hazard.age;
+  function drawLane(start, end, top, depth) {
+    if (depth < 2 || end - start < 2) return;
+    if (active) {
+      const cy = top + depth / 2;
+      NextgenVfx.drawMagmaFissure(ctx, { x1: start, y1: cy, x2: end, y2: cy, width: depth },
+        signatureMaterials.magma, time, .91);
+    } else {
+      drawMechanicZone(ctx, start, top, end - start, depth, hazard.color, false, quiet);
     }
   }
-  ctx.strokeStyle = color;
-  ctx.lineWidth = live ? 1.85 : 1.15;
-  ctx.setLineDash(live ? [] : [4, 4]);
-  mechanicDiamond(ctx, node.x, node.y, r, false);
-  ctx.setLineDash([]);
-  const progress = node.health / node.maxHealth;
-  if (progress < 1) {
-    ctx.fillStyle = color;
-    ctx.fillRect(node.x - r * .58, node.y + r + 4, r * 1.16 * progress, 2);
-  }
-  if (number !== null) {
-    ctx.fillStyle = "#15111f";
-    ctx.beginPath(); ctx.arc(node.x, node.y, 6.8, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = live ? "#fafff8" : color;
-    ctx.font = "bold 9px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(String(number), node.x, node.y + .25);
-  }
-  ctx.restore();
+  drawLane(left, right, y - height, height * 2);
+  drawLane(0, left, y - height, height - coverHalf);
+  drawLane(0, left, y + coverHalf, height - coverHalf);
+  BossConfluenceVfx.safeGuide(ctx, 0, y - coverHalf, left, coverHalf * 2, active, time);
+  NextgenVfx.drawMagmaShell(ctx, x, y, width, coverHalf, time, active ? 1 : .55);
 }
 
-function drawFusionTether(ctx, node, index, color, quiet) {
-  if (!boss || node.health <= 0) return;
-  const anchorX = boss.x - boss.width * .31, anchorY = boss.y + (index - 1) * boss.height * .19;
-  const length = anchorX - node.x;
-  const bend = quiet ? 0 : Math.sin(boss.age * 3.3 + index * 1.6) * node.radius * .28;
-  ctx.save();
-  ctx.lineCap = "round";
-  const shell = ctx.createLinearGradient(node.x, node.y, anchorX, anchorY);
-  shell.addColorStop(0, color + "b0"); shell.addColorStop(.50, "#413054d9"); shell.addColorStop(1, "#33243e");
-  ctx.beginPath(); ctx.moveTo(node.x + node.radius * .37, node.y);
-  ctx.bezierCurveTo(node.x + length * .24, node.y - bend, anchorX - length * .21, anchorY + bend, anchorX, anchorY);
-  ctx.strokeStyle = shell; ctx.lineWidth = node.radius * .62; ctx.stroke();
-  ctx.strokeStyle = color + "63"; ctx.lineWidth = node.radius * .18; ctx.stroke();
-  ctx.restore();
-}
-
-function drawClawLock(ctx, hazard, active, p, quiet) {
-  const { x, y, width, color } = hazard;
-  const gap = active ? pincerGap(hazard, p) : hazard.gap;
-  const edge = p > .73 && hazard.shock ? width * 1.7 : width;
-  for (const side of [-1, 1]) {
-    const tip = y + gap * side, end = side < 0 ? 0 : viewport.height;
-    const height = Math.abs(end - tip);
-    drawMechanicZone(ctx, x - edge, Math.min(end, tip), edge * 2, height, color, active && p > .48, quiet);
-    if (!active) continue;
-    ctx.fillStyle = "#183b39";
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x - width, end); ctx.lineTo(x + width, end);
-    ctx.lineTo(x + width, tip + side * width); ctx.quadraticCurveTo(x, tip + side * width * .36, x - width * .37, tip);
-    ctx.quadraticCurveTo(x - width * 1.14, tip + side * width * .51, x - width, tip + side * width * 1.63);
-    ctx.closePath(); ctx.fill(); ctx.stroke();
+function drawFusionLimbs(ctx, hazard, active, progress, quiet) {
+  const { x, y, nodes, radius, thickness } = hazard;
+  const [siphon, lance, burst] = nodes;
+  const time = quiet ? 0 : hazard.age;
+  if (siphon.health > 0 && progress < .5) {
+    const fieldRadius = radius * (1.98 - progress * .44);
+    BossConfluenceVfx.ring(ctx, { x, y, radius: fieldRadius, innerRadius: fieldRadius * .68 },
+      -time, active ? .93 : .6, "siphon", quiet);
+    BossConfluenceVfx.beam(ctx, { x1: siphon.x, y1: siphon.y, x2: x, y2: y, width: 7 },
+      time, active ? .68 : .31, "siphon", quiet);
   }
-  // Keep the center passage readable even when the warning's distant jaws
-  // start behind the top or bottom HUD. These rails mark the final opening.
-  const marker = Math.min(12, Math.max(6, width * .27));
-  ctx.strokeStyle = "#e5ffde";
-  ctx.lineWidth = 2;
-  for (const side of [-1, 1]) {
-    const rail = y + side * hazard.gap;
-    ctx.beginPath();
-    ctx.moveTo(x - width - marker, rail + marker * side);
-    ctx.lineTo(x - width - marker, rail);
-    ctx.lineTo(x + width + marker, rail);
-    ctx.lineTo(x + width + marker, rail + marker * side);
-    ctx.stroke();
+  if (lance.health > 0 && progress < .61) {
+    const line = { x1: lance.x, y1: lance.y, x2: mechanicRoom().left, y2: y,
+      width: thickness * 2 };
+    if (active && progress > .43) BossConfluenceVfx.beam(ctx, line, time, 1, "lance", quiet);
+    else {
+      ctx.strokeStyle = "#ffd7b78a";
+      ctx.setLineDash([10, 7]);
+      drawMechanicLine(ctx, line.x1, line.y1, line.x2, line.y2, 1.75);
+      ctx.setLineDash([]);
+    }
+  }
+  if (burst?.health > 0) {
+    const live = active && progress > .71;
+    if (live) BossConfluenceVfx.ring(ctx, { x, y, radius, innerRadius: 0 },
+      time, .94, "burst", quiet);
+    else {
+      ctx.strokeStyle = "#ffaee4";
+      ctx.setLineDash([6, 7]);
+      ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  for (const [index, node] of nodes.entries()) {
+    BossConfluenceVfx.tether(ctx, node, index, boss, time, quiet);
+    BossConfluenceVfx.fusionNode(ctx, node, node.role, time, active ? 1 : .7, quiet, index + 1);
   }
 }
 
 function drawAlienMechanic(ctx, hazard, quiet) {
   const { kind, x, y, color } = hazard;
   const active = mechanicActive(hazard), p = signatureProgress(hazard);
+  if (BossEnergyVfx.drawMechanic(ctx, hazard, quiet)) return;
+  if (BossCreatureVfx.drawMechanic(ctx, hazard, { active, progress: p, quiet })) return;
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.5;
   switch (kind) {
-    case "ribCage": {
-      const [top, bottom] = cageBars(hazard, active ? p : 1);
-      drawBoneRib(ctx, x, top, hazard.width, hazard.thickness, 1, color, active);
-      drawBoneRib(ctx, x, bottom, hazard.width, hazard.thickness, -1, color, active);
-      break;
-    }
-    case "bonefall": {
-      const { width, height } = hazard;
-      drawMechanicZone(ctx, x - width, y - height, width * 2, height * 2, color, active && p > .36, quiet);
-      if (active) {
-        const head = y - height - Math.max(0, .45 - p) * viewport.height * .49;
-        ctx.beginPath(); ctx.moveTo(x - width * .58, head - height); ctx.lineTo(x + width * .40, head - height);
-        ctx.lineTo(x + width * .62, head); ctx.lineTo(x, head + height * .77); ctx.lineTo(x - width * .46, head); ctx.closePath(); ctx.fill();
-      }
-      break;
-    }
     case "magmaCover": drawMagmaCover(ctx, hazard, active, quiet); break;
-    case "loom": {
-      for (const [a, b] of liveLoomLinks(hazard)) {
-        const one = hazard.nodes[a], two = hazard.nodes[b];
-        ctx.setLineDash(active ? [] : [5, 5]);
-        ctx.globalAlpha = active ? .35 : .64;
-        drawMechanicLine(ctx, one.x, one.y, two.x, two.y, active ? hazard.thickness * 2 : 1.4);
-        ctx.globalAlpha = .86;
-        if (active) for (const offset of [-3, 3]) drawMechanicLine(ctx, one.x, one.y + offset, two.x, two.y - offset);
-      }
-      ctx.setLineDash([]); ctx.globalAlpha = 1;
-      for (const node of hazard.nodes) drawArenaNode(ctx, node, color);
-      break;
-    }
-    case "pincerLock": drawClawLock(ctx, hazard, active, p, quiet); break;
     case "mirrorShield": {
       const h = hazard.height, w = 13;
       const surface = ctx.createLinearGradient(x - w, y - h, x + w, y + h);
@@ -622,40 +463,13 @@ function drawAlienMechanic(ctx, hazard, quiet) {
       }
       break;
     }
-    case "mirrorDecoys": {
-      for (const node of hazard.nodes) {
-        if (!node.health) continue;
-        const hot = active && p > .61 && p < .82;
-        ctx.globalAlpha = hot ? .9 : .42;
-        ctx.setLineDash(hot ? [] : [4, 7]);
-        drawMechanicLine(ctx, node.x, node.y, hazard.aimX, hazard.aimY, hot ? hazard.thickness * 1.6 : 1.5);
-        ctx.setLineDash([]); ctx.globalAlpha = 1;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.ellipse(node.x, node.y, node.radius * 1.64, node.radius * .72, -.18, 0, Math.PI * 2); ctx.stroke();
-        drawArenaNode(ctx, node, color, false);
-      }
-      if (boss) { ctx.fillStyle = "#fff4cf"; mechanicDiamond(ctx, boss.x, boss.y - boss.height * .38, 7); }
-      break;
-    }
-    case "tailConduit": {
-      if (!hazard.nodes[0].health) break;
-      const segments = quiet ? 10 : 22;
-      for (let i = 0; i < segments; i++) {
-        const t = (i + .5) / segments, hot = active && t <= p && t >= p - .18;
-        ctx.globalAlpha = hot ? 1 : .41;
-        const a = tailPosition(hazard, i / segments), b = tailPosition(hazard, (i + .68) / segments);
-        if (hot) {
-          ctx.strokeStyle = color + "70";
-          drawMechanicLine(ctx, a.x, a.y, b.x, b.y, hazard.thickness * 1.8);
-        }
-        ctx.strokeStyle = hot ? "#f4fcff" : color;
-        drawMechanicLine(ctx, a.x, a.y, b.x, b.y, hot ? 3.2 : 1.25);
-      }
-      ctx.globalAlpha = 1; drawArenaNode(ctx, hazard.nodes[0], color);
-      break;
-    }
     case "sporeNests": {
-      for (const node of hazard.nodes) drawArenaNode(ctx, node, color, true, null, true);
+      for (const node of hazard.nodes) {
+        if (node.health <= 0) continue;
+        const time = quiet ? 0 : hazard.age;
+        NextgenVfx.drawSporeCloud(ctx, node, time, active ? .84 : .42);
+        NextgenVfx.drawSporePod(ctx, node, time, active ? 1 : .67, node.radius * .42);
+      }
       if (hazard.infection > 0) {
         ctx.lineWidth = 2.5; ctx.strokeStyle = "#f2f7b8";
         ctx.beginPath(); ctx.arc(player.x, player.y, player.height * .37, -Math.PI / 2,
@@ -664,15 +478,21 @@ function drawAlienMechanic(ctx, hazard, quiet) {
       break;
     }
     case "sporeBlight": {
-      ctx.fillStyle = color + (active ? "60" : "16"); ctx.setLineDash(active ? [] : [4, 5]);
-      ctx.beginPath(); ctx.arc(x, y, hazard.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      NextgenVfx.drawSporeCloud(ctx, hazard, quiet ? 0 : hazard.age, active ? .91 : .36);
+      if (!active) {
+        ctx.strokeStyle = color;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath(); ctx.arc(x, y, hazard.radius, 0, Math.PI * 2); ctx.stroke();
+      }
       break;
     }
     case "riftFold": {
       const r = hazard.radius;
       ctx.globalAlpha = 1;
+      const time = quiet ? 0 : hazard.age;
       NextgenVfx.drawVoid(ctx, {x, y, radius:r}, signatureMaterials.void,
-        quiet ? 0 : hazard.age, active ? .98 : .8);
+        time, active ? .98 : .8);
+      if (active) BossConfluenceVfx.accretionWake(ctx, x, y, r, time, quiet);
       // The disk pulls but is not a solid damage area. Only these late seams hit.
       for (const seam of riftSeams(hazard)) {
         const live = p > .68;
@@ -687,44 +507,7 @@ function drawAlienMechanic(ctx, hazard, quiet) {
       }
       break;
     }
-    case "neuralRelay": {
-      const live = activeRelayNode(hazard);
-      if (!live) break;
-      ctx.setLineDash(active && p > .57 ? [] : [4, 6]);
-      drawMechanicLine(ctx, live.x, live.y, x, y, active && p > .57 ? hazard.thickness * 1.6 : 1.3);
-      ctx.setLineDash([]);
-      const iconX = (x + live.x) * .5, iconY = (y + live.y) * .5;
-      ctx.fillStyle = "#160c24"; ctx.fillRect(iconX - 12, iconY - 12, 24, 24);
-      ctx.strokeRect(iconX - 12, iconY - 12, 24, 24);
-      ctx.fillStyle = "#fff2f5"; ctx.fillRect(iconX - 5, iconY - 5, 3, 10); ctx.fillRect(iconX + 2, iconY - 5, 3, 10);
-      for (const [index, node] of hazard.nodes.entries()) drawArenaNode(ctx, node, color, live === node, index + 1);
-      break;
-    }
-    case "fusionLimbs": {
-      const [siphon, lance, burst] = hazard.nodes;
-      for (const [index, node] of hazard.nodes.entries()) drawFusionTether(ctx, node, index, fusionLimbColors[index], quiet);
-      if (siphon.health > 0 && p < .5) {
-        ctx.strokeStyle = "#a7f5fc";
-        ctx.setLineDash([4, 7]);
-        drawMechanicLine(ctx, siphon.x, siphon.y, x, y, 2);
-        ctx.beginPath(); ctx.arc(x, y, hazard.radius * (1.98 - p * .44), 0, Math.PI * 2); ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      if (lance.health > 0 && p < .61) {
-        ctx.strokeStyle = "#ffe3cc";
-        ctx.setLineDash(p > .43 ? [] : [10, 5]);
-        drawMechanicLine(ctx, lance.x, lance.y, mechanicRoom().left, y, p > .43 ? hazard.thickness * 1.8 : 1.9);
-        ctx.setLineDash([]);
-      }
-      if (burst?.health > 0) {
-        ctx.strokeStyle = "#ffbce9"; ctx.fillStyle = p > .71 ? "#ffbce96b" : "#ffbce913";
-        ctx.setLineDash(p > .71 ? [] : [3, 5]);
-        ctx.beginPath(); ctx.arc(x, y, hazard.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      for (const [index, node] of hazard.nodes.entries()) drawArenaNode(ctx, node, fusionLimbColors[index], true, index + 1);
-      break;
-    }
+    case "fusionLimbs": drawFusionLimbs(ctx, hazard, active, p, quiet); break;
   }
   ctx.restore();
 }

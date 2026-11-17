@@ -312,174 +312,6 @@ function drawUltimateChargeIdentity(ctx, target, scene) {
   ctx.restore();
 }
 
-function ultimateWaterWall(ctx, box, mat, time, alpha, direction = -1) {
-  if (!(box.width > 0 && box.height > 0)) return;
-  if (typeof drawWaterSection === "function") {
-    const center = box.x + box.width / 2;
-    const top = box.y;
-    const bottom = box.y + box.height;
-    drawWaterSection(ctx, () => center, top, bottom, direction, time, box.width / 2, mat, alpha < .7, quietCombatMotion());
-    if (typeof NextgenVfx === "undefined" && typeof getBossVfxMaterial === "function") {
-      const water = getBossVfxMaterial("water");
-      if (water) {
-        ctx.save(); ctx.beginPath(); ctx.rect(0, top, viewport.width, bottom - top); ctx.clip();
-        ctx.globalCompositeOperation = "soft-light"; ctx.globalAlpha = alpha * .5;
-        const trailX = center - direction * box.width * .8;
-        ctx.drawImage(water, trailX - box.width * 1.2, top, box.width * 2.4, bottom - top);
-        ctx.restore();
-      }
-    }
-    return;
-  }
-  ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y, box.width, box.height); ctx.clip();
-  const vertical = box.height > box.width;
-  const depth = vertical ? box.width : box.height;
-  const gradient = ctx.createLinearGradient(box.x, box.y, box.x + (vertical ? depth : 0), box.y + (vertical ? 0 : depth));
-  gradient.addColorStop(0, mat.dark); gradient.addColorStop(.22, "#061827");
-  gradient.addColorStop(.67, mat.mid); gradient.addColorStop(1, mat.rim);
-  ctx.globalAlpha = alpha * .9; ctx.fillStyle = gradient; ctx.fillRect(box.x, box.y, box.width, box.height);
-  const long = vertical ? box.height : box.width;
-  const crests = visualQuality.id === "low" ? 8 : 16;
-  for (let wave = 0; wave < crests; wave++) {
-    const along = (wave + .5) * long / crests;
-    const roll = Math.sin(time * 3.5 + wave * .8) * depth * .06;
-    ctx.save();
-    ctx.translate(box.x + (vertical ? depth * .72 + roll : along), box.y + (vertical ? along : depth * .72 + roll));
-    if (!vertical) ctx.rotate(Math.PI / 2);
-    const r = Math.min(45, Math.max(15, depth * .24));
-    ctx.fillStyle = mat.dark; ctx.globalAlpha = alpha * .84;
-    ctx.beginPath(); ctx.moveTo(-r * 2.2, r * .6);
-    ctx.bezierCurveTo(-r * .2, -r * 1.6, r * 1.3, -r, r * .74, r * .25);
-    ctx.bezierCurveTo(r * .35, -r * .6, -r * .5, -r * .55, -r * 2.2, r * .6); ctx.fill();
-    ctx.strokeStyle = mat.spark; ctx.globalAlpha = alpha * .75; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(-r * 2.2, r * .6); ctx.bezierCurveTo(-r * .2, -r * 1.6, r * 1.3, -r, r * .74, r * .25); ctx.stroke();
-    ctx.strokeStyle = mat.rim; ctx.lineWidth = 8; ctx.globalAlpha = alpha * .15; ctx.stroke();
-    for (let spray = 0; spray < 5; spray++) {
-      const sx = r * (.3 + spray * .19), sy = -r * (.65 + .22 * Math.sin(wave * 7 + spray + time * 3));
-      ctx.globalAlpha = alpha * .55; ctx.fillStyle = mat.spark;
-      ctx.beginPath(); ctx.ellipse(sx, sy, 1.2 + spray % 2, 2.6, .4, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.restore();
-  }
-  ctx.restore();
-}
-
-function ultimateLavaFissure(ctx, line, mat, time, alpha) {
-  if (typeof NextgenVfx !== "undefined" && NextgenVfx.drawMagmaFissure(ctx, line, mat, time, alpha)) return;
-  const dx = line.x2 - line.x1, dy = line.y2 - line.y1, length = Math.hypot(dx, dy);
-  const width = Math.max(3, line.width);
-  ctx.save(); ctx.translate(line.x1, line.y1); ctx.rotate(Math.atan2(dy, dx));
-  // Cold opaque basalt contains a rolling, uneven molten river. No rectangular glow.
-  const wave = x => Math.sin(x * .013 + time * .7) * width * .12 + Math.sin(x * .039 - time) * width * .04;
-  const heat = ctx.createLinearGradient(0, -width * .58, 0, width * .58);
-  heat.addColorStop(0, "#100e16"); heat.addColorStop(.16, "#31121a");
-  heat.addColorStop(.32, "#a32e16"); heat.addColorStop(.46, "#f38b36");
-  heat.addColorStop(.53, "#ffd37a"); heat.addColorStop(.64, "#d95122");
-  heat.addColorStop(.81, "#47131c"); heat.addColorStop(1, "#100d15");
-  const half = width * .51;
-  ctx.beginPath();
-  for (let i = 0; i <= 48; i++) {
-    const x = length * i / 48, turbulence = 1 + Math.sin(x * .071 + time * 2) * .13;
-    if (!i) ctx.moveTo(x, wave(x) - half * turbulence); else ctx.lineTo(x, wave(x) - half * turbulence);
-  }
-  for (let i = 48; i >= 0; i--) {
-    const x = length * i / 48, turbulence = 1 + Math.sin(x * .047 - time * 1.5) * .15;
-    ctx.lineTo(x, wave(x) + half * turbulence);
-  }
-  ctx.closePath(); ctx.globalAlpha = alpha; ctx.fillStyle = heat; ctx.fill();
-  if (typeof getBossVfxMaterial === "function") {
-    const crust = getBossVfxMaterial("magma");
-    if (crust) {
-      ctx.save(); ctx.clip();
-      // Keep density and normal-lighting ABOVE the hot substrate. Overlapping
-      // soft tiles make moving crust pockets without a visible repeating frame.
-      const span = Math.max(width * 2.2, 100), count = Math.ceil(length / (span * .64)) + 1;
-      for (let tile = 0; tile < count; tile++) {
-        const px = tile * span * .64 - span * .12 + Math.sin(time * .5 + tile * 1.7) * span * .035;
-        const py = wave(px) - width * (.81 + tile % 2 * .12);
-        ctx.globalAlpha = alpha * .78;
-        ctx.drawImage(crust, px, py, span, width * 1.8);
-      }
-      ctx.globalCompositeOperation = "soft-light"; ctx.globalAlpha = alpha * .46;
-      ctx.drawImage(crust, -width * .2, -width, length + width * .4, width * 2);
-      ctx.restore();
-    }
-  }
-  const blocks = visualQuality.id === "low" ? 11 : 22;
-  const rock = ultimateNodeTexture("magma", "rock");
-  for (let i = 0; i < blocks; i++) {
-    const x = length * (i * .618034 % 1), side = i % 2 ? 1 : -1;
-    const size = width * (.14 + (i * .371 % 1) * .16), y = wave(x) + side * width * (.32 + (i * .13 % .1));
-    ctx.save(); ctx.translate(x, y); ctx.rotate(i * 2.4 + Math.sin(time + i) * .08);
-    ctx.globalAlpha = alpha * .9; ctx.drawImage(rock, -size, -size * .7, size * 2, size * 1.4); ctx.restore();
-  }
-  // Fine convection seams slide with the river, and embers follow its direction.
-  ctx.globalCompositeOperation = "lighter"; ctx.strokeStyle = mat.spark; ctx.lineWidth = 1;
-  for (let seam = 0; seam < 14; seam++) {
-    const x = (seam * .618034 + time * .045) % 1 * length;
-    ctx.globalAlpha = alpha * (.3 + seam % 3 * .12); ctx.beginPath(); ctx.moveTo(x, wave(x));
-    ctx.bezierCurveTo(x + 12, wave(x) - width * .07, x + 18, wave(x) + width * .08, x + 38, wave(x + 38)); ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function ultimatePincerPlate(ctx, rect, mat, time, alpha, upper) {
-  if (!(rect.width > 0 && rect.height > 0)) return;
-  const lip = upper ? rect.y + rect.height : rect.y, side = upper ? -1 : 1;
-  const x = rect.x, w = rect.width, depth = rect.height;
-  ctx.save(); ctx.beginPath(); ctx.rect(x, rect.y, w, depth); ctx.clip();
-  const shell = ctx.createLinearGradient(x, lip, x + w * .08, lip + side * depth);
-  shell.addColorStop(0, mat.rim); shell.addColorStop(.13, mat.mid); shell.addColorStop(.3, "#263d32");
-  shell.addColorStop(.69, "#091519"); shell.addColorStop(1, mat.dark);
-  ctx.fillStyle = shell; ctx.globalAlpha = alpha;
-  ctx.beginPath(); ctx.moveTo(x, lip);
-  ctx.bezierCurveTo(x - w * .02, lip + side * depth * .6, x + w * .38, lip + side * depth * .98, x + w * 1.05, lip + side * depth * .87);
-  ctx.lineTo(x + w * 1.05, lip + side * depth * .16);
-  ctx.bezierCurveTo(x + w * .66, lip + side * depth * .03, x + w * .21, lip + side * depth * .45, x, lip); ctx.closePath(); ctx.fill();
-  ctx.save(); ctx.clip();
-  if (typeof getBossVfxMaterial === "function") {
-    const shellTexture = getBossVfxMaterial("chitin");
-    if (shellTexture) { ctx.globalAlpha = alpha * .58; ctx.drawImage(shellTexture, x, rect.y, w, depth); }
-  }
-  // A few wide, asymmetric sutures follow one continuous mandible, not tiled plates.
-  ctx.strokeStyle = "#030b10"; ctx.lineWidth = 7; ctx.globalAlpha = alpha * .78;
-  for (let suture = 0; suture < 4; suture++) {
-    const sx = x + w * (.16 + suture * .23);
-    ctx.beginPath(); ctx.moveTo(sx, lip + side * depth);
-    ctx.bezierCurveTo(sx - w * .13, lip + side * depth * .65, sx + w * .03, lip + side * depth * .4, sx + w * .1, lip + side * depth * .08); ctx.stroke();
-  }
-  ctx.restore();
-  const toothCount = 6;
-  for (let tooth = 0; tooth < toothCount; tooth++) {
-    const t = .04 + tooth * .155, tx = x + w * t;
-    const reach = depth * (.22 + .16 * Math.sin(tooth * 1.7 + .4));
-    const span = w * (.06 + tooth % 3 * .013);
-    const enamel = ctx.createLinearGradient(tx, lip, tx + span, lip + side * reach);
-    enamel.addColorStop(0, mat.spark); enamel.addColorStop(.16, mat.rim); enamel.addColorStop(.44, mat.mid); enamel.addColorStop(1, mat.dark);
-    ctx.fillStyle = enamel; ctx.globalAlpha = alpha;
-    ctx.beginPath(); ctx.moveTo(tx - span * .35, lip + side * reach);
-    ctx.bezierCurveTo(tx - span * .3, lip + side * reach * .3, tx + span * .12, lip + side * 2, tx + span * .7, lip);
-    ctx.bezierCurveTo(tx + span * .15, lip + side * reach * .6, tx + span * .7, lip + side * reach, tx - span * .35, lip + side * reach); ctx.closePath(); ctx.fill();
-  }
-  ctx.restore();
-}
-
-function ultimateOssuaryRing(ctx, circle, mat, time, alpha) {
-  const inner = Math.max(0, circle.innerRadius || 0), radius = Math.max(1, circle.radius);
-  ctx.save(); ctx.beginPath(); ctx.arc(circle.x, circle.y, radius, 0, Math.PI * 2);
-  if (inner) ctx.arc(circle.x, circle.y, inner, 0, Math.PI * 2, true);
-  ctx.clip(); ctx.fillStyle = mat.dark; ctx.globalAlpha = alpha;
-  ctx.fillRect(circle.x - radius, circle.y - radius, radius * 2, radius * 2);
-  const count = visualQuality.id === "low" ? 16 : 28;
-  const mid = (radius + inner) / 2, thick = Math.max(4, radius - inner);
-  for (let piece = 0; piece < count; piece++) {
-    const a = piece / count * Math.PI * 2 + time * .06;
-    ultimateBone(ctx, circle.x + Math.cos(a) * mid, circle.y + Math.sin(a) * mid,
-      Math.max(20, mid * Math.PI * 2 / count * 1.5), thick * 1.7, a + Math.PI / 2, mat, alpha);
-  }
-  ctx.restore();
-}
-
 function ultimateSilkLine(ctx, line, mat, time, alpha, nerve = false) {
   const dx = line.x2 - line.x1, dy = line.y2 - line.y1, length = Math.max(1, Math.hypot(dx, dy));
   const nx = -dy / length, ny = dx / length;
@@ -508,72 +340,6 @@ function ultimateSilkLine(ctx, line, mat, time, alpha, nerve = false) {
   ctx.restore();
 }
 
-function ultimatePrismBeam(ctx, line, mat, alpha) {
-  const key = "mirror-beam";
-  let beam = ultimateSurfaceCache.get(key);
-  if (!beam) {
-    beam = document.createElement("canvas"); beam.width = 128; beam.height = 64;
-    const brush = beam.getContext("2d"), spread = brush.createLinearGradient(0, 0, 0, 64);
-    spread.addColorStop(0, "#3b89ff00"); spread.addColorStop(.21, "#2e7cef0b");
-    spread.addColorStop(.36, "#449eff39"); spread.addColorStop(.46, "#79dcffc2");
-    spread.addColorStop(.49, "#e0fdffed"); spread.addColorStop(.51, "#b2c4ffb0");
-    spread.addColorStop(.54, "#7560c67a"); spread.addColorStop(.63, "#bb72ff52");
-    spread.addColorStop(.76, "#824bdd1d"); spread.addColorStop(1, "#542fac00");
-    brush.fillStyle = spread; brush.fillRect(0, 0, 128, 64);
-    const transmission = brush.createLinearGradient(0, 0, 128, 0);
-    transmission.addColorStop(0, "#ffffffff");
-    transmission.addColorStop(.28, "#ffffffe7");
-    transmission.addColorStop(.77, "#ffffffa6");
-    transmission.addColorStop(1, "#ffffff73");
-    brush.globalCompositeOperation = "destination-in";
-    brush.fillStyle = transmission; brush.fillRect(0, 0, 128, 64);
-    ultimateSurfaceCache.set(key, beam);
-  }
-  const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1), width = Math.max(8, line.width);
-  ctx.save(); ctx.translate(line.x1, line.y1); ctx.rotate(Math.atan2(line.y2 - line.y1, line.x2 - line.x1));
-  ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = alpha * .9;
-  ctx.drawImage(beam, 0, -width * 1.3, length, width * 2.6);
-  ctx.strokeStyle = mat.spark; ctx.lineWidth = 1; ctx.globalAlpha = alpha * .75;
-  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(length, 0); ctx.stroke();
-  ctx.restore();
-}
-
-function ultimateCloud(ctx, circle, mat, time, alpha, vacuum = false) {
-  if (vacuum && typeof NextgenVfx !== "undefined" && NextgenVfx.drawVoid(ctx, circle, mat, time, alpha)) return;
-  const radius = Math.max(1, circle.radius), inner = circle.innerRadius || 0;
-  ctx.save();
-  ctx.beginPath(); ctx.arc(circle.x, circle.y, radius, 0, Math.PI * 2);
-  if (inner > 0) ctx.arc(circle.x, circle.y, inner, 0, Math.PI * 2, true);
-  ctx.clip();
-  ctx.fillStyle = vacuum ? "#010207" : mat.dark; ctx.globalAlpha = alpha * (vacuum ? .98 : .73);
-  ctx.fillRect(circle.x - radius, circle.y - radius, radius * 2, radius * 2);
-  if (typeof getBossVfxMaterial === "function") {
-    const cloud = getBossVfxMaterial(vacuum ? "void" : "spore");
-    if (cloud) { ctx.globalAlpha = alpha * .8; ctx.drawImage(cloud, circle.x - radius, circle.y - radius, radius * 2, radius * 2); }
-  }
-  if (vacuum) {
-    for (let ring = 0; ring < 10; ring++) {
-      const r = radius * (.4 + ring * .06), lineWidth = 2 + ring % 3;
-      // The rotated ellipse is inside radius r; retain stroke and antialias margins.
-      if (inner > 0 && r + lineWidth * .5 + 2 <= inner) continue;
-      ctx.strokeStyle = ring % 3 ? mat.mid : mat.rim; ctx.globalAlpha = alpha * (.12 + ring % 3 * .13); ctx.lineWidth = lineWidth;
-      ctx.beginPath(); ctx.ellipse(circle.x, circle.y, r, r * .36, -.2, ring * .6 + time, ring * .6 + time + 3.7); ctx.stroke();
-    }
-    ctx.fillStyle = "#000106"; ctx.globalAlpha = alpha;
-    ctx.beginPath(); ctx.arc(circle.x, circle.y, Math.max(inner, radius * .37), 0, Math.PI * 2); ctx.fill();
-  } else {
-    const count = visualQuality.id === "low" ? 7 : 15;
-    for (let puff = 0; puff < count; puff++) {
-      const a = puff * 2.39996 + time * .07, orbit = radius * (.15 + (puff * 7 % 11) / 14);
-      const size = radius * (.23 + puff % 3 * .07);
-      ctx.globalAlpha = alpha * .65;
-      ctx.drawImage(pressureArtMist(mat.rim), circle.x + Math.cos(a) * orbit - size,
-        circle.y + Math.sin(a) * orbit - size, size * 2, size * 2);
-    }
-  }
-  ctx.restore();
-}
-
 function ultimateClipDanger(ctx, hazard) {
   if (!hazard.noShield) return;
   const top = clamp(hazard.gapY - hazard.gapSize / 2, 0, viewport.height);
@@ -583,94 +349,55 @@ function ultimateClipDanger(ctx, hazard) {
 }
 
 function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
-  const mat = ultimateMaterial(target), name = pressureMaterialNames[target.type];
-  const time = quietCombatMotion() ? 0 : hazard.age;
+  const quiet = quietCombatMotion();
+  const time = quiet ? 0 : hazard.age;
   const active = hazard.age >= hazard.warning;
-  const alpha = active ? .88 : .19 + Math.min(1, hazard.age / hazard.warning) * .2;
+  const alpha = active ? .96 : .20 + Math.min(1, hazard.age / hazard.warning) * .19;
   const kind = hazard.ultimateKind;
-  const flowing = !quietCombatMotion() && visualQuality.id !== "low";
-  const high = visualQuality.id === "high";
-  ctx.save(); ctx.globalCompositeOperation = "source-over";
-  ctx.save(); ultimateClipDanger(ctx, hazard);
-  let rectIndex = 0;
-  for (const rect of geometry.rects || []) {
-    if (kind === "tideWalls") ultimateWaterWall(ctx, rect, mat, time, alpha, rectIndex < 2 ? -1 : 1);
-    else if (kind === "pincer") ultimatePincerPlate(ctx, rect, mat, time, alpha, rect.y < hazard.gapY);
-    else if (kind === "magmaRift") {
-      const vertical = rect.height > rect.width;
-      ultimateLavaFissure(ctx, { x1: rect.x + (vertical ? rect.width / 2 : 0), y1: rect.y + (vertical ? 0 : rect.height / 2),
-        x2: rect.x + (vertical ? rect.width / 2 : rect.width), y2: rect.y + (vertical ? rect.height : rect.height / 2), width: vertical ? rect.width : rect.height }, mat, time, alpha);
-    } else {
-      ctx.globalAlpha = alpha * .8; ctx.fillStyle = mat.dark; ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
-    }
-    if (flowing && !["tideWalls", "magmaRift"].includes(kind) && rect.width > 6 && rect.height > 6) {
-      const vertical = rect.height > rect.width;
-      const x1 = rect.x + (vertical ? rect.width * .5 : 0);
-      const y1 = rect.y + (vertical ? 0 : rect.height * .5);
-      drawSignatureStream(ctx, { x1, y1, x2: x1 + (vertical ? 0 : rect.width),
-        y2: y1 + (vertical ? rect.height : 0), width: vertical ? rect.width : rect.height },
-        name, time, alpha * .67, high ? 24 : 12);
-    }
-    rectIndex++;
+  const mat = ultimateMaterial(target);
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ultimateClipDanger(ctx, hazard);
+  if (BossCreatureVfx.drawUltimate(ctx, hazard, geometry, target, { active, quiet, alpha })
+      || BossEnergyVfx.drawUltimate(ctx, hazard, geometry, quiet)) {
+    ctx.restore();
+    return;
   }
-  let segmentIndex = 0;
-  for (const line of geometry.segments || []) {
-    const angle = Math.atan2(line.y2 - line.y1, line.x2 - line.x1), length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
-    if (kind === "boneNova") ultimateBone(ctx, line.x1, line.y1, length, line.width * 1.3, angle, mat, alpha);
-    else if (kind === "magmaRift") ultimateLavaFissure(ctx, line, mat, time, alpha);
-    else if (kind === "silkCage" || kind === "neuralGrid") ultimateSilkLine(ctx, line, mat, time, alpha, kind === "neuralGrid");
-    else if (kind === "pincer") {
-      ultimateBone(ctx, line.x1, line.y1, length, line.width * 2.2, angle, mat, alpha);
-      for (let tooth = 1; tooth < 7; tooth++) {
-        const t = tooth / 8, side = segmentIndex % 2 ? 1 : -1;
-        ultimateBone(ctx, line.x1 + (line.x2 - line.x1) * t, line.y1 + (line.y2 - line.y1) * t,
-          line.width * 1.3, line.width * .25, angle + side * 1.2, mat, alpha);
+  for (const [index, rect] of geometry.rects.entries()) {
+    if (kind === "tideWalls") {
+      const x = rect.x + rect.width / 2;
+      NextgenVfx.drawWaterSection(ctx, () => x, rect.y, rect.y + rect.height,
+        index < 2 ? -1 : 1, time, rect.width / 2, mat, !active, quiet);
+    } else if (kind === "magmaRift") {
+      const y = rect.y + rect.height / 2;
+      NextgenVfx.drawMagmaFissure(ctx,
+        { x1: rect.x, y1: y, x2: rect.x + rect.width, y2: y, width: rect.height },
+        mat, time, alpha);
+    } else if (kind === "fusion") {
+      BossConfluenceVfx.column(ctx, rect, time, alpha, quiet);
+    }
+  }
+  for (const line of geometry.segments) {
+    const style = kind === "fusion" ? "lance" : "void";
+    if (kind === "fusion" || kind === "voidCollapse") {
+      BossConfluenceVfx.beam(ctx, line, time, alpha, style, quiet);
+      if (kind === "voidCollapse" && active) {
+        BossConfluenceVfx.ring(ctx, { x: hazard.lockX, y: hazard.lockY,
+          radius: line.width * 2.8, innerRadius: line.width * 1.4 },
+          time * 1.7, .84, "void", quiet);
       }
-    } else if (kind === "mirrorArray") ultimatePrismBeam(ctx, line, mat, alpha);
-    else if (kind === "voidCollapse" && typeof NextgenVfx !== "undefined") NextgenVfx.drawRift(ctx, line, mat, time, alpha);
-    else if (kind === "stormRing") ultimateArc(ctx, line.x1, line.y1, line.x2, line.y2, Math.floor(time * 13) + segmentIndex, mat, Math.max(2, line.width * .42), alpha);
-    else ultimateSilkLine(ctx, line, mat, time, alpha, true);
-    if (flowing && !["voidCollapse", "magmaRift"].includes(kind) && segmentIndex < (high ? 13 : 7)) {
-      drawSignatureStream(ctx, line, name, time + segmentIndex * .03, alpha * .73, high ? 12 : 7);
-    }
-    segmentIndex++;
-  }
-  let circleIndex = 0;
-  for (const circle of geometry.circles || []) {
-    if (kind === "boneNova") ultimateOssuaryRing(ctx, circle, mat, time, alpha);
-    else if (kind === "sporeBloom" || kind === "voidCollapse") ultimateCloud(ctx, circle, mat, time, alpha, kind === "voidCollapse");
-    else if (kind === "magmaRift") {
-      if (typeof NextgenVfx !== "undefined") NextgenVfx.drawEruption(ctx, circle, mat, time, alpha);
-      else ultimateDrawNode(ctx, circle.x, circle.y, circle.radius, name, alpha, "rock", time * .16);
-    }
-    else if (kind === "stormRing") {
-      const radius = circle.radius, inner = circle.innerRadius || Math.max(0, radius - 14);
-      ctx.strokeStyle = mat.dark; ctx.globalAlpha = alpha; ctx.lineWidth = radius - inner;
-      ctx.beginPath(); ctx.arc(circle.x, circle.y, (radius + inner) / 2, 0, Math.PI * 2); ctx.stroke();
-      const pieces = visualQuality.id === "low" ? 12 : 22;
-      // Preserve every subpath and sample; submit the ring's three light layers once.
-      ctx.save(); ctx.globalCompositeOperation = "lighter";
-      ctx.beginPath();
-      for (let i = 0; i < pieces; i++) {
-        const a = i / pieces * Math.PI * 2, b = (i + 1) / pieces * Math.PI * 2;
-        const r = (radius + inner) / 2;
-        appendUltimateArcPath(ctx, circle.x + Math.cos(a) * r, circle.y + Math.sin(a) * r,
-          circle.x + Math.cos(b) * r, circle.y + Math.sin(b) * r, i + Math.floor(time * 13));
-      }
-      strokeUltimateArcPath(ctx, mat, 2.5, alpha);
-      ctx.restore();
-    } else ultimateDrawNode(ctx, circle.x, circle.y, circle.radius, name, alpha);
-    if (flowing && !["voidCollapse", "magmaRift"].includes(kind) && circleIndex++ < (high ? 8 : 4)) {
-      const innerRadius = circle.innerRadius || circle.radius * (kind === "voidCollapse" ? .62 : .18);
-      drawSignatureOrbit(ctx, { ...circle, innerRadius }, name, time, alpha * .72, 1, high ? 20 : 12);
     }
   }
-  ctx.restore();
-  for (const node of geometry.nodes || []) {
-    if (node.health !== undefined && node.health <= 0) continue;
-    const r = node.radius || 18;
-    if (kind === "mirrorArray") ultimateCrystal(ctx, node.x, node.y, r * 2.0, (node.angle || 0) + Math.sin(time) * .06, mat, .95);
-    else ultimateDrawNode(ctx, node.x, node.y, r * 1.6, name, .93, kind === "magmaRift" ? "rock" : "orb");
+  for (const circle of geometry.circles) {
+    if (kind === "magmaRift") NextgenVfx.drawEruption(ctx, circle, mat, time, alpha);
+    else if (kind === "sporeBloom") NextgenVfx.drawSporeCloud(ctx, circle, time, alpha);
+    else if (kind === "voidCollapse") {
+      if (!circle.innerRadius) NextgenVfx.drawVoid(ctx, circle, mat, time, alpha);
+      BossConfluenceVfx.ring(ctx, circle.innerRadius ? circle : { ...circle, innerRadius: circle.radius * .82 },
+        time, alpha, "void", quiet);
+    } else if (kind === "fusion") {
+      BossConfluenceVfx.ring(ctx, circle, -time, alpha, "siphon", quiet);
+    }
   }
   ctx.restore();
 }
@@ -792,48 +519,61 @@ function drawBossUltimateHazard(ctx, hazard, quiet) {
   }
   const mat = ultimateMaterial(boss);
   ctx.save(); ctx.globalCompositeOperation = "source-over";
-  ctx.strokeStyle = active ? mat.spark : "#c4b7a6";
-  ctx.lineWidth = active ? 1.4 : 1.3; ctx.globalAlpha = active ? .76 : .58;
-  ctx.save(); ultimateClipDanger(ctx, hazard);
-  if (!active) ctx.setLineDash([6, 5]);
-  for (const rect of geometry.rects || []) {
-    if (!active) ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
-    else if (hazard.ultimateKind !== "tideWalls") {
-      ctx.globalAlpha = .38;
+  // Telegraphs show the real extents. Active effects own their silhouettes.
+  if (!active) {
+    ctx.save();
+    ultimateClipDanger(ctx, hazard);
+    ctx.strokeStyle = "#e7d8c2";
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = .68;
+    ctx.setLineDash([7, 6]);
+    for (const rect of geometry.rects) ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+    for (const circle of geometry.circles) {
+      ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2); ctx.stroke();
+      if (circle.innerRadius > 0) {
+        ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.innerRadius, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    for (const line of geometry.segments) {
+      const dx = line.x2 - line.x1, dy = line.y2 - line.y1, d = Math.max(1, Math.hypot(dx, dy));
+      const nx = -dy / d * line.width / 2, ny = dx / d * line.width / 2;
       ctx.beginPath();
-      ctx.moveTo(rect.x, rect.y); ctx.lineTo(rect.x + rect.width, rect.y);
-      ctx.moveTo(rect.x, rect.y + rect.height); ctx.lineTo(rect.x + rect.width, rect.y + rect.height);
-      ctx.stroke(); ctx.globalAlpha = .76;
+      ctx.moveTo(line.x1 + nx, line.y1 + ny); ctx.lineTo(line.x2 + nx, line.y2 + ny);
+      ctx.moveTo(line.x1 - nx, line.y1 - ny); ctx.lineTo(line.x2 - nx, line.y2 - ny);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  const time = quiet ? 0 : hazard.age;
+  // The no-shield gap is already marked by the seal warning on this frame.
+  if (hazard.noShield) {
+    if (active) BossConfluenceVfx.safeContact(ctx, geometry, hazard.gapY, hazard.gapSize, mat.rim, time);
+  } else {
+    for (const safe of geometry.safe) {
+      BossConfluenceVfx.safeGuide(ctx, safe.x, safe.y, safe.width, safe.height, active, time);
     }
   }
-  for (const circle of geometry.circles || []) {
-    ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2); ctx.stroke();
-    if (circle.innerRadius > 0) { ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.innerRadius, 0, Math.PI * 2); ctx.stroke(); }
-  }
-  for (const line of geometry.segments || []) {
-    const dx = line.x2 - line.x1, dy = line.y2 - line.y1, d = Math.max(1, Math.hypot(dx, dy));
-    const nx = -dy / d * line.width / 2, ny = dx / d * line.width / 2;
-    if (active && hazard.ultimateKind === "mirrorArray") ctx.globalAlpha = .24;
-    ctx.beginPath(); ctx.moveTo(line.x1 + nx, line.y1 + ny); ctx.lineTo(line.x2 + nx, line.y2 + ny);
-    ctx.moveTo(line.x1 - nx, line.y1 - ny); ctx.lineTo(line.x2 - nx, line.y2 - ny); ctx.stroke();
-    if (active) ctx.globalAlpha = .76;
-  }
-  ctx.restore(); ctx.setLineDash([]);
-  ctx.strokeStyle = "#81d6c9"; ctx.globalAlpha = active ? .38 : .74;
-  for (const safe of geometry.safe || []) {
-    ctx.strokeRect(safe.x, safe.y, safe.width, safe.height);
-    const x = safe.x + safe.width / 2, y = safe.y + safe.height / 2;
-    ctx.beginPath(); ctx.moveTo(x - 7, y - 3); ctx.lineTo(x, y + 3); ctx.lineTo(x + 7, y - 3); ctx.stroke();
-  }
-  // Exposed, attackable nodes are foreground silhouettes, with a physical health arc.
-  for (const node of geometry.nodes || []) {
-    if (node.health !== undefined && node.health <= 0) continue;
-    const r = node.radius || 18;
-    if (hazard.ultimateKind === "mirrorArray") ultimateCrystal(ctx, node.x, node.y, r * 1.7, node.angle || 0, mat, .97);
-    else ultimateDrawNode(ctx, node.x, node.y, r * 1.3, pressureMaterialNames[boss.type], .95);
-    if (node.maxHealth > 0) {
-      ctx.globalAlpha = .9; ctx.strokeStyle = mat.spark; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(node.x, node.y, r * 1.45, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(node.health / node.maxHealth, 0, 1)); ctx.stroke();
+  if (!BossEnergyVfx.drawUltimateNodes(ctx, hazard, geometry, quiet)) {
+    // Keep target silhouettes above the danger material and outside the gap clip.
+    for (const node of geometry.nodes) {
+      if (node.health <= 0) continue;
+      const r = node.radius;
+      if (hazard.ultimateKind === "fusion") {
+        BossConfluenceVfx.fusionNode(ctx, node, node.role, time, .96, quiet);
+        continue;
+      }
+      if (hazard.ultimateKind === "sporeBloom") NextgenVfx.drawSporePod(ctx, node, time, .96);
+      else if (hazard.ultimateKind === "mirrorArray") {
+        BossCreatureVfx.drawPrismNode(ctx, node, mat, time, .96, quiet);
+      }
+      if (node.maxHealth > 0 && node.health < node.maxHealth) {
+        ctx.globalAlpha = .92;
+        ctx.strokeStyle = mat.spark;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r * 1.19, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * node.health / node.maxHealth);
+        ctx.stroke();
+      }
     }
   }
   ctx.restore();

@@ -8,13 +8,61 @@ const NextgenVfx = (() => {
     medium: { facets: 420, strands: 16, samples: 1 }, high: { facets: 760, strands: 28, samples: 2 } });
   const stats = { facets: 0, samples: 0, atlasDraws: 0, effects: 0, tier: "high", peakFacets: 0 };
   const atlases = new Map();
-  let sampleCanvas, sampleContext, basaltTile, waterNormalTile;
+  const scheduledMaterials = new Set();
+  let sampleCanvas, sampleContext, basaltTile, magmaTile, waterNormalTile, waterFoamTile, sporeMistTile;
   const clamp01 = v => Math.max(0, Math.min(1, v));
   const fract = v => v - Math.floor(v);
   const seed = i => fract(Math.sin(i * 127.1 + 31.7) * 43758.5453);
   const tier = () => budgets[typeof visualQuality === "undefined" ? "high" : visualQuality.id] || budgets.high;
   const calm = () => typeof quietCombatMotion === "function" && quietCombatMotion();
   const motionTime = time => calm() ? 0 : time;
+  const ease = value => { const t = clamp01(value); return t * t * (3 - 2 * t); };
+
+  // Small material caches are shaded once; the render loop only transforms them.
+  function bakeTexture(size, sample) {
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = size;
+    const context = tile.getContext("2d");
+    const image = context.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        sample(x / size * 2 - 1, y / size * 2 - 1, image.data, (y * size + x) * 4);
+      }
+    }
+    context.putImageData(image, 0, 0);
+    return tile;
+  }
+
+  function waterFoamTexture() {
+    return waterFoamTile ||= bakeTexture(384, (x, y, pixels, i) => {
+      const r = Math.hypot(x, y), a = Math.atan2(y, x);
+      const sweep = a - Math.log(Math.max(.095, r)) * 2.85;
+      const whirl = sweep * 3 + Math.sin(a * 2 + r * 13) * .60;
+      const wave = .5 + .5 * Math.cos(whirl);
+      const fold = .5 + .5 * Math.sin(7 * sweep + r * 94 + Math.sin(a * 12) * .72);
+      const porous = .5 + .5 * Math.cos(a * 18 + r * 102) * Math.sin(sweep * 22 - r * 143);
+      const sheen = wave ** 8 * fold ** 2;
+      pixels[i] = 8 + sheen * 221;
+      pixels[i + 1] = 101 + wave * 81 + sheen * 73;
+      pixels[i + 2] = 142 + wave * 93 + sheen * 20;
+      pixels[i + 3] = (wave ** 2 * 126 + sheen * 120) * (.57 + .43 * porous) *
+        ease((r - .10) / .24) * ease((1 - r) / .26);
+    });
+  }
+
+  function sporeMistTexture() {
+    return sporeMistTile ||= bakeTexture(192, (x, y, pixels, i) => {
+      const r = Math.hypot(x, y), a = Math.atan2(y, x);
+      const n = bossVfxDensity(x * 9 + 3.4, y * 9 - 4.1, 29);
+      const bulge = .83 + Math.sin(a * 7) * .09 + Math.cos(a * 11 + .8) * .065;
+      const density = ease((bulge - r + n * .16) / .36) * (.4 + n * .6);
+      const light = clamp01((n - .31) * 1.9) * (1.1 - r * .4);
+      pixels[i] = 18 + light * 102;
+      pixels[i + 1] = 35 + light * 120;
+      pixels[i + 2] = 8 + light * 33;
+      pixels[i + 3] = density * 192;
+    });
+  }
 
   function beginFrame() {
     if (typeof BlackHoleSurface !== "undefined") BlackHoleSurface.beginFrame();
@@ -50,6 +98,24 @@ const NextgenVfx = (() => {
     ctx.drawImage(item.image, frame % 4 * sw, Math.floor(frame / 4) * sh, sw, sh, -width / 2, -height / 2, width, height);
     ctx.restore(); stats.atlasDraws++;
   }
+  function warmMaterial(name) {
+    if (scheduledMaterials.has(name)) return;
+    const work = name === "water" ? [waterNormalTexture, waterFoamTexture]
+      : name === "magma" ? [basaltTexture, magmaTexture]
+      : name === "spore" ? [sporeMistTexture] : [];
+    if (!work.length) return;
+    scheduledMaterials.add(name);
+    if (name !== "spore") atlas(name);
+    const schedule = typeof requestIdleCallback === "function"
+      ? job => requestIdleCallback(job, { timeout: 1500 })
+      : job => setTimeout(job, 32);
+    function warmNext() {
+      const bake = work.shift();
+      bake();
+      if (work.length) schedule(warmNext);
+    }
+    schedule(warmNext);
+  }
   function polygon(ctx, points, fill, alpha = 1) {
     if (stats.facets >= tier().facets) return;
     stats.facets++;
@@ -84,8 +150,9 @@ const NextgenVfx = (() => {
     // A smooth, low-contrast normal response baked once. It has no cell grid,
     // repeated wave silhouettes or frame-to-frame noise allocations.
     for(let y=0;y<512;y++)for(let x=0;x<192;x++){
-      const flow=x*.067+Math.sin(y*.021)*1.7+Math.sin(y*.049+x*.019)*.68;
-      const slope=Math.sin(flow)*.52+Math.sin(flow*2.14+y*.015)*.20;
+      const phase = y / 512 * TAU;
+      const flow = x * .067 + Math.sin(phase * 2) * 1.7 + Math.sin(phase * 4 + x * .019) * .68;
+      const slope = Math.sin(flow) * .52 + Math.sin(flow * 2.14 + phase) * .20;
       const spec=Math.max(0,slope+.21)**3;
       const i=(y*192+x)*4;image.data[i]=61+spec*135;image.data[i+1]=151+spec*95;image.data[i+2]=177+spec*74;
       image.data[i+3]=12+spec*63;
@@ -98,11 +165,11 @@ const NextgenVfx = (() => {
     stats.effects++;
     const time = quiet ? 0 : age, alpha = warning ? .43 : .94;
     const quality = tier(), rows = stats.tier === "low" ? 24 : 48;
-    const span = bottom - top, cap = Math.max(Number.MIN_VALUE, Math.min(width * .52, span * .10));
+    const span = bottom - top, cap = Math.max(Number.MIN_VALUE, Math.min(width * .69, span * .17));
     const wave = (y, q) => Math.sin(y * .021 + time * 1.8 + q * 2.8) * .055 + Math.sin(y * .063 - time * 2.7) * .023;
     // Rounded, turning ends live inside the unchanged collision mask. Only the
     // short end rolls contract; the broad middle retains the dangerous volume.
-    const envelope = y => { const p = clamp01(Math.min(y - top, bottom - y) / cap); return Math.sqrt(p * (2 - p)); };
+    const envelope = y => Math.sqrt(ease(Math.min(y - top, bottom - y) / cap));
     const surfaceX = (y, q) => crestAt(y) + direction * width * envelope(y) *
       (q * (.92 + .035 * Math.sin(y * .033 + time * .8)) + .025 * Math.sin(y * .043 + time * 1.4));
     const center = crestAt((top + bottom) / 2), cy = (top + bottom) / 2, sampleRadius = Math.max(width, span / 2);
@@ -112,15 +179,19 @@ const NextgenVfx = (() => {
     for (let r = 0; r <= rows; r++) { const y = top + (bottom - top) * r / rows; const x = crestAt(y) - width; if (!r) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
     for (let r = rows; r >= 0; r--) { const y = top + (bottom - top) * r / rows; ctx.lineTo(crestAt(y) + width, y); }
     ctx.closePath(); ctx.clip();
-    // The low-contrast danger skin spans the full mask, including the short
-    // rolled ends. It marks hazardous corners without an opaque rectangle.
-    ctx.strokeStyle = "#70bdca"; ctx.lineWidth = .8; ctx.globalAlpha = alpha * .30; ctx.stroke();
+    // A faint full-width shear edge reads at gameplay scale, with transparent
+    // stops at both caps to avoid exposing the damage mask as a rectangle.
+    const edgeLight = ctx.createLinearGradient(0, top, 0, bottom);
+    edgeLight.addColorStop(0, "#63dfee00");
+    edgeLight.addColorStop(cap / span, "#63dfee71");
+    edgeLight.addColorStop(1 - cap / span, "#63dfee71");
+    edgeLight.addColorStop(1, "#63dfee00");
     for (const side of [-1, 1]) {
       ctx.beginPath();
       for (let r = 0; r <= rows; r++) { const y = top + span * r / rows;
         const x = crestAt(y) + side * width * (.84 + .045 * Math.sin(y * .074 - time * 1.1));
         if (!r) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
-      ctx.strokeStyle = "#68bac9"; ctx.lineWidth = .9; ctx.globalAlpha = alpha * .27; ctx.stroke();
+      ctx.strokeStyle = edgeLight; ctx.lineWidth = 1.4; ctx.globalAlpha = alpha * .48; ctx.stroke();
     }
     ctx.save(); ctx.beginPath();
     for (let r = 0; r <= rows; r++) { const y = top + span * r / rows; if (!r) ctx.moveTo(surfaceX(y, -1), y); else ctx.lineTo(surfaceX(y, -1), y); }
@@ -146,7 +217,10 @@ const NextgenVfx = (() => {
       ctx.lineWidth=width*(band===0?.27:band===1?.053:.13);ctx.lineCap="round";
       ctx.globalAlpha=alpha*(band===0?.64:band===1?.43:.15);ctx.stroke();
     }
-    ctx.globalAlpha=alpha*.62;ctx.drawImage(waterNormalTexture(),center-width,top,width*2,bottom-top);
+    const normalTile = waterNormalTexture(), normalOffset = fract(time * .30) * span;
+    ctx.globalAlpha = alpha * .78;
+    ctx.drawImage(normalTile, center - width, top - normalOffset, width * 2, span);
+    ctx.drawImage(normalTile, center - width, bottom - normalOffset, width * 2, span);
     // Long, finely advected shear streaks provide movement without exposing
     // a tile grid. Their paths stay continuous from the back face into the lip.
     const streaks=quality.strands;
@@ -186,7 +260,7 @@ const NextgenVfx = (() => {
         if (!j) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
       ctx.strokeStyle = lip === 0 ? "#e5ffff" : lip === 1 ? "#9cdfdf" : "#07364e";
       ctx.lineWidth = lip === 0 ? Math.max(1.3, width * .042) : Math.max(2, width * .11);
-      ctx.globalAlpha = alpha * (lip === 0 ? .30 : .48); ctx.stroke();
+      ctx.globalAlpha = alpha * (lip === 0 ? .63 : .50); ctx.stroke();
     }
     // Foam has porous clumps, branching veins and advected droplets, never disks.
     ctx.fillStyle = "#e2fafa";
@@ -200,6 +274,30 @@ const NextgenVfx = (() => {
       ctx.beginPath(); ctx.ellipse(x,y,size*1.2,size*.62,-.4,0,TAU); ctx.fill();
     }
     ctx.restore(); // Release only the organic surface clip; the exact mask stays.
+    if (!warning) {
+      ctx.globalCompositeOperation = "lighter";
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = pass === 0 ? edgeLight : "#c2ffff";
+        ctx.globalAlpha = alpha * (pass === 0 ? .55 : .26);
+        ctx.lineWidth = Math.max(1, width * (pass === 0 ? .24 : .038)); ctx.lineCap = "round";
+        ctx.beginPath();
+        for (let j = 0; j <= rows; j++) {
+          const y = top + cap * .12 + (span - cap * .24) * j / rows;
+          if (!j) ctx.moveTo(crestX(y), y); else ctx.lineTo(crestX(y), y);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#beffff";
+      for (let i = 0; i < quality.strands * 3; i++) {
+        const t = fract(seed(i + 453) + time * (.09 + seed(i + 414) * .15));
+        const y = i % 2 ? top + cap * t : bottom - cap * t;
+        const x = crestX(y) + (seed(i + 477) - .5) * width * (.12 + (.7 - t * .5));
+        ctx.globalAlpha = alpha * .66 * Math.sin(Math.PI * t);
+        ctx.beginPath();
+        ctx.ellipse(x, y, .55 + seed(i + 31) * 1.55, 1 + seed(i + 39) * 3.7, .39, 0, TAU);
+        ctx.fill();
+      }
+    }
     // Tells retain exact boundaries. Active water is read from its surface and
     // foam instead of rectangular outlines; the same geometry still clips it.
     if(warning){
@@ -242,14 +340,11 @@ const NextgenVfx = (() => {
       ctx.strokeStyle = "#ffc06c"; ctx.lineWidth = .6; ctx.globalAlpha = alpha * .58; ctx.stroke();
     }
   }
-  function drawMagmaFissure(ctx, line, material, time, alpha) {
-    const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1), width = line.width;
-    if (!(length > 0 && width > 0)) return false;
-    stats.effects++; time = motionTime(time);
+  function magmaTexture() {
     // One small, periodic material bake, shared by all fissures. The upper half
     // is flowing melt and cooling skin; the lower half is porous, shaded basalt.
     // No pixels, noise grids or new canvases are generated on subsequent frames.
-    const texture = drawMagmaFissure.materialTexture ||= (() => {
+    return magmaTile ||= (() => {
       const w = 384, h = 128, tile = document.createElement("canvas");
       tile.width = w; tile.height = h * 2;
       const c = tile.getContext("2d"), pixels = c.createImageData(w, h * 2);
@@ -291,36 +386,32 @@ const NextgenVfx = (() => {
       }
       c.putImageData(pixels, 0, 0); return tile;
     })();
+  }
+
+  function drawMagmaFissure(ctx, line, material, time, alpha) {
+    const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1), width = line.width;
+    if (!(length > 0 && width > 0)) return false;
+    stats.effects++; time = motionTime(time);
+    const texture = magmaTexture();
     ctx.save(); ctx.translate(line.x1, line.y1); ctx.rotate(Math.atan2(line.y2 - line.y1, line.x2 - line.x1));
     // The authoritative rectangle remains the outer clip. The crust has its own
     // broken silhouette inside it, so neither its texture nor ends form a tile.
     ctx.beginPath(); ctx.rect(0, -width / 2, length, width); ctx.clip();
     const steps = Math.max(16, Math.min(64, Math.ceil(length / 13)));
-    const cap = Math.max(Number.MIN_VALUE, Math.min(width * .42, length * .08));
+    const cap = Math.max(Number.MIN_VALUE, Math.min(width * .55, length * .12));
     const envelope = x => { const p = clamp01(Math.min(x, length - x) / cap); return Math.sqrt(p * (2 - p)); };
     const shore = (x, side) => side * width * .5 * envelope(x) *
-      (.88 + .065 * Math.sin(x * .091 + side * 2) + .035 * Math.sin(x * .217 - side));
+      (.78 + .12 * Math.sin(x * .019 + side * 2) + .073 * Math.sin(x * .091 + side * 2) + .027 * Math.sin(x * .217 - side));
     const channel = x => width * (.075 * Math.sin(x * .018 + time * .32) + .025 * Math.sin(x * .047 - time * .21));
-    const bank = (x, side) => channel(x) + side * width *
-      (.16 + .045 * Math.sin(x * .052 + side * 1.7) + .025 * Math.sin(x * .123));
-    // Sparse heat fractures and a fine exact edge retain danger readability in
-    // the corners outside the raised crust; no solid rectangular backing.
-    ctx.strokeStyle = "#bd8054"; ctx.lineWidth = .8; ctx.globalAlpha = alpha * .32; ctx.stroke();
-    for (const side of [-1, 1]) {
-      ctx.beginPath();
-      for (let i = 0; i <= steps; i++) { const x = length * i / steps;
-        const y = side * width * (.43 + .025 * Math.sin(x * .097 + side));
-        if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
-      ctx.strokeStyle = "#ce7845"; ctx.lineWidth = .9; ctx.globalAlpha = alpha * .30; ctx.stroke();
-    }
-    for (const end of [0, length]) {
-      const inward = end ? -1 : 1;
-      ctx.beginPath(); ctx.moveTo(end, -width * .42);
-      ctx.lineTo(end + inward * cap * .24, -width * .18); ctx.lineTo(end + inward * cap * .08, width * .08);
-      ctx.lineTo(end + inward * cap * .28, width * .29); ctx.lineTo(end, width * .43);
-      ctx.strokeStyle = "#da824b"; ctx.lineWidth = .9; ctx.globalAlpha = alpha * .32; ctx.stroke();
-    }
-    ctx.beginPath();
+    const bank = (x, side) => (channel(x) + side * width *
+      (.19 + .051 * Math.sin(x * .052 + side * 1.7) + .027 * Math.sin(x * .123))) * envelope(x);
+    const capLight = ctx.createLinearGradient(0, 0, length, 0);
+    capLight.addColorStop(0, "#ff642300");
+    capLight.addColorStop(cap / length, "#ff9d5a80");
+    capLight.addColorStop(1 - cap / length, "#ff9d5a80");
+    capLight.addColorStop(1, "#ff642300");
+    // Irregular rocks and embers mark the transition from melt to hazard edge.
+    ctx.save(); ctx.beginPath();
     for (let i = 0; i <= steps; i++) { const x = length * i / steps; if (!i) ctx.moveTo(x, shore(x, -1)); else ctx.lineTo(x, shore(x, -1)); }
     for (let i = steps; i >= 0; i--) { const x = length * i / steps; ctx.lineTo(x, shore(x, 1)); }
     ctx.closePath(); ctx.clip();
@@ -343,14 +434,15 @@ const NextgenVfx = (() => {
     for (const side of [-1, 1]) {
       ctx.beginPath();
       for (let i = 0; i <= steps; i++) { const x = length * i / steps, y = bank(x, side); if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
-      ctx.strokeStyle = "#210b12"; ctx.lineWidth = width * .095; ctx.globalAlpha = alpha * .47; ctx.stroke();
-      ctx.strokeStyle = "#8f2e17"; ctx.lineWidth = width * .035; ctx.globalAlpha = alpha * .38; ctx.stroke();
+      ctx.strokeStyle = "#210b12"; ctx.lineWidth = width * .064; ctx.globalAlpha = alpha * .44; ctx.stroke();
     }
     ctx.restore();
-    const blocks = Math.min(stats.tier === "high" ? 22 : stats.tier === "medium" ? 14 : 8, Math.ceil(length / 24));
+    const blocks = Math.min(stats.tier === "high" ? 23 : stats.tier === "medium" ? 15 : 8, Math.ceil(length / 24));
     for (let i = 0; i < blocks && stats.facets < tier().facets; i++) {
-      const x = length * (i + .35 + seed(i + 19) * .25) / blocks, side = i % 2 ? 1 : -1;
-      const size = Math.min(width * (.29 + seed(i) * .20), length / blocks * 1.12), y = side * width * (.30 + .045 * seed(i + 37));
+      const x = length * (i + .26 + seed(i + 19) * .48) / blocks, side = seed(i + 583) > .52 ? 1 : -1;
+      const cluster = seed(i + 293);
+      const size = Math.min(width * (.24 + cluster * .25), length / blocks * (.64 + cluster * .88));
+      const y = side * width * (.24 + .15 * seed(i + 37));
       const points = [];
       for (let j = 0; j < 9; j++) {
         const angle = j / 9 * TAU + i * 2.399, radius = size * (.70 + seed(i * 19 + j) * .30);
@@ -368,15 +460,38 @@ const NextgenVfx = (() => {
       ctx.fillStyle = relief; ctx.fillRect(x - size, y - size, size * 2, size * 2);
       ctx.restore();
       // Broken warm edge reflections face the melt; the far faces stay occluded.
-      ctx.strokeStyle = "#ca7444"; ctx.lineWidth = .7; ctx.globalAlpha = alpha * .42;
+      ctx.strokeStyle = "#d48850"; ctx.lineWidth = .7; ctx.globalAlpha = alpha * .48;
       ctx.beginPath();
       for (let j = 0; j < points.length; j += 2) {
         const k = (j + 2) % points.length;
         if ((points[j + 1] + points[k + 1]) * side < y * side * 2) { ctx.moveTo(points[j], points[j + 1]); ctx.lineTo(points[k], points[k + 1]); }
       }
       ctx.stroke();
+      // Offset fracture branches break the repetition and light the inward lip.
+      ctx.beginPath();
+      const root = y - side * size * .49, split = x - size * .09;
+      ctx.moveTo(x - size * .57, root);
+      ctx.lineTo(split, root - side * size * .16);
+      ctx.lineTo(x + size * .21, root + side * size * .14);
+      ctx.lineTo(x + size * .48, root + side * size * .03);
+      ctx.moveTo(split, root - side * size * .16);
+      ctx.lineTo(x - size * .24, root + side * size * .27);
+      ctx.strokeStyle = "#ff8a3d"; ctx.lineWidth = .9 + cluster * .47;
+      ctx.globalAlpha = alpha * (.38 + Math.sin(time * 2 - i * .89) * .23); ctx.stroke();
     }
-    // Small scattered glints ride the melt, rather than outlining its length.
+    ctx.restore(); // Drop the organic silhouette clip. The full damage mask remains.
+    ctx.globalCompositeOperation = "lighter";
+    for (const side of [-1, 1]) {
+      ctx.strokeStyle = capLight; ctx.globalAlpha = alpha * .31;
+      ctx.lineWidth = Math.min(15, width * .09);
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i++) {
+        const x = length * i / steps, y = bank(x, side);
+        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // Small glints and rising embers ride advected currents around the banks.
     const tendrils = Math.ceil(tier().strands / 2);
     ctx.strokeStyle = "#ffd599";
     for (let i = 0; i < tendrils; i++) {
@@ -385,6 +500,16 @@ const NextgenVfx = (() => {
       ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + 4, y - reach, x + 11, y + reach, x + 17, y - reach * .3);
       ctx.globalAlpha = alpha * (.15 + .20 * seed(i + 43)); ctx.lineWidth = .4 + seed(i + 1) * .6; ctx.stroke();
     }
+    for (let i = 0; i < tier().strands * 2; i++) {
+      const life = fract(seed(i + 501) + time * (.11 + seed(i + 151) * .19));
+      const side = i % 2 ? 1 : -1, x = length * (.018 + seed(i + 759) * .964);
+      const y = bank(x, side) + side * life * width * .20;
+      const span = 1 + seed(i + 78) * Math.min(11, width * .075);
+      ctx.strokeStyle = i % 4 ? "#ff752d" : "#ffdc92";
+      ctx.globalAlpha = alpha * Math.sin(Math.PI * life) * envelope(x) * (.35 + seed(i + 57) * .5);
+      ctx.lineWidth = .7 + seed(i + 473) * 1.6; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + span, y - side * span * .67); ctx.stroke();
+    }
     ctx.restore(); return true;
   }
   function drawEruption(ctx, circle, material, age, alpha) {
@@ -392,18 +517,240 @@ const NextgenVfx = (() => {
     if (!(r > 0)) return;
     stats.effects++; const time = motionTime(age);
     ctx.save(); ringClip(ctx, x, y, r, circle.innerRadius || 0);
-    const heat = ctx.createRadialGradient(x, y + r * .20, 0, x, y, r);
-    heat.addColorStop(0, "#ffdb88"); heat.addColorStop(.23, "#f47b30"); heat.addColorStop(.51, "#892f20"); heat.addColorStop(1, "#18121b");
+    const heat = ctx.createRadialGradient(x - r * .11, y - r * .13, 0, x, y, r);
+    heat.addColorStop(0, "#fff2bd"); heat.addColorStop(.21, "#ffae42"); heat.addColorStop(.48, "#c13b1cdf");
+    heat.addColorStop(.75, "#41191ba0"); heat.addColorStop(1, "#1a101700");
     ctx.fillStyle = heat; ctx.globalAlpha = alpha; ctx.fillRect(x - r, y - r, r * 2, r * 2);
-    stamp(ctx, "magma", age, x, y, r * 2, r * 2, alpha * .92);
+    stamp(ctx, "magma", age, x, y, r * 1.84, r * 1.84, alpha * .94);
     const count = stats.tier === "high" ? 11 : 7;
     for (let i = 0; i < count; i++) {
-      const a = i * 2.39996, arc = fract(time * .32 + seed(i + 71));
+      const a = i * 2.39996 + time * .35, arc = fract(time * .32 + seed(i + 71));
       const orbit = r * (.18 + .63 * arc);
       rock(ctx, x + Math.cos(a) * orbit, y + Math.sin(a) * orbit - Math.sin(arc * Math.PI) * r * .20,
-        r * (.13 + seed(i) * .14), a, time, alpha * (1 - arc * .3));
+        r * (.075 + seed(i) * .11), a, time, alpha * Math.sin(Math.PI * arc));
+    }
+    ctx.globalCompositeOperation = "lighter"; ctx.lineCap = "round";
+    for (let i = 0; i < tier().strands * 2; i++) {
+      const t = fract(time * (.32 + seed(i + 419) * .31) + seed(i + 127));
+      const angle = seed(i + 163) * TAU + t * .45, rad = r * (.23 + t * .76);
+      const previous = rad - 2 - seed(i + 19) * r * .17;
+      ctx.strokeStyle = i % 3 ? "#ff772d" : "#ffe894";
+      ctx.globalAlpha = alpha * Math.sin(Math.PI * t) * .79;
+      ctx.lineWidth = .63 + seed(i + 71) * Math.min(3, r * .037);
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(angle - .09) * previous, y + Math.sin(angle - .09) * previous);
+      ctx.lineTo(x + Math.cos(angle) * rad, y + Math.sin(angle) * rad);
+      ctx.stroke();
     }
     ctx.restore();
+  }
+
+  function drawMagmaShell(ctx, x, y, width, halfHeight, age, alpha) {
+    if (!(width > 0 && halfHeight > 0)) return false;
+    const time = motionTime(age);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(width, halfHeight);
+    ctx.beginPath();
+    ctx.moveTo(-.91, -.39);
+    ctx.lineTo(-.55, -.80); ctx.lineTo(.09, -.99); ctx.lineTo(.66, -.66);
+    ctx.lineTo(1, -.16); ctx.lineTo(.78, .63); ctx.lineTo(.18, .99);
+    ctx.lineTo(-.57, .85); ctx.lineTo(-1, .29);
+    ctx.closePath(); ctx.clip();
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(basaltTexture(), -1, -1, 2, 2);
+    const shade = ctx.createLinearGradient(-.76, -.86, .82, .83);
+    shade.addColorStop(0, "#df86576f"); shade.addColorStop(.24, "#b6603129");
+    shade.addColorStop(.54, "#170b1903"); shade.addColorStop(1, "#0a080dbd");
+    ctx.fillStyle = shade; ctx.fillRect(-1, -1, 2, 2);
+    ctx.globalCompositeOperation = "lighter";
+    const seams = [[-.86,-.41,-.34,-.20,-.20,.46,-.51,.82], [-.35,-.20,.15,-.35,.26,-.84],
+      [-.20,.46,.21,.27,.62,.66], [.21,.27,.66,-.02,.82,-.58], [.15,-.35,.66,-.02,.97,-.10]];
+    for (let i = 0; i < seams.length; i++) {
+      const path = seams[i];
+      ctx.beginPath(); ctx.moveTo(path[0], path[1]);
+      for (let k = 2; k < path.length; k += 2) ctx.lineTo(path[k], path[k + 1]);
+      ctx.strokeStyle = "#a84424"; ctx.lineWidth = .085; ctx.globalAlpha = alpha * .62; ctx.stroke();
+      ctx.strokeStyle = "#ffb666"; ctx.lineWidth = .022;
+      ctx.globalAlpha = alpha * (.62 + Math.sin(time * 3.1 + i * .8) * .21); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  function drawSporeCloud(ctx, circle, age, alpha) {
+    const { x, y, radius } = circle, inner = circle.innerRadius || 0;
+    if (!(radius > inner && radius > 0)) return false;
+    stats.effects++;
+    const time = motionTime(age), width = radius - inner;
+    ctx.save();
+    ringClip(ctx, x, y, radius, inner);
+    const fog = ctx.createRadialGradient(x, y, inner, x, y, radius);
+    fog.addColorStop(0, inner > 0 ? "#56783300" : "#22380fc0");
+    fog.addColorStop(.23, "#354e17af");
+    fog.addColorStop(.63, "#71913172");
+    fog.addColorStop(1, "#73953900");
+    ctx.fillStyle = fog; ctx.globalAlpha = alpha;
+    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    const mist = sporeMistTexture(), count = stats.tier === "low" ? 8 : stats.tier === "medium" ? 12 : 17;
+    for (let i = 0; i < count; i++) {
+      const a = i * 2.39996 + time * (.09 + seed(i + 298) * .10);
+      const size = width * (.16 + seed(i + 109) * .13);
+      const orbit = inner + width * (.25 + seed(i + 523) * .5);
+      ctx.save();
+      ctx.translate(x + Math.cos(a) * orbit, y + Math.sin(a) * orbit);
+      ctx.rotate(a + time * .18);
+      ctx.globalAlpha = alpha * (.39 + seed(i + 118) * .29);
+      ctx.drawImage(mist, -size, -size, size * 2, size * 2);
+      ctx.restore();
+    }
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < tier().strands * 3; i++) {
+      const p = fract(seed(i + 606) + time * (.065 + seed(i + 46) * .13));
+      const a = i * 2.39996 - time * .14 + p * .59, r = inner + width * (.03 + p * .94);
+      const size = Math.max(.45, Math.min(2.1, radius * .009)) * (.52 + seed(i + 50));
+      ctx.globalAlpha = alpha * (.35 + seed(i + 83) * .49) * Math.sin(p * Math.PI);
+      ctx.fillStyle = i % 5 ? "#a5cf4b" : "#e6ff89";
+      ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * r, y + Math.sin(a) * r, size * 1.4, size, a, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  function drawSporePod(ctx, node, age, alpha, radius = node.radius) {
+    if (node.health <= 0 || !(radius > 0)) return false;
+    const { x, y } = node, time = motionTime(age);
+    const health = node.maxHealth > 0 ? clamp01(node.health / node.maxHealth) : 1;
+    const pulse = 1 + Math.sin(time * (2.4 + (1 - health) * 3.6) + x * .029) * (.036 + (1 - health) * .075);
+    const r = radius * pulse;
+    ctx.save(); ctx.translate(x, y);
+    ctx.globalAlpha = alpha * .54;
+    ctx.drawImage(sporeMistTexture(), -r * 1.84, -r * 1.84, r * 3.68, r * 3.68);
+    // Tapered mycelia run from the living membrane into the drifting cloud.
+    const threads = stats.tier === "low" ? 8 : 15;
+    ctx.lineCap = "round";
+    for (let i = 0; i < threads; i++) {
+      const turn = i * TAU / threads + Math.sin(time * .52 + i) * .13 + (seed(i + 62) - .5) * .56;
+      const length = r * (1.10 + seed(i + 21) * 1.03);
+      const dx = Math.cos(turn), dy = Math.sin(turn), sway = Math.sin(time * 1.25 + i * 2.3) * .25;
+      ctx.beginPath(); ctx.moveTo(dx * r * .62, dy * r * .62);
+      ctx.bezierCurveTo(dx * r - dy * r * sway, dy * r + dx * r * sway,
+        dx * length + dy * r * .39, dy * length - dx * r * .39, dx * length, dy * length);
+      ctx.lineWidth = Math.max(.65, r * .047);
+      ctx.strokeStyle = "#415b1d"; ctx.globalAlpha = alpha * .68; ctx.stroke();
+      ctx.lineWidth = Math.max(.32, r * .019);
+      ctx.strokeStyle = "#d0fa79"; ctx.globalAlpha = alpha * (.22 + seed(i + 618) * .42); ctx.stroke();
+      if (i % 2 === 0) {
+        ctx.beginPath(); ctx.moveTo(dx * length * .83, dy * length * .83);
+        ctx.quadraticCurveTo(dx * length * .9 - dy * r * .35, dy * length * .9 + dx * r * .35,
+          dx * length * 1.04 - dy * r * .42, dy * length * 1.04 + dx * r * .42);
+        ctx.globalAlpha *= .68; ctx.stroke();
+      }
+    }
+    const membrane = ctx.createRadialGradient(-r * .25, -r * .28, 0, 0, 0, r * 1.09);
+    membrane.addColorStop(0, "#e1ff9a"); membrane.addColorStop(.23, "#97d741");
+    membrane.addColorStop(.58, "#3b6924"); membrane.addColorStop(.86, "#335218");
+    membrane.addColorStop(.94, "#83b94a"); membrane.addColorStop(1, "#111c10");
+    ctx.beginPath();
+    for (let i = 0; i <= 48; i++) {
+      const a = i * TAU / 48, lobe = r * (.943 + Math.sin(a * 5 + time * .87) * .076 + Math.cos(a * 9 - time * .76) * .034);
+      if (i) ctx.lineTo(Math.cos(a) * lobe, Math.sin(a) * lobe * .88);
+      else ctx.moveTo(Math.cos(a) * lobe, Math.sin(a) * lobe * .88);
+    }
+    ctx.closePath(); ctx.fillStyle = membrane; ctx.globalAlpha = alpha; ctx.fill(); ctx.clip();
+    ctx.globalAlpha = alpha * .61; ctx.drawImage(sporeMistTexture(), -r * 1.35, -r * 1.35, r * 2.7, r * 2.7);
+    for (let vein = 0; vein < 9; vein++) {
+      const a = vein * TAU / 9 + (seed(vein + 608) - .5) * .75;
+      const dx = Math.cos(a), dy = Math.sin(a), length = r * (.63 + seed(vein) * .41);
+      ctx.beginPath();
+      ctx.moveTo(dx * r * .13 - r * .13, dy * r * .13 - r * .22);
+      ctx.bezierCurveTo(dx * r * .35 - dy * r * .22, dy * r * .35 + dx * r * .22,
+        dx * length * .75, dy * length * .75, dx * length, dy * length);
+      ctx.strokeStyle = "#183321"; ctx.lineWidth = Math.max(.75, r * .067); ctx.globalAlpha = alpha * .72; ctx.stroke();
+      ctx.strokeStyle = "#c8f96c"; ctx.lineWidth = Math.max(.45, r * .025);
+      ctx.globalAlpha = alpha * (.37 + .22 * Math.sin(time * 3.2 + vein)); ctx.stroke();
+    }
+    // Embedded vesicles and smaller cell walls read through the skin.
+    for (let i = 0; i < tier().strands; i++) {
+      const a = i * 2.39996, size = r * (.025 + .075 * seed(i + 23));
+      const l = r * (.18 + .79 * seed(i + 236));
+      ctx.beginPath(); ctx.ellipse(Math.cos(a) * l, Math.sin(a) * l, size, size * .62, a * .75, 0, TAU);
+      ctx.strokeStyle = "#a6d651"; ctx.lineWidth = Math.max(.42, r * .012);
+      ctx.globalAlpha = alpha * (.18 + seed(i + 449) * .31); ctx.stroke();
+    }
+    const seedGlow = ctx.createRadialGradient(-r * .17, -r * .21, 0, -r * .17, -r * .21, r * .45);
+    seedGlow.addColorStop(0, "#efffb4a2"); seedGlow.addColorStop(.38, "#dcff6b63"); seedGlow.addColorStop(1, "#abfa1900");
+    ctx.globalCompositeOperation = "lighter";
+    ctx.fillStyle = seedGlow; ctx.globalAlpha = alpha * (.64 + (1 - health) * .32);
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.restore();
+    return true;
+  }
+
+  function drawVortex(ctx, circle, material, age, alpha, coreRadius, kind = "water", spin = 1) {
+    const { x, y, radius } = circle;
+    if (!(radius > 0)) return false;
+    const time = motionTime(age), water = kind === "water";
+    const core = Math.max(0, Math.min(radius, coreRadius));
+    stats.effects++;
+    if (!water) drawSporeCloud(ctx, circle, age, alpha * .61);
+    ctx.save(); ringClip(ctx, x, y, radius);
+    if (core > 0) {
+      const eye = ctx.createRadialGradient(x, y, 0, x, y, core * 1.15);
+      eye.addColorStop(0, water ? "#051522f0" : "#142614ee");
+      eye.addColorStop(.66, water ? "#082f43cf" : "#3a6923c2");
+      eye.addColorStop(.87, water ? "#24657aaa" : "#a5c66780");
+      eye.addColorStop(1, "#081a1c00");
+      ctx.fillStyle = eye; ctx.globalAlpha = alpha;
+      ctx.fillRect(x - core * 1.15, y - core * 1.15, core * 2.3, core * 2.3);
+    }
+    ctx.translate(x, y);
+    ctx.globalCompositeOperation = "lighter";
+    if (water) {
+      const foam = waterFoamTexture();
+      ctx.save();
+      ctx.rotate(time * .54 * spin + .7);
+      ctx.globalAlpha = alpha * .85;
+      ctx.drawImage(foam, -radius, -radius, radius * 2, radius * 2);
+      ctx.rotate(-time * .77 * spin + 1.82);
+      ctx.globalAlpha = alpha * .46;
+      ctx.drawImage(foam, -radius * .82, -radius * .82, radius * 1.64, radius * 1.64);
+      ctx.restore();
+    }
+    const arms = water ? 6 : 9, steps = stats.tier === "low" ? 16 : 32;
+    const spiralLight = ctx.createRadialGradient(0, 0, radius * .07, 0, 0, radius);
+    spiralLight.addColorStop(0, water ? "#2c90b300" : "#62963d00");
+    spiralLight.addColorStop(.31, water ? "#35dff4b0" : "#8acad294");
+    spiralLight.addColorStop(.67, water ? "#a2faffdc" : material.rim);
+    spiralLight.addColorStop(1, water ? "#00b6ea00" : "#93a93b00");
+    ctx.lineCap = "round"; ctx.strokeStyle = spiralLight;
+    for (let arm = 0; arm < arms; arm++) {
+      const base = arm * TAU / arms + time * (arm % 2 ? .59 : .40) * spin;
+      ctx.beginPath();
+      for (let step = 0; step <= steps; step++) {
+        const t = step / steps;
+        const a = base + Math.log(.12 + t * .88) * (water ? 2.35 : 1.81);
+        const r = radius * (.16 + t * .82) * (1 + Math.sin(a * 3 + arm) * .012);
+        const px = Math.cos(a) * r, py = Math.sin(a) * r;
+        if (step) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      ctx.globalAlpha = alpha * (water ? .28 : .15); ctx.lineWidth = Math.max(1, radius * .055); ctx.stroke();
+      ctx.globalAlpha = alpha * (water ? .71 : .31); ctx.lineWidth = Math.max(.65, radius * .012); ctx.stroke();
+    }
+    for (let i = 0; i < tier().strands * 3; i++) {
+      const p = fract(seed(i + 342) - time * (.089 + seed(i + 93) * .21));
+      const orbit = radius * (.15 + .82 * p), a = seed(i + 178) * TAU + Math.log(.11 + p * .89) * 2.8 + time * .43 * spin;
+      const px = Math.cos(a) * orbit, py = Math.sin(a) * orbit;
+      const size = (.45 + seed(i + 80) * 2.4) * Math.min(1.5, radius / 65);
+      ctx.strokeStyle = water ? "#87e9f2" : "#d3f26f"; ctx.fillStyle = ctx.strokeStyle;
+      ctx.globalAlpha = alpha * Math.sin(p * Math.PI) * .84;
+      ctx.lineWidth = Math.max(.5, size * .32);
+      ctx.beginPath(); ctx.ellipse(px, py, size * 1.15, size * .83, a, 0, TAU);
+      if (water && i % 4) ctx.stroke(); else ctx.fill();
+    }
+    ctx.restore();
+    return true;
   }
 
   function drawVoid(ctx, circle, material, age, alpha, water = false) {
@@ -579,7 +926,8 @@ const NextgenVfx = (() => {
     }
     ctx.restore();
   }
-  return Object.freeze({ beginFrame, phase, drawWaterSection, drawMagmaFissure, drawEruption, drawVoid, drawRift, drawWaterJet, drawRaySkin, stamp, rock,
+  return Object.freeze({ beginFrame, phase, warmMaterial, drawWaterSection, drawMagmaFissure, drawEruption, drawMagmaShell,
+    drawSporeCloud, drawSporePod, drawVortex, drawVoid, drawRift, drawWaterJet, drawRaySkin, stamp, rock,
     diagnostics: () => ({ ...stats, budget: tier(), atlasReady: [...atlases].filter(([, v]) => v.ready).map(([k]) => k), sampleSize: 224,
       extraWebGLContexts: typeof BlackHoleSurface === "undefined" ? 0 : BlackHoleSurface.diagnostics().extraWebGLContexts,
       blackHole: typeof BlackHoleSurface === "undefined" ? null : BlackHoleSurface.diagnostics() }) });

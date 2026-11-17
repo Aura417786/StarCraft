@@ -211,6 +211,7 @@ function resizeBossEncounter(oldWidth, oldHeight, oldBounds) {
     }
     for (const hazard of bossHazards) {
       if (hazard.kind === "ultimate") {
+        hazard.ultimateArtPreview = null;
         hazard.lockX *= scaleX;hazard.lockY = resizeY(hazard.lockY);
         hazard.originX *= scaleX;hazard.originY = resizeY(hazard.originY);
         hazard.gapY = resizeY(hazard.gapY);hazard.gapSize *= scaleY;

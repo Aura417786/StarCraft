@@ -127,41 +127,8 @@ function signatureGlow(ctx, x, y, radius, material, alpha) {
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 }
 
-function signatureGuide(ctx, y, size, active, direction = -1, right = viewport.width) {
-  const top = y - size / 2, bottom = y + size / 2;
-  ctx.save();
-  const edgeLight = ctx.createLinearGradient(0, 0, right, 0);
-  edgeLight.addColorStop(0, "transparent");
-  edgeLight.addColorStop(.19, "#72e7d6");
-  edgeLight.addColorStop(.81, "#72e7d6");
-  edgeLight.addColorStop(1, "transparent");
-  ctx.strokeStyle = edgeLight;
-  ctx.globalAlpha = active ? .56 : .83;
-  ctx.lineWidth = active ? 1 : 1.6;
-  ctx.beginPath();
-  for (const [edge, inward] of [[top, 1], [bottom, -1]]) {
-    ctx.moveTo(0, edge);
-    ctx.lineTo(right, edge);
-    for (const x of [right * .16, right * .48, right * .80]) {
-      ctx.moveTo(x - 10, edge + inward * 10);
-      ctx.lineTo(x, edge + inward * 3);
-      ctx.lineTo(x + 10, edge + inward * 10);
-    }
-  }
-  ctx.stroke();
-  if (!active && size > 30) {
-    // The arrows show the approaching front's direction from inside the gap.
-    ctx.globalAlpha = .68;
-    ctx.beginPath();
-    for (let mark = 0; mark < 3; mark++) {
-      const x = right * .78 - direction * mark * 15;
-      ctx.moveTo(x - direction * 6, y - 7);
-      ctx.lineTo(x, y);
-      ctx.lineTo(x - direction * 6, y + 7);
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
+function signatureGuide(ctx, y, size, active, direction = -1, right = viewport.width, time = 0) {
+  BossConfluenceVfx.safeGuide(ctx, 0, y - size / 2, right, size, active, time, direction);
 }
 
 function traceSignatureFront(ctx, crestAt, top, bottom, offset) {
@@ -338,7 +305,7 @@ function drawWaterSection(ctx, crestAt, top, bottom, direction, age, width, mate
 }
 
 function drawWaterWall(ctx, { crestAt, gap, size, direction, halfWidth, age, warning, material }, quiet) {
-  signatureGuide(ctx, gap, size, !warning, direction);
+  signatureGuide(ctx, gap, size, !warning, direction, viewport.width, quiet ? 0 : age);
   const bounds = [[0, Math.max(0, gap - size / 2)],
     [Math.min(viewport.height, gap + size / 2), viewport.height]];
   for (const [top, bottom] of bounds) {
@@ -442,21 +409,26 @@ function drawSignatureTide(ctx, hazard, material, active, progress, quiet) {
     const halfWidth = hazard.thickness / 2;
     const approach = clamp(hazard.age / hazard.warning, 0, 1);
     const crestAt = active ? y => alienTideX(hazard, y, progress)
-      : y => edge + hazard.direction * halfWidth * (.62 + approach * .65 + .25 * waveRoll(y, hazard.age));
+      : y => edge + hazard.direction * halfWidth * (.62 + approach * .65 + .25 * waveRoll(y, quiet ? 0 : hazard.age));
     drawWaterWall(ctx, { crestAt, gap, size: hazard.gapSize, direction: hazard.direction,
       halfWidth, age: hazard.age, warning: !active, material }, quiet);
     return;
   }
-  signatureGuide(ctx, gap, hazard.gapSize, active, hazard.direction);
+  signatureGuide(ctx, gap, hazard.gapSize, active, hazard.direction, viewport.width, quiet ? 0 : hazard.age);
   const warningTravel = clamp(hazard.age / hazard.warning, 0, 1);
   const crestAt = active ? y => alienTideX(hazard, y, progress)
     : y => edge + hazard.direction * hazard.thickness * (.37 + .41 * warningTravel
       + .14 * Math.sin(y * .028 - hazard.age * 6));
   const top = Math.max(0, gap - hazard.gapSize / 2);
   const bottom = Math.min(viewport.height, gap + hazard.gapSize / 2);
-  if (top > 0) fillSignatureFront(ctx, hazard, crestAt, hazard.age * 7, 0, top, material, active, quiet);
-  if (bottom < viewport.height) fillSignatureFront(ctx, hazard, crestAt, hazard.age * 7, bottom,
-    viewport.height, material, active, quiet);
+  for (const [start, end] of [[0, top], [bottom, viewport.height]]) {
+    if (end <= start) continue;
+    const time = quiet ? 0 : hazard.age;
+    if (hazard.material === "fusion" || hazard.material === "plasma") {
+      BossConfluenceVfx.column(ctx, { x: 0, y: start, width: hazard.thickness, height: end - start },
+        time, active ? .90 : .36, quiet, hazard.material, crestAt);
+    } else fillSignatureFront(ctx, hazard, crestAt, time * 7, start, end, material, active, quiet);
+  }
 }
 
 function drawRayOrganic(ctx, kind, material, length, left, right, age, quiet) {
@@ -655,9 +627,20 @@ function drawSignatureFilament(ctx, hazard, active, progress, quiet) {
 }
 
 function drawSignatureVortex(ctx, hazard, material, active, progress, quiet) {
-  if (typeof NextgenVfx !== "undefined" && ["water", "void"].includes(hazard.material)) {
+  if (["water", "spore", "void"].includes(hazard.material)) {
     const core = alienVortexCore(hazard, progress);
-    NextgenVfx.drawVoid(ctx, { x: hazard.x, y: hazard.y, radius: hazard.radius }, material, quiet ? 0 : hazard.age, active ? .92 : .35, hazard.material === "water");
+    const field = { x: hazard.x, y: hazard.y, radius: hazard.radius };
+    const time = quiet ? 0 : hazard.age;
+    if (hazard.material === "void") {
+      NextgenVfx.drawVoid(ctx, field, material, time, active ? .92 : .38);
+      if (active) BossConfluenceVfx.ring(ctx, { ...field, radius: core, innerRadius: core * .78 },
+        time, .80, "void", quiet);
+    }
+    else NextgenVfx.drawVortex(ctx, field, material, time, active ? .98 : .39,
+      core, hazard.material, hazard.spin || 1);
+    if (active) return;
+    ctx.beginPath(); ctx.setLineDash([7, 7]); ctx.strokeStyle = material.rim;
+    ctx.arc(field.x, field.y, field.radius, 0, Math.PI * 2); ctx.stroke();
     // The lethal core and pull field are distinct, even on reduced motion.
     ctx.strokeStyle = material.spark; ctx.lineWidth = 1.8; ctx.globalAlpha = .82;
     ctx.setLineDash(active ? [] : [7, 6]); ctx.beginPath(); ctx.arc(hazard.x, hazard.y, core, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -735,34 +718,21 @@ function drawSignatureVortex(ctx, hazard, material, active, progress, quiet) {
 function drawSignatureRing(ctx, hazard, material, active, progress, quiet) {
   const { x, y } = hazard;
   const radius = alienRingRadius(hazard, progress);
-  if (!active) signatureGlow(ctx, x, y, hazard.radius * 1.06, material, .23);
-  ctx.strokeStyle = material.rim;
-  ctx.globalAlpha = active ? .30 : .72;
-  ctx.lineWidth = active ? hazard.thickness : 1.8;
-  ctx.setLineDash(active ? [] : [8, 9]);
-  ctx.beginPath(); ctx.arc(x, y, active ? radius : hazard.radius, 0, Math.PI * 2); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.globalAlpha = .96;
-  ctx.strokeStyle = active ? material.spark : material.rim;
-  ctx.lineWidth = active ? 3 : 1.5;
-  ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
-  if (quiet || !active) return;
-  if (visualQuality.id !== "low") {
-    drawSignatureOrbit(ctx, { x, y, radius: radius + hazard.thickness / 2,
-      innerRadius: Math.max(0, radius - hazard.thickness / 2) },
-      hazard.material, hazard.age, .71, 1, visualQuality.id === "high" ? 32 : 16);
+  if (active) {
+    BossConfluenceVfx.ring(ctx, { x, y, radius: radius + hazard.thickness / 2,
+      innerRadius: Math.max(0, radius - hazard.thickness / 2) }, quiet ? 0 : hazard.age, .94,
+      signatureMaterials[hazard.material] ? hazard.material : "fusion", quiet);
+    return;
   }
-  ctx.globalAlpha = .55;
-  ctx.lineWidth = 1.8;
+  ctx.save();
   ctx.strokeStyle = material.rim;
+  ctx.globalAlpha = .63;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([7, 9]);
   ctx.beginPath();
-  for (let i = 0; i < 16; i++) {
-    const angle = i * Math.PI / 8 + progress * .4;
-    const size = (6 + i % 4 * 4) * Math.sin(progress * Math.PI);
-    ctx.moveTo(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
-    ctx.lineTo(x + Math.cos(angle) * (radius + size), y + Math.sin(angle) * (radius + size));
-  }
+  ctx.arc(x, y, hazard.radius, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.restore();
 }
 
 function drawSignatureImpact(ctx, hazard, material, active, progress, quiet) {
@@ -770,8 +740,9 @@ function drawSignatureImpact(ctx, hazard, material, active, progress, quiet) {
   const warning = active ? 1 : clamp(hazard.age / hazard.warning, 0, 1);
   const well = hazard.type === "well";
   if (typeof NextgenVfx !== "undefined" && (well || hazard.material === "void" || hazard.material === "magma")) {
-    if (hazard.material === "magma") NextgenVfx.drawEruption(ctx, hazard, material, hazard.age, active ? .92 : .36);
+    if (hazard.material === "magma") NextgenVfx.drawEruption(ctx, hazard, material, quiet ? 0 : hazard.age, active ? .92 : .36);
     else NextgenVfx.drawVoid(ctx, hazard, material, hazard.age, active ? .94 : .35);
+    if (active && hazard.material === "magma") return;
     ctx.strokeStyle = material.rim; ctx.lineWidth = active ? 1.8 : 1.1; ctx.globalAlpha = .84;
     ctx.setLineDash(active ? [] : [8, 7]); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     return;
@@ -833,7 +804,23 @@ function drawAlienSignatureHazard(ctx, hazard, quiet) {
     const half = hazard.thickness / 2;
     const phase = active ? progress : clamp(hazard.age / hazard.warning, 0, 1);
     const kind = hazard.material || (vertical ? "void" : null);
-    drawMaterialRay(ctx, { x1: vertical ? hazard.x : hazard.right, y1: vertical ? 0 : hazard.y,
+    if (vertical && signatureMaterials[kind]) {
+      const line = { x1: hazard.x, y1: 0, x2: hazard.x, y2: viewport.height, width: half * 2 };
+      if (active) BossConfluenceVfx.beam(ctx, line, quiet ? 0 : hazard.age, .88, kind, quiet);
+      else {
+        ctx.strokeStyle = material.rim;
+        ctx.globalAlpha = .51;
+        ctx.lineWidth = 1.3;
+        ctx.setLineDash([7, 12]);
+        ctx.beginPath();
+        for (const side of [-1, 1]) {
+          const x = hazard.x + side * half;
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, viewport.height);
+        }
+        ctx.stroke();
+      }
+    } else drawMaterialRay(ctx, { x1: vertical ? hazard.x : hazard.right, y1: vertical ? 0 : hazard.y,
       x2: vertical ? hazard.x : 0, y2: vertical ? viewport.height : hazard.y, left: half, right: half,
       active, phase, kind, age: hazard.age }, quiet);
   } else { ctx.restore(); return false; }
