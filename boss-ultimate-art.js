@@ -798,16 +798,11 @@ function drawBossUltimateHazard(ctx, hazard, quiet) {
   if (!active) ctx.setLineDash([6, 5]);
   for (const rect of geometry.rects || []) {
     if (!active) ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
-    else {
+    else if (hazard.ultimateKind !== "tideWalls") {
       ctx.globalAlpha = .38;
       ctx.beginPath();
-      if (hazard.ultimateKind === "tideWalls") {
-        ctx.moveTo(rect.x, rect.y); ctx.lineTo(rect.x, rect.y + rect.height);
-        ctx.moveTo(rect.x + rect.width, rect.y); ctx.lineTo(rect.x + rect.width, rect.y + rect.height);
-      } else {
-        ctx.moveTo(rect.x, rect.y); ctx.lineTo(rect.x + rect.width, rect.y);
-        ctx.moveTo(rect.x, rect.y + rect.height); ctx.lineTo(rect.x + rect.width, rect.y + rect.height);
-      }
+      ctx.moveTo(rect.x, rect.y); ctx.lineTo(rect.x + rect.width, rect.y);
+      ctx.moveTo(rect.x, rect.y + rect.height); ctx.lineTo(rect.x + rect.width, rect.y + rect.height);
       ctx.stroke(); ctx.globalAlpha = .76;
     }
   }

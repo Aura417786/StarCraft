@@ -166,6 +166,8 @@ function syncGameAudio() {
       bossPhase: boss?.finale ? "finale" : boss?.phase, bossHealth: boss?.hp, lives: player.lives,
       width: viewport.width, height: viewport.height, listenerX: player.x, listenerY: player.y,
       bossX: boss?.x ?? bossPresentation?.target.x, bossY: boss?.y ?? bossPresentation?.target.y,
+      scene: state, fighter: typeof currentUltimateId === "function" ? currentUltimateId() : "red",
+      elite: enemies.some(enemy => !!enemy.elite),
       visible: windowActive && !document.hidden });
   syncUltimateAudio(active);
 }
@@ -1172,6 +1174,7 @@ function updateResultCopy(won) {
     : (lastDamageMessage || tr("调整航线，再次突围。", "Plot a new course and try again."));
 }
 function endGame(won = false) {
+  if (!won && state !== "over" && player.lives === 0) gameAudio.fighterSkill?.(currentUltimateId(), "destroy", { x:player.x, y:player.y });
   if (typeof prepareBossRetryResult === "function") prepareBossRetryResult(won);
   completeSortie({ won, died: !won && player.lives === 0 });
   clearPause();
@@ -1272,7 +1275,7 @@ function drawBullets() {
     context.save(); context.translate(bullet.x, bullet.y); context.rotate(bullet.angle ?? 0);
     const half = bullet.halfHeight ?? 2.5, length = bullet.length ?? weapon.length;
     if (index >= bullets.length - tailBudget && typeof drawFlightBoltWake === "function")
-      drawFlightBoltWake(context, length, half, bullet.color, index, battleTime);
+      drawFlightBoltWake(context, length, half, bullet.color, index, battleTime, false, bullet);
     context.fillStyle = bullet.color;
     context.beginPath();
     if (bullet.visual === "lance" || bullet.visual === "counter") {
@@ -1476,6 +1479,7 @@ function drawFrame(time) {
     drawFighterCombat(context);
     drawEvolution();
     drawShield();
+    if (typeof PlayerVfx !== "undefined") PlayerVfx.shieldDetail(context);
     drawMuzzleFlash();
     drawUltimate();
     drawCombatEffects();

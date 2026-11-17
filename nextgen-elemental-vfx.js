@@ -323,7 +323,9 @@ const NextgenVfx = (() => {
       }
     }
     ctx.strokeStyle = water ? "#a9e5e9" : "#d3adca"; ctx.globalAlpha = alpha * .76; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.arc(x, y, r - .8, 0, TAU); if (inner > 0) ctx.arc(x, y, inner + .8, 0, TAU, true); ctx.stroke();
+    // Collapsing singularities legitimately pass through subpixel radii. Keep
+    // the decorative inset nonnegative so the final frame cannot halt RAF.
+    ctx.beginPath(); ctx.arc(x, y, Math.max(0, r - .8), 0, TAU); if (inner > 0) ctx.arc(x, y, inner + .8, 0, TAU, true); ctx.stroke();
     ctx.restore(); return true;
   }
 

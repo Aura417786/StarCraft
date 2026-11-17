@@ -41,9 +41,17 @@ async function main() {
         }
       }
       const phases=[0,.25,.65,.90,1.01,1.15,1.71,1.90].map(age=>NextgenVfx.phase({age,warning:1,duration:1}).name);
-      return {output,phases};
+      let collapsedFrames=0;
+      for(const quality of ['low','medium','high'])for(const water of [false,true])for(const radius of [0,.001,.2,.799,.8,1,2]) {
+        setVisualQuality(quality,false);NextgenVfx.beginFrame();
+        const c=document.createElement('canvas');c.width=c.height=16;
+        NextgenVfx.drawVoid(c.getContext('2d'),{x:8,y:8,radius},signatureMaterials.void,2,.9,water);
+        collapsedFrames++;
+      }
+      return {output,phases,collapsedFrames};
     });
-    report.geometry=geometry.output; report.phases=geometry.phases;
+    report.geometry=geometry.output; report.phases=geometry.phases;report.collapsedFrames=geometry.collapsedFrames;
+    assert.equal(geometry.collapsedFrames,42);
     assert.deepEqual(geometry.phases,["tell","gather","charge","release","contact","sustain","fracture","residue"]);
     for(const row of geometry.output) {assert.ok(row.lit>100,row.name+" must render");assert.equal(row.outside,0,row.name+" must preserve authoritative primitive and holes");assert.ok(row.diagnostics.facets<=row.diagnostics.budget.facets);if(row.quiet)assert.equal(row.diagnostics.samples,0);}
     await page.locator("#start-button").click();

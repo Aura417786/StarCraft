@@ -143,7 +143,7 @@ const gameStaticEnglish = new Map([
   ["完美护盾与地形", "Perfect Guard and Terrain"],
   ["完美护盾。", "Perfect Guard. "],
   ["首领封场。", "Boss lockdown. "],
-  ["出现封场倒计时后，按护盾键抵挡全屏冲击。没有储能时会补给一次应急护盾；护盾禁用的挑战请进入标出的缺口。", "When the lockdown countdown appears, use your shield to block the arena-wide strike. An emergency charge is supplied if empty. In no-shield challenges, enter the marked opening."],
+  ["预警时若有护盾，留到倒计时结束抵挡冲击；挡住环境攻击会消耗护盾，不会返还。没有护盾或禁盾挑战会提前标出通路，请及时进入。不会额外补给应急护盾。", "If you have a shield when the warning starts, save it for the strike at the end of the countdown. Environmental attacks consume the shield without a refund. If empty or shields are disabled, enter the announced passage. No emergency charge is supplied."],
   ["完美连携。", "Perfect Link. "],
   ["借地形避险。", "Use the terrain. "],
   ["残骸能挡住敌弹。击碎陨石可用碎块打敌机，进入裂隙后注意引力箭头。", "Wrecks block enemy shots. Break asteroids to send debris into enemy ships. Watch the gravity arrows in the rift."],

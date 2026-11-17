@@ -62,7 +62,11 @@ for(const id of ['evolution-screen','evolution-title','evolution-description','e
 for(const id of ['momentum-hud','combo-count','combo-best','combo-fill','rage-label','final-combo','combo-meter','combo-caption','stance-button','shake-button']) nodes.set('#'+id,mockNode());
 nodes.get('#evolution-screen').contains=node=>node===nodes.get('#evolution-screen')||evolutionCards.includes(node);
 nodes.get('#evolution-screen').querySelector = () => undefined;
-document.createElement = mockNode;
+document.createElement = tag => {
+  const node=mockNode();
+  if(tag==='canvas')node.getContext=()=>mockCanvasContext(false);
+  return node;
+};
 const canvas = nodes.get('#game-canvas');
 canvas.width = 1280;
 canvas.height = 720;
@@ -72,7 +76,17 @@ nodes.get('#fighter-art').complete = true;
 nodes.get('#fighter-art').naturalWidth = 1536;
 let captureDraws = false;
 const drawOperations = [];
-canvas.getContext = () => new Proxy({}, { get: (target,name) => name in target ? target[name] : (...args) => { if(captureDraws) drawOperations.push({name,args}); if(name==='createLinearGradient'||name==='createRadialGradient') return {addColorStop(){}}; }, set(target,name,value) { target[name]=value; if(captureDraws) drawOperations.push({name:'set:'+String(name),args:[value]}); return true; } });
+function mockCanvasContext(record) {
+  return new Proxy({}, {get(target,name) {
+    if(name in target)return target[name];
+    return (...args)=>{
+      if(record&&captureDraws)drawOperations.push({name,args});
+      if(name==='createLinearGradient'||name==='createRadialGradient')return {addColorStop(){}};
+      if(name==='createImageData')return {width:args[0],height:args[1],data:new Uint8ClampedArray(args[0]*args[1]*4)};
+    };
+  },set(target,name,value){target[name]=value;if(record&&captureDraws)drawOperations.push({name:'set:'+String(name),args:[value]});return true;}});
+}
+canvas.getContext = () => mockCanvasContext(true);
 document.querySelector = (selector) => nodes.get(selector);
 const slots = Array.from({length:5},()=>({dataset:{}}));
 const protectionSlots = Array.from({length:2},()=>({dataset:{}}));
@@ -97,6 +111,7 @@ const gameAudio={ muted:false,
   fireUltimate(){audioCalls.push({name:'fireUltimate',args:[]});},
   stopUltimate(){audioCalls.push({name:'stopUltimate',args:[]});},
   bossAttack(...args){audioCalls.push({name:'bossAttack',args});},
+  bossSkill(...args){audioCalls.push({name:'bossSkill',args});},
   bossEnrage(){audioCalls.push({name:'bossEnrage',args:[]});},
   overdrive(){audioCalls.push({name:'overdrive',args:[]});},
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
@@ -661,7 +676,8 @@ check('rendering mixed old and new bullets uses the color and core stored on eac
   const mixed=emitted();
   captureDraws=true; drawOperations.length=0; execute('drawBullets();'); captureDraws=false;
   const fills=drawOperations.filter(op=>op.name==='set:fillStyle'&&op.args[0]!=='#fff3df').map(op=>op.args[0]);
-  assert.deepEqual(fills,mixed.flatMap(b=>[b.color,b.core]));
+  const bodyColors=fills.filter(value=>typeof value==='string').filter((value,index,all)=>value!==all[index-1]);
+  assert.deepEqual(bodyColors,mixed.flatMap(b=>[b.color,b.core]));
 });
 
 check('a calibrated ordinary projectile damages a target once and removes itself on impact', () => {
@@ -1044,22 +1060,20 @@ check('resize preserves normalized combat progression and restart restores openi
   leaveBattle(); begin(); assert.equal(scene().battleTime,0);
   execute('spawnEnemy("scout");'); near(scene().enemies[0].healthLog,0);
 });
-check('the Broodmother forces a water gap, then pulls at that same gap with an independently warned vortex', () => {
+check('the Broodmother establishes an undertow, intercepts its exit with a tide and punishes the locked column', () => {
   readyBoss(0,'prepareAlienAttack(boss);');
   const result=execute(`(() => {
-    const wave=bossHazards.find(h=>h.kind==='tide'),well=bossHazards.find(h=>h.kind==='vortex');
+    const wave=bossHazards.find(h=>h.kind==='tide'),well=bossHazards.find(h=>h.kind==='vortex'),column=bossHazards.find(h=>h.kind==='seam');
     player.x=well.x+well.radius*.5;player.y=well.y;
-    const before=alienCurrentVector();
-    well.age=well.warning+.1;
-    const after=alienCurrentVector();
-    return { wave: {y:wave.gapY,end:wave.warning+wave.duration,material:wave.material},
-      well:{y:well.y,start:well.warning,material:well.material},before,after,combo:boss.comboLog[0] };
+    const before=alienCurrentVector();well.age=well.warning+.1;const after=alienCurrentVector();
+    return {wave,well,column,before,after,combo:boss.comboLog[0]};
   })()`);
-  assert.equal(result.wave.material,'water'); assert.equal(result.well.material,'water');
-  near(result.wave.y,result.well.y);
-  assert.ok(result.wave.end>result.well.start && result.well.start>=.9);
-  near(result.before.x,0); assert.ok(result.after.x<0);
-  assert.ok(result.combo.overlap>0);
+  assert.equal(result.wave.material,'water');assert.equal(result.well.material,'water');
+  near(result.well.y,result.combo.lockY);near(result.wave.gapY,result.combo.gapY);near(result.column.x,result.combo.lockX);
+  assert.deepEqual([result.well.comboStage,result.wave.comboStage,result.column.comboStage],[0,1,2]);
+  assert.ok(result.well.warning<result.wave.warning&&result.wave.warning<result.column.warning);
+  assert.ok([result.well,result.wave,result.column].every(h=>h.warning-(h.tellAt??0)>=1.3));
+  near(result.before.x,0);assert.ok(result.after.x<0);
 });
 check('a previous volley still crosses during a normal tell, while cyan corridors clear old projectiles', () => {
   readyBoss(1);
@@ -1069,80 +1083,66 @@ check('a previous volley still crosses during a normal tell, while cyan corridor
   frames(14);
   assert.equal(bossState().boss.phase,'telegraph');
   assert.equal(health().lives,2);
-  readyBoss(10,'boss.attackIndex=0;addBossProjectile(player.x+200,player.y,-420,0);prepareAlienAttack(boss);');
-  assert.equal(bossState().boss.alienAttack,'fusionCorridor');
+  readyBoss(0,'boss.attackIndex=0;addBossProjectile(player.x+200,player.y,-420,0);prepareAlienAttack(boss);');
+  assert.equal(bossState().boss.alienAttack,'broodArc');
   assert.equal(bossState().bossProjectiles.length,0);
-  assert.ok(bossState().bossHazards.some(hazard=>hazard.kind==='guide'));
+  assert.ok(bossState().bossHazards.some(hazard=>hazard.kind==='tide'&&hazard.material==='water'));
 });
 check('the fusion corridor is reachable from either edge while charging in a tall viewport', () => {
   for (const edge of [.05,.95]) {
     readyBoss(10);
     surface={width:2560,height:1440}; emit(window,'resize');
     execute(`player.y=player.previousY=alienLane(${edge});boss.enraged=true;boss.attackIndex=0;prepareAlienAttack(boss);ultimate.phase='charging';`);
-    const guide=bossState().bossHazards.find(hazard=>hazard.kind==='guide');
+    const guide=bossState().bossHazards.find(hazard=>hazard.kind==='tide');
     const move=edge<.5?'ArrowDown':'ArrowUp';
     key(move);
-    const seconds = Math.abs(position().y - guide.y) / execute('player.speed * .65');
-    assert.ok(seconds <= bossState().boss.telegraphDuration - .24);
+    const seconds = Math.abs(position().y - guide.gapY) / execute('player.speed * .65');
+    assert.ok(seconds <= guide.warning-(guide.tellAt??0)-.24, `gap requires ${seconds}s within the visible ${guide.warning-(guide.tellAt??0)}s tell`);
     execute(`updatePlayer(${seconds});`);
     key(move,'keyup');
-    assert.ok(Math.abs(position().y-guide.y)<guide.thickness/2-execute('player.height*.16'));
+    assert.ok(Math.abs(position().y-guide.gapY)<guide.gapSize/2-execute('player.height*.16'));
   }
 });
-check('the alternate Broodmother chain expands a pressure ring from the undertow center', () => {
+check('the alternate Broodmother chain intercepts the tide gap then lashes that announced altitude', () => {
   readyBoss(0,'boss.pressureComboIndex=0;prepareAlienAttack(boss);');
   const result=execute(`(() => {
-    const well=bossHazards.find(h=>h.kind==='vortex'),ring=bossHazards.find(h=>h.kind==='ring');
-    const warningSafe=!alienHazardHitsPlayer(ring);
-    ring.age=ring.warning+ring.duration*.5;
-    player.x=ring.x+alienRingRadius(ring,.5);player.y=ring.y;
-    const contact=alienHazardHitsPlayer(ring);
-    player.x=ring.x+ring.radius+player.width;
-    return {warning:ring.warning,warningSafe,contact,escaped:!alienHazardHitsPlayer(ring),
-      sameOrigin:ring.x===well.x&&ring.y===well.y,overlap:well.warning+well.duration-ring.warning};
+    const wave=bossHazards.find(h=>h.kind==='tide'),well=bossHazards.find(h=>h.kind==='vortex'),lash=bossHazards.find(h=>h.lash);
+    const warningSafe=!alienHazardHitsPlayer(lash);
+    lash.age=lash.warning+.05;player.x=boss.lockX;player.y=lash.y;
+    const contact=alienHazardHitsPlayer(lash);player.y+=lash.thickness+player.height*.16;
+    return {wave,well,lash,warningSafe,contact,escaped:!alienHazardHitsPlayer(lash)};
   })()`);
-  assert.ok(result.warning>=.9 && result.warningSafe && result.contact && result.escaped);
-  assert.ok(result.sameOrigin && result.overlap>0);
+  assert.ok(result.warningSafe&&result.contact&&result.escaped);
+  near(result.wave.gapY,result.well.y);near(result.well.y,result.lash.y);
+  assert.deepEqual([result.wave.comboStage,result.well.comboStage,result.lash.comboStage],[0,1,2]);
+  assert.ok(result.lash.warning>result.well.warning&&result.lash.warning-result.lash.tellAt>=1.3);
 });
-check('mirror pincer premarks both edges and fires along the locked lines', () => {
-  readyBoss(5, 'boss.attackIndex=0;prepareAlienAttack(boss);');
-  const portals=bossState().bossHazards.filter(h=>h.kind==='portal');
-  assert.equal(portals.length,2);
-  assert.ok(portals[0].originX<portals[0].x && portals[1].originX>portals[1].x);
-  assert.ok(portals.every(h=>h.warning>=.9));
-  assert.notEqual(portals[0].y,portals[1].y);
-  const marked=portals.map(h=>h.y);
-  execute('player.y=flightBounds.top;');
-  assert.deepEqual(bossState().bossHazards.filter(h=>h.kind==='portal').map(h=>h.y),marked);
-  let right=false,left=false;
-  for(let i=0;i<90;i++) {
-    execute('updateBossProjectiles(1/60);');
-    const shots=bossState().bossProjectiles;
-    right ||= shots.some(s=>s.vx>0); left ||= shots.some(s=>s.vx<0);
-  }
-  assert.ok(right && left,'Both reflected directions must be real projectiles');
+check('mirror reflection announces a fixed light sheet and never emits a generic return projectile', () => {
+  readyBoss(5,'prepareAlienAttack(boss);');
+  const result=execute(`(() => {
+    const mirror=bossHazards.find(h=>h.kind==='mirrorShield');mirror.age=mirror.warning+.01;
+    const packet={x:mirror.x,previousX:mirror.x-10,y:mirror.y,previousY:mirror.y,halfHeight:2};
+    const consumed=interceptAlienRound(packet),ray=bossHazards.find(h=>h.reflection);
+    const marked=ray.endY;player.y=flightBounds.top;const locked=ray.endY===marked;
+    ray.age=ray.warning+.05;player.x=(ray.originX+ray.endX)/2;player.y=marked;
+    const hit=alienHazardHitsPlayer(ray);player.y+=ray.thickness+player.height*.16;
+    return {consumed,locked,hit,safe:!alienHazardHitsPlayer(ray),warning:ray.warning,origin:ray.originX,end:ray.endX,shots:bossProjectiles.length};
+  })()`);
+  assert.ok(result.consumed&&result.locked&&result.hit&&result.safe);
+  assert.ok(result.warning>=1.4&&result.origin>result.end);assert.equal(result.shots,0);
 });
-check('a sideways dodge solves the rift inside the final cyan corridor in compact and wide windows', () => {
-  for (const size of [{width:640,height:360},{width:1280,height:720},{width:2560,height:1440}]) {
-    for (const escape of [false, true]) {
-      readyBoss(10);
-      surface = size; emit(window, 'resize');
-      execute('player.y=player.previousY=alienLane(.30);boss.enraged=true;boss.attackIndex=0;prepareAlienAttack(boss);bossHitGrace=0;');
-      const guide = bossState().bossHazards.find(hazard => hazard.kind === 'guide');
-      key('ArrowDown');
-      for (let frame = 0; frame < 30 && position().y < guide.y - 8; frame++) step();
-      key('ArrowDown', 'keyup');
-      while (!bossState().bossHazards.some(hazard => hazard.kind === 'seam') && scene().battleTime < 4) step();
-      const seam = bossState().bossHazards.find(hazard => hazard.kind === 'seam');
-      assert.ok(seam && seam.age < seam.warning);
-      const start = position();
-      if (escape) key('ArrowRight');
-      frames(9);
-      key('ArrowRight', 'keyup');
-      frames(Math.ceil((seam.warning - seam.age) / .05) - 8);
-      assert.equal(position().y, start.y);
-      assert.equal(health().lives, escape ? 3 : 2, `${size.width}x${size.height}, escape ${escape}`);
-    }
+check('a sideways dodge solves the fusion seam while preserving the tide gap in compact and wide windows', () => {
+  for(const size of [{width:640,height:360},{width:1280,height:720},{width:2560,height:1440}])for(const escape of [false,true]){
+    readyBoss(10);surface=size;emit(window,'resize');
+    execute(`player.y=player.previousY=alienLane(.30);boss.enraged=true;boss.attackIndex=0;prepareAlienAttack(boss);bossHitGrace=0;
+      var seamProbe=bossHazards.find(h=>h.kind==='seam'),tideProbe=bossHazards.find(h=>h.kind==='tide');
+      bossHazards.splice(0,bossHazards.length,tideProbe,seamProbe);
+      player.x=player.previousX=seamProbe.x;player.y=player.previousY=tideProbe.gapY;
+      seamProbe.age=seamProbe.warning+.01;tideProbe.age=tideProbe.warning+tideProbe.duration*.5;`);
+    const start=position();
+    if(escape){key('ArrowRight');execute('updatePlayer(.4);');key('ArrowRight','keyup');}
+    execute('updateBossDamage();');
+    assert.equal(position().y,start.y);assert.equal(health().lives,escape?3:2,`${size.width}x${size.height}, escape ${escape}`);
   }
 });
 check('attacking shells reduce damage but leave an opening after each attack', () => {
@@ -1461,8 +1461,8 @@ check('energy cannon drawings balance context state and never draw nonfinite coo
     assert.equal(drawOperations.filter(d=>d.name==='save').length,drawOperations.filter(d=>d.name==='restore').length);
     assert.ok(drawOperations.flatMap(d=>d.args).filter(v=>typeof v==='number').every(Number.isFinite));
     assert.ok(drawOperations.some(d=>d.name==='ellipse'));
-    assert.ok(drawOperations.some(d=>d.name==='set:globalCompositeOperation'&&d.args[0]==='screen'));
-    assert.equal(drawOperations.some(d=>d.name==='fillRect'),false);
+    if(phase==='firing')assert.ok(drawOperations.some(d=>d.name==='set:globalCompositeOperation'&&d.args[0]==='screen'));
+    assert.ok(drawOperations.filter(d=>d.name==='fillRect').every(d=>Math.abs(d.args[3])<surface.height*.5));
   }
   execute('reducedMotion.matches=false;');
 });
@@ -1676,13 +1676,14 @@ check('shield drawing is a translucent red enclosing ellipse with finite geometr
   execute('reducedMotion.matches=false;resetShield();'); captureDraws=true; drawOperations.length=0; execute('drawShield();'); captureDraws=false;
   assert.equal(drawOperations.length,0);
 });
-check('Boss attacks trigger volley cues and warned lasers sound only when they activate', () => {
-  readyBoss(7); audioCalls.length=0; execute('boss.pressureCycle=3;prepareAlienAttack(boss,true);boss.phase="attack";boss.phaseTime=1.2;runAlienAttack(boss);');
-  assert.ok(audioCalls.some(c=>c.name==='bossAttack'&&c.args[0]==='volley'));
-  readyBoss(4); audioCalls.length=0; execute('addBossHazard("beam",{y:200,thickness:30,warning:1,duration:2});updateBossProjectiles(.99);');
-  assert.equal(audioCalls.filter(c=>c.name==='bossAttack'&&c.args[0]==='beam').length,0);
-  execute('updateBossProjectiles(.01);updateBossProjectiles(.01);');
-  assert.equal(audioCalls.filter(c=>c.name==='bossAttack'&&c.args[0]==='beam').length,1);
+check('Boss hazard audio separates its readable tell from one actual activation cue', () => {
+  readyBoss(7);audioCalls.length=0;execute('boss.pressureCycle=3;prepareAlienAttack(boss,true);updateBossProjectiles(.01);');
+  assert.ok(audioCalls.some(c=>c.name==='bossSkill'&&c.args[1].phase==='tell'));
+  assert.equal(audioCalls.filter(c=>c.name==='bossSkill'&&c.args[1].phase==='active').length,0);
+  readyBoss(4);audioCalls.length=0;execute('addBossHazard("beam",{y:200,thickness:30,warning:1,duration:2});updateBossProjectiles(.99);');
+  const beamPhase=phase=>audioCalls.filter(c=>c.name==='bossSkill'&&c.args[0]==='beam'&&c.args[1].phase===phase).length;
+  assert.equal(beamPhase('tell'),1);assert.equal(beamPhase('active'),0);
+  execute('updateBossProjectiles(.01);updateBossProjectiles(.01);');assert.equal(beamPhase('active'),1);
 });
 check('Boss enrage impact sounds once when crossing half health and never replays on later damage', () => {
   readyBoss(1,'boss.hp=.51;boss.age=bossRules.armoredMinimum;'); audioCalls.length=0;
@@ -2439,7 +2440,7 @@ check('counter kills use normal one-time score and combo settlement without char
 });
 check('perfect counter is capped at three percent against the fusion Boss even with unbounded weapon tiers', () => {
   readyBoss(10,'player.y=boss.y;weapon.tier=1000;shield.charges=1;requestShield();');
-  execute(bossProjectile().repeat(5)+'updateBossDamage();');
+  execute(contactShell().repeat(5)+'updateEnemyProjectileDamage();updateBossDamage();');
   const after=bossState();
   assert.ok(after.boss.hp>=.97&&after.boss.hp<1);
   near(ult().energy,0);
@@ -2447,7 +2448,7 @@ check('perfect counter is capped at three percent against the fusion Boss even w
 });
 check('lethal perfect counters safely finish a Boss after collecting contact bullets and never settle it twice', () => {
   readyBoss(0,'beginBossFinale(boss);boss.finale.age=boss.finale.transform+bossRules.finaleMinimum;bossHitGrace=0;weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
-  execute(bossProjectile().repeat(8)+'updateBossDamage();updateBossDamage();');
+  execute(contactShell().repeat(8)+'updateEnemyProjectileDamage();updateBossDamage();updateBossDamage();');
   assert.equal(execute('boss'),null); assert.equal(execute('bossDefeated'),1); assert.equal(scene().score,2000);
   assert.equal(protection().charges,1);
   assert.equal(execute('bossProjectiles.length'),0); assert.equal(execute('isBossDeathPlaying()'),true); near(ult().energy,0);
@@ -2589,7 +2590,7 @@ check('death, menu, new rounds, evolution and lethal parry Boss transitions disc
     earnCannonLink(); execute(action+'updateCannonLink(0);'); near(cannonLinkState().remaining,0);
   }
   readyBoss(0,'beginBossFinale(boss);boss.finale.age=boss.finale.transform+bossRules.finaleMinimum;bossHitGrace=0;weapon.tier=1000;boss.hp=.001;shield.charges=1;requestShield();');
-  execute(bossProjectile()+'updateBossDamage();'); assert.equal(execute('isBossDeathPlaying()'),true);near(cannonLinkState().remaining,0);
+  execute(contactShell()+'updateEnemyProjectileDamage();updateBossDamage();'); assert.equal(execute('isBossDeathPlaying()'),true);near(cannonLinkState().remaining,0);
   finishBossPresentation();assert.equal(execute('evolution.pending'),true);near(cannonLinkState().remaining,0);
 });
 check('linked cannon damage remains unchanged and respects fusion resistance without generating energy', () => {
@@ -2617,12 +2618,12 @@ check('linked charge and red cannon show a small ice-blue signature with finite 
     captureDraws=true;drawOperations.length=0;execute('drawUltimate();');captureDraws=false;
     assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
     assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
-    assert.ok(drawOperations.some(op=>op.name==='set:strokeStyle'&&op.args[0]==='#c1f4ff'));
+    assert.ok(drawOperations.some(op=>op.name==='set:strokeStyle'&&op.args[0]===(phase==='firing'?'#c1f4ff':'#c0efffa0')));
     assert.ok(drawOperations.some(op=>op.name==='ellipse'));
     if(phase==='firing') {
-      assert.equal(drawOperations.filter(op=>op.name==='createLinearGradient').length,4);
+      if(!reduced)assert.ok(drawOperations.some(op=>op.name==='createLinearGradient'));
       assert.ok(drawOperations.filter(op=>op.name==='lineTo').length>20);
-      assert.equal(drawOperations.some(op=>op.name==='fillRect'),false);
+      assert.ok(drawOperations.filter(op=>op.name==='fillRect').every(op=>Math.abs(op.args[3])<surface.height*.5));
     }
   }
   execute('reducedMotion.matches=false;');

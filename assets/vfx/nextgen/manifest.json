@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "license": "Original artwork for Star Breaker; generated with project authoring scripts.",
+  "layout": {
+    "columns": 4,
+    "rows": 4,
+    "frames": 16,
+    "fps": 12
+  },
+  "assets": [
+    {
+      "element": "water",
+      "file": "water-atlas.webp",
+      "tile": 384,
+      "bytes": 240756,
+      "sha256": "9a1b9edabb3bfe26a036d81b79fd1a708fef871bd5cbe23d966bf3615d9a3c64",
+      "minimumAlphaMargin": 42,
+      "frameDifferenceRange": [
+        4.773522271050347,
+        5.75390625
+      ]
+    },
+    {
+      "element": "magma",
+      "file": "magma-atlas.webp",
+      "tile": 384,
+      "bytes": 191752,
+      "sha256": "8bba15e9802ad81e6eb29214a5554aad930c94735ade59816345264b5c0d6e43",
+      "minimumAlphaMargin": 71,
+      "frameDifferenceRange": [
+        2.8360188802083335,
+        3.6226331922743054
+      ]
+    },
+    {
+      "element": "void",
+      "file": "void-atlas.webp",
+      "tile": 384,
+      "bytes": 155040,
+      "sha256": "f031f7ef7bd82d34217f291373a174c84633fc748fa8ed31e6eab9dbc27e6f0e",
+      "minimumAlphaMargin": 71,
+      "frameDifferenceRange": [
+        1.665503607855903,
+        1.7519904242621527
+      ]
+    }
+  ]
+}

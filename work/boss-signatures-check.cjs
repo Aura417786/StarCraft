@@ -23,7 +23,7 @@ function signatureArena() {
     function positionBoss(type, enraged = false, pattern = 0, pressure = false) {
       clearAlienThreats();
       boss = { x: viewport.width * .84, y: viewport.height * .48, width: 252, height: 190,
-        color: bossTypes[type].color, type, enraged, pressureCycle: pressure ? 3 : 0, attackIndex: pattern - 1 };
+        color: bossTypes[type].color, type, enraged, pressureCycle: pressure ? 3 : 0, attackIndex: pattern - 1, pressureComboIndex: pattern % 2 - 1 };
       prepareAlienAttack(boss, pressure);
       return boss;
     }
@@ -68,7 +68,7 @@ test("all eleven identities can execute every regular and enraged attack timelin
       for (let pattern = 0; pattern < 3; pattern++) {
         const result = run(`playSignature(${type}, ${pattern}, ${enraged})`);
         assert.ok(result.kinds.length || result.peak > 0, `type ${type} attack ${pattern}`);
-        assert.ok(result.peak <= 240);
+        assert.equal(result.peak,0,"Authored Boss chains must not generate generic projectile volleys");
         result.kinds.forEach(kind => bodyKinds.add(kind));
         assert.equal(run("bossHazards.length"), 0);
       }
@@ -77,7 +77,7 @@ test("all eleven identities can execute every regular and enraged attack timelin
   }
 });
 
-test("short actions retain the 0.9s tell and complex signatures retain their teaching window", () => {
+test("three-stage actions retain at least 1.3s tells and actionable identity hints", () => {
   const run = signatureArena();
   const result = run(`(() => {
     const warnings = [];
@@ -101,7 +101,7 @@ test("short actions retain the 0.9s tell and complex signatures retain their tea
   assert.equal(result.warnings.length, 44);
   for (const { first, repeat, hint, enHint, wide, quick } of result.warnings) {
     assert.ok(Math.abs(first - repeat - (quick ? 0 : .4)) < 1e-8);
-    assert.ok(repeat >= (quick ? .9 : wide ? 1.6 : 1.4) && first <= 2.2);
+    assert.ok(repeat >= (quick ? 1.3 : wide ? 1.6 : 1.4) && first <= 2.2);
     assert.ok(hint.length >= 8 && hint.length <= 26 && enHint.length < 86, hint);
   }
   for (const [hint, enHint] of result.finales) {
@@ -187,6 +187,8 @@ test("diagonal filaments share geometry with their real hit and remap with the p
     const oldOrigin = silk.originX;
     const warningSafe = !alienHazardHitsPlayer(silk);
     silk.age = silk.warning + .08;
+    const pose=alienFilamentPose(silk,.08/silk.duration);
+    player.x=(pose.x1+pose.x2)/2;player.y=(pose.y1+pose.y2)/2;
     const before = alienHazardHitsPlayer(silk);
     player.y += 99;
     const movedSafe = !alienHazardHitsPlayer(silk);
@@ -220,8 +222,9 @@ test("the reverse tide leaves the same reachable escape corridor and remaps it a
     Object.assign(viewport, { width: 640, height: 450 });
     Object.assign(flightBounds, { left: 44, right: 620, top: 225, bottom: 335 });
     Object.assign(player, { x: 80, y: 227, width: 95, height: 56 });
+    positionBoss(0, false, 0, false);
+    const first = bossHazards.find(h=>h.kind==="tide");
     positionBoss(0, true, 0, true);
-    const first = bossHazards[0];
     boss.phase = "attack";
     boss.phaseTime = 1.27;
     runAlienAttack(boss);

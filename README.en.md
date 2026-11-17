@@ -1,5 +1,9 @@
 # Star Breaker · 星际突围
 
+**v35 Elemental encounters.** Eleven bosses coordinate setup, interception and pursuit, with stronger enraged chains and distinct finales. Bosses no longer maintain a generic orb lattice. Vortices, closing bone cages, magma cover, mirrors and neural relays demand different responses. Environmental hits do not refund a shield. The finisher's warning locks its response: reserve a shield if stocked, or follow the announced passage when empty or shields are disabled. No emergency shield is supplied.
+
+Blender-authored water, magma and singularity animation joins geometry-aligned surfaces and refraction. Crimson's piercing cannon, Azure's tracking arcs and Auric's coverage field have separate effects and sound palettes. Elemental boss voices and music layers respond to elites, low life and encounter phase. [Design and verification](docs/nextgen-v35-plan.md)
+
 **v34 Hangar main menu.** Start Game launches with the displayed fighter and difficulty. Sortie Setup lets you change both. Records & Refits holds refits, the campaign archive, and badges. The Flight Manual holds the guide and prologue replay. Use Settings for sound, graphics, language, and fullscreen.
 
 **v33 Deep-space hangar and Dark Forest prologue.** The first campaign launch plays a 2:26 cinematic with bilingual subtitles. When a returning signal gives away Earth, a research lead takes the prototype up to buy time for evacuation. The selected fighter's special carries the final shot into gameplay. Pause or skip it, or choose **Replay Prologue** in the Flight Manual.

@@ -667,6 +667,7 @@ function drawCrimsonBeam(shot) {
 
 function drawUltimate() {
   if (state !== "battle") return;
+  if (typeof PlayerVfx !== "undefined" && PlayerVfx.draw(context)) return;
   context.save();
   if (ultimate.phase === "charging" && ultimate.kind === "red") {
     drawCrimsonCharge(muzzlePosition(), clamp(ultimate.elapsed / cannonLink.chargeDuration, 0, 1), cannonLink.chargingLinked);

@@ -92,7 +92,9 @@ async function main() {
       assert.ok(Math.abs(hard.recovery - hard.originalHardRecovery) < 1e-10, "Hard recovery must match the original v29 formula");
       assert.ok(Math.abs(easy.interval - hard.interval / .62) < 1e-8, "Easy should slow complete attack cycles to 62% frequency");
       assert.ok(Math.abs(normal.interval - hard.interval / .80) < 1e-8, "Normal should slow complete attack cycles to 80% frequency");
-      if (hard.type !== 10) assert.ok(easy.lattice > normal.lattice && normal.lattice > hard.lattice);
+      // v35 pressure comes from coordinated hazards. Difficulty still controls
+      // full cycles/recovery above; it must not resurrect an ambient orb grid.
+      for (const sample of [easy, normal, hard]) assert.equal(sample.lattice, null);
     }
     const liveCadence = await page.evaluate(() => ["easy", "normal", "hard"].map(difficulty => {
       showScreen("battle", { difficulty, seed: 4225 });
