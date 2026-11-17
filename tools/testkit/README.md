@@ -8,12 +8,17 @@ node tools/testkit/nextgen-vfx.cjs . ../v35-tests/vfx
 node tools/testkit/nextgen-player.cjs . ../v35-tests/player
 node tools/testkit/nextgen-review.cjs . ../v35-tests/showcase full
 node tools/testkit/nextgen-performance.cjs . ../v35-tests/performance
+node tools/testkit/nextgen-audio-loading.cjs
+node tools/testkit/soak.cjs . ../v35-tests/soak 10
+node tools/testkit/frozen-http.cjs <冻结包的Game目录> ../v35-tests/frozen-http
 ```
 
 新战斗夹具核对护盾消耗/返还、锁定通路、11 本体与终局、三分辨率及站桩对照。
 VFX 夹具检查真实像素是否越过判定边界。战机夹具使用真实 Space/V 键盘事件。
 展示录像是保护玩家的分镜检查，性能样本不同时录屏；两者都不是自然通关证据。
 旧 `pressure.cjs` 所要求的免费补盾和常驻小球是已废弃设计，不用于 v35 验收。
+`frozen-http` 使用真实本机 HTTP 服务读取冻结目录，检查嵌套资源、模型、音频和三架战机的真实按键；不修改冻结包。
+`soak` 是额外初始生命、真实浏览器时间的持续运行检查，保留每分钟的推进、堆和资源池记录；不等价于自然通关。性能检查、持续运行和录屏串行执行，避免互相干扰。
 
 ## v33 序章交接
 

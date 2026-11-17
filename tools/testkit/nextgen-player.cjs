@@ -8,7 +8,7 @@ async function main(){
   const report={method:'Protected visual fixture with real Space/V keyboard presses, production renderer, 3 fighters × 3 quality tiers; not natural victories.',cases:[]};
   try{
     const {page,errors}=await createPage(browser,game,false,{pageOptions:{viewport:{width:1440,height:900}}});
-    for(const fighter of ['red','blue','yellow'])for(const quality of ['low','medium','high']){
+    for(const fighter of (process.argv.includes('--motion-only')?[]:['red','blue','yellow']))for(const quality of ['low','medium','high']){
       await page.evaluate(({fighter,quality})=>{
         selectedFighter=fighter;showScreen('battle',{seed:4225,difficulty:'veteran'});setVisualQuality(quality,false);
         enemyCooldown=powerupCooldown=nextBossTime=Infinity;shotCooldown=Infinity;
@@ -40,7 +40,7 @@ async function main(){
       showScreen('battle',{fighter:'red',seed:4225});
       ultimate.kind='red';ultimate.phase='firing';
       ultimate.shot={startX:100,x:700,y:350,length:400,radius:45,contacts:[],linked:false};
-      const c=document.createElement('canvas');c.width=900;c.height=600;const paint=c.getContext('2d');
+      const c=document.createElement('canvas');c.width=900;c.height=600;const paint=c.getContext('2d',{willReadFrequently:true});
       const snap=t=>{paint.clearRect(0,0,900,600);ultimate.elapsed=t;PlayerVfx.draw(paint);return paint.getImageData(0,0,900,600).data;};
       const same=(a,b)=>a.every((v,i)=>v===b[i]);
       reduceCombatMotion=true;const quiet=same(snap(1),snap(1.1));

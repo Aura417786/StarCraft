@@ -19,6 +19,9 @@ async function main() {
   try {
     const { page, errors } = await createPage(browser, root, false);
     await page.addScriptTag({ path: path.join(__dirname, "balance-policy.js") });
+    await page.addScriptTag({ path: path.join(__dirname, "balance-scenarios.js") });
+    assert.equal(await page.evaluate(() => balanceBuildRoute("wings")), "ember",
+      "Live control policy must include its evolution-route dependency before the soak begins");
     await page.locator("#start-button").click();
     const skip = page.locator("#tutorial-skip");
     if (await skip.isVisible()) await skip.click();
@@ -80,7 +83,7 @@ async function main() {
         });
         timeline.push({ elapsed: Math.round(elapsed * 100) / 100, ...selected, ...game });
         fs.writeFileSync(path.join(out, "soak.json"), JSON.stringify({ requestedMinutes: minutes, browser: browser.version(),
-          fixture: "Real foreground Chrome, natural campaign then Rush with spare lives and live control policy. Forced GC every 5 min.",
+          fixture: "Real-time headless Chrome RAF, natural campaign then Rush with spare lives and live control policy. Forced GC every 5 min.",
           errors, timeline }, null, 2));
         console.log(`${Math.round(elapsed)}s · ${game.totalActive.toFixed(1)} combat s · Bosses seen ${game.seen.join(',')} · ${Math.round(selected.JSHeapUsedSize / 1048576)} MiB JS`);
         assert.deepEqual(errors, []);
