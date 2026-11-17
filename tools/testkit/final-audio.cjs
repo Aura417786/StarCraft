@@ -143,9 +143,9 @@ async function run() {
       if (typeof skipFlightTutorial === "function") skipFlightTutorial();
       syncGameAudio();
     });
-    await waitFor(() => audioProof.sources.filter(voice => voice.loop && voice.duration > 30).length >= 2);
+    await waitFor(() => audioProof.sources.filter(voice => voice.loop && voice.duration > 30).length >= 3);
     const flight = await page.evaluate(() => audioProof.sources.filter(voice => voice.loop && voice.duration > 30));
-    assert.equal(flight.length, 2);
+    assert.equal(flight.length, 3);
     assert.equal(flight[0].time, flight[1].time);
     assert.ok(Math.abs(flight[0].loopEnd - 33.103) < .003);
     assert.ok(flight.every(voice => voice.seam < .00001));
@@ -158,10 +158,10 @@ async function run() {
         boss.hp = 1;
         syncGameAudio();
       }, type);
-      await waitFor(duration => audioProof.sources.filter(voice => voice.loop && Math.abs(voice.duration - duration) < .004).length >= 3, duration);
+      await waitFor(duration => audioProof.sources.filter(voice => voice.loop && Math.abs(voice.duration - duration) < .004).length >= 4, duration);
       const layers = () => page.evaluate(duration => audioProof.sources.filter(voice => voice.loop && Math.abs(voice.duration - duration) < .004), duration);
       const stems = await layers();
-      assert.equal(stems.length, 3);
+      assert.equal(stems.length, 4);
       assert.equal(new Set(stems.map(voice => voice.time)).size, 1);
       assert.equal(new Set(stems.map(voice => voice.loopEnd)).size, 1);
       assert.ok(stems.every(voice => voice.seam < .00001));
@@ -170,13 +170,13 @@ async function run() {
         await page.evaluate(hp => { boss.hp = hp; syncGameAudio(); }, hp);
         await page.waitForTimeout(925);
         const mix = (await layers()).map(layer => layer.trace.at(-1)?.value ?? 0);
-        const expected = { harmony: [.93, .08, 0], pressure: [.81, .67, .06], finale: [.70, .75, .89] };
+        const expected = { harmony: [.93, .08, 0, 0], pressure: [.81, .67, .06, 0], finale: [.70, .75, .89, 0] };
         assert.deepEqual(mix, expected[stage]);
         const captured = await capture(`${name}-${stage}`, .78);
         assert.ok(captured.peak > .004 && captured.peak < .89);
         stages.push({ hp, mix, captured });
       }
-      assert.equal((await layers()).length, 3, "HP thresholds change gains on the same sources");
+      assert.equal((await layers()).length, 4, "HP thresholds change gains on the same sources");
       await page.evaluate(() => { boss.hp = 1; syncGameAudio(); });
       await page.waitForTimeout(720);
       const transition = await capture(name + "-continuous-transition", 21, { thresholds: true });
@@ -186,16 +186,16 @@ async function run() {
       }, name);
       assert.deepEqual(section.sequence, ["A", "B", "A'", "B'"]);
       assert.ok(section.answerAt < 20);
-      assert.equal((await layers()).length, 3, "a recorded transition also keeps every source in place");
+      assert.equal((await layers()).length, 4, "a recorded transition also keeps every source in place");
       report.factions[name] = { duration: stems[0].loopEnd, startSpread: 0, maximumSeam: Math.max(...stems.map(voice => voice.seam)), section, stages, transition };
     }
     const duck = await page.evaluate(() => {
       gameAudio.bossAttack("whip", 1080, 345);
       return audioProof.gains[3].slice(-2);
     });
-    assert.equal(duck[0].value, .68);
+    assert.equal(duck[0].value, .64);
     assert.equal(duck[1].value, 1);
-    assert.ok(Math.abs(duck[1].time - duck[0].time - .398) < .001);
+    assert.ok(Math.abs(duck[1].time - duck[0].time - .528) < .001);
     report.skillDuck = { minimum: duck[0].value, fullCycleSeconds: duck[1].time - duck[0].time + .022 };
     await page.keyboard.press("Escape");
     assert.equal(await page.evaluate(() => pauseView), "menu");
@@ -246,8 +246,9 @@ async function run() {
     report.bossIdentities = await page.evaluate(() => {
       const durations = new Set();
       for (let index = 0; index < 11; index++) {
+        gameAudio.sync(true, true, false, { bossType: index, bossPhase: "recover" });
         const before = audioProof.sources.length;
-        gameAudio.sync(true, true, false, { bossType: index, bossPhase: "enter" });
+        gameAudio.sync(true, true, true, { bossType: index, bossPhase: "finale" });
         const effects = audioProof.sources.slice(before).filter(voice => !voice.loop && voice.duration !== 2).slice(-2);
         if (effects.length !== 2) throw new Error("Missing authored boss voice at " + index);
         durations.add(effects[1].duration);
@@ -265,7 +266,7 @@ async function run() {
       return audioProof.decoded.filter(match).length;
     });
     await page.evaluate(() => gameAudio.sync(true, true, false, { bossType: 8, bossPhase: "recover" }));
-    await waitFor(count => audioProof.decoded.filter(([duration]) => Math.abs(duration - 73.846) < .004).length >= count + 3, retiredFaction);
+    await waitFor(count => audioProof.decoded.filter(([duration]) => Math.abs(duration - 73.846) < .004).length >= count + 4, retiredFaction);
     report.factionDecodedAgainAfterFlight = true;
     await page.evaluate(() => { gameAudio.victorySequence(true); gameAudio.sync(false, false); });
     await waitFor(() => audioProof.sources.some(source => !source.loop && Math.abs(source.duration - 15) < .003));

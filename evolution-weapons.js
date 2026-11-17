@@ -120,7 +120,7 @@ function releaseEvolutionLance() {
   if (!spawnEvolutionRound(muzzle, "lance", .9 + 1.65 * fraction, { pierces: 5 })) return false;
   evolutionWeapons.lanceCooldown = evolutionWeaponRules.lanceCooldown;
   addEvolutionPulse(muzzle.x, muzzle.y, 58, "#9edfff", .23);
-  gameAudio.bossAttack?.("cannon", muzzle.x, muzzle.y, false);
+  gameAudio.fighterSkill?.(fighterProfile().id, "pierce", { x: muzzle.x, y: muzzle.y });
   addCombatShake(2);
   return true;
 }
@@ -148,7 +148,7 @@ function fireEvolutionDrones() {
       angle: evolutionAim(muzzle, index),
     }) || fired;
   });
-  if (fired) { evolutionWeapons.droneFlash = .12; gameAudio.shoot?.(false); }
+  if (fired) { evolutionWeapons.droneFlash = .12; gameAudio.fighterSkill?.(fighterProfile().id, "wing"); }
 }
 function evolutionTryIntercept() {
   if (!isBattleActive() || evolution.blast < 2 || evolutionWeapons.grounded > 0) return false;
@@ -342,7 +342,7 @@ function releaseFighterCharge() {
   fighterCombat.redFlash = .18;
   muzzleFlash = .09;
   addEvolutionPulse(muzzle.x, muzzle.y, 48 + 24 * power, color, .22);
-  gameAudio.shoot?.(true, weapon.tier, "red");
+  gameAudio.fighterSkill?.("red", "pierce", { x: muzzle.x, y: muzzle.y, power: .65 + power * .5 });
   if (power >= .96) addCombatShake(1.7);
   updateFighterSystemsHud();
   return true;
@@ -444,6 +444,7 @@ function armEvolutionGuardPierce() {
 function spawnFighterRound(bullet, volley, primary) {
   bullet.armorPiercing = evolution.pierce > 0;
   if (volley === "azure-seeker") {
+    if (primary) gameAudio.fighterSkill?.("blue", "missile", { x: bullet.x, y: bullet.y, power: .5 });
     bullet.seeker = { retarget: 0, target: null };
     bullet.color = "#75d6fb"; bullet.core = "#e3fcff";
     bullet.length *= .76;
@@ -552,7 +553,7 @@ function onFighterProjectileImpact(shot, target) {
     fighterCombat.capacitor = 0;
     fighterCombat.field = { x: impact.x, y: impact.y, age: 0, nextPulse: .04, pulses: 0,
       damage: Math.min(220, Math.exp(evolutionBaseDpsLog()) * .21) };
-    gameAudio.shoot?.(true, 1, "yellow");
+    gameAudio.fighterSkill?.("yellow", "shield", { x: impact.x, y: impact.y, power: .8 });
   }
   if (!shot.seeker) return;
   const status = fighterCombat.marks.get(target);
@@ -567,6 +568,7 @@ function onFighterProjectileImpact(shot, target) {
   // Discharge the marked target first, then arc through two nearby enemies.
   // If the pack has fewer bodies, the spare arcs return to the mark.
   const destinations = [target, neighbors[0] ?? target, neighbors[1] ?? neighbors[0] ?? target];
+  gameAudio.fighterSkill?.("blue", "chain", { x: target.x, y: target.y });
   let origin = { x: shot.x, y: shot.y - 8 };
   for (const [index, destination] of destinations.entries()) {
     directFighterHit(destination, shot, [.52, .34, .32][index], "azure-chain");

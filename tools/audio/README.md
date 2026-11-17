@@ -1,5 +1,15 @@
 # 《星际突围》音频制作
 
+## v35 原创材质音与动态配乐
+
+新增 105 段离线渲染音频：11 个 Boss 材质家族各含预警、三种释放、命中、消散；三架战机各有 11 种声音；另有两条机库分轨及四条精英/低生命压力分轨。新音频 Ogg 合计约 2.8 MB，双击版另有逐字节一致的离线库。详见 [资源与许可证说明](../../assets/audio/nextgen/README.md)。
+
+`render_nextgen.py --synth <FluidSynth.exe> --soundfont <MuseScore_General.sf3> --ffmpeg <ffmpeg.exe> --work <制作目录>` 自动生成原创材质声、MIDI、音频、清单与 74 秒音效展示。新音色是离线合成的物理/频谱近似，音乐为 SoundFont 演奏；没有使用实地录音或付费生成服务。`analyze_nextgen.py --ffmpeg <ffmpeg.exe> --captures <浏览器录音目录>` 测量实际输出真峰值、响度与削波，并导出带章节清单的 MP3。
+
+`node tools/testkit/nextgen-audio.cjs --contract-only` 检查接口、所有哈希、离线/HTTP 数据一致性与体积；`node tools/testkit/nextgen-audio-browser.cjs <证据目录>` 录制所有 Boss、战机、机库、精英/低生命、终局、左右方向与阵亡尾声。原有 `final-audio.cjs` 继续检查配乐同步、血量分层、暂停/静音、远近衰减与通关恢复。录音和信号测量不能替代耳机/音箱的人工试听。
+
+新预警有独立通道，优先压低音乐与普通效果声；音乐切换用音频时钟的下一拍交叉淡化，战斗提示仍在真实预警/命中/消散事件立即播放。下文保留原始阵营配乐的创作与重建说明。
+
 游戏的乐谱、声音设计参数和混音可以重建。巡航仍使用电钢琴提出上行三度，长笛应答。每只 Boss 的入场、破壳、技能和死亡采用独立的材质声与音程。
 
 | 配乐 | 作法 | 时长 |

@@ -1,0 +1,1395 @@
+{
+  "version": 35,
+  "sampleRate": 32000,
+  "bosses": [
+    {
+      "family": "water",
+      "skills": [
+        "broodArc",
+        "broodSweep",
+        "broodSpawn"
+      ],
+      "identity": "turbulence, pressure slap, falling droplets"
+    },
+    {
+      "family": "bone",
+      "skills": [
+        "boneSpears",
+        "boneRibs",
+        "bonePounce"
+      ],
+      "identity": "dry fractures, hollow rib resonances, falling chips"
+    },
+    {
+      "family": "magma",
+      "skills": [
+        "cinderLava",
+        "cinderHeart",
+        "cinderFurnace"
+      ],
+      "identity": "subsurface rumble, brittle cracks, pressurized eruption"
+    },
+    {
+      "family": "silk",
+      "skills": [
+        "weaverCross",
+        "weaverWeb",
+        "weaverSnare"
+      ],
+      "identity": "tensioned filaments, bowed harmonics, snapping strands"
+    },
+    {
+      "family": "chitin",
+      "skills": [
+        "binderClaw",
+        "binderPin",
+        "binderSpines"
+      ],
+      "identity": "ratcheting joints, plate closure, chain scrape"
+    },
+    {
+      "family": "crystal",
+      "skills": [
+        "mirrorPrism",
+        "mirrorBlades",
+        "mirrorDecoy"
+      ],
+      "identity": "inharmonic glass modes, refracted shimmer, shards"
+    },
+    {
+      "family": "plasma",
+      "skills": [
+        "wyrmPulse",
+        "wyrmCurrent",
+        "wyrmStreak"
+      ],
+      "identity": "electrical corona, interrupted arcs, thunder body"
+    },
+    {
+      "family": "spore",
+      "skills": [
+        "sporeSwarm",
+        "sporeField",
+        "sporePollen"
+      ],
+      "identity": "wet membrane pops, organic exhale, granular swarm"
+    },
+    {
+      "family": "void",
+      "skills": [
+        "mawEclipse",
+        "mawScars",
+        "mawFragments"
+      ],
+      "identity": "descending suction, detuned gravity, vacuum tear"
+    },
+    {
+      "family": "nerve",
+      "skills": [
+        "neuralSynapse",
+        "neuralPulse",
+        "neuralRupture"
+      ],
+      "identity": "syncopated impulses, nerve tremolo, discharged synapses"
+    },
+    {
+      "family": "fusion",
+      "skills": [
+        "fusionBind",
+        "fusionCorridor",
+        "fusionPrism"
+      ],
+      "identity": "multi-body call-response, plate mass, unstable rift"
+    }
+  ],
+  "clips": {
+    "ng_water_tell": {
+      "group": "water",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4577,
+      "sha256": "77b3f99124d5ef09e7995b9615c48e8caed365a19d943b8e7f41e03e3c287232",
+      "peakDbFS": -6.692,
+      "rmsDbFS": -22.231,
+      "seamDelta": null
+    },
+    "ng_water_0": {
+      "group": "water",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 8508,
+      "sha256": "d5e5a8bd933ed593576c68336d245bc90ea4e5953813ecc7e489297a1479e361",
+      "peakDbFS": -5.089,
+      "rmsDbFS": -22.384,
+      "seamDelta": null
+    },
+    "ng_water_1": {
+      "group": "water",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5617,
+      "sha256": "17313e16181351b7f8b24f44508537395e63fa0da86c2082f248352ecd001abe",
+      "peakDbFS": -3.061,
+      "rmsDbFS": -22.091,
+      "seamDelta": null
+    },
+    "ng_water_2": {
+      "group": "water",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 10184,
+      "sha256": "156ae809cfcfd441ad0f058b57c5903d49f69fa0f6a3ffdd6c7085fb21b083ea",
+      "peakDbFS": -3.138,
+      "rmsDbFS": -20.923,
+      "seamDelta": null
+    },
+    "ng_water_impact": {
+      "group": "water",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3605,
+      "sha256": "583c90800b34b9766f3e2f3307951abd79279f508a81818dba5525a6fa7107a8",
+      "peakDbFS": -7.359,
+      "rmsDbFS": -23.703,
+      "seamDelta": null
+    },
+    "ng_water_tail": {
+      "group": "water",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6511,
+      "sha256": "dbe8c5e59e090dc97ad6bc091270630a50a21101ab3042b64eb9284123e32396",
+      "peakDbFS": -6.846,
+      "rmsDbFS": -24.63,
+      "seamDelta": null
+    },
+    "ng_bone_tell": {
+      "group": "bone",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6089,
+      "sha256": "a9de0ad9349f6f945eed31d01e80d95fb87ef1b09df455f2bab454012dc8fedc",
+      "peakDbFS": -5.837,
+      "rmsDbFS": -21.703,
+      "seamDelta": null
+    },
+    "ng_bone_0": {
+      "group": "bone",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 10162,
+      "sha256": "43da294f0ee98278c8d83b864446f549efd1a26bd552f0512d5875db8cf0764a",
+      "peakDbFS": -4.03,
+      "rmsDbFS": -24.983,
+      "seamDelta": null
+    },
+    "ng_bone_1": {
+      "group": "bone",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5330,
+      "sha256": "0450ee9913746106ae1d0b7f54f533f4c87814990b1b0c2ac12ace5242d4a681",
+      "peakDbFS": -4.221,
+      "rmsDbFS": -26.013,
+      "seamDelta": null
+    },
+    "ng_bone_2": {
+      "group": "bone",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 9479,
+      "sha256": "aa1a0d9b4a8f7b6a86b536fa6df80befdf84320dda52e6d6cef44dc6c124670f",
+      "peakDbFS": -3.801,
+      "rmsDbFS": -23.081,
+      "seamDelta": null
+    },
+    "ng_bone_impact": {
+      "group": "bone",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3384,
+      "sha256": "0e5c276689976b5bebb225892c7cbbc5189c749d600b0b06fe5dc5abb4192b24",
+      "peakDbFS": -5.453,
+      "rmsDbFS": -24.415,
+      "seamDelta": null
+    },
+    "ng_bone_tail": {
+      "group": "bone",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6387,
+      "sha256": "0ef76f5808297401c21473cdcd90a2195d753f00380ab3a1a90478e10a556e18",
+      "peakDbFS": -6.424,
+      "rmsDbFS": -26.273,
+      "seamDelta": null
+    },
+    "ng_magma_tell": {
+      "group": "magma",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4330,
+      "sha256": "8440f8e303304b61b2436749042909dc0061d394704644667d95dfa95aac42e9",
+      "peakDbFS": -6.46,
+      "rmsDbFS": -22.841,
+      "seamDelta": null
+    },
+    "ng_magma_0": {
+      "group": "magma",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 7998,
+      "sha256": "42e6d0dcfdc86da043c538a06feb9eb3adff366f8bfbb1bfaafc5a3202c9f3ca",
+      "peakDbFS": -7.861,
+      "rmsDbFS": -21.335,
+      "seamDelta": null
+    },
+    "ng_magma_1": {
+      "group": "magma",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5129,
+      "sha256": "aa8b34cdca7318431d5255e962880115133c5425ce4a72523df52de49a8afdad",
+      "peakDbFS": -3.894,
+      "rmsDbFS": -22.232,
+      "seamDelta": null
+    },
+    "ng_magma_2": {
+      "group": "magma",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 9357,
+      "sha256": "0e354e2141f1c51c13ae63a472c7b686d4e735b388d75b108d02821d36b085e9",
+      "peakDbFS": -6.355,
+      "rmsDbFS": -21.959,
+      "seamDelta": null
+    },
+    "ng_magma_impact": {
+      "group": "magma",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3329,
+      "sha256": "02b4b9bf22b588f7cae4611d26188d67fd1ec6a7806b6acca00f68e4519b8aa3",
+      "peakDbFS": -7.854,
+      "rmsDbFS": -23.831,
+      "seamDelta": null
+    },
+    "ng_magma_tail": {
+      "group": "magma",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6133,
+      "sha256": "1d4e684fad326399d11e956c80c1ea9cb42fc097f4affb5945d11d2ce5b45825",
+      "peakDbFS": -6.142,
+      "rmsDbFS": -23.965,
+      "seamDelta": null
+    },
+    "ng_silk_tell": {
+      "group": "silk",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4992,
+      "sha256": "37777a5d127c1dc5c0f3f49d93a6b67bbf33c6db57a64287f46289badc2f8923",
+      "peakDbFS": -6.24,
+      "rmsDbFS": -17.279,
+      "seamDelta": null
+    },
+    "ng_silk_0": {
+      "group": "silk",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 8726,
+      "sha256": "fac813ce4d7f7d71b7273c2b7f094977d2dd9068390bf25a34e9aaa34dc9f579",
+      "peakDbFS": -4.352,
+      "rmsDbFS": -14.964,
+      "seamDelta": null
+    },
+    "ng_silk_1": {
+      "group": "silk",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5748,
+      "sha256": "87450898f83553f52c0e17f60b00272ac5ce18b59da449d4978d3b5895d16a18",
+      "peakDbFS": -4.69,
+      "rmsDbFS": -20.17,
+      "seamDelta": null
+    },
+    "ng_silk_2": {
+      "group": "silk",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 10667,
+      "sha256": "206f0c5e19ee348824419f1df56d9972e70775890d00bdc616a48d07e8a5e7f9",
+      "peakDbFS": -4.488,
+      "rmsDbFS": -18.1,
+      "seamDelta": null
+    },
+    "ng_silk_impact": {
+      "group": "silk",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3706,
+      "sha256": "e98f51859a23301843f60508d49eb83d91390125a241b98058c95cb0241b3fc1",
+      "peakDbFS": -6.544,
+      "rmsDbFS": -22.717,
+      "seamDelta": null
+    },
+    "ng_silk_tail": {
+      "group": "silk",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6704,
+      "sha256": "568361b21c8b2183fc9058f109cf274d99d0f75c88c907f7ef770dbee97732cb",
+      "peakDbFS": -6.727,
+      "rmsDbFS": -18.64,
+      "seamDelta": null
+    },
+    "ng_chitin_tell": {
+      "group": "chitin",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4261,
+      "sha256": "1800b75217cc0aed121371bc85cf1bea06e8aadcafa2481b184996c048fc8ba9",
+      "peakDbFS": -7.214,
+      "rmsDbFS": -28.593,
+      "seamDelta": null
+    },
+    "ng_chitin_0": {
+      "group": "chitin",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 12553,
+      "sha256": "560acc90cbad83e1bef1b3e183b75695a37aeeb99f76d838d57707493a7b0837",
+      "peakDbFS": -4.004,
+      "rmsDbFS": -26.676,
+      "seamDelta": null
+    },
+    "ng_chitin_1": {
+      "group": "chitin",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5073,
+      "sha256": "a7d1baab7549f5d934271d03d040ffbc8f00dd1f40bd0c5235d912f85cf55ab5",
+      "peakDbFS": -4.977,
+      "rmsDbFS": -28.704,
+      "seamDelta": null
+    },
+    "ng_chitin_2": {
+      "group": "chitin",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 9039,
+      "sha256": "7026193d616b6fa120ed901959f91cdad4dbe24210a7d57239367eb7b31d1f7a",
+      "peakDbFS": -5.907,
+      "rmsDbFS": -27.782,
+      "seamDelta": null
+    },
+    "ng_chitin_impact": {
+      "group": "chitin",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3358,
+      "sha256": "7765b9e4bcf6956c9ad64de4edab07e30cabaa84b3cc26eaca076f976e618111",
+      "peakDbFS": -6.289,
+      "rmsDbFS": -27.851,
+      "seamDelta": null
+    },
+    "ng_chitin_tail": {
+      "group": "chitin",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5987,
+      "sha256": "a8cbb8ca2b95b41ab38da79b1689e14ffafa63a732edade6ab73a298693de077",
+      "peakDbFS": -6.411,
+      "rmsDbFS": -28.889,
+      "seamDelta": null
+    },
+    "ng_crystal_tell": {
+      "group": "crystal",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5314,
+      "sha256": "d17253f7c4272071ed7d8fcc864bd22cac4cf5c301c61d7254845a1e61491aa1",
+      "peakDbFS": -6.2,
+      "rmsDbFS": -19.435,
+      "seamDelta": null
+    },
+    "ng_crystal_0": {
+      "group": "crystal",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 9897,
+      "sha256": "560f3b0215501b4384dd8c7e95d0f1598f46a19cd97c216bd35e773e250efc91",
+      "peakDbFS": -4.427,
+      "rmsDbFS": -19.862,
+      "seamDelta": null
+    },
+    "ng_crystal_1": {
+      "group": "crystal",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5934,
+      "sha256": "fa724356edb5af9fb466d4d0803d040865735a3f6197e804014be10ec4c53e06",
+      "peakDbFS": -4.591,
+      "rmsDbFS": -21.268,
+      "seamDelta": null
+    },
+    "ng_crystal_2": {
+      "group": "crystal",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 11523,
+      "sha256": "5fa3e17985e0b9c10456ea12b9b6c69c0d7e00c8c7ef36b7ab3d413e8edaa85a",
+      "peakDbFS": -4.519,
+      "rmsDbFS": -21.082,
+      "seamDelta": null
+    },
+    "ng_crystal_impact": {
+      "group": "crystal",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3627,
+      "sha256": "5f9c2f1f42f113a330fc77c1a630b968135cd864b4c62af1169324dd770fc831",
+      "peakDbFS": -5.885,
+      "rmsDbFS": -22.991,
+      "seamDelta": null
+    },
+    "ng_crystal_tail": {
+      "group": "crystal",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 7192,
+      "sha256": "8f0464d8344143850714112daf9d3bb0bf39b58e5c3a5a9789751955e2eaf12e",
+      "peakDbFS": -6.492,
+      "rmsDbFS": -22.184,
+      "seamDelta": null
+    },
+    "ng_plasma_tell": {
+      "group": "plasma",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4710,
+      "sha256": "eb8ccdbf2eac4ed099be08f8f323ce53a9552330c7fa27cf3ff6b1ae1f15c754",
+      "peakDbFS": -6.902,
+      "rmsDbFS": -21.661,
+      "seamDelta": null
+    },
+    "ng_plasma_0": {
+      "group": "plasma",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 8729,
+      "sha256": "7b6cf0cc5a6a54ec6bda5dfb790407c74c99277dd6f759057cfd1febcae4d9f1",
+      "peakDbFS": -5.271,
+      "rmsDbFS": -21.919,
+      "seamDelta": null
+    },
+    "ng_plasma_1": {
+      "group": "plasma",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5717,
+      "sha256": "2532fc245e639af5bcc29893d9c98d98bf96f6d5a034c8f3aa296fe722d680da",
+      "peakDbFS": -4.728,
+      "rmsDbFS": -25.852,
+      "seamDelta": null
+    },
+    "ng_plasma_2": {
+      "group": "plasma",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 10264,
+      "sha256": "e0462695a50cffc9d16c4c52e11b9e547599cb9670466cd8bdd75c9f0cc216a8",
+      "peakDbFS": -4.077,
+      "rmsDbFS": -22.744,
+      "seamDelta": null
+    },
+    "ng_plasma_impact": {
+      "group": "plasma",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3627,
+      "sha256": "4fe8f2883c474129c32ba65b25e8dc5e919c186a4848cf22e61abc0b320c7fc3",
+      "peakDbFS": -7.266,
+      "rmsDbFS": -26.788,
+      "seamDelta": null
+    },
+    "ng_plasma_tail": {
+      "group": "plasma",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6725,
+      "sha256": "4215a73492cddd2408f13f7f966e6296a14f53284f362be1f0ec0d7e4b3c76ca",
+      "peakDbFS": -6.745,
+      "rmsDbFS": -26.133,
+      "seamDelta": null
+    },
+    "ng_spore_tell": {
+      "group": "spore",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4591,
+      "sha256": "dae9fc66769b69cf8254e83bc6535dee37a31f4ee23a56b13f403447fa716ca5",
+      "peakDbFS": -6.143,
+      "rmsDbFS": -19.564,
+      "seamDelta": null
+    },
+    "ng_spore_0": {
+      "group": "spore",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 8503,
+      "sha256": "a14d6003ab0434c360cdee0e2402b06b178bb5f21b40b582315b826713aca8ef",
+      "peakDbFS": -5.089,
+      "rmsDbFS": -22.393,
+      "seamDelta": null
+    },
+    "ng_spore_1": {
+      "group": "spore",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5631,
+      "sha256": "746daf3eaeafe98180bdddb3eda18dbe14c2cc4e42c535802d3ed98c7ed39ecd",
+      "peakDbFS": -2.99,
+      "rmsDbFS": -21.977,
+      "seamDelta": null
+    },
+    "ng_spore_2": {
+      "group": "spore",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 10153,
+      "sha256": "aff21f0246909efd53ece4daf5efc6e3cd5d66277b287870f99758c2a0423137",
+      "peakDbFS": -5.049,
+      "rmsDbFS": -21.388,
+      "seamDelta": null
+    },
+    "ng_spore_impact": {
+      "group": "spore",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3593,
+      "sha256": "7240546efec347a588d4542a9fa54d9190323515539dfafaa88a6616a16220f0",
+      "peakDbFS": -6.493,
+      "rmsDbFS": -23.929,
+      "seamDelta": null
+    },
+    "ng_spore_tail": {
+      "group": "spore",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6535,
+      "sha256": "9c3d07a386dd43f20e0c262ae3a52c2b6e65fbd6b5bdd18b682028f8e0b3f25c",
+      "peakDbFS": -6.351,
+      "rmsDbFS": -25.842,
+      "seamDelta": null
+    },
+    "ng_void_tell": {
+      "group": "void",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4444,
+      "sha256": "0f40e99f6f7d075dfc1e397fbb409e7c91ced7b316de3ede8cb6780177132d48",
+      "peakDbFS": -6.018,
+      "rmsDbFS": -17.876,
+      "seamDelta": null
+    },
+    "ng_void_0": {
+      "group": "void",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 8209,
+      "sha256": "24c2f34e14b9d6bbad40584d2458c1d16c7c3024932ffe83801e291566189892",
+      "peakDbFS": -4.278,
+      "rmsDbFS": -17.641,
+      "seamDelta": null
+    },
+    "ng_void_1": {
+      "group": "void",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5115,
+      "sha256": "1b43bc526342b41bc9f1eaf561318f6d26494698e7efeed5844b13f70491d92d",
+      "peakDbFS": -4.282,
+      "rmsDbFS": -20.519,
+      "seamDelta": null
+    },
+    "ng_void_2": {
+      "group": "void",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 9499,
+      "sha256": "d2201205a38890de457989503152ca64dba373e6c200eba79e6a96a6ce5a1e89",
+      "peakDbFS": -3.328,
+      "rmsDbFS": -18.715,
+      "seamDelta": null
+    },
+    "ng_void_impact": {
+      "group": "void",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3299,
+      "sha256": "3c3251f6e8088038a81b13139fef7ee49183d1cd65b8565db44968449902091e",
+      "peakDbFS": -4.988,
+      "rmsDbFS": -22.139,
+      "seamDelta": null
+    },
+    "ng_void_tail": {
+      "group": "void",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6201,
+      "sha256": "a508f4704edfba5eab66d152d85270fa507bb637d784ff15ea6aaa37d6cfa4bd",
+      "peakDbFS": -4.393,
+      "rmsDbFS": -20.328,
+      "seamDelta": null
+    },
+    "ng_nerve_tell": {
+      "group": "nerve",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5618,
+      "sha256": "ae07275a57b299331860433773cbf74e60a86675e6aa7c324092acd9a5c6b8be",
+      "peakDbFS": -5.656,
+      "rmsDbFS": -20.206,
+      "seamDelta": null
+    },
+    "ng_nerve_0": {
+      "group": "nerve",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 11195,
+      "sha256": "ba54bf45084d97846f748d1882ef9717743af12ee83eaa90f5af98bad99fb414",
+      "peakDbFS": -4.972,
+      "rmsDbFS": -21.992,
+      "seamDelta": null
+    },
+    "ng_nerve_1": {
+      "group": "nerve",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6778,
+      "sha256": "22e130d30c5ea11c6daf462b5a80e56e43e8c48b9ff660453255272a47b89ee3",
+      "peakDbFS": -3.465,
+      "rmsDbFS": -24.879,
+      "seamDelta": null
+    },
+    "ng_nerve_2": {
+      "group": "nerve",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 13449,
+      "sha256": "2c429bc843d5aca4c483587fa2c7ee4dafb78bb52d7ffbf27480f63c9ba71d77",
+      "peakDbFS": -3.302,
+      "rmsDbFS": -21.692,
+      "seamDelta": null
+    },
+    "ng_nerve_impact": {
+      "group": "nerve",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3466,
+      "sha256": "32aa097972fefa76341b84ff43c7aaf24b5b1f5dae659a0acaed8e158f144dbe",
+      "peakDbFS": -7.828,
+      "rmsDbFS": -24.032,
+      "seamDelta": null
+    },
+    "ng_nerve_tail": {
+      "group": "nerve",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 8230,
+      "sha256": "cfca78458b403c4c36693a75f506ad918f62a42122e3d43e4f74d4920d080fce",
+      "peakDbFS": -5.754,
+      "rmsDbFS": -25.011,
+      "seamDelta": null
+    },
+    "ng_fusion_tell": {
+      "group": "fusion",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4819,
+      "sha256": "d502760aa8b5396bb4ac38e35760af0d8e4bc298b5158d699eb236ac74cd3671",
+      "peakDbFS": -5.105,
+      "rmsDbFS": -20.819,
+      "seamDelta": null
+    },
+    "ng_fusion_0": {
+      "group": "fusion",
+      "duration": 1.75,
+      "loop": false,
+      "bpm": null,
+      "bytes": 8657,
+      "sha256": "674105f7b3a816e297ee52737b5d1689509b87f12bf48e32342c16e074ccdf33",
+      "peakDbFS": -4.751,
+      "rmsDbFS": -19.677,
+      "seamDelta": null
+    },
+    "ng_fusion_1": {
+      "group": "fusion",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5681,
+      "sha256": "58da946603c81fc8467aec0bc1130d34591bc0ea27bec3fcceac6b2ce1d46f19",
+      "peakDbFS": -4.854,
+      "rmsDbFS": -22.522,
+      "seamDelta": null
+    },
+    "ng_fusion_2": {
+      "group": "fusion",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 10121,
+      "sha256": "23531770d615389633c975a853f2388948442063f48c0cc1e53bdd64493bd596",
+      "peakDbFS": -5.196,
+      "rmsDbFS": -23.253,
+      "seamDelta": null
+    },
+    "ng_fusion_impact": {
+      "group": "fusion",
+      "duration": 0.72,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3648,
+      "sha256": "617960d9ca88e70339066f0be0099321ff86bc01debfbdfeaa42012f577ad451",
+      "peakDbFS": -5.297,
+      "rmsDbFS": -21.673,
+      "seamDelta": null
+    },
+    "ng_fusion_tail": {
+      "group": "fusion",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6680,
+      "sha256": "9c7170ffe481bd74ae608b1829a8fb0e4e23b241715c49b93d8a6938a2fce2ba",
+      "peakDbFS": -8.164,
+      "rmsDbFS": -25.434,
+      "seamDelta": null
+    },
+    "ng_red_shot": {
+      "group": "fighters",
+      "duration": 0.17,
+      "loop": false,
+      "bpm": null,
+      "bytes": 995,
+      "sha256": "8c09b2970a5ff6660734e135a71ac702db8cc80a790aa053ed240d955ee5f6c0",
+      "peakDbFS": -4.243,
+      "rmsDbFS": -16.604,
+      "seamDelta": null
+    },
+    "ng_red_charge": {
+      "group": "fighters",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5073,
+      "sha256": "2d155013c33868da36576efb868234e7d05541b3aa3b12f77d53362577d61d0e",
+      "peakDbFS": -4.638,
+      "rmsDbFS": -18.297,
+      "seamDelta": null
+    },
+    "ng_red_launch": {
+      "group": "fighters",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 9372,
+      "sha256": "80b72b582e4b8ec66a6e0aa852ab396a30218b0a5f4946b9c82d05e59a857a55",
+      "peakDbFS": -6.605,
+      "rmsDbFS": -22.253,
+      "seamDelta": null
+    },
+    "ng_red_pierce": {
+      "group": "fighters",
+      "duration": 0.45,
+      "loop": false,
+      "bpm": null,
+      "bytes": 2400,
+      "sha256": "5927fc2576531f496c6e2526f88cfb61ec696e786c67b11168bc02a43a8e590d",
+      "peakDbFS": -4.754,
+      "rmsDbFS": -19.753,
+      "seamDelta": null
+    },
+    "ng_red_chain": {
+      "group": "fighters",
+      "duration": 0.48,
+      "loop": false,
+      "bpm": null,
+      "bytes": 2502,
+      "sha256": "98cd5f492bd18f9fe2fc02fffb92b688329d1b803c809f506d6b1e3d4f0b7912",
+      "peakDbFS": -6.605,
+      "rmsDbFS": -17.986,
+      "seamDelta": null
+    },
+    "ng_red_missile": {
+      "group": "fighters",
+      "duration": 0.64,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3159,
+      "sha256": "2fb47086cbc070bc36a2b4e5bc76565b81d32fcc44a004863ad851d7e7067aed",
+      "peakDbFS": -3.906,
+      "rmsDbFS": -19.935,
+      "seamDelta": null
+    },
+    "ng_red_wing": {
+      "group": "fighters",
+      "duration": 0.23,
+      "loop": false,
+      "bpm": null,
+      "bytes": 1377,
+      "sha256": "3210404af94b07d14f53ac54199426e8a6251763f9422ce10e1644eaffae0ee5",
+      "peakDbFS": -4.238,
+      "rmsDbFS": -17.272,
+      "seamDelta": null
+    },
+    "ng_red_shield": {
+      "group": "fighters",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6006,
+      "sha256": "01c4cfad629e9d63cd082f4e1f54c027d68e2bec79a24ef1dcce0f6005eb01b9",
+      "peakDbFS": -4.694,
+      "rmsDbFS": -22.067,
+      "seamDelta": null
+    },
+    "ng_red_perfect": {
+      "group": "fighters",
+      "duration": 0.58,
+      "loop": false,
+      "bpm": null,
+      "bytes": 2803,
+      "sha256": "6b48acf04c26d843e0bf4f54fe00acf5f8a539a4ebe816d48efe33d5fb7f60ae",
+      "peakDbFS": -5.244,
+      "rmsDbFS": -21.484,
+      "seamDelta": null
+    },
+    "ng_red_hit": {
+      "group": "fighters",
+      "duration": 0.32,
+      "loop": false,
+      "bpm": null,
+      "bytes": 1723,
+      "sha256": "c6b526988be92c227ac064e3eefe8074b3eaed51b93d76d035f976c8914d9e10",
+      "peakDbFS": -5.244,
+      "rmsDbFS": -18.976,
+      "seamDelta": null
+    },
+    "ng_red_destroy": {
+      "group": "fighters",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5146,
+      "sha256": "6cf5d6f4ae70ae04c76c2278f1e08e9adc67c39b77c05b2f01ece69d894939ed",
+      "peakDbFS": -3.906,
+      "rmsDbFS": -22.468,
+      "seamDelta": null
+    },
+    "ng_blue_shot": {
+      "group": "fighters",
+      "duration": 0.17,
+      "loop": false,
+      "bpm": null,
+      "bytes": 1113,
+      "sha256": "afb025b3e9479582e9d4037876e730d592f6e0d0731d2c45fa6bf5830433b1ba",
+      "peakDbFS": -4.788,
+      "rmsDbFS": -17.735,
+      "seamDelta": null
+    },
+    "ng_blue_charge": {
+      "group": "fighters",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 4697,
+      "sha256": "e1e006d577f2290b4ef5be0ce20abbe8068a0b0fa188abf615a978e4f0d05dd9",
+      "peakDbFS": -3.097,
+      "rmsDbFS": -18.316,
+      "seamDelta": null
+    },
+    "ng_blue_launch": {
+      "group": "fighters",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 10286,
+      "sha256": "988329f02a61eaa2d485957fcee44d2bcc5ed946ac8fcbcd5af71aa0f866aca3",
+      "peakDbFS": -3.567,
+      "rmsDbFS": -23.011,
+      "seamDelta": null
+    },
+    "ng_blue_pierce": {
+      "group": "fighters",
+      "duration": 0.45,
+      "loop": false,
+      "bpm": null,
+      "bytes": 2514,
+      "sha256": "77244cf5db2bd258b5ef447aea46b232383700ab7cacfbc4261474d72ef710f5",
+      "peakDbFS": -5.828,
+      "rmsDbFS": -20.631,
+      "seamDelta": null
+    },
+    "ng_blue_chain": {
+      "group": "fighters",
+      "duration": 0.48,
+      "loop": false,
+      "bpm": null,
+      "bytes": 2670,
+      "sha256": "9355a889e975db96d0a48e61c2443fc72d662b6eb0a47bae21fe640b5716ae34",
+      "peakDbFS": -3.567,
+      "rmsDbFS": -19.665,
+      "seamDelta": null
+    },
+    "ng_blue_missile": {
+      "group": "fighters",
+      "duration": 0.64,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3413,
+      "sha256": "c2378c123437c479f077dd17ec01bcec1ced0065adb8c5af7fb78a97a46c361d",
+      "peakDbFS": -5.353,
+      "rmsDbFS": -23.58,
+      "seamDelta": null
+    },
+    "ng_blue_wing": {
+      "group": "fighters",
+      "duration": 0.23,
+      "loop": false,
+      "bpm": null,
+      "bytes": 1450,
+      "sha256": "161a342d8c7fe4063f389179122d94dd7205940057e81fec2948eebf2f565af1",
+      "peakDbFS": -5.046,
+      "rmsDbFS": -20.247,
+      "seamDelta": null
+    },
+    "ng_blue_shield": {
+      "group": "fighters",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 6783,
+      "sha256": "57fb56f4a717895dcaf745dfc48693ee5e3d9f0ffd9ef66658eb20652f9f6ccd",
+      "peakDbFS": -4.744,
+      "rmsDbFS": -21.712,
+      "seamDelta": null
+    },
+    "ng_blue_perfect": {
+      "group": "fighters",
+      "duration": 0.58,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3061,
+      "sha256": "07158ccc772d7c8b503fa97acc71dcdc81c94b156bb6cacb48a863bd48f19498",
+      "peakDbFS": -5.022,
+      "rmsDbFS": -22.535,
+      "seamDelta": null
+    },
+    "ng_blue_hit": {
+      "group": "fighters",
+      "duration": 0.32,
+      "loop": false,
+      "bpm": null,
+      "bytes": 1860,
+      "sha256": "661af4d96446908944197c96e749b6d207d9ecdf52b6ce9328cd05721a6fa4ac",
+      "peakDbFS": -5.022,
+      "rmsDbFS": -20.023,
+      "seamDelta": null
+    },
+    "ng_blue_destroy": {
+      "group": "fighters",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5694,
+      "sha256": "6567b318c1963ff2896bf86787f2fede3c4b7b46141c5a82b19b3eea77199845",
+      "peakDbFS": -5.353,
+      "rmsDbFS": -26.098,
+      "seamDelta": null
+    },
+    "ng_gold_shot": {
+      "group": "fighters",
+      "duration": 0.17,
+      "loop": false,
+      "bpm": null,
+      "bytes": 1151,
+      "sha256": "36ef5b93f2b4b0e65daaf031069d46b6985b6bcbe02a72c9586565f238c0ca5e",
+      "peakDbFS": -4.764,
+      "rmsDbFS": -15.568,
+      "seamDelta": null
+    },
+    "ng_gold_charge": {
+      "group": "fighters",
+      "duration": 0.88,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5507,
+      "sha256": "e8afafece81fd523a445b54b12d748d38e1ec86a3ffe9735b799fb2f99eb98e9",
+      "peakDbFS": -4.333,
+      "rmsDbFS": -16.738,
+      "seamDelta": null
+    },
+    "ng_gold_launch": {
+      "group": "fighters",
+      "duration": 2.05,
+      "loop": false,
+      "bpm": null,
+      "bytes": 11571,
+      "sha256": "2b803413eed690d12d670d53eb65473bee283d5a9c574314b5842ec1d7eabaf9",
+      "peakDbFS": -5.184,
+      "rmsDbFS": -21.35,
+      "seamDelta": null
+    },
+    "ng_gold_pierce": {
+      "group": "fighters",
+      "duration": 0.45,
+      "loop": false,
+      "bpm": null,
+      "bytes": 2981,
+      "sha256": "720da6d03b54006cdf65870dcd0f90b901fd5d9ff4355c78714e197e849ed55b",
+      "peakDbFS": -4.037,
+      "rmsDbFS": -17.933,
+      "seamDelta": null
+    },
+    "ng_gold_chain": {
+      "group": "fighters",
+      "duration": 0.48,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3103,
+      "sha256": "00f1dfa1fe48e84b04b225b11fa24083fb4e64a5a11faf5a8b1074ec9fa36eff",
+      "peakDbFS": -5.184,
+      "rmsDbFS": -16.856,
+      "seamDelta": null
+    },
+    "ng_gold_missile": {
+      "group": "fighters",
+      "duration": 0.64,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3764,
+      "sha256": "bcb49529b483a718263f1ca75cb70516400456357de51be7c0432e706ea89d2d",
+      "peakDbFS": -4.173,
+      "rmsDbFS": -19.031,
+      "seamDelta": null
+    },
+    "ng_gold_wing": {
+      "group": "fighters",
+      "duration": 0.23,
+      "loop": false,
+      "bpm": null,
+      "bytes": 1457,
+      "sha256": "e48dfef413fbddc9adc7d08030557d17dea79d4fe192624419e02abe81713a5a",
+      "peakDbFS": -4.079,
+      "rmsDbFS": -16.418,
+      "seamDelta": null
+    },
+    "ng_gold_shield": {
+      "group": "fighters",
+      "duration": 1.34,
+      "loop": false,
+      "bpm": null,
+      "bytes": 7682,
+      "sha256": "d281a4ecb1b9cd5263ead7bcd12dab50b1864932aa236d1b81cda8e9c38bc1dd",
+      "peakDbFS": -3.9,
+      "rmsDbFS": -20.099,
+      "seamDelta": null
+    },
+    "ng_gold_perfect": {
+      "group": "fighters",
+      "duration": 0.58,
+      "loop": false,
+      "bpm": null,
+      "bytes": 3117,
+      "sha256": "dd2231d95db3c9e808479ecb5060188bac24ccff5219e77aad94f6cd04ac9ae3",
+      "peakDbFS": -3.526,
+      "rmsDbFS": -19.94,
+      "seamDelta": null
+    },
+    "ng_gold_hit": {
+      "group": "fighters",
+      "duration": 0.32,
+      "loop": false,
+      "bpm": null,
+      "bytes": 1953,
+      "sha256": "2648d2f2fe06a81d4941cbf01619be61d665a777450fb1f3914a41b48eacd6fd",
+      "peakDbFS": -3.526,
+      "rmsDbFS": -17.381,
+      "seamDelta": null
+    },
+    "ng_gold_destroy": {
+      "group": "fighters",
+      "duration": 1.15,
+      "loop": false,
+      "bpm": null,
+      "bytes": 5940,
+      "sha256": "ab2f3dc693f0f06f7eb28da4004cf2a98bd06ef70c423d0a3d4723ed2bf0bb97",
+      "peakDbFS": -4.173,
+      "rmsDbFS": -21.565,
+      "seamDelta": null
+    },
+    "ng_hangar_harmony": {
+      "group": "music",
+      "duration": 22.857145833333334,
+      "loop": true,
+      "bpm": 84,
+      "bytes": 194524,
+      "sha256": "032518c34610ff2881555d6726ec82517e39e32f5e9c668d753dcd85a12a6ede",
+      "peakDbFS": -6.766,
+      "rmsDbFS": -21.417,
+      "seamDelta": 6.58e-05
+    },
+    "ng_hangar_detail": {
+      "group": "music",
+      "duration": 22.857145833333334,
+      "loop": true,
+      "bpm": 84,
+      "bytes": 192097,
+      "sha256": "cd32d49e2de8dc293e99dac9b2176ad408f6f344cce12b4619020ab50ad6fe62",
+      "peakDbFS": -8.003,
+      "rmsDbFS": -31.928,
+      "seamDelta": 0.0209861
+    },
+    "ng_flight_alert": {
+      "group": "music",
+      "duration": 33.103458333333336,
+      "loop": true,
+      "bpm": 116,
+      "bytes": 256349,
+      "sha256": "c6ea984e7943c1ddd7f30382be3f4926bc9dfb7a90b43bc208c4003a562b45ae",
+      "peakDbFS": -8.746,
+      "rmsDbFS": -22.926,
+      "seamDelta": 0.0080146
+    },
+    "ng_bio_danger": {
+      "group": "music",
+      "duration": 68.5714375,
+      "loop": true,
+      "bpm": 112,
+      "bytes": 526221,
+      "sha256": "ca6f64ac80c10a56417be5066604b5177de516b3e25217c03538c16a1dee9523",
+      "peakDbFS": -8.898,
+      "rmsDbFS": -22.39,
+      "seamDelta": 0.0250598
+    },
+    "ng_mechanical_danger": {
+      "group": "music",
+      "duration": 61.93547916666667,
+      "loop": true,
+      "bpm": 124,
+      "bytes": 479520,
+      "sha256": "b280e0757a16bd956a760bde42a754c0f531cf412a97b2d78bfa64e080109dcc",
+      "peakDbFS": -8.233,
+      "rmsDbFS": -22.51,
+      "seamDelta": 0.0091324
+    },
+    "ng_void_danger": {
+      "group": "music",
+      "duration": 73.84614583333334,
+      "loop": true,
+      "bpm": 104,
+      "bytes": 570387,
+      "sha256": "7da2d680e7dcf94ab815a670b14f82f9a86b2cf7719de14d4402f7d77a12649f",
+      "peakDbFS": -8.675,
+      "rmsDbFS": -22.527,
+      "seamDelta": 0.009868
+    }
+  },
+  "groups": {
+    "water": [
+      "ng_water_tell",
+      "ng_water_0",
+      "ng_water_1",
+      "ng_water_2",
+      "ng_water_impact",
+      "ng_water_tail"
+    ],
+    "bone": [
+      "ng_bone_tell",
+      "ng_bone_0",
+      "ng_bone_1",
+      "ng_bone_2",
+      "ng_bone_impact",
+      "ng_bone_tail"
+    ],
+    "magma": [
+      "ng_magma_tell",
+      "ng_magma_0",
+      "ng_magma_1",
+      "ng_magma_2",
+      "ng_magma_impact",
+      "ng_magma_tail"
+    ],
+    "silk": [
+      "ng_silk_tell",
+      "ng_silk_0",
+      "ng_silk_1",
+      "ng_silk_2",
+      "ng_silk_impact",
+      "ng_silk_tail"
+    ],
+    "chitin": [
+      "ng_chitin_tell",
+      "ng_chitin_0",
+      "ng_chitin_1",
+      "ng_chitin_2",
+      "ng_chitin_impact",
+      "ng_chitin_tail"
+    ],
+    "crystal": [
+      "ng_crystal_tell",
+      "ng_crystal_0",
+      "ng_crystal_1",
+      "ng_crystal_2",
+      "ng_crystal_impact",
+      "ng_crystal_tail"
+    ],
+    "plasma": [
+      "ng_plasma_tell",
+      "ng_plasma_0",
+      "ng_plasma_1",
+      "ng_plasma_2",
+      "ng_plasma_impact",
+      "ng_plasma_tail"
+    ],
+    "spore": [
+      "ng_spore_tell",
+      "ng_spore_0",
+      "ng_spore_1",
+      "ng_spore_2",
+      "ng_spore_impact",
+      "ng_spore_tail"
+    ],
+    "void": [
+      "ng_void_tell",
+      "ng_void_0",
+      "ng_void_1",
+      "ng_void_2",
+      "ng_void_impact",
+      "ng_void_tail"
+    ],
+    "nerve": [
+      "ng_nerve_tell",
+      "ng_nerve_0",
+      "ng_nerve_1",
+      "ng_nerve_2",
+      "ng_nerve_impact",
+      "ng_nerve_tail"
+    ],
+    "fusion": [
+      "ng_fusion_tell",
+      "ng_fusion_0",
+      "ng_fusion_1",
+      "ng_fusion_2",
+      "ng_fusion_impact",
+      "ng_fusion_tail"
+    ],
+    "fighters": [
+      "ng_red_shot",
+      "ng_red_charge",
+      "ng_red_launch",
+      "ng_red_pierce",
+      "ng_red_chain",
+      "ng_red_missile",
+      "ng_red_wing",
+      "ng_red_shield",
+      "ng_red_perfect",
+      "ng_red_hit",
+      "ng_red_destroy",
+      "ng_blue_shot",
+      "ng_blue_charge",
+      "ng_blue_launch",
+      "ng_blue_pierce",
+      "ng_blue_chain",
+      "ng_blue_missile",
+      "ng_blue_wing",
+      "ng_blue_shield",
+      "ng_blue_perfect",
+      "ng_blue_hit",
+      "ng_blue_destroy",
+      "ng_gold_shot",
+      "ng_gold_charge",
+      "ng_gold_launch",
+      "ng_gold_pierce",
+      "ng_gold_chain",
+      "ng_gold_missile",
+      "ng_gold_wing",
+      "ng_gold_shield",
+      "ng_gold_perfect",
+      "ng_gold_hit",
+      "ng_gold_destroy"
+    ],
+    "music": [
+      "ng_hangar_harmony",
+      "ng_hangar_detail",
+      "ng_flight_alert",
+      "ng_bio_danger",
+      "ng_mechanical_danger",
+      "ng_void_danger"
+    ]
+  }
+}

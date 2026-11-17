@@ -12,6 +12,8 @@ const gameAudio = (() => {
   let sfxBus = null;
   let musicBus = null;
   let musicDuck = null;
+  let warningBus = null;
+  let effectsDuck = null;
   let noiseBuffer = null;
   let muted = false;
   let volume = 1;
@@ -54,6 +56,13 @@ const gameAudio = (() => {
   let visible = true;
   const soundStage = { width: 1280, height: 720, listenerX: 128, listenerY: 360, bossX: 1000, bossY: 360 };
   let threat = 0;
+  let scene = "battle";
+  let fighterType = "red";
+  let lowLife = false;
+  let eliteActive = false;
+  let nextgenBossGroup = "";
+  const nextgenRequests = new Map();
+  const lastSkillCue = new Map();
   let bankLoading = false;
   let bankRequest = null;
   let liveScore = null;
@@ -65,20 +74,26 @@ const gameAudio = (() => {
   let factionLoading = "";
   let factionGeneration = 0;
   let factionRequest = null;
-  const scoreOffsets = { adventure: 0, boss: 0, bio: 0, mechanical: 0, void: 0 };
+  const scoreOffsets = { adventure: 0, hangar: 0, boss: 0, bio: 0, mechanical: 0, void: 0 };
   const buffers = new Map();
   const authoredStems = {
     adventure: ["flight_harmony", "flight_pulse"],
     boss: ["boss_harmony", "boss_pressure", "boss_finale"],
   };
   const catalog = typeof starBreakerAudioCatalog !== "undefined" ? starBreakerAudioCatalog : null;
+  const nextgen = catalog?.nextgen;
+  if (nextgen) {
+    authoredStems.hangar = ["ng_hangar_harmony", "ng_hangar_detail"];
+    authoredStems.adventure.push("ng_flight_alert");
+  }
   const factionScores = catalog && document.currentScript?.hasAttribute("data-faction-scores") ? catalog.factions : null;
   const offlineAudio = window.location?.protocol === "file:";
   const offlineBanks = new Map();
   const factions = ["bio", "bio", "mechanical", "void", "mechanical", "mechanical", "bio", "bio", "void", "void", "void"];
   const factionLayerNames = ["harmony", "pressure", "finale"];
   function scoreStemNames(theme) {
-    return authoredStems[theme] ?? factionLayerNames.map(layer => theme + "_" + layer);
+    return authoredStems[theme] ?? [...factionLayerNames.map(layer => theme + "_" + layer),
+      ...(nextgen ? ["ng_" + theme + "_danger"] : [])];
   }
   function currentFaction() { return factions[bossType] ?? "bio"; }
   const bossCueIntervals = { volley: 0.28, beam: 0.65, summon: 0.7, burst: 0.45,
@@ -90,7 +105,7 @@ const gameAudio = (() => {
   }
   function canPlay(bus = "sfx") {
     return !!audio && audio.state === "running"
-      && (active || (bus === "music" && (paused || (victoryActive && visible)))) && !muted && !disposed;
+      && (active || (bus === "music" && (paused || ((victoryActive || scene === "menu") && visible)))) && !muted && !disposed;
   }
   function mixClamp(value, low, high) { return Math.min(high, Math.max(low, value)); }
   function soundPosition(x, y, distance = true) {
@@ -98,7 +113,7 @@ const gameAudio = (() => {
     const dy = Number.isFinite(y) ? (y - soundStage.listenerY) / soundStage.height : 0;
     const dx = (x - soundStage.listenerX) / soundStage.width;
     const radius = Math.hypot(dx, dy * .65);
-    return { pan: mixClamp(2 * x / soundStage.width - 1, -1, 1) * .60,
+    return { pan: mixClamp(2 * x / soundStage.width - 1, -1, 1) * .78,
       attenuation: distance ? Math.max(.26, 1 / (1 + 2.1 * radius ** 1.45)) : 1, spatial: true };
   }
   function connectSpace(gain, output, chain, pan, spatial, time) {
@@ -145,29 +160,31 @@ const gameAudio = (() => {
     gain.setValueAtTime(level, time + duration * .40);
     gain.linearRampToValueAtTime(1, time + duration);
   }
-  function retireVoice(voice, fade = 0.025) {
+  function retireVoice(voice, fade = 0.025, startAt = audio?.currentTime) {
     if (!audio || !voices.has(voice)) return;
     voices.delete(voice);
     fadingVoices.add(voice);
     const time = audio.currentTime;
     holdGain(voice.gain.gain, time);
-    voice.gain.gain.linearRampToValueAtTime(0, time + fade);
-    try { voice.source.stop(time + fade + 0.005); } catch { /* 自然结束后 stop 可以无效。 */ }
+    const start = Math.max(time, startAt);
+    if (start > time) voice.gain.gain.setValueAtTime(voice.gain.gain.value, start);
+    voice.gain.gain.linearRampToValueAtTime(0, start + fade);
+    try { voice.source.stop(start + fade + 0.005); } catch { /* 自然结束后 stop 可以无效。 */ }
   }
-  function stopVoices(bus = null, fade = .025) {
+  function stopVoices(bus = null, fade = .025, startAt = audio?.currentTime) {
     for (const voice of Array.from(voices)) {
-      if (!bus || voice.bus === bus) retireVoice(voice, fade);
+      if (!bus || voice.bus === bus) retireVoice(voice, fade, startAt);
     }
   }
   function limitVoices(bus) {
     const sameBus = Array.from(voices).filter(voice => voice.bus === bus);
-    const limit = bus === "music" ? 28 : bus === "ultimate" ? 8 : bus === "arrival" ? 1 : bus === "boss" || bus === "impact" ? 12 : 24;
+    const limit = bus === "music" ? 28 : bus === "ultimate" ? 8 : bus === "warning" ? 4 : bus === "arrival" ? 1 : bus === "boss" || bus === "impact" ? 12 : 24;
     if (sameBus.length >= limit) retireVoice(sameBus[0], 0.008);
     if (voices.size >= MAX_VOICES) {
       // 蓄力与炮声有独立声部，密集射击和背景乐不会抢断它们。
       const expendable = Array.from(voices).find(voice => voice.bus === "impact") ||
         Array.from(voices).find(voice => voice.bus === "sfx") ||
-        Array.from(voices).find(voice => voice.bus !== "ultimate" && !voice.loop);
+        Array.from(voices).find(voice => voice.bus !== "ultimate" && voice.bus !== "warning" && !voice.loop);
       if (expendable) retireVoice(expendable, 0.008);
       else return false;
     }
@@ -215,7 +232,7 @@ const gameAudio = (() => {
     }
     gain.gain.exponentialRampToValueAtTime(EPSILON, start + duration);
     source.connect(filter); filter.connect(gain);
-    connectSpace(gain, bus === "music" ? musicBus : sfxBus, chain, pan, spatial, start);
+    connectSpace(gain, bus === "music" ? musicBus : bus === "warning" ? warningBus : sfxBus, chain, pan, spatial, start);
     trackVoice(source, gain, bus, chain);
     source.start(start);
     source.stop(start + duration + 0.01);
@@ -241,8 +258,9 @@ const gameAudio = (() => {
     const chain = [source, gain];
     source.connect(gain);
     const start = Math.max(time, audio.currentTime);
-    if (pan || spatial) connectSpace(gain, sfxBus, chain, pan, spatial, start);
-    else gain.connect(sfxBus);
+    const output = bus === "warning" ? warningBus : sfxBus;
+    if (pan || spatial) connectSpace(gain, output, chain, pan, spatial, start);
+    else gain.connect(output);
     const length = Math.min(buffer.duration / rate, duration);
     gain.gain.setValueAtTime(level * attenuation, start);
     gain.gain.setValueAtTime(level * attenuation, start + Math.max(0, length - .05));
@@ -449,6 +467,17 @@ const gameAudio = (() => {
     return offlineBanks.get(filename);
   }
   async function audioBytes(name, faction, signal) {
+    const authored = nextgen?.clips[name];
+    if (authored) {
+      if (!offlineAudio) {
+        const response = await fetch(`assets/audio/nextgen/${name}.ogg`, { signal });
+        return response.ok ? response.arrayBuffer() : null;
+      }
+      await offlineBank(`assets/audio/nextgen/${authored.group}.js`);
+      const encoded = globalThis.starBreakerNextgenAudio?.[name];
+      if (!encoded || disposed || signal?.aborted) return null;
+      return Uint8Array.from(atob(encoded), char => char.charCodeAt(0)).buffer;
+    }
     if (!offlineAudio) {
       const response = await fetch(`assets/audio/${name}.ogg`, { signal });
       return response.ok ? response.arrayBuffer() : null;
@@ -514,8 +543,37 @@ const gameAudio = (() => {
     });
   }
   function preloadBossScore(type) {
+    requestBossPalette(type);
     if (Number.isInteger(type) && factions[type]) requestFactionScore(factions[type]);
     if (type === factions.length - 1) requestVictory();
+  }
+  function requestPalette(group) {
+    if (!nextgen?.groups[group] || !audio || muted || disposed || nextgenRequests.has(group)) return;
+    const current = audio;
+    const request = new AbortController();
+    nextgenRequests.set(group, request);
+    (async () => {
+      const names = nextgen.groups[group];
+      for (let index = 0; index < names.length; index += 3) {
+        await Promise.all(names.slice(index, index + 3).map(async name => {
+          const clip = await decodeAudio(current, name, { signal: request.signal });
+          if (clip && !disposed && audio === current && !request.signal.aborted) buffers.set(name, clip);
+        }));
+        if (request.signal.aborted || disposed) return;
+      }
+    })().catch(() => { nextgenRequests.delete(group); });
+  }
+  function requestBossPalette(type) {
+    const group = nextgen?.bosses[type]?.family;
+    if (!group) return;
+    if (group === nextgenBossGroup) { requestPalette(group); return; }
+    if (nextgenBossGroup) {
+      nextgenRequests.get(nextgenBossGroup)?.abort();
+      nextgenRequests.delete(nextgenBossGroup);
+      for (const name of nextgen.groups[nextgenBossGroup]) buffers.delete(name);
+    }
+    nextgenBossGroup = group;
+    requestPalette(group);
   }
   function requestVictory() {
     if (!audio || muted || !factionScores || victoryLoading) return;
@@ -533,15 +591,17 @@ const gameAudio = (() => {
     const request = new AbortController();
     bankRequest = request;
     async function decode(name) {
-      const loop = name === "room" || Object.hasOwn(catalog.stems, name);
+      const loop = name === "room" || Object.hasOwn(catalog.stems, name) || nextgen?.clips[name]?.loop;
       const buffer = await decodeAudio(current, name, { signal: request.signal, loop });
       if (buffer && !disposed && audio === current) buffers.set(name, buffer);
     }
     async function prepare() {
       if (disposed) return;
-      await Promise.all([...authoredStems.adventure, "room"].map(decode));
+      await Promise.all([...authoredStems.adventure, ...(authoredStems.hangar ?? []), "room"].map(decode));
       if (audio !== current || disposed) return;
       reconcile();
+      requestPalette("fighters");
+      if (Number.isInteger(bossType)) requestBossPalette(bossType);
       const remaining = [
         ...catalog.effects.filter(name => name !== "room"),
         ...(factionScores ? [] : authoredStems.boss),
@@ -560,12 +620,12 @@ const gameAudio = (() => {
   }
   function updateScoreMix() {
     if (!liveScore) return;
-    const [base, rhythm, finale] = liveScore.layers;
+    const [base, rhythm, finale, danger] = liveScore.layers;
     const faction = factionScores?.[liveScore.theme];
     if (faction) {
       // A/B are already on one authored sample-aligned timeline. Gain
       // changes begin at the next half-beat without restarting any layer.
-      const mixKey = bossMusicTier + "/" + overdriveMusic;
+      const mixKey = bossMusicTier + "/" + overdriveMusic + "/" + lowLife + "/" + bossPhase;
       if (liveScore.mixKey === mixKey) return;
       const now = audio.currentTime;
       const beat = 30 / faction.bpm;
@@ -579,6 +639,11 @@ const gameAudio = (() => {
       smoothGain(base, harmony, .48, start);
       smoothGain(rhythm, pressure + (overdriveMusic ? .08 : 0), .55, start);
       smoothGain(finale, climax, .57, start);
+      smoothGain(danger, lowLife ? .50 : bossPhase === "recover" ? 0 : .03, .55, start);
+    } else if (liveScore.theme === "hangar") {
+      smoothGain(liveScore.ambience, .055, .6);
+      smoothGain(base, .86, 1.1);
+      smoothGain(rhythm, .45, 1.1);
     } else if (bossActive) {
       const exposed = bossPhase === "recover";
       smoothGain(liveScore.ambience, .055, .38);
@@ -589,17 +654,27 @@ const gameAudio = (() => {
       smoothGain(liveScore.ambience, .23, .38);
       smoothGain(base, .82, .22);
       smoothGain(rhythm, overdriveMusic ? .89 : .30 + comboLayer * .12, .32);
+      const key = `${lowLife}/${eliteActive}`;
+      if (liveScore.mixKey !== key) {
+        const beat = 60 / 116;
+        const now = audio.currentTime;
+        const elapsed = Math.max(0, now - liveScore.start) + liveScore.offset;
+        const start = liveScore.mixKey ? now + beat - elapsed % beat : liveScore.start;
+        liveScore.mixKey = key;
+        smoothGain(finale, lowLife ? .66 : eliteActive ? .47 : .03, .48, start);
+      }
     }
   }
-  function startScore(theme) {
+  function startScore(theme, startAt) {
     const names = scoreStemNames(theme);
     const clips = names.map(name => buffers.get(name));
-    const intended = factionScores?.[theme]?.layers.harmony ?? catalog.stems[names[0]];
+    const intended = factionScores?.[theme]?.layers.harmony ?? catalog.stems[names[0]] ?? nextgen?.clips[names[0]]?.duration;
     const duration = Math.min(...clips.map(clip => clip.duration), intended);
     if (!(duration > 0)) return;
-    const start = audio.currentTime + .024;
+    const start = Math.max(audio.currentTime + .024, startAt ?? 0);
     const offset = scoreOffsets[theme] % duration;
     function loop(clip, loopEnd) {
+      if (!limitVoices("music")) return null;
       const source = audio.createBufferSource();
       source.buffer = clip;
       source.loop = true;
@@ -738,7 +813,7 @@ const gameAudio = (() => {
     }
     scheduler = window.setTimeout(scheduleMusic, 40);
   }
-  function stopMusic(fade = .035, silence = true) {
+  function stopMusic(fade = .035, silence = true, startAt = audio?.currentTime) {
     if (scheduler !== null) window.clearTimeout(scheduler);
     scheduler = null;
     if (liveScore) {
@@ -748,7 +823,7 @@ const gameAudio = (() => {
     } else if (!musicPlaying) return;
     musicPlaying = false;
     if (silence) smoothGain(musicBus, 0, fade);
-    stopVoices("music", fade);
+    stopVoices("music", fade, startAt);
   }
   function stopVictory(reset = false) {
     if (victoryVoice) {
@@ -790,6 +865,7 @@ const gameAudio = (() => {
   function reconcile() {
     if (!audio) return;
     smoothGain(sfxBus, paused ? .16 : .65, .12);
+    smoothGain(warningBus, paused ? .16 : .65, .12);
     if (victoryActive) {
       stopMusic(.25, false);
       if (!canPlay("music") || !visible) { stopVictory(); return; }
@@ -800,13 +876,15 @@ const gameAudio = (() => {
     }
     if (!canPlay("music")) {
       stopMusic();
-      stopVoices();
+      if (scene === "over" && !muted && visible && !disposed) {
+        for (const voice of Array.from(voices)) if (voice.bus !== "death") retireVoice(voice);
+      } else stopVoices();
       return;
     }
     loadBank(audio);
     if (!factionScores && (warningActive || cinematicActive)) { stopMusic(); return; }
     const theme = cinematicActive && liveScore ? liveScore.theme
-      : bossActive ? (factionScores ? currentFaction() : "boss") : "adventure";
+      : bossActive ? (factionScores ? currentFaction() : "boss") : scene === "menu" && nextgen ? "hangar" : "adventure";
     if (bossActive && factionScores) requestFactionScore(theme);
     const musicLevel = (paused ? .25 : 1) * (warningActive ? .31 : cinematicActive ? .46 : 1);
     const ready = scoreStemNames(theme).every(name => buffers.has(name));
@@ -814,8 +892,15 @@ const gameAudio = (() => {
       smoothGain(musicBus, .39 * musicLevel, .18);
       return;
     }
+    let transitionAt;
     if (theme !== musicTheme) {
-      stopMusic(factionScores ? .24 : .025, false);
+      if (liveScore && ready) {
+        const bpm = factionScores?.[liveScore.theme]?.bpm ?? (liveScore.theme === "hangar" ? 84 : 116);
+        const beat = 60 / bpm;
+        const elapsed = Math.max(0, audio.currentTime - liveScore.start) + liveScore.offset;
+        transitionAt = audio.currentTime + beat - elapsed % beat;
+      }
+      stopMusic(factionScores ? .38 : .025, false, transitionAt);
       musicTheme = theme;
       scoreOffsets[theme] = 0;
       musicStep = 0;
@@ -823,7 +908,7 @@ const gameAudio = (() => {
     if (ready) {
       if (musicPlaying) stopMusic(.20, false);
       smoothGain(musicBus, (factionScores?.[theme] || bossActive ? .59 : .52) * musicLevel, .2);
-      if (!liveScore) startScore(theme);
+      if (!liveScore) startScore(theme, transitionAt);
       updateScoreMix();
       return;
     }
@@ -844,16 +929,20 @@ const gameAudio = (() => {
     sfxBus = audio.createGain();
     musicBus = audio.createGain();
     musicDuck = audio.createGain();
+    warningBus = audio.createGain();
+    effectsDuck = audio.createGain();
     const limiter = audio.createDynamicsCompressor();
     master.gain.value = muted ? 0 : 0.68 * volume ** 2;
     sfxBus.gain.value = 0.65;
     musicBus.gain.value = 0;
+    warningBus.gain.value = .65;
     limiter.threshold.value = -16;
     limiter.knee.value = 15;
     limiter.ratio.value = 4;
     limiter.attack.value = 0.003;
     limiter.release.value = 0.18;
-    sfxBus.connect(master); musicBus.connect(musicDuck); musicDuck.connect(master);
+    sfxBus.connect(effectsDuck); effectsDuck.connect(master); warningBus.connect(master);
+    musicBus.connect(musicDuck); musicDuck.connect(master);
     master.connect(limiter); limiter.connect(audio.destination);
     noiseBuffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * 2), audio.sampleRate);
     const data = noiseBuffer.getChannelData(0);
@@ -906,6 +995,10 @@ const gameAudio = (() => {
     const nextType = Number.isInteger(context?.bossType) ? context.bossType : null;
     const nextPhase = context?.bossPhase ?? null;
     const nextVisible = context.visible !== false;
+    const nextScene = context.scene ?? (nextActive ? "battle" : scene);
+    const nextFighter = context.fighter ?? fighterType;
+    const nextLowLife = Number.isFinite(context.lives) ? context.lives <= 1 : lowLife;
+    const nextElite = !!context.elite;
     const health = Number.isFinite(context.bossHealth) ? context.bossHealth : nextEnraged ? .64 : 1;
     const nextTier = nextCinematic && !nextBossActive ? bossMusicTier
       : nextPhase === "finale" || health <= .33 ? 2 : health <= .66 ? 1 : 0;
@@ -916,7 +1009,9 @@ const gameAudio = (() => {
     const changed = active !== !!nextActive || paused !== nextPaused || bossActive !== !!nextBossActive || enraged !== !!nextEnraged ||
       comboLayer !== nextComboLayer || warningActive !== nextWarning || cinematicActive !== nextCinematic ||
       overdriveMusic !== nextOverdrive || bossType !== nextType || bossPhase !== nextPhase || threat !== nextThreat
-      || bossMusicTier !== nextTier || visible !== nextVisible;
+      || bossMusicTier !== nextTier || visible !== nextVisible || scene !== nextScene
+      || lowLife !== nextLowLife || eliteActive !== nextElite;
+    if (scene === "over" && nextScene !== "over") stopVoices("death");
     if (changed && (!nextActive || nextPaused || !nextVisible || (warningActive && !nextWarning))) stopVoices("arrival");
     const wasActive = active;
     const wasInBossSequence = bossActive || warningActive || cinematicActive;
@@ -932,6 +1027,10 @@ const gameAudio = (() => {
     bossPhase = nextPhase;
     bossMusicTier = nextTier;
     visible = nextVisible;
+    scene = nextScene;
+    fighterType = nextFighter;
+    lowLife = nextLowLife;
+    eliteActive = nextElite;
     threat = nextThreat;
     for (const key in soundStage) {
       if (Number.isFinite(context[key])) soundStage[key] = key === "width" || key === "height" ? Math.max(1, context[key]) : context[key];
@@ -939,6 +1038,7 @@ const gameAudio = (() => {
     const inBossSequence = bossActive || warningActive || cinematicActive;
     if (!inBossSequence && (wasInBossSequence || (!active && !paused && visible))) releaseFactionScore();
     if ((nextWarning || nextBossActive) && factionScores && Number.isInteger(nextType)) requestFactionScore(currentFaction());
+    if ((nextWarning || nextBossActive) && Number.isInteger(nextType)) requestBossPalette(nextType);
     if (changed) reconcile();
     if (wasActive && canPlay() && (entering || transforming)) {
       duckMusic(.39, 1.05);
@@ -947,7 +1047,7 @@ const gameAudio = (() => {
       if (transforming) bossVoice({ level: .47, rate: .79, ...position });
     }
   }
-  function shoot(overdrive = false, tier = 1, fighter = "red") {
+  function shoot(overdrive = false, tier = 1, fighter = fighterType) {
     if (!canPlay()) return;
     const time = audio.currentTime;
     if (time - lastShotTime < 0.043) return;
@@ -957,6 +1057,9 @@ const gameAudio = (() => {
     // shields and special-weapon cues retain their own mix and timing.
     const shotLevel = overdrive ? .68 : .66;
     const cannon = fighter === "yellow" ? "gold" : fighter === "blue" ? "blue" : "red";
+    fighterType = fighter;
+    if (sample("ng_" + cannon + "_shot", { level: overdrive ? .25 : .20,
+      rate: 1.03 - weight * .035 + .045 * Math.random(), ...soundPosition(soundStage.listenerX, soundStage.listenerY, false) })) return;
     if (sample("shot_" + cannon, { level: (overdrive ? .25 : .19) * shotLevel,
       rate: 1.05 - weight * .048 - (overdrive ? .11 : 0) + .065 * Math.random() })) return;
     if (overdrive) {
@@ -994,6 +1097,7 @@ const gameAudio = (() => {
     const time = audio.currentTime;
     if (time - lastPerfectShieldTime < 0.35) return;
     lastPerfectShieldTime = time;
+    if (fighterSkill(fighterType, "perfect")) { duckMusic(.55, .48); return; }
     // 清脆金属撞击接低频反冲；两道不谐和泛音形成格挡质感，避开射击音的尖锐滑音。
     note({ time, noise: true, duration: 0.045, volume: 0.13,
       filterType: "bandpass", cutoff: 3300, endCutoff: 1700, resonance: 1.1, attack: 0.001 });
@@ -1053,6 +1157,7 @@ const gameAudio = (() => {
   function hurt() {
     if (!canPlay()) return;
     duckMusic(.46, .41);
+    if (fighterSkill(fighterType, "hit")) return;
     if (sample("hurt", { level: .50 })) return;
     note({ duration: .27, frequency: 214, endFrequency: 79, type: "triangle", volume: .23, cutoff: 1400 });
     note({ noise: true, duration: .13, volume: .15, filterType: "bandpass", cutoff: 2060, endCutoff: 450 });
@@ -1123,6 +1228,7 @@ const gameAudio = (() => {
     const time = audio.currentTime;
     if (time - (lastBossAttack.get(kind) ?? -Infinity) < bossCueIntervals[kind]) return;
     lastBossAttack.set(kind, time);
+    if (bossSkill(kind, { bossId: (bossType ?? 0) + 1, x, y, phase: "active", power: signature ? .68 : .37 })) return;
     const position = soundPosition(x, y, !signature);
     const pressure = kind === "surge" || kind === "beam" || kind === "cannon";
     const cue = pressure ? "pressure" : kind === "coil" ? "stage" : kind === "whip" ? "snap" : "hit_organic";
@@ -1271,6 +1377,9 @@ const gameAudio = (() => {
     if (!canPlay()) return;
     duration = Number.isFinite(duration) ? Math.max(0.12, Math.min(3, duration)) : 0.85;
     const rate = Math.min(3, Math.max(.42, .85 / duration));
+    const ship = kind === "yellow" ? "gold" : kind === "blue" ? "blue" : "red";
+    if (sample("ng_" + ship + "_charge", { bus: "ultimate", level: .44,
+      rate: .88 / duration, duration, ...soundPosition(soundStage.listenerX, soundStage.listenerY, false) })) return;
     if (sample("charge", { bus: "ultimate", level: .33, rate, duration,
       pan: kind === "blue" ? -.19 : kind === "yellow" ? .19 : 0 })) return;
     const common = { bus: "ultimate", time: audio.currentTime, duration, crescendo: true };
@@ -1294,6 +1403,8 @@ const gameAudio = (() => {
     stopUltimate();
     if (!canPlay()) return;
     const launch = kind === "blue" ? "blue" : kind === "yellow" ? "gold" : "red";
+    if (sample("ng_" + launch + "_launch", { bus: "ultimate", level: .66,
+      ...soundPosition(soundStage.listenerX, soundStage.listenerY, false) })) { duckMusic(.40, .95); return; }
     if (sample("launch_" + launch, { bus: "ultimate", level: .58 })) {
       duckMusic(.51, .61);
       return;
@@ -1331,10 +1442,68 @@ const gameAudio = (() => {
     note({ ...common, duration: 0.85, noise: true, volume: 0.15,
       cutoff: 1900, attack: 0.012, sustain: true });
   }
+  function bossSkill(kind, options = {}) {
+    if (!canPlay()) return false;
+    const index = Number.isInteger(options.bossId) ? options.bossId - 1 : bossType ?? 0;
+    const profile = nextgen?.bosses[index];
+    if (!profile) return false;
+    const phase = ["tell", "active", "impact", "tail"].includes(options.phase) ? options.phase : "active";
+    const identity = `${index}/${kind}/${phase}`;
+    const now = audio.currentTime;
+    const cooldown = phase === "tell" ? .23 : phase === "impact" ? .11 : .12;
+    if (now - (lastSkillCue.get(identity) ?? -Infinity) < cooldown) return false;
+    requestBossPalette(index);
+    const shape = /vortex|ring|bind|web|spawn|fold|swarm|pollen/i.test(kind) ? 2
+      : /beam|lash|filament|spear|pounce|blade|seam|streak|claw/i.test(kind) ? 1 : 0;
+    const skill = profile.skills.indexOf(kind);
+    const name = `ng_${profile.family}_${phase === "active" ? (skill >= 0 ? skill : shape) : phase}`;
+    const position = soundPosition(options.x ?? soundStage.bossX, options.y ?? soundStage.bossY);
+    // Telegraphs must remain audible at the far edge; impacts retain distance.
+    position.attenuation = Math.max(phase === "tell" ? .78 : .48, position.attenuation);
+    const power = Number.isFinite(options.power) ? mixClamp(options.power, .2, 1.5) : 1;
+    const levels = { tell: .45, active: .66, impact: .54, tail: .30 };
+    let played = sample(name, { bus: phase === "tell" ? "warning" : "boss", level: levels[phase] * power,
+      rate: phase === "tell" ? 1 : .97 + Math.random() * .06, ...position });
+    if (!played) {
+      // A missed decode must not erase an actionable telegraph. The authored
+      // palette takes over as soon as it is available; this fallback is brief.
+      const frequency = [93, 183, 74, 279, 247, 570, 327, 155, 67, 294, 110][index];
+      note({ bus: phase === "tell" ? "warning" : "boss", frequency,
+        endFrequency: phase === "tell" ? frequency * 2 : frequency * .43,
+        duration: phase === "tell" ? .62 : .36, volume: .11 * power,
+        type: "triangle", cutoff: frequency * 5, crescendo: phase === "tell", ...position });
+      played = true;
+    }
+    lastSkillCue.set(identity, now);
+    if (phase === "tell") {
+      duckMusic(.38, .90);
+      holdGain(effectsDuck.gain, now);
+      effectsDuck.gain.linearRampToValueAtTime(.64, now + .018);
+      effectsDuck.gain.setValueAtTime(.64, now + .32);
+      effectsDuck.gain.linearRampToValueAtTime(1, now + .85);
+    }
+    else if (phase === "active" && power >= .65) duckMusic(.64, .55);
+    return true;
+  }
+  function fighterSkill(kind = fighterType, event = "shield", options = {}) {
+    if (!canPlay()) return false;
+    const ship = kind === "yellow" || kind === "gold" ? "gold" : kind === "blue" ? "blue" : "red";
+    const identity = `fighter/${ship}/${event}`;
+    const now = audio.currentTime;
+    if (now - (lastSkillCue.get(identity) ?? -Infinity) < (event === "wing" ? .12 : .16)) return false;
+    const played = sample(`ng_${ship}_${event}`, { bus: event === "destroy" ? "death" : event === "launch" || event === "charge" ? "ultimate" : "sfx",
+      level: (event === "destroy" ? .65 : .39) * (Number.isFinite(options.power) ? mixClamp(options.power, .2, 1.5) : 1),
+      rate: .98 + Math.random() * .04,
+      ...soundPosition(options.x ?? soundStage.listenerX, options.y ?? soundStage.listenerY, false) });
+    if (played) lastSkillCue.set(identity, now);
+    return played;
+  }
   function destroy() {
     if (disposed) return;
     disposed = true;
     bankRequest?.abort();
+    for (const request of nextgenRequests.values()) request.abort();
+    nextgenRequests.clear();
     releaseFactionScore();
     stopMusic();
     stopVictory(true);
@@ -1352,6 +1521,12 @@ const gameAudio = (() => {
     audio = null;
   }
   return { unlock, setMuted, get muted() { return muted; }, setVolume, get volume() { return volume; },
-    sync, shoot, hit, hurt, overdrive, perfectShield, explode, warning, bossAttack, bossEnrage, fieldCue, radioCue,
+    get diagnostics() {
+      return { voices: voices.size + fadingVoices.size, decodedBytes: [...buffers.values()]
+        .reduce((bytes, buffer) => bytes + (buffer.length || 0) * (buffer.numberOfChannels || 1) * 4, 0),
+        bossPalette: nextgenBossGroup, musicTheme: liveScore?.theme ?? musicTheme,
+        musicLayers: liveScore?.layers.length ?? 0, lowLife, elite: eliteActive };
+    },
+    sync, shoot, hit, hurt, overdrive, perfectShield, explode, warning, bossAttack, bossSkill, fighterSkill, bossEnrage, fieldCue, radioCue,
     bossRoar, prepareBossRoar, bossPresentationCue, victorySequence, preloadBossScore, chargeUltimate, fireUltimate, stopUltimate, destroy };
 })();
