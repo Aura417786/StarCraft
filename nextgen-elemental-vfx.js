@@ -8,12 +8,7 @@ const NextgenVfx = (() => {
     medium: { facets: 420, strands: 16, samples: 1 }, high: { facets: 760, strands: 28, samples: 2 } });
   const stats = { facets: 0, samples: 0, atlasDraws: 0, effects: 0, tier: "high", peakFacets: 0 };
   const atlases = new Map();
-  const waterVertices = new Float32Array(14 * 14 * 2);
-  const palette = Array.from({ length: 128 }, (_, i) => {
-    const t = i / 127;
-    return `rgb(${Math.round(3 + 69 * t * t)},${Math.round(23 + 157 * t)},${Math.round(37 + 178 * t)})`;
-  });
-  let sampleCanvas, sampleContext, basaltTile;
+  let sampleCanvas, sampleContext, basaltTile, waterNormalTile;
   const clamp01 = v => Math.max(0, Math.min(1, v));
   const fract = v => v - Math.floor(v);
   const seed = i => fract(Math.sin(i * 127.1 + 31.7) * 43758.5453);
@@ -81,55 +76,67 @@ const NextgenVfx = (() => {
     return sampleCanvas;
   }
 
+  function waterNormalTexture() {
+    if (waterNormalTile) return waterNormalTile;
+    waterNormalTile=document.createElement("canvas");waterNormalTile.width=192;waterNormalTile.height=512;
+    const c=waterNormalTile.getContext("2d"),image=c.createImageData(192,512);
+    // A smooth, low-contrast normal response baked once. It has no cell grid,
+    // repeated wave silhouettes or frame-to-frame noise allocations.
+    for(let y=0;y<512;y++)for(let x=0;x<192;x++){
+      const flow=x*.067+Math.sin(y*.021)*1.7+Math.sin(y*.049+x*.019)*.68;
+      const slope=Math.sin(flow)*.52+Math.sin(flow*2.14+y*.015)*.20;
+      const spec=Math.max(0,slope+.21)**3;
+      const i=(y*192+x)*4;image.data[i]=61+spec*135;image.data[i+1]=151+spec*95;image.data[i+2]=177+spec*74;
+      image.data[i+3]=12+spec*63;
+    }
+    c.putImageData(image,0,0);return waterNormalTile;
+  }
+
   function drawWaterSection(ctx, crestAt, top, bottom, direction, age, width, material, warning, quiet) {
     if (!(width > 0 && bottom > top)) return false;
     stats.effects++;
     const time = quiet ? 0 : age, alpha = warning ? .43 : .94;
-    const quality = tier(), columns = stats.tier === "low" ? 7 : stats.tier === "medium" ? 10 : 13;
-    const rows = Math.max(3, Math.min(stats.tier === "low" ? 8 : 13, Math.ceil((bottom - top) / 28)));
+    const quality = tier(), rows = stats.tier === "low" ? 24 : 48;
     const wave = (y, q) => Math.sin(y * .021 + time * 1.8 + q * 2.8) * .055 + Math.sin(y * .063 - time * 2.7) * .023;
-    // One shared fixed-capacity vertex buffer; no per-facet objects during play.
-    const stride = (rows + 1) * 2;
-    for (let c = 0; c <= columns; c++) for (let r = 0; r <= rows; r++) {
-      const q = c / columns, y = top + (bottom - top) * r / rows;
-      const roll = wave(y, q), curl = Math.sin(q * Math.PI) * (q > .60 ? 1.3 : .5);
-      const i = c * stride + r * 2;
-      waterVertices[i] = crestAt(y) + direction * width * (-1 + 2 * q + roll * Math.sin(q * Math.PI) * 2.1);
-      waterVertices[i + 1] = y - width * (.23 * curl + roll);
-    }
     ctx.save(); ctx.beginPath();
     for (let r = 0; r <= rows; r++) { const y = top + (bottom - top) * r / rows; const x = crestAt(y) - width; if (!r) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
     for (let r = rows; r >= 0; r--) { const y = top + (bottom - top) * r / rows; ctx.lineTo(crestAt(y) + width, y); }
     ctx.closePath(); ctx.clip();
-    // One continuous mass under the tessellation prevents holes when the frame
-    // budget trims small facets. The turn-over lip is dark on its underside.
     const center = crestAt((top + bottom) / 2);
     const depth = ctx.createLinearGradient(center - direction * width, 0, center + direction * width, 0);
-    depth.addColorStop(0, "#031a2b"); depth.addColorStop(.25, "#075470"); depth.addColorStop(.56, "#1595ac");
-    depth.addColorStop(.70, "#76d8de"); depth.addColorStop(.82, "#082638"); depth.addColorStop(1, "#217b91");
-    ctx.globalAlpha = alpha * .32; ctx.fillStyle = depth; ctx.fillRect(center - width * 3, top, width * 6, bottom - top);
-    for (let c = 0; c < columns; c++) {
-      const u = c / columns;
-      for (let r = 0; r < rows; r++) {
-        const y1 = top + (bottom - top) * r / rows;
-        if (stats.facets >= quality.facets) continue;
-        const p1 = c * stride + r * 2, p2 = (c + 1) * stride + r * 2;
-        // Analytic normal-light response: bright slope, occluded curl, wet glints.
-        const normal = Math.sin((u + .16) * Math.PI) * .68 + wave(y1, u) * 2.6;
-        const undercurl = u > .72 ? .26 : 1;
-        const light = clamp01((.16 + normal) * undercurl);
-        ctx.beginPath();ctx.moveTo(waterVertices[p1],waterVertices[p1+1]);
-        ctx.lineTo(waterVertices[p2],waterVertices[p2+1]);ctx.lineTo(waterVertices[p2+2],waterVertices[p2+3]);
-        ctx.lineTo(waterVertices[p1+2],waterVertices[p1+3]);ctx.closePath();
-        ctx.fillStyle=palette[Math.round(light*127)];
-        const edgeWeight=.50+.50*Math.sin((u+.5/columns)*Math.PI);
-        ctx.globalAlpha=alpha*.90*edgeWeight;ctx.fill();stats.facets++;
+    // Broad shaded back, translucent rising face, narrow illuminated lip and a
+    // deep occluded trough. Continuous interpolation replaces all flat quads.
+    depth.addColorStop(0,"#031c2c00");depth.addColorStop(.07,"#052c41d9");depth.addColorStop(.30,"#07536ded");
+    depth.addColorStop(.50,"#147e98f2");depth.addColorStop(.65,"#48aeb9f5");depth.addColorStop(.72,"#8fced0f2");
+    depth.addColorStop(.79,"#061e2be8");depth.addColorStop(.92,"#0b4055d8");depth.addColorStop(1,"#16566a00");
+    ctx.globalAlpha=alpha;ctx.fillStyle=depth;ctx.fillRect(center-width*3,top,width*6,bottom-top);
+    // The underside is a single curved ribbon, with a narrow transmitted-light
+    // lip beside it. There are no horizontal band seams to reveal the mesh.
+    for(let band=0;band<3;band++){
+      ctx.beginPath();
+      for(let j=0;j<=rows;j++){
+        const y=top+(bottom-top)*j/rows;
+        const x=crestAt(y)+direction*width*(.48+wave(y,.78)+(band===0?.13:band===1?-.025:-.18));
+        if(!j)ctx.moveTo(x,y);else ctx.lineTo(x,y);
       }
+      ctx.strokeStyle=band===0?"#041722":band===1?"#a9dedb":"#56bdc9";
+      ctx.lineWidth=width*(band===0?.27:band===1?.053:.13);ctx.lineCap="round";
+      ctx.globalAlpha=alpha*(band===0?.64:band===1?.43:.15);ctx.stroke();
     }
-    // Fine GPU normals are a secondary material pass, not a stand-in for volume.
-    if (!quiet && stats.tier !== "low" && typeof drawHadalSurface === "function") {
-      ctx.globalAlpha = .20;
-      drawHadalSurface(ctx, center - width, top, width * 2, bottom - top, time * .65, direction > 0);
+    ctx.globalAlpha=alpha*.62;ctx.drawImage(waterNormalTexture(),center-width,top,width*2,bottom-top);
+    // Long, finely advected shear streaks provide movement without exposing
+    // a tile grid. Their paths stay continuous from the back face into the lip.
+    const streaks=quality.strands;
+    ctx.lineWidth=.65;ctx.strokeStyle="#a0dde1";
+    for(let i=0;i<streaks;i++){
+      const u=.12+seed(i+25)*.52,start=fract(seed(i+9)+time*(.055+seed(i)*.025));
+      const y0=top+(bottom-top)*start,span=Math.min(bottom-top,18+seed(i+60)*64);
+      ctx.beginPath();
+      for(let j=0;j<=8;j++){
+        const y=y0+span*j/8,x=crestAt(y)+direction*width*(-1+2*u+wave(y,u)*1.4);
+        if(!j)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }
+      ctx.globalAlpha=alpha*(.08+seed(i+70)*.16);ctx.stroke();
     }
     if (!warning && !quiet) {
       const r = Math.max(width, (bottom - top) / 2), cy = (top + bottom) / 2;
@@ -172,11 +179,15 @@ const NextgenVfx = (() => {
       ctx.globalAlpha = alpha * (.25 + seed(i + 2) * .65);
       ctx.beginPath(); ctx.ellipse(x,y,size*1.2,size*.62,-.4,0,TAU); ctx.fill();
     }
-    // Authoritative outer edges stay explicit through both dark and bright folds.
-    ctx.strokeStyle = "#b6f6ff"; ctx.globalAlpha = warning ? .45 : .43; ctx.lineWidth = 1.1;
-    for (const side of [-1, 1]) { ctx.beginPath();
-      for (let j = 0; j <= rows; j++) { const y = top + (bottom - top) * j / rows; const x = crestAt(y) + side * width;
-        if (!j) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.stroke(); }
+    // Tells retain exact boundaries. Active water is read from its surface and
+    // foam instead of rectangular outlines; the same geometry still clips it.
+    if(warning){
+      ctx.strokeStyle="#b6f6ff";ctx.globalAlpha=.45;ctx.lineWidth=1.1;
+      for(const side of [-1,1]){ctx.beginPath();for(let j=0;j<=rows;j++){
+        const y=top+(bottom-top)*j/rows,x=crestAt(y)+side*width;
+        if(!j)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }ctx.stroke();}
+    }
     ctx.restore(); return true;
   }
 
