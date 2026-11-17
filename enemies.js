@@ -42,7 +42,7 @@ function chooseEnemyKind(roll = typeof combatRandom === "function" ? combatRando
 function resetEnemyCombat(resetIntroductions = true) {
   if (typeof resetEliteEncounters === "function") resetEliteEncounters(resetIntroductions);
   if (typeof resetFormations === "function") resetFormations(resetIntroductions);
-  enemyProjectiles.length = 0;
+  clearCombatRounds(enemyProjectiles);
   for (const enemy of enemies) {
     if (enemy.kind === "gunner" && (enemy.gunPhase === "warning" || enemy.gunPhase === "relay")) enemy.gunPhase = "retreat";
   }
@@ -117,9 +117,11 @@ function fireEnemyGun(enemy) {
     * (typeof sortieRules === "function" ? sortieRules().projectileSpeed : 1);
   for (const spread of enemyGunAngles(enemy)) {
     if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) break;
-    enemyProjectiles.push({ x: muzzle.x, y: muzzle.y, previousX: muzzle.x, previousY: muzzle.y,
-      vx: Math.cos(heading + spread) * speed, vy: Math.sin(heading + spread) * speed,
-      radius: 6, age: 0, aimKind: enemy.gunAimKind, tint: gunnerAimTint(enemy.gunAimKind) });
+    const shot = acquireHostileRound(muzzle.x, muzzle.y,
+      Math.cos(heading + spread) * speed, Math.sin(heading + spread) * speed, 6);
+    shot.aimKind = enemy.gunAimKind;
+    shot.tint = gunnerAimTint(enemy.gunAimKind);
+    enemyProjectiles.push(shot);
   }
   gameAudio.bossAttack(enemy.gunAimKind === "relay" ? "burst" : "volley", enemy.x, enemy.y, false);
   queueGunnerRelay(enemy);
@@ -220,7 +222,7 @@ function updateEnemyProjectiles(seconds) {
     applyGravityTide(shot, seconds, "enemy");
     shot.x += shot.vx * seconds; shot.y += shot.vy * seconds; shot.age += seconds;
     if (shot.age >= enemyCombatRules.projectileLife || shot.x < -40 || shot.x > viewport.width + 40
-      || shot.y < -40 || shot.y > viewport.height + 40) enemyProjectiles.splice(index, 1);
+      || shot.y < -40 || shot.y > viewport.height + 40) retireCombatRound(enemyProjectiles, index);
   }
 }
 function enemyShotHitsPlayer(shot) {
@@ -231,7 +233,7 @@ function updateEnemyProjectileDamage() {
   let contact;
   for (let index = enemyProjectiles.length - 1; index >= 0; index--) {
     const shot = enemyProjectiles[index];
-    if (enemyShotHitsPlayer(shot)) { enemyProjectiles.splice(index, 1); contact = shot; }
+    if (enemyShotHitsPlayer(shot)) { retireCombatRound(enemyProjectiles, index); contact = shot; }
   }
   if (!contact) return;
   tryPerfectShield();
@@ -240,7 +242,7 @@ function updateEnemyProjectileDamage() {
     : tr("被炮击机命中", "Hit by a gunship");
   damagePlayer(message, contact);
 }
-function drawEnemyThreats(bossShotCount = 0, detailStride = 1, quietShots = reducedMotion.matches) {
+function drawEnemyThreats(bossShotCount = 0, detailStride = 1, quietShots = reducedMotion.matches, alpha = 1) {
   context.save();
   for (const enemy of enemies) {
     if (enemy.scoutIntercept && !enemy.scoutIntercept.start) {
@@ -300,7 +302,7 @@ function drawEnemyThreats(bossShotCount = 0, detailStride = 1, quietShots = redu
   for (let index = 0; index < enemyProjectiles.length; index++) {
     const shot = enemyProjectiles[index];
     drawHostileProjectile(context, shot, shot.formationTint || shot.tint || "#ff528c", quietShots,
-      (bossShotCount + index) % detailStride === 0, hostileCount > 96);
+      (bossShotCount + index) % detailStride === 0, hostileCount > 96, alpha);
   }
   context.restore();
 }

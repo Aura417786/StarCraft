@@ -15,7 +15,7 @@ function gravityTideEligible() {
 }
 function clearGravityEnemyShots() {
   for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
-    if (enemyProjectiles[i].gravityAffected) enemyProjectiles.splice(i, 1);
+    if (enemyProjectiles[i].gravityAffected) retireCombatRound(enemyProjectiles, i);
   }
 }
 function resetGravityTide() {

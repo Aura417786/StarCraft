@@ -356,12 +356,15 @@ function addBossHazard(kind, options) {
   bossHazards.push({ kind, age: 0, color: boss.color, right: boss.x - boss.width * .37, attackLabel: boss.attackLabel, ...options });
 }
 
-function addBossProjectile(x, y, vx, vy, options = {}) {
+function addBossProjectile(x, y, vx, vy, options) {
   if (bossProjectiles.length >= bossRules.maxProjectiles) return;
   const difficulty = typeof sortieRules === "function" ? sortieRules().projectileSpeed : 1;
   const speed = difficulty * (boss?.scaling?.speedMul ?? 1);
-  bossProjectiles.push({ x, y, previousX: x, previousY: y, vx: vx * speed, vy: vy * speed, age: 0, radius: 7,
-    color: boss ? boss.color : "#ffb66f", attackLabel: boss?.attackLabel, ...options });
+  const shot = acquireHostileRound(x, y, vx * speed, vy * speed, 7);
+  shot.color = boss ? boss.color : "#ffb66f";
+  shot.attackLabel = boss?.attackLabel;
+  if (options) Object.assign(shot, options);
+  bossProjectiles.push(shot);
 }
 
 function fan(at, count, spread, speed, glyph, options = {}) {
@@ -533,7 +536,7 @@ function prepareAlienAttack(target, allowPressure = false) {
   updateAlienAttackInterval(target);
   // Clear old projectiles before a marked corridor. Any follow-up inside it
   // is announced separately, with enough horizontal room to move.
-  if (bossHazards.some(hazard => hazard.kind === "guide" || isWaterTide(hazard))) bossProjectiles.length = 0;
+  if (bossHazards.some(hazard => hazard.kind === "guide" || isWaterTide(hazard))) clearCombatRounds(bossProjectiles);
   target.nextEvent = 0;
   if ((target.type === 0 && key !== "broodSpawn") || pressure) gameAudio.bossAttack("coil", target.x, target.y);
   setBossMessage(bossStageTitle(target), tr(target.attackLabel[2], target.attackLabel[3]));
@@ -575,11 +578,11 @@ function updateBossProjectiles(seconds) {
     }
     // The marked channel stays navigable as the surge carries its own spray past the pilot.
     if (shot.backgroundPressure && boss && Math.abs(shot.y - boss.pressureGapY) < boss.pressureGapSize / 2 + shot.radius) {
-      bossProjectiles.splice(i, 1);
+      retireCombatRound(bossProjectiles, i);
       continue;
     }
     if (waterTide && shot.x <= sprayBoundary && Math.abs(shot.y - troughY) < waterTide.gapSize / 2 + shot.radius) {
-      bossProjectiles.splice(i, 1);
+      retireCombatRound(bossProjectiles, i);
       continue;
     }
     if (shot.reflect && (shot.y < flightBounds.top || shot.y > flightBounds.bottom)) {
@@ -588,7 +591,7 @@ function updateBossProjectiles(seconds) {
       shot.reflect = false;
     }
     if (shot.burstAt && shot.age >= shot.burstAt) {
-      bossProjectiles.splice(i, 1);
+      retireCombatRound(bossProjectiles, i);
       gameAudio.bossAttack("burst", shot.x, shot.y);
       const count = shot.burstCount;
       const speed = alienAttackSpeed(boss, 365);
@@ -598,7 +601,7 @@ function updateBossProjectiles(seconds) {
           { radius: 6, color: shot.color, glyph: "orb", attackLabel: shot.attackLabel });
       }
     } else if (shot.x < -40 || shot.x > viewport.width + 40 || shot.y < -45 || shot.y > viewport.height + 45 || shot.age > 8) {
-      bossProjectiles.splice(i, 1);
+      retireCombatRound(bossProjectiles, i);
     }
   }
   for (let i = bossHazards.length - 1; i >= 0; i--) {

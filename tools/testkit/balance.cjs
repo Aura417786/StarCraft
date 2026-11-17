@@ -222,7 +222,7 @@ async function main() {
       || run.peak_weapon.lanes > caps.lanes || run.peak_weapon.visibleLanes > caps.lanes
       || run.max_normal_shot_damage > caps.ordinaryShot);
     const html = fs.readFileSync(path.join(config.game, "index.html"), "utf8");
-    const digestFiles = ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1])];
+    const digestFiles = ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1].split(/[?#]/, 1)[0])];
     const revisionFingerprint = createHash("sha256");
     for (const file of digestFiles) revisionFingerprint.update(file).update(fs.readFileSync(path.join(config.game, file)));
     const commit = spawnSync("git", ["-C", config.game, "rev-parse", "HEAD"], { encoding: "utf8", windowsHide: true });

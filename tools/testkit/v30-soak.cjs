@@ -17,7 +17,7 @@ const summarize = values => {
 };
 function fingerprint() {
   const html = fs.readFileSync(path.join(game, "index.html"), "utf8"), hash = createHash("sha256");
-  for (const file of ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1])])
+  for (const file of ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1].split(/[?#]/, 1)[0])])
     hash.update(file).update(fs.readFileSync(path.join(game, file)));
   return hash.digest("hex");
 }

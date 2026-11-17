@@ -5,8 +5,18 @@ const combatEffects = { clock: 0, particles: [], impacts: [], wrecks: [], shockw
   detonations: [], contacts: [], shake: 0, shakeTime: 0, light: null,
   directionalHit: null, hitPause: 0, holdDuringPresentation: false, nextHeavyPause: 0, nextContact: 0 };
 const spareDetonations = Array.from({ length: 8 }, () => ({}));
-const spareCombatParticles = Array.from({ length: 180 }, () => ({}));
+const combatEffectPools = {
+  particles: { capacity: 180 }, impacts: { capacity: 32 },
+  shockwaves: { capacity: 16 }, contacts: { capacity: 20 },
+};
+for (const pool of Object.values(combatEffectPools))
+  pool.spare = Array.from({ length: pool.capacity }, () => ({}));
+const spareCombatParticles = combatEffectPools.particles.spare;
+const combatAnimatedLists = Object.keys(combatEffectPools);
 const detonationVolumes = new Map();
+const detonationGradients = new Map();
+const combatLightView = {};
+let combatUnitDisk;
 const detonationStrands = Array.from({ length: 72 }, (_, i) => ({
   angle: i * 2.39996322973,
   depth: ((i + .5) * .75487766625) % 1,
@@ -77,17 +87,21 @@ function activeCombatLight() {
   const profile = combatLightProfiles[light.kind];
   if (light.age >= profile.life) return null;
   const fade = (1 - light.age / profile.life) ** 2;
-  return { ...light, strength: fade * profile.strength * (quietCombatMotion() ? .33 : 1) };
+  combatLightView.x = light.x; combatLightView.y = light.y; combatLightView.radius = light.radius;
+  combatLightView.color = light.color; combatLightView.kind = light.kind; combatLightView.age = light.age;
+  combatLightView.strength = fade * profile.strength * (quietCombatMotion() ? .33 : 1);
+  return combatLightView;
 }
 
 // A small reused image of the scenery is enough for soft radial streaks.
 // This pass runs behind projectile shapes and never samples the HUD or warnings.
-let combatBlurSurface;
+let combatBlurSurface, combatBlurContext, combatBlurMask;
 function combatBackdropSample(ctx, x, y, radius, tint) {
   const transform = ctx.getTransform?.();
   if (!transform || !(transform.a > 0 && transform.d > 0)) return null;
   combatBlurSurface ??= shipRenderCanvas(176, 176);
-  const pass = combatBlurSurface?.getContext("2d");
+  combatBlurContext ??= combatBlurSurface?.getContext("2d");
+  const pass = combatBlurContext;
   if (!pass) return null;
   const sx = Math.floor((x - radius) * transform.a + transform.e);
   const sy = Math.floor((y - radius) * transform.d + transform.f);
@@ -100,9 +114,12 @@ function combatBackdropSample(ctx, x, y, radius, tint) {
     pass.fillStyle = tint; pass.fillRect(0, 0, 176, 176);
   }
   pass.globalCompositeOperation = "destination-in";
-  const fade = pass.createRadialGradient(88, 88, 11, 88, 88, 88);
-  fade.addColorStop(0, "#000000"); fade.addColorStop(.68, "#000000a0"); fade.addColorStop(1, "#00000000");
-  pass.fillStyle = fade; pass.fillRect(0, 0, 176, 176);
+  if (!combatBlurMask) {
+    const fade = pass.createRadialGradient(88, 88, 11, 88, 88, 88);
+    fade.addColorStop(0, "#000000"); fade.addColorStop(.68, "#000000a0"); fade.addColorStop(1, "#00000000");
+    combatBlurMask = fade;
+  }
+  pass.fillStyle = combatBlurMask; pass.fillRect(0, 0, 176, 176);
   pass.globalCompositeOperation = "source-over";
   return combatBlurSurface;
 }
@@ -184,11 +201,24 @@ function recordCombatDetonation(target, { kind = "ordinary", type, size } = {}) 
 
 function detonationGlow(ctx, x, y, radius, core, rim, alpha) {
   if (radius <= 1 || alpha <= .006) return;
-  const fog = ctx.createRadialGradient(x - radius * .15, y - radius * .20, radius * .025, x, y, radius);
-  fog.addColorStop(0, core); fog.addColorStop(.42, rim); fog.addColorStop(1, rim.slice(0, 7) + "00");
+  const key = core + rim;
+  let fog = detonationGradients.get(key);
+  if (!fog) {
+    fog = ctx.createRadialGradient(-.15, -.20, .025, 0, 0, 1);
+    fog.addColorStop(0, core); fog.addColorStop(.42, rim); fog.addColorStop(1, rim.slice(0, 7) + "00");
+    if (detonationGradients.size >= 72) detonationGradients.delete(detonationGradients.keys().next().value);
+    detonationGradients.set(key, fog);
+  }
+  if (!combatUnitDisk) {
+    combatUnitDisk = new Path2D();
+    combatUnitDisk.arc(0, 0, 1, 0, Math.PI * 2);
+  }
   ctx.globalAlpha = alpha;
   ctx.fillStyle = fog;
-  ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(radius, radius);
+  ctx.fill(combatUnitDisk);
+  ctx.restore();
 }
 
 function detonationVolumeSprite(profile) {
@@ -442,9 +472,20 @@ updateShakeButton();
 function canAnimateCombatEffects() {
   return battleHasFocus();
 }
+function recycleCombatEffect(name, effect) {
+  const { capacity, spare } = combatEffectPools[name];
+  if (spare.length < capacity) spare.push(effect);
+}
+function clearCombatEffectPools() {
+  for (const name of combatAnimatedLists) {
+    const list = combatEffects[name];
+    for (const item of list) recycleCombatEffect(name, item);
+    list.length = 0;
+  }
+}
 function resetCombatEffects() {
-  for (const particle of combatEffects.particles) spareCombatParticles.push(particle);
-  for (const name of ["particles", "impacts", "wrecks", "shockwaves", "contacts"]) combatEffects[name].length = 0;
+  clearCombatEffectPools();
+  combatEffects.wrecks.length = 0;
   while (combatEffects.detonations.length) releaseCombatDetonation(combatEffects.detonations.length - 1);
   combatEffects.clock = 0; combatEffects.shake = 0; combatEffects.shakeTime = 0; combatEffects.light = null;
   combatEffects.directionalHit = null; combatEffects.hitPause = 0;
@@ -454,8 +495,7 @@ function resetCombatEffects() {
   resetBossPresentation();
 }
 function resizeCombatEffects(oldWidth, oldHeight) {
-  for (const particle of combatEffects.particles) spareCombatParticles.push(particle);
-  for (const name of ["particles", "impacts", "shockwaves", "contacts"]) combatEffects[name].length = 0;
+  clearCombatEffectPools();
   while (combatEffects.detonations.length) releaseCombatDetonation(combatEffects.detonations.length - 1);
   combatEffects.shake = 0; combatEffects.shakeTime = 0;
   combatEffects.directionalHit = null; combatEffects.hitPause = 0;
@@ -479,15 +519,19 @@ function pushCombatEffect(list, item, limit) {
   if (list.length >= limit) list.shift();
   list.push(item);
 }
+function acquireCombatEffect(name) {
+  const list = combatEffects[name], { spare, capacity } = combatEffectPools[name];
+  const effect = list.length >= capacity ? list.shift() : spare.pop() ?? {};
+  list.push(effect);
+  return effect;
+}
 function spawnCombatParticle(x, y, angle, speed, duration, size, spin, color, armor, smoke) {
-  const particles = combatEffects.particles;
-  const particle = spareCombatParticles.pop() ?? particles.shift();
+  const particle = acquireCombatEffect("particles");
   particle.x = x; particle.y = y;
   particle.vx = Math.cos(angle) * speed; particle.vy = Math.sin(angle) * speed;
   particle.age = 0; particle.duration = duration; particle.size = size;
   particle.angle = angle; particle.spin = spin; particle.color = color;
   particle.armor = armor; particle.smoke = smoke;
-  particles.push(particle);
 }
 function addCombatShake(strength) {
   if (quietCombatMotion() || shakePreference === "off") return;
@@ -535,9 +579,12 @@ function recordSurfaceContact(target, bullet, bossHit, heavy) {
   const material = bossHit ? bossDetonationMaterials[target.type] : "metal";
   const palette = detonationMaterials[material] ?? detonationMaterials.metal;
   const quiet = quietCombatMotion();
-  pushCombatEffect(combatEffects.contacts, { x, y, angle, age: 0, duration: heavy ? .29 : .16,
-    radius: Math.min(h * .32, heavy ? 44 : bossHit ? 18 : 13), heavy,
-    color: palette.glow, core: palette.core }, 20);
+  const contact = acquireCombatEffect("contacts");
+  contact.x = x; contact.y = y; contact.angle = angle; contact.age = 0;
+  contact.duration = heavy ? .29 : .16;
+  contact.radius = Math.min(h * .32, heavy ? 44 : bossHit ? 18 : 13);
+  contact.heavy = heavy; contact.color = palette.glow; contact.core = palette.core;
+  contact.weapon = contact.colors = contact.material = undefined;
   if (heavy && !quiet) {
     combatEffects.directionalHit = { x: dx, y: dy, strength: bossHit ? 3.4 : 1.8, age: 0 };
     if (combatEffects.clock >= combatEffects.nextHeavyPause) {
@@ -555,8 +602,11 @@ function recordUltimateBossImpact(target, impact) {
   const material = detonationMaterials[bossDetonationMaterials[target.type]] ?? detonationMaterials.metal;
   const first = !cast.bossPauseUsed;
   cast.bossPauseUsed = true;
-  pushCombatEffect(combatEffects.contacts, { x, y, angle, weapon, colors, material,
-    radius, heavy: first, age: 0, duration: .34 }, 20);
+  const contact = acquireCombatEffect("contacts");
+  contact.x = x; contact.y = y; contact.angle = angle; contact.age = 0;
+  contact.duration = .34; contact.radius = radius; contact.heavy = first;
+  contact.weapon = weapon; contact.colors = colors; contact.material = material;
+  contact.color = contact.core = undefined;
 
   if (first) {
     pulseCombatLight(x, y, radius * 1.85, colors.glow, "impact");
@@ -683,8 +733,9 @@ function drawSurfaceContacts() {
 }
 function combatBurst(x, y, size = 1, color = "#ffb569", armor = false) {
   const quiet = quietCombatMotion();
-  pushCombatEffect(combatEffects.shockwaves, { x, y, age: 0, duration: quiet ? 0.3 : 0.5,
-    radius: 32 * size, color }, 16);
+  const wave = acquireCombatEffect("shockwaves");
+  wave.x = x; wave.y = y; wave.age = 0; wave.duration = quiet ? .3 : .5;
+  wave.radius = 32 * size; wave.color = color;
   const count = quiet ? 3 : armor ? 14 : 10;
   for (let i = 0; i < count; i++) {
     const angle = Math.PI * 2 * i / count + Math.random() * 0.28;
@@ -704,9 +755,12 @@ function recordCombatFeedback(kind, target, bullet = null) {
   const y = Number.isFinite(bullet?.y) ? clamp(bullet.y, target.y - h * .3, target.y + h * .3) : target.y;
   const quiet = quietCombatMotion();
   const hold = quiet ? 0 : profile.hold ?? 0;
-  pushCombatEffect(combatEffects.impacts, { x, y, age: 0, duration: profile.duration + hold, hold,
-    color: bullet?.color || profile.color, size: bullet ? profile.size : Math.min(profile.size, h * .59), kind,
-    fighter: bullet && typeof selectedFighter === "string" ? selectedFighter : null, auxiliary: !!bullet?.auxiliary }, 32);
+  const effect = acquireCombatEffect("impacts");
+  effect.x = x; effect.y = y; effect.age = 0; effect.duration = profile.duration + hold; effect.hold = hold;
+  effect.color = bullet?.color || profile.color;
+  effect.size = bullet ? profile.size : Math.min(profile.size, h * .59);
+  effect.kind = kind; effect.fighter = bullet && typeof selectedFighter === "string" ? selectedFighter : null;
+  effect.auxiliary = !!bullet?.auxiliary;
   if (!quiet) {
     for (let i = 0; i < profile.sparks; i++) {
       const angle = bullet ? Math.PI * (.7 + Math.random() * .6) : i * Math.PI * 2 / profile.sparks + .1;
@@ -849,9 +903,10 @@ function updateCombatEffects(seconds) {
   }
   const calm = quietCombatMotion();
   const particleDrag = Math.exp(-seconds * 2.9);
-  for (const name of ["particles", "impacts", "shockwaves", "contacts"]) {
+  for (const name of combatAnimatedLists) {
     const list = combatEffects[name];
-    for (let i = list.length - 1; i >= 0; i--) {
+    let write = 0;
+    for (let i = 0; i < list.length; i++) {
       const effect = list[i]; effect.age += seconds;
       if (name === "particles" && !calm) {
         effect.x += effect.vx * seconds;
@@ -859,11 +914,10 @@ function updateCombatEffects(seconds) {
         effect.vx *= particleDrag;
         effect.vy = effect.vy * particleDrag + seconds * (effect.smoke ? -27 : effect.armor ? 72 : 17);
       }
-      if (effect.age >= effect.duration) {
-        if (name === "particles") spareCombatParticles.push(effect);
-        list.splice(i, 1);
-      }
+      if (effect.age >= effect.duration) recycleCombatEffect(name, effect);
+      else list[write++] = effect;
     }
+    list.length = write;
   }
   for (let i = combatEffects.wrecks.length - 1; i >= 0; i--) {
     const wreck = combatEffects.wrecks[i]; wreck.age += seconds;
@@ -880,10 +934,7 @@ function updateCombatEffects(seconds) {
     if (wreck.age >= wreck.duration) combatEffects.wrecks.splice(i, 1);
   }
   if (cinematic) {
-    for (let i = explosions.length - 1; i >= 0; i--) {
-      explosions[i].age += seconds;
-      if (explosions[i].age >= explosions[i].duration) explosions.splice(i, 1);
-    }
+    advanceCombatExplosions(seconds);
     advanceBossDeathPresentation(seconds);
   }
 }

@@ -15,7 +15,7 @@ async function main() {
   const output = path.resolve(process.argv[3]);
   fs.mkdirSync(output, { recursive: true });
   const html = fs.readFileSync(path.join(game, "index.html"), "utf8");
-  const sourceFiles = ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1])];
+  const sourceFiles = ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1].split(/[?#]/, 1)[0])];
   const fingerprintGame = () => {
     const fingerprint = createHash("sha256");
     for (const file of sourceFiles) fingerprint.update(file).update(fs.readFileSync(path.join(game, file)));

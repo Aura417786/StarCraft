@@ -98,8 +98,8 @@ function beginSpecialTraining(training) {
   training.stage = 2;
   training.hint = "special";
   training.outcome = 0;
-  enemyProjectiles.length = 0;
-  bullets.length = 0;
+  clearCombatRounds(enemyProjectiles);
+  clearCombatRounds(bullets);
   resetCannonLink();
   ultimate.charges = 1;
   updateUltimateDisplay();

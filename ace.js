@@ -10,7 +10,7 @@ const aceEncounter = { nextTime: 36, warning: 0, target: null, warningY: 0,
 
 function clearAceProjectiles() {
   for (let index = enemyProjectiles.length - 1; index >= 0; index--) {
-    if (enemyProjectiles[index].source === "ace") enemyProjectiles.splice(index, 1);
+    if (enemyProjectiles[index].source === "ace") retireCombatRound(enemyProjectiles, index);
   }
 }
 function resetAceEncounter() {
@@ -222,8 +222,9 @@ function fireAceVolley(enemy) {
   for (const offset of aim.offsets) {
     if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) break;
     const angle = aim.angle + offset;
-    enemyProjectiles.push({ source: "ace", x, y, previousX: x, previousY: y,
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, radius: 5, age: 0 });
+    const shot = acquireHostileRound(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 5);
+    shot.source = "ace";
+    enemyProjectiles.push(shot);
     fired = true;
   }
   if (fired) gameAudio.bossAttack("volley", x, y, false);

@@ -130,7 +130,7 @@ function destroyBattlefieldObject(object, source) {
   addEvolutionPulse(object.x, object.y, radius, "#8effe5", 0.5);
   for (const list of [enemyProjectiles, bossProjectiles]) {
     for (let i = list.length - 1; i >= 0; i--) {
-      if (Math.hypot(list[i].x - object.x, list[i].y - object.y) <= radius + list[i].radius) list.splice(i, 1);
+      if (Math.hypot(list[i].x - object.x, list[i].y - object.y) <= radius + list[i].radius) retireCombatRound(list, i);
     }
   }
   const shot = { source: "blast", damageLog: weaponDamageLog() + Math.log(weapon.lanes / weapon.interval * 1.8), x: object.x, y: object.y };
@@ -165,7 +165,7 @@ function resolveBattlefieldCover() {
         if (Number.isFinite(t) && t < firstTime && t < playerTime) { firstTime=t; cover=object; }
       }
       if (!cover) continue;
-      list.splice(i, 1);
+      retireCombatRound(list, i);
       cover.hp = Math.max(0, cover.hp - (isFieldAsteroid(cover) ? .13 : .105));
       if (cover.hitFlash <= 0) {
         gameAudio.fieldCue?.("cover-hit", cover.x, cover.y);

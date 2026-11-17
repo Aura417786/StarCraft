@@ -108,7 +108,10 @@ function openEvolutionChoice() {
   if (typeof resetBattleRewind === "function") resetBattleRewind("evolution");
   evolution.pending = true; evolution.choice = evolution.route;
   clearMovement(); cancelUltimate(true);
-  bullets.length = bossProjectiles.length = bossHazards.length = enemyProjectiles.length = 0;
+  clearCombatRounds(bullets);
+  clearCombatRounds(bossProjectiles);
+  clearCombatRounds(enemyProjectiles);
+  bossHazards.length = 0;
   evolution.pulses.length = 0;
   clearEvolutionWeaponTransients(); clearFighterCombatTransients();
   movementHint.hidden = true; evolutionScreen.hidden = false;

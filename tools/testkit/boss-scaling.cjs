@@ -52,7 +52,7 @@ async function main() {
   }
   const game = path.resolve(gameArgument), output = path.resolve(outputArgument);
   const html = fs.readFileSync(path.join(game, "index.html"), "utf8");
-  const sourceFiles = ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1])];
+  const sourceFiles = ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1].split(/[?#]/, 1)[0])];
   const fingerprint = createHash("sha256");
   for (const file of sourceFiles) fingerprint.update(file).update(fs.readFileSync(path.join(game, file)));
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, headless: true });

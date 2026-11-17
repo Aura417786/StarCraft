@@ -389,7 +389,8 @@ function spacePropGraphics() {
   try {
     const surface = document.createElement("canvas");
     surface.width = surface.height = 416;
-    const gl = surface.getContext("webgl", { alpha: true, antialias: true, depth: true, premultipliedAlpha: true, failIfMajorPerformanceCaveat: true });
+    const gl = surface.getContext("webgl", { alpha: true, antialias: true, depth: true, premultipliedAlpha: true,
+      powerPreference: "high-performance", failIfMajorPerformanceCaveat: true });
     if (!gl || typeof gl.createShader !== "function") return null;
     const diagnostics = gl.getExtension("WEBGL_debug_renderer_info");
     if (diagnostics && /swiftshader|llvmpipe|software rasterizer/i.test(gl.getParameter(diagnostics.UNMASKED_RENDERER_WEBGL))) {
@@ -411,28 +412,38 @@ function spacePropGraphics() {
     for (const attribute of attributes) gl.enableVertexAttribArray(attribute);
     const uniforms = Object.fromEntries(["pose", "extent", "keyTint", "bounceTint", "environment"].map(name => [name, gl.getUniformLocation(program, name)]));
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.uniform2f(uniforms.extent, 1.7, 1.7);
     gl.clearColor(0, 0, 0, 0);
     surface.addEventListener("webglcontextlost", () => { spacePropDevice = null; });
     const detail = loadSpacePropDetail(gl, gl.getUniformLocation(program, "detailAtlas"));
-    spacePropDevice = { gl, surface, attributes, uniforms, detail };
+    spacePropDevice = { gl, surface, attributes, uniforms, detail, boundMesh: null, resolution: 0 };
   } catch { /* The same meshes retain a lighted Canvas fallback. */ }
   return spacePropDevice;
 }
 
 function spacePropRenderGpu(device, mesh, matrix, pose, key, bounce, resolution) {
   const { gl, uniforms, attributes, surface } = device;
-  if (!mesh.buffer) {
-    mesh.buffer = gl.createBuffer();
+  if (device.boundMesh !== mesh) {
+    const upload = !mesh.buffer;
+    if (upload) mesh.buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, mesh.data, gl.STATIC_DRAW);
-  } else gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffer);
-  gl.viewport(0, surface.height - resolution, resolution, resolution);
+    if (upload) gl.bufferData(gl.ARRAY_BUFFER, mesh.data, gl.STATIC_DRAW);
+    gl.vertexAttribPointer(attributes[0], 3, gl.FLOAT, false, 40, 0);
+    gl.vertexAttribPointer(attributes[1], 3, gl.FLOAT, false, 40, 12);
+    gl.vertexAttribPointer(attributes[2], 4, gl.FLOAT, false, 40, 24);
+    device.boundMesh = mesh;
+  }
+  if (resolution !== device.resolution) {
+    const top = surface.height - resolution;
+    gl.viewport(0, top, resolution, resolution);
+    // The Canvas compositor copies only this crop. The viewport alone does
+    // not restrict gl.clear, so clip color and depth clears to the same crop.
+    gl.scissor(0, top, resolution, resolution);
+    device.resolution = resolution;
+  }
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.vertexAttribPointer(attributes[0], 3, gl.FLOAT, false, 40, 0);
-  gl.vertexAttribPointer(attributes[1], 3, gl.FLOAT, false, 40, 12);
-  gl.vertexAttribPointer(attributes[2], 4, gl.FLOAT, false, 40, 24);
   gl.uniformMatrix3fv(uniforms.pose, false, matrix);
-  gl.uniform2f(uniforms.extent, 1.7, 1.7);
   gl.uniform3fv(uniforms.keyTint, key); gl.uniform3fv(uniforms.bounceTint, bounce);
   gl.uniform2f(uniforms.environment, pose.haze || 0, pose.flash || 0);
   gl.drawArrays(gl.TRIANGLES, 0, mesh.data.length / 10);

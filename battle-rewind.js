@@ -207,7 +207,7 @@ function requestBattleRewind(secondsAgo, cooldownSeconds = 18) {
   fighterCombat.redHeld = false;
   evolutionWeapons.lanceCharging = false;
   ultimate.audioActive = false;
-  explosions.length = 0;
+  clearCombatExplosions();
   evolution.pulses.length = 0;
   powerupNotice.hidden = true;
   upgradeNoticeTime = 0;

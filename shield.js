@@ -46,7 +46,7 @@ function consumeShieldContacts() {
   for (const shots of [enemyProjectiles, bossProjectiles]) {
     for (let index = shots.length - 1; index >= 0; index--) {
       // 开盾只检查此刻接触，过去一帧已经飞过的弹不会补判。
-      if (consumeEvolutionShieldProjectile(shots[index], false)) { shots.splice(index, 1); intercepted ||= shots === enemyProjectiles; }
+      if (consumeEvolutionShieldProjectile(shots[index], false)) { retireCombatRound(shots, index); intercepted ||= shots === enemyProjectiles; }
     }
   }
   if (intercepted) tryPerfectShield();
@@ -190,9 +190,9 @@ function resetShield() {
   beginEvolutionShieldCapture();
   updateShieldDisplay();
 }
-function drawShield() {
+function drawShield(alpha = 1) {
   if (state !== "battle" || !shieldIsActive()) return;
-  const x = player.x, y = player.y;
+  const x = flightRenderX(player, alpha), y = flightRenderY(player, alpha);
   const rx = player.width * 0.60, ry = player.height * 0.65;
   const age = Math.max(0, shield.duration - shield.remaining);
   const fade = reducedMotion.matches ? 1 : Math.min(1, age / 0.12 + 0.25, shield.remaining / 0.18);
@@ -227,15 +227,15 @@ function drawShield() {
     if (shield.perfectRemaining > 1e-9 && !shield.perfectUsed)
       drawFlightLattice(context, x, y, rx * 1.07, ry * 1.07, "#fff3cb", age * 1.2, .75, .4);
   }
-  drawPerfectShield();
+  drawPerfectShield(x, y);
 }
 
-function drawPerfectShield() {
+function drawPerfectShield(playerX = player.x, playerY = player.y) {
   if (shield.perfectRemaining > 1e-9 && !shield.perfectUsed) {
     context.save();
     context.strokeStyle = "#ffe7d4"; context.lineWidth = 3;
     context.shadowColor = "#ff3d54"; context.shadowBlur = reducedMotion.matches ? 0 : 20;
-    context.beginPath(); context.ellipse(player.x, player.y, player.width * 0.62, player.height * 0.68,
+    context.beginPath(); context.ellipse(playerX, playerY, player.width * 0.62, player.height * 0.68,
       0, -Math.PI * 0.55, Math.PI * 0.55); context.stroke(); context.restore();
   }
   if (!shield.effect || shield.flash <= 0) return;
@@ -271,7 +271,7 @@ function drawPerfectShield() {
   context.shadowBlur = 0;
   context.font = "700 18px Microsoft YaHei, sans-serif"; context.textAlign = "center";
   context.fillStyle = "#ffe5d7";
-  context.fillText(tr("完美格挡", "PERFECT GUARD"), player.x, player.y - player.height * 0.9 - (reducedMotion.matches ? 0 : progress * 18));
+  context.fillText(tr("完美格挡", "PERFECT GUARD"), playerX, playerY - player.height * 0.9 - (reducedMotion.matches ? 0 : progress * 18));
   context.restore();
   if (typeof drawFlightLattice === "function")
     drawFlightLattice(context, effect.x, effect.y, player.width * (.66 + progress * .71), player.height * (.72 + progress * .84),

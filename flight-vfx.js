@@ -3,6 +3,8 @@
 const flightVfxTau = Math.PI * 2;
 const flightVfxSpectrum = ["#9de4f1", "#efbe90", "#c9a3d8", "#86baf8", "#f5b6c7"];
 const flightWakeColors = { red: "#ff8058", blue: "#71d8ff", yellow: "#ffd47c" };
+const flightProjectileShapes = new Map();
+const flightProjectileGlows = new Map();
 const flightDustAlpha = [.16, .28, .52];
 const flightSkyArcs = [
   { y: .81, arc: -.40, lean: -.15, color: "#9cd4ec" },
@@ -18,11 +20,14 @@ function flightVfxNoise(index) {
   return ((n ^ n >>> 16) >>> 0) / 4294967296;
 }
 
-const flightVfxDust = Array.from({ length: 182 }, (_, i) => ({
-  x: flightVfxNoise(i * 5), y: flightVfxNoise(i * 5 + 1),
-  z: flightVfxNoise(i * 5 + 2), wobble: flightVfxNoise(i * 5 + 3) * flightVfxTau,
-  band: flightVfxNoise(i * 5 + 4),
-}));
+const flightVfxDust = Array.from({ length: 182 }, (_, i) => {
+  const z = flightVfxNoise(i * 5 + 2), layer = i % 3;
+  const wobble = flightVfxNoise(i * 5 + 3) * flightVfxTau;
+  return { x: flightVfxNoise(i * 5), y: flightVfxNoise(i * 5 + 1), z, sinWobble: Math.sin(wobble), cosWobble: Math.cos(wobble),
+    speed: (4 + 31 * z ** 2) * (layer * .28 + .58), radius: .38 + z ** 3 * (layer === 2 ? 1.28 : .77),
+    band: flightVfxNoise(i * 5 + 4) };
+});
+const flightSkyField = { width: 0, height: 0, sector: -1, haze: null, shine: null };
 
 function flightVfxTier() { return visualQuality.meshDetail; }
 function flightVfxStill() { return typeof quietCombatMotion === "function" ? quietCombatMotion() : reducedMotion.matches; }
@@ -35,26 +40,31 @@ function drawCosmicFlightVfx(ctx, world, field) {
   const clock = quiet ? 0 : field.clock + field.ambientClock;
   const tint = flightVfxSpectrum[field.sector % flightVfxSpectrum.length] ?? flightVfxSpectrum[0];
   ctx.save();
-  const glowX = width * .77, glowY = height * .36;
-  const haze = ctx.createRadialGradient(glowX, glowY, 0, glowX, glowY, width * .56);
-  haze.addColorStop(0, tint + "19");
-  haze.addColorStop(.36, tint + "08");
-  haze.addColorStop(1, tint + "00");
-  ctx.fillStyle = haze;
+  if (width !== flightSkyField.width || height !== flightSkyField.height || field.sector !== flightSkyField.sector) {
+    const glowX = width * .77, glowY = height * .36;
+    const haze = ctx.createRadialGradient(glowX, glowY, 0, glowX, glowY, width * .56);
+    haze.addColorStop(0, tint + "19"); haze.addColorStop(.36, tint + "08"); haze.addColorStop(1, tint + "00");
+    const orbit = flightSkyArcs[field.sector] ?? flightSkyArcs[0];
+    const shine = ctx.createLinearGradient(width * .08, 0, width * .08 + width * .98, 0);
+    shine.addColorStop(0, orbit.color + "00"); shine.addColorStop(.44, orbit.color + "05");
+    shine.addColorStop(.74, orbit.color + "3c"); shine.addColorStop(1, orbit.color + "00");
+    Object.assign(flightSkyField, { width, height, sector: field.sector, haze, shine });
+  }
+  ctx.fillStyle = flightSkyField.haze;
   ctx.fillRect(0, 0, width, height);
-  if (tier && !quiet) drawFlightSkyArcs(ctx, width, height, clock, field.sector);
+  if (tier && !quiet) drawFlightSkyArcs(ctx, width, height, clock, field.sector, flightSkyField.shine);
   // Dust sits at three depths. Paths are batched and the animated seeds never
   // consume the sortie random stream or accumulate during a pause or rewind.
+  const skySin = Math.sin(clock * .22), skyCos = Math.cos(clock * .22);
   for (let layer = 0; layer < 3; layer++) {
     ctx.fillStyle = layer === 2 ? "#fff3db" : tint;
     ctx.globalAlpha = (quiet ? .60 : 1) * flightDustAlpha[layer];
     ctx.beginPath();
     for (let i = layer; i < count; i += 3) {
       const speck = flightVfxDust[i];
-      const speed = (4 + 31 * speck.z ** 2) * (layer * .28 + .58);
-      const x = flightVfxWrap(speck.x * width - clock * speed, width);
-      const y = speck.y * height + Math.sin(clock * .22 + speck.wobble) * speck.z * 9;
-      const r = .38 + speck.z ** 3 * (layer === 2 ? 1.28 : .77);
+      const x = flightVfxWrap(speck.x * width - clock * speck.speed, width);
+      const y = speck.y * height + (skySin * speck.cosWobble + skyCos * speck.sinWobble) * speck.z * 9;
+      const r = speck.radius;
       if (!quiet && tier && layer === 2 && speck.band > .75) {
         ctx.moveTo(x + r, y);
         ctx.lineTo(x - 4.5 - speck.z * 12, y - r * .28);
@@ -83,14 +93,9 @@ function drawCosmicFlightVfx(ctx, world, field) {
   ctx.restore();
 }
 
-function drawFlightSkyArcs(ctx, width, height, clock, sector) {
+function drawFlightSkyArcs(ctx, width, height, clock, sector, shine) {
   const orbit = flightSkyArcs[sector] ?? flightSkyArcs[0];
   const x0 = width * .08, span = width * .98;
-  const shine = ctx.createLinearGradient(x0, 0, x0 + span, 0);
-  shine.addColorStop(0, orbit.color + "00");
-  shine.addColorStop(.44, orbit.color + "05");
-  shine.addColorStop(.74, orbit.color + "3c");
-  shine.addColorStop(1, orbit.color + "00");
   ctx.strokeStyle = shine;
   for (let lane = 0; lane < 6; lane++) {
     const shift = lane * height * .014;
@@ -151,6 +156,76 @@ function drawFlightBoltWake(ctx, length, half, tint, index, time, hostile = fals
     ctx.fill();
   }
   ctx.globalAlpha = alpha;
+}
+
+function flightProjectileShape(half, length, lance) {
+  const key = `${half}/${length}/${lance}`;
+  const cached = flightProjectileShapes.get(key);
+  if (cached) return cached;
+  const body = new Path2D(), core = new Path2D();
+  if (lance) {
+    body.moveTo(0, -half * .65); body.lineTo(length * .78, -half);
+    body.lineTo(length, 0); body.lineTo(length * .78, half); body.lineTo(0, half * .65);
+  } else {
+    body.moveTo(0, -half * .32);
+    body.lineTo(length * .24, -half * .76);
+    body.quadraticCurveTo(length * .86, -half * 1.38, length, 0);
+    body.quadraticCurveTo(length * .86, half * 1.38, length * .24, half * .76);
+    body.lineTo(0, half * .32);
+  }
+  body.closePath(); core.moveTo(length * .17, 0);
+  core.lineTo(length * .75, -half * .48);
+  core.quadraticCurveTo(length * .94, -half * .42, length * .96, 0);
+  core.quadraticCurveTo(length * .94, half * .42, length * .75, half * .48);
+  core.closePath();
+  if (flightProjectileShapes.size >= 36) flightProjectileShapes.delete(flightProjectileShapes.keys().next().value);
+  const shape = { key, body, core };
+  flightProjectileShapes.set(key, shape);
+  return shape;
+}
+
+function strokeFlightProjectile(ctx, body, color, half, glow, crowded) {
+  ctx.strokeStyle = color; ctx.lineJoin = "round";
+  ctx.globalAlpha = .18 * glow;
+  ctx.lineWidth = half * 2.3; ctx.stroke(body);
+  if (!crowded) {
+    ctx.globalAlpha = .38 * glow;
+    ctx.lineWidth = half * .8; ctx.stroke(body);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function flightProjectileGlowTile(shape, color, half, length, glow) {
+  const key = `${shape.key}/${color}/${glow}`;
+  const cached = flightProjectileGlows.get(key);
+  if (cached) return cached;
+  const x = Math.ceil(half * 1.2 + 2), y = Math.ceil(half * 2.7 + 2);
+  const width = Math.ceil(length) + 2 * x, height = 2 * y;
+  if (width > 160 || height > 56 || typeof shipRenderCanvas !== "function") return null;
+  const ratio = 3;
+  const surface = shipRenderCanvas(width * ratio, height * ratio);
+  const paint = surface?.getContext("2d");
+  if (!paint) return null;
+  paint.setTransform(ratio, 0, 0, ratio, x * ratio, y * ratio);
+  strokeFlightProjectile(paint, shape.body, color, half, glow, false);
+  if (flightProjectileGlows.size >= 64) flightProjectileGlows.delete(flightProjectileGlows.keys().next().value);
+  const entry = { surface, x, y, width, height };
+  flightProjectileGlows.set(key, entry);
+  return entry;
+}
+
+function drawFlightProjectileBody(ctx, bullet, half, length, glow, crowded) {
+  const shape = flightProjectileShape(half, length, bullet.visual === "lance" || bullet.visual === "counter");
+  if (glow && half >= 2) {
+    const tile = !crowded && ctx.globalCompositeOperation === "source-over" && ctx.filter === "none"
+      && flightProjectileGlowTile(shape, bullet.color, half, length, glow);
+    if (tile) {
+      ctx.globalAlpha = 1;
+      ctx.drawImage(tile.surface, -tile.x, -tile.y, tile.width, tile.height);
+    } else strokeFlightProjectile(ctx, shape.body, bullet.color, half, glow, crowded);
+  }
+  ctx.fillStyle = bullet.color; ctx.fill(shape.body);
+  ctx.fillStyle = bullet.core; ctx.fill(shape.core);
 }
 
 const flightExhaustProfiles = {

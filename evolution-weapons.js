@@ -84,13 +84,19 @@ function spawnEvolutionRound(origin, visual, damageSeconds, options = {}) {
   const angle = options.angle ?? 0, speed = visual === "lance" ? 1080 : 850;
   const colors = visual === "drone" ? ["#9ce9e2", "#edfffa"] : visual === "counter" ? ["#ffc987", "#fff1d5"] : ["#9edfff", "#f1fcff"];
   const damageLog = Math.min(Math.log(850), evolutionBaseDpsLog() + Math.log(Math.max(.001, damageSeconds)));
-  bullets.push({ x: origin.x, y: origin.y, previousX: origin.x, previousY: origin.y,
-    angle, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-    halfHeight: visual === "lance" ? 6 : visual === "counter" ? 3 : 2,
-    length: visual === "lance" ? 62 : visual === "counter" ? 32 : 19,
-    damage: Math.exp(damageLog), damageLog, color: colors[0], core: colors[1],
-    source: "evolution-" + visual, visual, auxiliary: true, noEnergy: !!options.noEnergy,
-    armorPiercing: visual === "lance", piercesShield: visual === "lance", critical: visual === "lance", piercesLeft: options.pierces ?? 0, hitTargets: new Set(), overdrive: false });
+  const lance = visual === "lance", counter = visual === "counter";
+  const shot = acquirePlayerRound(origin.x, origin.y, angle, Math.cos(angle) * speed, Math.sin(angle) * speed,
+    lance ? 6 : counter ? 3 : 2, lance ? 62 : counter ? 32 : 19, colors[0], colors[1]);
+  shot.damage = Math.exp(damageLog);
+  shot.damageLog = damageLog;
+  shot.source = "evolution-" + visual;
+  shot.visual = visual;
+  shot.auxiliary = true;
+  shot.noEnergy = !!options.noEnergy;
+  shot.armorPiercing = shot.piercesShield = shot.critical = lance;
+  shot.piercesLeft = options.pierces ?? 0;
+  shot.overdrive = false;
+  bullets.push(shot);
   return true;
 }
 function beginEvolutionLance() {
@@ -187,7 +193,7 @@ function evolutionTryIntercept() {
   const packet = candidates.filter(({ shot }) => shot.owner === leader.owner
     && Math.abs((shot.age ?? 0) - (leader.age ?? 0)) <= .24).slice(0, 18);
   for (const { shot, shots } of packet) {
-    shots.splice(shots.indexOf(shot), 1);
+    retireCombatRound(shots, shots.indexOf(shot));
     addEvolutionPulse(shot.x, shot.y, 32, "#9ce9e2", .29);
   }
   if (evolution.links.phalanx) gainShieldEnergy(evolutionShieldChargeTime() * .32);
@@ -330,11 +336,15 @@ function releaseFighterCharge() {
   // fully charged output, but earn that output toward the end of the windup.
   const damage = Math.min(850, Math.exp(evolutionBaseDpsLog()) * (.08 + .87 * Math.pow(power, 1.65)));
   const start = muzzle.x + 2, color = "#ff9a82";
-  const shot = { x: start, y: muzzle.y, previousX: start, previousY: muzzle.y, vx: 1120, vy: 0,
-    angle: 0, length: 36 + 34 * power, halfHeight: 4 + 3 * power, color, core: "#fff0d5",
-    damage, damageLog: Math.log(damage), visual: "lance", source: "crimson-heavy",
-    armorPiercing: true, armorStrength: power, critical: power >= .96,
-    piercesLeft: power >= .96 ? 4 : 2, hitTargets: new Set() };
+  const shot = acquirePlayerRound(start, muzzle.y, 0, 1120, 0, 4 + 3 * power, 36 + 34 * power, color, "#fff0d5");
+  shot.damage = damage;
+  shot.damageLog = Math.log(damage);
+  shot.visual = "lance";
+  shot.source = "crimson-heavy";
+  shot.armorPiercing = true;
+  shot.armorStrength = power;
+  shot.critical = power >= .96;
+  shot.piercesLeft = power >= .96 ? 4 : 2;
   applyGuardPiercingRound(shot);
   bullets.push(shot);
   fighterCombat.redCooldown = fighterCombatRules.redCycle;
@@ -444,7 +454,7 @@ function spawnFighterRound(bullet, volley, primary) {
   bullet.armorPiercing = evolution.pierce > 0;
   if (volley === "azure-seeker") {
     if (primary) gameAudio.fighterSkill?.("blue", "missile", { x: bullet.x, y: bullet.y, power: .5 });
-    bullet.seeker = { retarget: 0, target: null };
+    bullet.seeker = acquirePlayerRoundSeeker(bullet);
     bullet.color = "#75d6fb"; bullet.core = "#e3fcff";
     bullet.length *= .76;
   } else if (volley.startsWith("auric-")) {

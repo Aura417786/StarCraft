@@ -124,6 +124,20 @@ function shipRenderSurface(asset, width, height) {
   asset.cache.set(key, cached);
   return cached;
 }
+function shipRenderDisabledBody(cached) {
+  const body = cached.body;
+  if (cached.disabled) return cached.disabled;
+  const surface = shipRenderCanvas(body.width, body.height);
+  const paint = surface?.getContext("2d");
+  if (!paint || typeof paint.filter !== "string") return null;
+  paint.filter = shipDisabledFilter;
+  paint.drawImage(body, 0, 0);
+  cached.disabled = surface;
+  return surface;
+}
+const shipDisabledFilter = "brightness(0.55) saturate(0.45)";
+const shipHitFilter = "brightness(1.25) saturate(0.65)";
+
 function shipRenderGeometry(asset, ship, playerShip) {
   const [sx, sy, sw, sh] = asset.crop;
   const scale = Math.min(ship.width * 0.94 / sw, ship.height * 0.96 / sh);
@@ -283,9 +297,13 @@ function drawShipPBR(ctx, ship, kind, upgrades = null, quiet = false, time = 0, 
   }
   if (playerShip) drawShipEvolutionModules(ctx, ship, upgrades, asset, quiet, false);
   ctx.save();
-  if (ship.disabled) ctx.filter = "brightness(0.55) saturate(0.45)";
-  else if (ship.hitFlash > 0 && !quiet) ctx.filter = "brightness(1.25) saturate(0.65)";
-  const source = atlas?.image ?? cached?.body ?? asset.image;
+  const filter = ship.disabled ? shipDisabledFilter : ship.hitFlash > 0 && !quiet ? shipHitFilter : "";
+  const filtered = ship.disabled && cached ? shipRenderDisabledBody(cached) : null;
+  if (filter) {
+    if (!filtered) ctx.filter = filter;
+    else if (ctx.filter !== "none") ctx.filter = "none";
+  }
+  const source = filtered ?? atlas?.image ?? cached?.body ?? asset.image;
   const crop = atlas ? [atlas.sourceX, 0, atlas.sourceWidth, atlas.sourceHeight] : cached ? null : asset.crop;
   const shaded = typeof shadeSceneShip === "function" &&
     shadeSceneShip(ctx, ship, source, crop, geometry, playerShip && ship === player);

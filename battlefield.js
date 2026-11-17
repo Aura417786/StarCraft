@@ -12,6 +12,8 @@ const battlefieldSectors = [
 const sceneryRules = { interval: 75, blend: 10, zoom: 1.28, maxImages: 3 };
 const battlefieldState = { sector: 0, previous: 0, completed: 0, clock: 0, ambientClock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 };
 const sceneryCache = new Map();
+let sceneryJourneyClock = -1, sceneryJourneyFrame;
+let sceneryVignetteHeight = 0, sceneryVignette;
 const sceneryStars = Array.from({ length: 48 }, (_, i) => ({
   x: sceneryHash(i * 13.4 + 1), y: sceneryHash(i * 7.9 + 18), depth: 0.2 + sceneryHash(i * 17.8 + 3) * 0.8,
 }));
@@ -45,11 +47,19 @@ function sceneryLayer(sector, menu = false) {
   return record;
 }
 function sceneryJourney(clock = battlefieldState.clock) {
+  if (clock === sceneryJourneyClock && sceneryJourneyFrame) return sceneryJourneyFrame;
   const duration = sceneryRules.interval, blend = sceneryRules.blend;
   const leg = Math.floor(Math.max(0, clock) / duration), phase = Math.max(0, clock) % duration;
   const current = leg % battlefieldSectors.length, next = (current + 1) % battlefieldSectors.length;
   const raw = sceneryClamp((phase - (duration - blend)) / blend, 0, 1);
-  return { leg, current, next, phase, currentAge: phase + blend, nextAge: Math.max(0, phase - (duration - blend)), blend: raw * raw * (3 - 2 * raw) };
+  const frame = { leg, current, next, phase, currentAge: phase + blend,
+    nextAge: Math.max(0, phase - (duration - blend)), blend: raw * raw * (3 - 2 * raw) };
+  // Explicit look-ahead samples must not evict the shared current frame.
+  if (clock === battlefieldState.clock) {
+    sceneryJourneyClock = clock;
+    sceneryJourneyFrame = frame;
+  }
+  return frame;
 }
 function resetBattlefield(inBattle = false) {
   Object.assign(battlefieldState, { sector: 0, previous: 0, completed: 0, clock: 0, ambientClock: 0, transition: 0, titleTime: 5, driftX: 0, driftY: 0 });
@@ -258,10 +268,14 @@ function drawBattlefield(showHud = true) {
   drawSceneryMoon(ctx, journey);
   sceneryDrawParticles();
   drawActiveJourney("back");
-  const vignette = ctx.createLinearGradient(0, 0, 0, h);
-  vignette.addColorStop(0, "#02040b40"); vignette.addColorStop(0.12, "#02040b18"); vignette.addColorStop(0.24, "#02040b00");
-  vignette.addColorStop(0.78, "#02040b00"); vignette.addColorStop(1, "#02040b24");
-  ctx.fillStyle = vignette; ctx.fillRect(0, 0, w, h);
+  if (h !== sceneryVignetteHeight) {
+    sceneryVignette = ctx.createLinearGradient(0, 0, 0, h);
+    sceneryVignette.addColorStop(0, "#02040b40"); sceneryVignette.addColorStop(0.12, "#02040b18");
+    sceneryVignette.addColorStop(0.24, "#02040b00"); sceneryVignette.addColorStop(0.78, "#02040b00");
+    sceneryVignette.addColorStop(1, "#02040b24");
+    sceneryVignetteHeight = h;
+  }
+  ctx.fillStyle = sceneryVignette; ctx.fillRect(0, 0, w, h);
   if (showHud && state === "battle" && w > 740 && h > 460) {
     const theme = battlefieldSectors[battlefieldState.sector], x = Math.round(w * 0.034), y = w <= 1000 ? 160 : 132;
     const emphasis = battlefieldState.titleTime > 0 ? Math.min(1, battlefieldState.titleTime / 1.2) : 0;

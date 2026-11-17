@@ -38,7 +38,7 @@ const BlackHoleSurface = (() => {
     const surface = document.createElement("canvas");
     surface.width = surface.height = 512;
     const gl = surface.getContext("webgl2", { alpha:true, depth:false, stencil:false,
-      antialias:false, premultipliedAlpha:false, preserveDrawingBuffer:true });
+      antialias:false, premultipliedAlpha:false, preserveDrawingBuffer:true, powerPreference:"high-performance" });
     if (!gl) { failed=true; reason="webgl-unavailable"; return; }
     const program=gl.createProgram(), shaders=[];
     for (const [kind, source] of [[gl.VERTEX_SHADER,vertex],[gl.FRAGMENT_SHADER,fragment]]) {

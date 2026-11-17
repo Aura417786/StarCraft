@@ -52,8 +52,10 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 reducedMotion.addEventListener?.("change", () => syncSortieEligibility());
 
 let state = "menu";
+const gameAudioFrame = {};
 let previousTime = 0;
 const combatStepSeconds = 1 / 120;
+const maxCombatFrameSeconds = .05;
 let combatStepRemainder = 0;
 let windowActive = true;
 let pauseView = "";
@@ -139,6 +141,7 @@ const movementKeys = new Set([
 // viewport 使用屏幕像素作为坐标；高清画布另按设备像素密度绘制。
 const viewport = { width: 1280, height: 720 };
 let battlefieldInitialized = false;
+let battlefieldCoversCanvas = false;
 const player = { x: 200, y: 360, width: 180, height: 120, speed: 300,
   lives: startingPlayerLives, maxLives: startingPlayerLives, hitFlash: 0 };
 const flightBounds = { left: 0, right: 0, top: 0, bottom: 0 };
@@ -152,6 +155,12 @@ const stars = Array.from({ length: 150 }, () => ({
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }
+function flightRenderX(entity, alpha) {
+  return entity.x + ((entity.previousX ?? entity.x) - entity.x) * (1 - alpha);
+}
+function flightRenderY(entity, alpha) {
+  return entity.y + ((entity.previousY ?? entity.y) - entity.y) * (1 - alpha);
+}
 function setBossWarning(name = "") {
   const hidden = !name, label = name ? tr(name + "即将出现", name + " incoming") : "";
   if (bossWarning.hidden !== hidden) bossWarning.hidden = hidden;
@@ -160,15 +169,28 @@ function setBossWarning(name = "") {
 function syncGameAudio() {
   const active = isBattleActive();
   const cinematic = isBossPresentationPlaying();
-  gameAudio.sync(active || (cinematic && canAnimateCombatEffects()), !!boss, !!boss?.enraged,
-    { paused: !!pauseView && windowActive && !document.hidden, combo: momentum.count, overdrive: isOverdriveActive(), warning: pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning), cinematic,
-      bossType: boss?.type ?? pendingBossType ?? bossPresentation?.target.type,
-      bossPhase: boss?.finale ? "finale" : boss?.phase, bossHealth: boss?.hp, lives: player.lives,
-      width: viewport.width, height: viewport.height, listenerX: player.x, listenerY: player.y,
-      bossX: boss?.x ?? bossPresentation?.target.x, bossY: boss?.y ?? bossPresentation?.target.y,
-      scene: state, fighter: typeof currentUltimateId === "function" ? currentUltimateId() : "red",
-      elite: enemies.some(enemy => !!enemy.elite),
-      visible: windowActive && !document.hidden });
+  const frame = gameAudioFrame;
+  frame.visible = windowActive && !document.hidden;
+  frame.paused = !!pauseView && frame.visible;
+  frame.combo = momentum.count;
+  frame.overdrive = isOverdriveActive();
+  frame.warning = pendingBossType !== null || (!boss && battleTime >= nextBossTime - bossRules.warning);
+  frame.cinematic = cinematic;
+  frame.bossType = boss?.type ?? pendingBossType ?? bossPresentation?.target.type;
+  frame.bossPhase = boss?.finale ? "finale" : boss?.phase;
+  frame.bossHealth = boss?.hp;
+  frame.lives = player.lives;
+  frame.width = viewport.width; frame.height = viewport.height;
+  frame.listenerX = player.x; frame.listenerY = player.y;
+  frame.bossX = boss?.x ?? bossPresentation?.target.x;
+  frame.bossY = boss?.y ?? bossPresentation?.target.y;
+  frame.scene = state;
+  frame.fighter = typeof currentUltimateId === "function" ? currentUltimateId() : "red";
+  frame.elite = false;
+  for (const enemy of enemies) {
+    if (enemy.elite) { frame.elite = true; break; }
+  }
+  gameAudio.sync(active || (cinematic && canAnimateCombatEffects()), !!boss, !!boss?.enraged, frame);
   syncUltimateAudio(active);
 }
 function updateSoundButton() {
@@ -213,6 +235,7 @@ function resizeBattlefield() {
   if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
   if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  battlefieldCoversCanvas = pixelWidth === width * pixelRatio && pixelHeight === height * pixelRatio;
   // 全屏通常连续发出 resize 和 fullscreenchange，同尺寸不重复调整战斗。
   if (battlefieldInitialized && width === oldWidth && height === oldHeight) return;
   viewport.width = width;
@@ -292,8 +315,8 @@ function resizeEncounter(scaleX, scaleY, resizeY) {
   resizeEliteMines(scaleX, scaleY, resizeY);
   if (typeof resizeFlightTutorial === "function") resizeFlightTutorial(scaleX, resizeY);
   resizeEvolutionWeapons(scaleX, scaleY, resizeY);
-  enemyProjectiles.length = 0;
-  explosions.length = 0;
+  clearCombatRounds(enemyProjectiles);
+  clearCombatExplosions();
 }
 
 function readyFighter() {
@@ -732,7 +755,7 @@ function updatePlayer(seconds) {
   movementHint.hidden = true;
 }
 function resetWeapons(preserveUpgrades = true) {
-  bullets.length = 0;
+  clearCombatRounds(bullets);
   shotCooldown = 0;
   muzzleFlash = 0;
   if (!preserveUpgrades) {
@@ -760,7 +783,6 @@ function weaponPalette() { return weaponPalettes[(weapon.tier - 1) % weaponPalet
 function projectileDamage() { return Math.exp(Math.min(690, weaponDamageLog())); }
 function formattedProjectileDamage() { return progressionFormatLog(weaponDamageLog()); }
 function shotLanes() { return firingLanes(); }
-function shotOffsets() { return shotLanes().map(lane => lane.offset); }
 function powerupGainForTime(type = "red") {
   return type === "red" && battleTime >= 360 ? 2 : 1;
 }
@@ -826,7 +848,7 @@ function updateShooting(seconds) {
     applyGravityTide(bullet, seconds, "player");
     bullet.x += (bullet.vx ?? weapon.speed) * seconds;
     bullet.y += (bullet.vy ?? 0) * seconds;
-    if (typeof interceptAlienRound === "function" && interceptAlienRound(bullet)) bullets.splice(index, 1);
+    if (typeof interceptAlienRound === "function" && interceptAlienRound(bullet)) retireCombatRound(bullets, index);
   }
   const interval = reconcileShotCadence();
   muzzleFlash = Math.max(0, muzzleFlash - seconds);
@@ -843,15 +865,17 @@ function updateShooting(seconds) {
   const tierShape = Math.min(4, weapon.tier - 1);
   const halfHeight = (firingStyle.mode === "focus" ? 2.5 + Math.log2(weapon.lanes) * .65 : 2.5)
     * (1 + tierShape * .12) * (overdrive ? 1.5 : 1);
-  for (const [index, lane] of lanes.entries()) {
+  const center = Math.floor((lanes.length - 1) / 2);
+  const damage = projectileDamage();
+  for (let index = 0; index < lanes.length; index++) {
+    const lane = lanes[index];
     const angle = lane.angle;
     const y = muzzle.y + lane.offset;
-    const bullet = { x: muzzle.x + 3, previousX: muzzle.x + 3, y, previousY: y,
-      angle, vx: Math.cos(angle) * weapon.speed, vy: Math.sin(angle) * weapon.speed,
-      halfHeight, length: weapon.length + tierShape * 3, overdrive, mode: firingStyle.mode, tier: weapon.tier,
-      piercesLeft: evolutionPierceCount(), hitTargets: new Set(), damage: projectileDamage() * lane.weight,
-      color: palette.color, core: palette.core };
-    bullets.push(spawnFighterRound(bullet, volley, index === Math.floor((lanes.length - 1) / 2)));
+    const bullet = acquirePlayerRound(muzzle.x + 3, y, angle, Math.cos(angle) * weapon.speed, Math.sin(angle) * weapon.speed,
+      halfHeight, weapon.length + tierShape * 3, palette.color, palette.core);
+    bullet.overdrive = overdrive; bullet.mode = firingStyle.mode; bullet.tier = weapon.tier;
+    bullet.piercesLeft = evolutionPierceCount(); bullet.damage = damage * lane.weight;
+    bullets.push(spawnFighterRound(bullet, volley, index === center));
   }
   muzzleFlash = .055;
   gameAudio.shoot(overdrive, weapon.tier, sortieFighter);
@@ -864,7 +888,7 @@ function resetEncounter(resetScore = true) {
   if (resetScore) resetBossEncounter();
   else resizeBossEncounter();
   enemies.length = 0;
-  explosions.length = 0;
+  clearCombatExplosions();
   enemyCooldown = 0.6;
   enemySpawnCount = 0;
   powerups.length = 0;
@@ -966,14 +990,7 @@ function spawnEnemy(kind = chooseEnemyKind()) {
 function createExplosion(enemy, points = enemy.points ?? enemyRules.points) {
   gameAudio.explode(points >= 2000, enemy.x, enemy.y);
   recordCombatDestruction(enemy, points >= 2000);
-  explosions.push({ x: enemy.x, y: enemy.y, age: 0, points,
-    duration: reducedMotion.matches ? 0.2 : 0.55,
-    particles: Array.from({ length: 12 }, (_, index) => {
-      const angle = index / 12 * Math.PI * 2 + Math.random() * 0.3;
-      const speed = 45 + Math.random() * 95;
-      return { vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed };
-    }),
-  });
+  addCombatExplosion(enemy.x, enemy.y, points, reducedMotion.matches ? 0.2 : 0.55);
 }
 function bulletHitsEnemy(bullet, enemy) { return Number.isFinite(projectileEnemyEntry(bullet, enemy)); }
 function updateEncounter(seconds) {
@@ -991,10 +1008,7 @@ function updateEncounter(seconds) {
     if (scene && seconds > 0) updateJourneyEncounter(scene, scene.previousElapsed);
   }
   updateEnemyProjectiles(seconds);
-  for (let index = explosions.length - 1; index >= 0; index--) {
-    explosions[index].age += seconds;
-    if (explosions[index].age >= explosions[index].duration) explosions.splice(index, 1);
-  }
+  advanceCombatExplosions(seconds);
   for (let index = enemies.length - 1; index >= 0; index--) {
     const enemy = enemies[index];
     enemy.hitFlash = Math.max(0, enemy.hitFlash - seconds);
@@ -1048,23 +1062,20 @@ function updatePowerups(seconds) {
   }
   resolveProjectileHits();
   for (let index = bullets.length - 1; index >= 0; index--) {
-    if (bullets[index].x > viewport.width || bullets[index].y < -60 || bullets[index].y > viewport.height + 60) bullets.splice(index, 1);
+    if (bullets[index].x > viewport.width || bullets[index].y < -60 || bullets[index].y > viewport.height + 60)
+      retireCombatRound(bullets, index);
   }
 }
 function resolveProjectileHits() {
+  invalidateProjectileEnemyGrid();
   for (let bulletIndex = bullets.length - 1; bulletIndex >= 0; bulletIndex--) {
     const bullet = bullets[bulletIndex];
     if (!bullet.hitTargets) bullet.hitTargets = new Set();
     let consumed = false;
     // 每轮重新寻找最近目标；爆破或击破首领可能移除其他目标。
     while (!consumed) {
-      let hit = null;
-      for (const enemy of enemies) {
-        if (bullet.hitTargets.has(enemy) || enemy.x - enemy.width / 2 >= viewport.width) continue;
-        const time = projectileEnemyEntry(bullet, enemy);
-        if (Number.isFinite(time) && (!hit || time < hit.time)) hit = { kind: "enemy", target: enemy, time };
-      }
-      for (const orb of bullet.auxiliary ? [] : powerups) {
+      let hit = findProjectileEnemyHit(bullet);
+      if (!bullet.auxiliary) for (const orb of powerups) {
         if (orb.x - orb.radius >= viewport.width) continue;
         const time = projectileOrbEntry(bullet, orb);
         if (Number.isFinite(time) && (!hit || time < hit.time)) hit = { kind: "orb", target: orb, time };
@@ -1074,10 +1085,9 @@ function resolveProjectileHits() {
         const time = projectileOrbEntry(bullet, mine);
         if (Number.isFinite(time) && (!hit || time < hit.time)) hit = { kind: "mine", target: mine, time };
       }
-      for (const target of activeBosses()) {
-        if (bullet.hitTargets.has(target) || !bossCanTakeDamage(target)) continue;
-        const entry = projectileAlienBossHit(bullet, target);
-        if (entry && (!hit || entry.time < hit.time)) hit = { kind: "boss", target, time: entry.time };
+      if (boss && !bullet.hitTargets.has(boss) && bossCanTakeDamage(boss)) {
+        const entry = projectileAlienBossHit(bullet, boss);
+        if (entry && (!hit || entry.time < hit.time)) hit = { kind: "boss", target: boss, time: entry.time };
       }
       for (const object of battlefieldEvents.objects) {
         if (bullet.hitTargets.has(object) || object.x - object.width / 2 >= viewport.width) continue;
@@ -1100,19 +1110,20 @@ function resolveProjectileHits() {
         if (hit.target.hp === 0) defeatEnemy(enemies.indexOf(hit.target), bullet);
         onFighterProjectileImpact(bullet, hit.target);
       }
+      invalidateProjectileEnemyGrid();
       movementHint.hidden = true;
       if (!isBattleActive() || bullets[bulletIndex] !== bullet) return;
       if (hit.kind === "orb" || hit.kind === "object" || hit.kind === "mine" || !(bullet.piercesLeft > 0)) {
-        bullets.splice(bulletIndex, 1); consumed = true;
+        retireCombatRound(bullets, bulletIndex); consumed = true;
       } else bullet.piercesLeft--;
     }
   }
 }
-function drawPowerups() {
+function drawPowerups(alpha = 1) {
   for (const orb of powerups) {
     const details = powerupTypes[orb.type];
     context.save();
-    context.translate(orb.x, orb.y);
+    context.translate(flightRenderX(orb, alpha), flightRenderY(orb, alpha));
     context.strokeStyle = details.color;
     context.fillStyle = "#101e35";
     context.lineWidth = 2;
@@ -1252,14 +1263,15 @@ function endGame(won = false) {
     : tr(`游戏结束。本局得分 ${score}，击毁 ${kills} 架敌机。`, `Game over. Score: ${score}. Enemies destroyed: ${kills}.`);
   if (!epilogue) restartButton.focus({ preventScroll: true });
 }
-function drawEnemies() {
+function drawEnemies(alpha = 1) {
   for (const enemy of enemies) {
+    context.save();
+    context.translate(flightRenderX(enemy, alpha) - enemy.x, flightRenderY(enemy, alpha) - enemy.y);
     if (enemy.kind === "transport") drawSupplyTransport(enemy);
     else if (!drawEliteHull(enemy)) {
       drawEnemyHull(enemy);
       drawEliteEscortShield(enemy);
     }
-    context.save();
     context.translate(enemy.x, enemy.y);
     const w = enemy.width, h = enemy.height;
     // 完整圆角血条：仅用连续长度表达剩余血量，不绘制分段或文字。
@@ -1283,78 +1295,53 @@ function drawEnemies() {
   }
 }
 function drawExplosions() {
+  if (explosions.length === 0) return;
+  context.save();
+  context.fillStyle = "#ffe3a5";
+  context.font = "600 16px Consolas, monospace";
+  context.textAlign = "center";
+  const travel = reducedMotion.matches ? 0 : 24;
   for (const explosion of explosions) {
     const progress = explosion.age / explosion.duration;
-    context.save();
     context.globalAlpha = 1 - progress;
-    context.fillStyle = "#ffe3a5";
-    context.font = "600 16px Consolas, monospace";
-    context.textAlign = "center";
     if (explosion.points > 0) {
       context.fillText("+" + explosion.points, clamp(explosion.x, 30, viewport.width - 30),
-        explosion.y - 28 - (reducedMotion.matches ? 0 : progress * 24));
+        explosion.y - 28 - progress * travel);
     }
-    context.restore();
   }
+  context.restore();
 }
-function drawBullets() {
+function drawBullets(alpha = 1) {
   context.save();
   const glow = quietCombatMotion() ? 0 : visualQuality.glow;
   const crowded = bullets.length + bossProjectiles.length + enemyProjectiles.length > 112;
   const tailBudget = visualQuality.id === "high" ? (crowded ? 24 : 52) : (crowded ? 14 : 30);
   for (let index = 0; index < bullets.length; index++) {
     const bullet = bullets[index];
-    context.save(); context.translate(bullet.x, bullet.y); context.rotate(bullet.angle ?? 0);
+    context.save(); context.translate(flightRenderX(bullet, alpha), flightRenderY(bullet, alpha));
+    if (bullet.angle) context.rotate(bullet.angle);
     const half = bullet.halfHeight ?? 2.5, length = bullet.length ?? weapon.length;
     if (index >= bullets.length - tailBudget && typeof drawFlightBoltWake === "function")
       drawFlightBoltWake(context, length, half, bullet.color, index, battleTime, false, bullet);
-    context.fillStyle = bullet.color;
-    context.beginPath();
-    if (bullet.visual === "lance" || bullet.visual === "counter") {
-      context.moveTo(0, -half * .65); context.lineTo(length * .78, -half);
-      context.lineTo(length, 0); context.lineTo(length * .78, half); context.lineTo(0, half * .65); context.closePath();
-    } else {
-      context.moveTo(0, -half * .32);
-      context.lineTo(length * .24, -half * .76);
-      context.quadraticCurveTo(length * .86, -half * 1.38, length, 0);
-      context.quadraticCurveTo(length * .86, half * 1.38, length * .24, half * .76);
-      context.lineTo(0, half * .32); context.closePath();
-    }
-    if (glow && half >= 2) {
-      context.strokeStyle = bullet.color;
-      context.lineJoin = "round";
-      context.globalAlpha = .18 * glow;
-      context.lineWidth = half * 2.3; context.stroke();
-      if (!crowded) {
-        context.globalAlpha = .38 * glow;
-        context.lineWidth = half * .8; context.stroke();
-      }
-      context.globalAlpha = 1;
-    }
-    context.fill();
-    context.fillStyle = bullet.core;
-    context.beginPath(); context.moveTo(length * .17, 0);
-    context.lineTo(length * .75, -half * .48);
-    context.quadraticCurveTo(length * .94, -half * .42, length * .96, 0);
-    context.quadraticCurveTo(length * .94, half * .42, length * .75, half * .48);
-    context.closePath(); context.fill();
+    drawFlightProjectileBody(context, bullet, half, length, glow, crowded);
     context.restore();
   }
   context.restore();
 }
-function drawMuzzleFlash() {
+function drawMuzzleFlash(alpha = 1) {
   if (state !== "battle" || muzzleFlash <= 0 || reducedMotion.matches) return;
   const muzzle = muzzlePosition();
   const glow = visualQuality.glow;
   const intensity = muzzleFlash / .055;
   const palette = weaponPalette();
   context.save();
+  context.translate(flightRenderX(player, alpha) - player.x, flightRenderY(player, alpha) - player.y);
   context.globalAlpha = intensity;
   context.fillStyle = palette.core;
   context.shadowColor = palette.color;
   context.shadowBlur = 8 * glow;
-  for (const offset of shotOffsets()) {
-    const y = muzzle.y + offset;
+  for (const lane of shotLanes()) {
+    const y = muzzle.y + lane.offset;
     if (glow && typeof drawFlightLattice === "function")
       drawFlightLattice(context, muzzle.x + 3, y, 4 + intensity * 5, 5 + intensity * 7, palette.color, battleTime, .44 * intensity);
     if (glow) {
@@ -1373,11 +1360,12 @@ function drawMuzzleFlash() {
   }
   context.restore();
 }
-function drawPlayer() {
+function drawPlayer(alpha = 1) {
   if (state !== "battle") return;
+  context.save();
+  context.translate(flightRenderX(player, alpha) - player.x, flightRenderY(player, alpha) - player.y);
   if (typeof drawFlightEngineWake === "function")
     drawFlightEngineWake(context, player, fighterProfile().id, shipVisuals.clock, isOverdriveActive(), flightBoostActive());
-  context.save();
   if (player.hitFlash > 0) {
     context.strokeStyle = "#ff657b";
     context.lineWidth = 2;
@@ -1397,6 +1385,7 @@ function drawPlayer() {
   context.restore();
 }
 function advanceCombatStep(realSeconds) {
+  recycleCombatRounds();
   const cinematic = activeBossPresentation();
   if (cinematic) {
     const seconds = bossPresentationFrameSeconds(cinematic, combatImpactFrameSeconds(realSeconds));
@@ -1437,9 +1426,29 @@ function advanceCombatStep(realSeconds) {
   }
 }
 
+function advanceCombatFrame(seconds, resuming) {
+  if (!battleHasFocus()) {
+    combatStepRemainder = 0;
+    return 1;
+  }
+  // Handle actions on the first frame without moving the simulation clock.
+  if (resuming) advanceCombatStep(0);
+  combatStepRemainder += seconds;
+  while (combatStepRemainder + 1e-9 >= combatStepSeconds && battleHasFocus()) {
+    combatStepRemainder = Math.max(0, combatStepRemainder - combatStepSeconds);
+    advanceCombatStep(combatStepSeconds);
+  }
+  if (!battleHasFocus()) {
+    combatStepRemainder = 0;
+    return 1;
+  }
+  return resuming || isBossPresentationPlaying() || combatEffects.hitPause > 0
+    ? 1 : clamp(combatStepRemainder / combatStepSeconds, 0, 1);
+}
+
 function drawFrame(time) {
   const resuming = previousTime === 0;
-  const realSeconds = resuming ? 0 : clamp((time - previousTime) / 1000, 0, .05);
+  const realSeconds = resuming ? 0 : clamp((time - previousTime) / 1000, 0, maxCombatFrameSeconds);
   if (resuming) combatStepRemainder = 0;
   previousTime = time;
   if (typeof pollFlightGamepad === "function") pollFlightGamepad();
@@ -1456,26 +1465,21 @@ function drawFrame(time) {
     window.requestAnimationFrame(drawFrame);
     return;
   }
-  if (battleHasFocus()) {
-    // Process immediate actions on the first frame without advancing time.
-    if (resuming) advanceCombatStep(0);
-    combatStepRemainder += realSeconds;
-    while (combatStepRemainder + 1e-9 >= combatStepSeconds && battleHasFocus()) {
-      combatStepRemainder = Math.max(0, combatStepRemainder - combatStepSeconds);
-      advanceCombatStep(combatStepSeconds);
-    }
-  }
-  if (!battleHasFocus()) combatStepRemainder = 0;
+  const alpha = advanceCombatFrame(realSeconds, resuming);
   const showCombat = state !== "over" && !evolution.pending;
   prepareSceneLighting(viewport);
-  context.clearRect(0, 0, viewport.width, viewport.height);
+  // The backdrop starts with an opaque fill. Both camera effects only zoom
+  // with overscan, so a full-pixel viewport can skip the preceding clear.
+  if (!battlefieldCoversCanvas) context.clearRect(0, 0, viewport.width, viewport.height);
   context.save();
   applyBossPresentationCamera(context);
   if (typeof bossPressureCameraScale === "function") {
     const pressureZoom = bossPressureCameraScale();
-    context.translate(viewport.width / 2, viewport.height / 2);
-    context.scale(pressureZoom, pressureZoom);
-    context.translate(-viewport.width / 2, -viewport.height / 2);
+    if (pressureZoom !== 1) {
+      context.translate(viewport.width / 2, viewport.height / 2);
+      context.scale(pressureZoom, pressureZoom);
+      context.translate(-viewport.width / 2, -viewport.height / 2);
+    }
   }
   drawBattlefield(showCombat);
   drawSceneLightingBackdrop(context);
@@ -1489,6 +1493,7 @@ function drawFrame(time) {
   if (showCombat) drawSceneLightScatter(context);
   context.globalAlpha = 1;
   if (showCombat) {
+    const hostileAlpha = evolutionIsFrozen() ? 1 : alpha;
     const cameraOffset = combatShakeOffset();
     context.translate(cameraOffset.x, cameraOffset.y);
     const presentation = activeBossPresentation();
@@ -1498,21 +1503,21 @@ function drawFrame(time) {
     drawBattlefieldObjects();
     drawEliteMines();
     if (presentation?.motion) drawBossPresentationMotion(context, presentation);
-    else drawEnemies();
+    else drawEnemies(hostileAlpha);
     drawAceThreats(context);
     drawEnemyThreats(bossProjectiles.length, hostileShotDetailStride(bossProjectiles.length + enemyProjectiles.length),
-      quietCombatMotion() || visualQuality.id === "low");
-    drawBossBattle();
-    if (!isBossDeathPlaying()) drawPowerups();
-    drawBullets();
+      quietCombatMotion() || visualQuality.id === "low", hostileAlpha);
+    drawBossBattle(hostileAlpha);
+    if (!isBossDeathPlaying()) drawPowerups(alpha);
+    drawBullets(alpha);
     drawJourneyCatapult();
-    drawPlayer();
+    drawPlayer(alpha);
     drawEvolutionWeapons(context);
     drawFighterCombat(context);
     drawEvolution();
-    drawShield();
+    drawShield(alpha);
     if (typeof PlayerVfx !== "undefined") PlayerVfx.shieldDetail(context);
-    drawMuzzleFlash();
+    drawMuzzleFlash(alpha);
     drawUltimate();
     drawCombatEffects();
     drawExplosions();

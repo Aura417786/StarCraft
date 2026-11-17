@@ -181,7 +181,7 @@ async function main() {
     methodology: "Fixtures stage encounters and loadouts, then use production damagePlayer, DOM controls and unmodified game scripts. Main assertions hold the game RAF to inspect the precise restoration instant; a separate real-RAF smoke checks keyboard input and normal advancement. This is not a natural full-campaign clear or hardware gamepad test." };
   const html = fs.readFileSync(path.join(game, "index.html"), "utf8");
   const fingerprint = createHash("sha256");
-  for (const file of ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1])])
+  for (const file of ["index.html", ...[...html.matchAll(/<script\s+src="([^"]+)"/g)].map(match => match[1].split(/[?#]/, 1)[0])])
     fingerprint.update(file).update(fs.readFileSync(path.join(game, file)));
   evidence.sourceFingerprint = fingerprint.digest("hex");
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, headless: true,

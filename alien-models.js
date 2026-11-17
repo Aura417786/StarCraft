@@ -14,6 +14,9 @@ let starBreakerModelLoad;
 let starBreakerModelPumpScheduled = false;
 let starBreakerModelsUnavailable = false;
 const bossWorldLightSample = {};
+const bossEnvironmentRadiance = Float32Array.from({ length: 256 }, (_, value) => 2 ** (value * (4 / 255)) - 1);
+const bossContactShadowProfiles = [[.08, .61, .43], [-.075, .38, .62], [-.13, .27, .44]];
+const bossContactShadowGradients = new WeakMap();
 // The sector plate motivates the key; the darker opposite hemisphere preserves shape.
 const bossSectorLights = [
   { id: "orbit", aim: [.68, .64, .58], rgb: [180, 218, 255], rim: [86, 151, 208] },
@@ -265,7 +268,7 @@ async function loadStarBreakerModel(entry) {
     const mixer = gltf.animations.length ? new AnimationMixer(center) : null;
     for (const clip of gltf.animations) mixer.clipAction(clip).play();
     const duration = Math.max(1, ...gltf.animations.map(clip => clip.duration));
-    entry.model = { center, turn, size, mixer, duration, animatedMeshes, resources };
+    entry.model = { center, turn, size, mixer, duration, animationTime: null, animatedMeshes, resources };
     // The warning starts asset work before the encounter. Compile off the draw path when idle.
     entry.warming = true;
     const prepare = () => {
@@ -336,7 +339,9 @@ function preloadBossEnvironment(stage, sector) {
       const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       const radiance = new Float32Array(pixels.length);
       for (let i = 0; i < pixels.length; i += 4) {
-        for (let channel = 0; channel < 3; channel++) radiance[i + channel] = 2 ** (pixels[i + channel] * (4 / 255)) - 1;
+        radiance[i] = bossEnvironmentRadiance[pixels[i]];
+        radiance[i + 1] = bossEnvironmentRadiance[pixels[i + 1]];
+        radiance[i + 2] = bossEnvironmentRadiance[pixels[i + 2]];
         radiance[i + 3] = 1;
       }
       const { DataTexture, FloatType, RGBAFormat, LinearSRGBColorSpace, EquirectangularReflectionMapping, PMREMGenerator } = StarBreaker3D;
@@ -508,6 +513,17 @@ function lightBossModel(stage, model, type, pose, x, y, width, incident) {
 }
 
 function drawBossContactShadow(ctx, x, y, width, height, incident, quiet) {
+  let gradients = bossContactShadowGradients.get(ctx);
+  if (!gradients) {
+    gradients = bossContactShadowProfiles.map(([cy, radius, opacity]) => {
+      const shade = ctx.createRadialGradient(0, cy, radius * .08, 0, cy, radius);
+      shade.addColorStop(0, "rgba(1, 2, 7, " + opacity + ")");
+      shade.addColorStop(.54, "rgba(2, 4, 11, " + opacity * .53 + ")");
+      shade.addColorStop(1, "rgba(4, 8, 18, 0)");
+      return shade;
+    });
+    bossContactShadowGradients.set(ctx, gradients);
+  }
   ctx.save();
   // Tight occlusion beneath the shell and a separate, softer shadow displaced
   // away from the key. Both affect the scenery beneath the opaque model only.
@@ -520,23 +536,19 @@ function drawBossContactShadow(ctx, x, y, width, height, incident, quiet) {
   }
   ctx.translate(x - dx * width * .083, y + height * (.22 + dy * .085));
   ctx.rotate(dx * -.13);
-  ctx.scale(1, height / width * .64);
-  const layer = (cy, radius, opacity) => {
-    const shade = ctx.createRadialGradient(0, cy, radius * .08, 0, cy, radius);
-    shade.addColorStop(0, "rgba(1, 2, 7, " + opacity + ")");
-    shade.addColorStop(.54, "rgba(2, 4, 11, " + opacity * .53 + ")");
-    shade.addColorStop(1, "rgba(4, 8, 18, 0)");
-    ctx.fillStyle = shade;
+  // Express the original ellipses in hull-width units to reuse the same
+  // gradients across ship sizes, movement, fullscreen, and the 2D fallback.
+  ctx.scale(width, height * .64);
+  const count = !quiet && visualQuality.id === "high" ? 3 : 2;
+  for (let index = 0; index < count; index++) {
+    const [cy, radius] = bossContactShadowProfiles[index];
+    ctx.fillStyle = gradients[index];
     ctx.fillRect(-radius, cy - radius, radius * 2, radius * 2);
-  };
-  layer(width * .08, width * .61, .43);
-  layer(-width * .075, width * .38, .62);
-  if (!quiet && visualQuality.id === "high") layer(-width * .13, width * .27, .44);
+  }
   ctx.restore();
 }
 
-function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
-  const model = preloadStarBreakerModel(type, true)?.model;
+function drawStarBreakerModel(ctx, type, x, y, width, height, pose, model = preloadStarBreakerModel(type, true)?.model) {
   if (!model) return false;
   const stage = bossModelStage();
   if (!stage) return false;
@@ -547,7 +559,11 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
     stage.current = model;
   }
   const { time, charge, ruptured, recoil, quiet, action } = pose;
-  model.mixer?.setTime(time % Math.max(.01, model.duration));
+  const animationTime = time % model.duration;
+  if (model.mixer && animationTime !== model.animationTime) {
+    model.mixer.setTime(animationTime);
+    model.animationTime = animationTime;
+  }
   const idleMotion = 1 - (action?.slack ?? 0) * .93;
   model.turn.rotation.set(.025 + Math.sin(time * 1.3) * .08 * idleMotion + (action?.pitch ?? 0),
     -.11 + Math.sin(time * .77) * .18 * idleMotion + (action?.yaw ?? 0),
@@ -569,9 +585,12 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
   const renderHeight = Math.max(112, Math.round(renderWidth / aspect));
   const target = renderer.domElement;
   if (target.width !== renderWidth || target.height !== renderHeight) renderer.setSize(renderWidth, renderHeight, false);
-  camera.left = -fittedWidth / 2; camera.right = fittedWidth / 2;
-  camera.top = fittedWidth / aspect / 2; camera.bottom = -camera.top;
-  camera.updateProjectionMatrix();
+  const halfWidth = fittedWidth / 2, halfHeight = fittedWidth / aspect / 2;
+  if (camera.right !== halfWidth || camera.top !== halfHeight) {
+    camera.left = -halfWidth; camera.right = halfWidth;
+    camera.top = halfHeight; camera.bottom = -halfHeight;
+    camera.updateProjectionMatrix();
+  }
   const incident = sampleBossWorldLight(type, x, y);
   lightBossModel(stage, model, type, pose, x, y, width, incident);
   drawBossContactShadow(ctx, x, y, width, height, incident, quiet);
@@ -591,6 +610,8 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose) {
 
 function drawStarBreakerBoss(ctx, target, quiet) {
   if (target.disabled) return false;
+  const model = preloadStarBreakerModel(target.type, true)?.model;
+  if (!model) return false;
   const age = target.age || 0;
   const action = bossActionPose(target, quiet);
   const pressure = target.phase === "rupture";
@@ -601,5 +622,5 @@ function drawStarBreakerBoss(ctx, target, quiet) {
     time: quiet ? 0 : age, charge: cue?.charge ?? (pressure ? .85 : action.charge), action,
     ruptured: cue?.unfurl ?? (pressure ? 1 : stageStrength),
     hit: target.hitFlash ? 1 : 0, recoil, quiet, color: target.color, turn: cue?.turn, intensity: cue?.intensity,
-  });
+  }, model);
 }

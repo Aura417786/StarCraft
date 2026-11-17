@@ -299,8 +299,10 @@ function updateFormationTactics(group, members, seconds) {
     let fired = false;
     for (const { member, x, y, vx, vy, radius } of cue.shots) {
       if (!enemies.includes(member) || enemyProjectiles.length >= enemyCombatRules.maxProjectiles) continue;
-      enemyProjectiles.push({ x, y, previousX: x, previousY: y, vx, vy, radius, age: 0,
-        formationAttack: true, formationTint: cue.tint });
+      const shot = acquireHostileRound(x, y, vx, vy, radius);
+      shot.formationAttack = true;
+      shot.formationTint = cue.tint;
+      enemyProjectiles.push(shot);
       travel = Math.max(travel, (x - flightBounds.left) / -vx);
       fired = true;
     }

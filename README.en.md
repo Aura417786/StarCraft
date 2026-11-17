@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**High-refresh rendering and dense combat optimizations.** Interpolated ship and projectile positions follow the display refresh while combat uses a fixed simulation step. Pooled combat objects and cached glow reduce repeated work in dense battles.
+
 **High-resolution hangar fighters.** View Crimson, Azure and Auric at an angle to see the recessed barrels, armor seams and canopy reflections in fullscreen.
 
 **Hangar navigation fix.** Refits, Campaign Archive and Badge Wall open in both windowed and fullscreen play.

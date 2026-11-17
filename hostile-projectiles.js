@@ -1,12 +1,18 @@
 "use strict";
 
+const hostileContactShape = {};
+
 // These dimensions describe the solid, visible head. Bloom is decoration.
-function hostileShotShape(shot) {
+function hostileShotShape(shot, shape = {}) {
   const r = shot.radius;
-  if (shot.glyph === "thread") return { kind: "capsule", spine: r * 1.25, radius: r * .65 };
-  if (shot.glyph === "prism" || shot.glyph === "shard")
-    return { kind: "diamond", width: r * 1.33, height: r * .82 };
-  return { kind: "circle", radius: r };
+  if (shot.glyph === "thread") {
+    shape.kind = "capsule"; shape.spine = r * 1.25; shape.radius = r * .65;
+  } else if (shot.glyph === "prism" || shot.glyph === "shard") {
+    shape.kind = "diamond"; shape.width = r * 1.33; shape.height = r * .82;
+  } else {
+    shape.kind = "circle"; shape.radius = r;
+  }
+  return shape;
 }
 
 function capsuleSweepEntry(x, y, dx, dy, length, radius) {
@@ -21,7 +27,7 @@ function hostileShotHitsHull(shot, target) {
   const y0 = (target.previousY ?? target.y) - (shot.previousY ?? shot.y);
   const dx = target.x - shot.x - x0, dy = target.y - shot.y - y0;
   const hullRadius = target.height * .16;
-  const shape = hostileShotShape(shot);
+  const shape = hostileShotShape(shot, hostileContactShape);
   if (shape.kind === "circle") {
     return Number.isFinite(projectileCircleEntry(x0, y0, dx, dy, 0, 0, hullRadius + shape.radius));
   }
@@ -59,19 +65,10 @@ function hostileShotDetailStride(count) {
   return Math.max(1, Math.ceil(count / budget));
 }
 
-function drawHostileProjectile(ctx, shot, color, quiet, detailed = true, crowded = false) {
-  const shape = hostileShotShape(shot);
-  ctx.save();
-  ctx.translate(shot.x, shot.y);
-  const wake = detailed && !quiet && (shot.radius >= 6 || shot.glyph) && typeof drawFlightBoltWake === "function";
-  if (shape.kind !== "circle" || wake) ctx.rotate(Math.atan2(shot.vy ?? 0, shot.vx ?? 0));
-  if (wake)
-    drawFlightBoltWake(ctx, shot.radius * 1.2, shot.radius * .49, color,
-      (shot.vx ?? 0) * .073 + (shot.vy ?? 0) * .113, shot.age ?? 0, true);
-  ctx.fillStyle = ctx.shadowColor = color;
-  // The crisp collision silhouette is always rendered. At saturation
-  // a small bright core reads better than hundreds of overlapping blurs.
-  ctx.shadowBlur = quiet || !detailed || crowded ? 0 : shot.burstAt ? 15 : 8;
+const hostileHeadTiles = new Map();
+const hostileRenderShape = {};
+
+function traceHostileBody(ctx, shape) {
   ctx.beginPath();
   if (shape.kind === "capsule") {
     const length = shape.spine + shape.radius;
@@ -80,8 +77,14 @@ function drawHostileProjectile(ctx, shot, color, quiet, detailed = true, crowded
     ctx.moveTo(shape.width, 0); ctx.lineTo(0, shape.height);
     ctx.lineTo(-shape.width, 0); ctx.lineTo(0, -shape.height); ctx.closePath();
   } else ctx.arc(0, 0, shape.radius, 0, Math.PI * 2);
+}
+
+function paintHostileHead(ctx, shot, shape, color, blur) {
+  ctx.fillStyle = ctx.shadowColor = color;
+  if (blur) ctx.shadowBlur = blur;
+  traceHostileBody(ctx, shape);
   ctx.fill();
-  ctx.shadowBlur = 0;
+  if (blur) ctx.shadowBlur = 0;
   const r = shot.radius;
   ctx.fillStyle = "#fff7ed";
   ctx.beginPath();
@@ -94,5 +97,55 @@ function drawHostileProjectile(ctx, shot, color, quiet, detailed = true, crowded
     ctx.arc(0, 0, r * .43, 0, Math.PI * 2, true);
   } else ctx.arc(0, 0, r * .44, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function hostileHeadTile(shot, shape, color, blur, scale) {
+  const key = `${shape.kind}/${shot.radius}/${color}/${blur}/${scale}`;
+  const cached = hostileHeadTiles.get(key);
+  if (cached) return cached;
+  const radius = shape.kind === "capsule" ? shape.spine + shape.radius : shape.kind === "diamond" ? shape.width : shape.radius;
+  const center = Math.ceil(radius * scale + blur * 2 + 2);
+  if (center > 140 || typeof shipRenderCanvas !== "function") return null;
+  const tile = shipRenderCanvas(center * 2, center * 2);
+  const paint = tile?.getContext("2d");
+  if (!paint) return null;
+  // Move the opaque head outside the bake tile. Its shadow alone lands inside,
+  // leaving the live vector fill and its bright center exactly as authored.
+  const offset = tile.width;
+  paint.setTransform(scale, 0, 0, scale, center - offset, center);
+  paint.fillStyle = paint.shadowColor = color;
+  paint.shadowBlur = blur; paint.shadowOffsetX = offset;
+  traceHostileBody(paint, shape); paint.fill();
+  if (hostileHeadTiles.size >= 128) hostileHeadTiles.delete(hostileHeadTiles.keys().next().value);
+  const entry = { tile, extent: center / scale };
+  hostileHeadTiles.set(key, entry);
+  return entry;
+}
+
+function drawHostileProjectile(ctx, shot, color, quiet, detailed = true, crowded = false, alpha = 1) {
+  const shape = hostileShotShape(shot, hostileRenderShape);
+  const blur = quiet || !detailed || crowded ? 0 : shot.burstAt ? 15 : 8;
+  let sprite;
+  // Native blur is in backing-store pixels. Bake it once at the active pixel
+  // scale and hold near-identical camera zoom samples in the same cache bin.
+  if (blur && ctx.getTransform && ctx.globalAlpha === 1 && ctx.globalCompositeOperation === "source-over" && ctx.filter === "none") {
+    const matrix = ctx.getTransform();
+    const pixelScale = Math.max(.25, Math.round(Math.hypot(matrix.a, matrix.b) * 16) / 16);
+    sprite = hostileHeadTile(shot, shape, color, blur, pixelScale);
+  }
+  ctx.save();
+  const x = typeof flightRenderX === "function" ? flightRenderX(shot, alpha) : shot.x;
+  const y = typeof flightRenderY === "function" ? flightRenderY(shot, alpha) : shot.y;
+  ctx.translate(x, y);
+  const wake = detailed && !quiet && (shot.radius >= 6 || shot.glyph) && typeof drawFlightBoltWake === "function";
+  if (shape.kind !== "circle" || wake) ctx.rotate(Math.atan2(shot.vy ?? 0, shot.vx ?? 0));
+  if (wake)
+    drawFlightBoltWake(ctx, shot.radius * 1.2, shot.radius * .49, color,
+      (shot.vx ?? 0) * .073 + (shot.vy ?? 0) * .113, shot.age ?? 0, true);
+  if (sprite) {
+    const { tile, extent } = sprite;
+    ctx.drawImage(tile, -extent, -extent, extent * 2, extent * 2);
+  }
+  paintHostileHead(ctx, shot, shape, color, sprite ? 0 : blur);
   ctx.restore();
 }

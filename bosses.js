@@ -153,15 +153,15 @@ function updateBossHealthHud() {
 }
 
 function clearAlienThreats() {
-  bossProjectiles.length = 0;
+  clearCombatRounds(bossProjectiles);
   bossHazards.length = 0;
   if (boss) { boss.pressureState = null; boss.pressureArmor = false; }
 }
 
 function clearBossFinaleAttacks() {
   clearAlienThreats();
-  enemyProjectiles.length = 0;
-  bullets.length = 0;
+  clearCombatRounds(enemyProjectiles);
+  clearCombatRounds(bullets);
   muzzleFlash = 0;
   clearEvolutionWeaponTransients();
   clearFighterCombatTransients();
@@ -552,7 +552,7 @@ function updateBossDamage() {
   for (let index = bossProjectiles.length - 1; index >= 0; index--) {
     const shot = bossProjectiles[index];
     if (bossShotHitsPlayer(shot)) {
-      bossProjectiles.splice(index, 1);
+      retireCombatRound(bossProjectiles, index);
       contact = shot;
     }
   }
@@ -579,14 +579,21 @@ function updateBossDamage() {
   }
 }
 
-function drawBossBattle() {
+function drawBossBattle(alpha = 1) {
   updateBossHealthHud();
   const quiet = quietCombatMotion() || visualQuality.id === "low";
   const scene = activeBossPresentation();
-  if (scene && scene.kind !== "death") drawBossPresentationBody(context, scene, quiet);
-  else if (boss?.finale) drawBossFinale(context, boss, quiet);
-  else if (boss) drawBossShip(context, boss, quiet);
-  if (bossCounterActive(boss)) drawBossCounterCue(context, boss);
+  if (scene && scene.kind !== "death") {
+    drawBossPresentationBody(context, scene, quiet);
+    if (bossCounterActive(boss)) drawBossCounterCue(context, boss);
+  } else if (boss) {
+    context.save();
+    context.translate(flightRenderX(boss, alpha) - boss.x, flightRenderY(boss, alpha) - boss.y);
+    if (boss.finale) drawBossFinale(context, boss, quiet);
+    else drawBossShip(context, boss, quiet);
+    if (bossCounterActive(boss)) drawBossCounterCue(context, boss);
+    context.restore();
+  }
   if (typeof drawSceneryOcclusion === "function") drawSceneryOcclusion(context, boss ?? scene?.target);
   if (typeof drawBossPressureArt === "function") drawBossPressureArt("front");
   for (const hazard of bossHazards) {
@@ -597,7 +604,7 @@ function drawBossBattle() {
   const detailStride = hostileShotDetailStride(hostileCount);
   for (let index = 0; index < bossProjectiles.length; index++) {
     const shot = bossProjectiles[index];
-    drawHostileProjectile(context, shot, shot.color, quiet, index % detailStride === 0, hostileCount > 96);
+    drawHostileProjectile(context, shot, shot.color, quiet, index % detailStride === 0, hostileCount > 96, alpha);
   }
   if (bossHitGrace > 0 && boss && state === "battle") {
     context.save();
@@ -605,7 +612,7 @@ function drawBossBattle() {
     context.globalAlpha = .45;
     context.lineWidth = 1.5;
     context.beginPath();
-    context.arc(player.x, player.y, player.height * .21, 0, Math.PI * 2);
+    context.arc(flightRenderX(player, alpha), flightRenderY(player, alpha), player.height * .21, 0, Math.PI * 2);
     context.stroke();
     context.restore();
   }
