@@ -304,6 +304,8 @@ function roundTouchesMechanic(bullet, x, y, radius) {
 
 function interceptAlienRound(bullet) {
   for (const hazard of bossHazards) {
+    // Future combo apparatus does not exist for weapons until its tell is visible.
+    if (hazard.age < (hazard.tellAt ?? 0)) continue;
     if (hazard.kind === "magmaCover" && mechanicActive(hazard) && !bullet.piercesShield
       && roundTouchesMechanic(bullet, hazard.x, hazard.y, hazard.width * .87)) return true;
     if (hazard.kind === "mirrorShield" && mechanicActive(hazard) && !bullet.piercesShield

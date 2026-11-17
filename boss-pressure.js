@@ -391,7 +391,7 @@ function pressureSealHitsPlayer(hazard) {
 function damageBossUltimateNodes(shot, missile = false) {
   if(!shot)return;
   for(const hazard of bossHazards){
-    if(hazard.kind!=="ultimate")continue;
+    if(hazard.kind!=="ultimate"||hazard.age<(hazard.tellAt??0))continue;
     for(const node of hazard.nodes){
       if(node.health<=0||shot.ultimateNodeHits?.has(node))continue;
       const hit=missile?roundTouchesMechanic(shot,node.x,node.y,node.radius)
