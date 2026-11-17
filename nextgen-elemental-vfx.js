@@ -97,12 +97,24 @@ const NextgenVfx = (() => {
     stats.effects++;
     const time = quiet ? 0 : age, alpha = warning ? .43 : .94;
     const quality = tier(), rows = stats.tier === "low" ? 24 : 48;
+    const span = bottom - top, cap = Math.max(Number.MIN_VALUE, Math.min(width * .52, span * .10));
     const wave = (y, q) => Math.sin(y * .021 + time * 1.8 + q * 2.8) * .055 + Math.sin(y * .063 - time * 2.7) * .023;
+    // Rounded, turning ends live inside the unchanged collision mask. Only the
+    // short end rolls contract; the broad middle retains the dangerous volume.
+    const envelope = y => { const p = clamp01(Math.min(y - top, bottom - y) / cap); return Math.sqrt(p * (2 - p)); };
+    const surfaceX = (y, q) => crestAt(y) + direction * width * envelope(y) *
+      (q * (.92 + .035 * Math.sin(y * .033 + time * .8)) + .025 * Math.sin(y * .043 + time * 1.4));
+    const center = crestAt((top + bottom) / 2), cy = (top + bottom) / 2, sampleRadius = Math.max(width, span / 2);
+    // Capture the underlying scene before painting water, not the water itself.
+    const sample = !warning && !quiet ? backdrop(ctx, center, cy, sampleRadius) : null;
     ctx.save(); ctx.beginPath();
     for (let r = 0; r <= rows; r++) { const y = top + (bottom - top) * r / rows; const x = crestAt(y) - width; if (!r) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
     for (let r = rows; r >= 0; r--) { const y = top + (bottom - top) * r / rows; ctx.lineTo(crestAt(y) + width, y); }
     ctx.closePath(); ctx.clip();
-    const center = crestAt((top + bottom) / 2);
+    ctx.save(); ctx.beginPath();
+    for (let r = 0; r <= rows; r++) { const y = top + span * r / rows; if (!r) ctx.moveTo(surfaceX(y, -1), y); else ctx.lineTo(surfaceX(y, -1), y); }
+    for (let r = rows; r >= 0; r--) { const y = top + span * r / rows; ctx.lineTo(surfaceX(y, 1), y); }
+    ctx.closePath(); ctx.clip();
     const depth = ctx.createLinearGradient(center - direction * width, 0, center + direction * width, 0);
     // Broad shaded back, translucent rising face, narrow illuminated lip and a
     // deep occluded trough. Continuous interpolation replaces all flat quads.
@@ -116,7 +128,7 @@ const NextgenVfx = (() => {
       ctx.beginPath();
       for(let j=0;j<=rows;j++){
         const y=top+(bottom-top)*j/rows;
-        const x=crestAt(y)+direction*width*(.48+wave(y,.78)+(band===0?.13:band===1?-.025:-.18));
+        const x=surfaceX(y,.48+wave(y,.78)+(band===0?.13:band===1?-.025:-.18));
         if(!j)ctx.moveTo(x,y);else ctx.lineTo(x,y);
       }
       ctx.strokeStyle=band===0?"#041722":band===1?"#a9dedb":"#56bdc9";
@@ -133,24 +145,21 @@ const NextgenVfx = (() => {
       const y0=top+(bottom-top)*start,span=Math.min(bottom-top,18+seed(i+60)*64);
       ctx.beginPath();
       for(let j=0;j<=8;j++){
-        const y=y0+span*j/8,x=crestAt(y)+direction*width*(-1+2*u+wave(y,u)*1.4);
+        const y=Math.min(bottom,y0+span*j/8),x=surfaceX(y,-1+2*u+wave(y,u)*1.4);
         if(!j)ctx.moveTo(x,y);else ctx.lineTo(x,y);
       }
       ctx.globalAlpha=alpha*(.08+seed(i+70)*.16);ctx.stroke();
     }
-    if (!warning && !quiet) {
-      const r = Math.max(width, (bottom - top) / 2), cy = (top + bottom) / 2;
-      const sample = backdrop(ctx, center, cy, r);
-      if (sample) {
-        ctx.globalAlpha = .17;
-        const slices = 8, sh = 224 / slices;
-        for (let i = 0; i < slices; i++) {
-          const shift = Math.sin(i * 1.7 + time * .85) * Math.min(5, width * .10);
-          ctx.drawImage(sample, 0, i * sh, 224, sh, center - r + shift, cy - r + i * r * 2 / slices, r * 2, r * 2 / slices + .5);
-        }
+    if (sample) {
+      ctx.globalAlpha = .17;
+      const slices = 8, sh = 224 / slices;
+      for (let i = 0; i < slices; i++) {
+        const shift = Math.sin(i * 1.7 + time * .85) * Math.min(5, width * .10);
+        ctx.drawImage(sample, 0, i * sh, 224, sh, center - sampleRadius + shift,
+          cy - sampleRadius + i * sampleRadius * 2 / slices, sampleRadius * 2, sampleRadius * 2 / slices + .5);
       }
     }
-    const crestX = y => crestAt(y) + direction * width * (.45 + wave(y, .78));
+    const crestX = y => surfaceX(y, .45 + wave(y, .78));
     // One coherent sheet owns the silhouette. A single frame contributes only
     // porous foam inside the leading curl, never stacked copies of the wave.
     ctx.save();ctx.beginPath();
@@ -162,7 +171,7 @@ const NextgenVfx = (() => {
     for (let lip = 0; lip < 3; lip++) {
       ctx.beginPath();
       for (let j = 0; j <= 44; j++) { const y = top + (bottom - top) * j / 44;
-        const x = crestX(y) - direction * lip * width * .11 + Math.sin(y * .16 + time * 2) * width * .025;
+        const x = surfaceX(y, .45 + wave(y, .78) - lip * .11 + Math.sin(y * .16 + time * 2) * .025);
         if (!j) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
       ctx.strokeStyle = lip === 0 ? "#e5ffff" : lip === 1 ? "#9cdfdf" : "#07364e";
       ctx.lineWidth = lip === 0 ? Math.max(1.3, width * .042) : Math.max(2, width * .11);
@@ -174,11 +183,12 @@ const NextgenVfx = (() => {
     for (let i = 0; i < flecks; i++) {
       const t = fract(seed(i) + time * (.04 + seed(i + 50) * .055));
       const y = top + (bottom - top) * t;
-      const x = crestX(y) - direction * width * (seed(i + 80) ** 2 * .42 - .07);
+      const x = surfaceX(y, .45 + wave(y, .78) - (seed(i + 80) ** 2 * .42 - .07));
       const size = .5 + seed(i + 6) * Math.min(3.7, width * .08);
       ctx.globalAlpha = alpha * (.25 + seed(i + 2) * .65);
       ctx.beginPath(); ctx.ellipse(x,y,size*1.2,size*.62,-.4,0,TAU); ctx.fill();
     }
+    ctx.restore(); // Release only the organic surface clip; the exact mask stays.
     // Tells retain exact boundaries. Active water is read from its surface and
     // foam instead of rectangular outlines; the same geometry still clips it.
     if(warning){
@@ -226,35 +236,59 @@ const NextgenVfx = (() => {
     if (!(length > 0 && width > 0)) return false;
     stats.effects++; time = motionTime(time);
     ctx.save(); ctx.translate(line.x1, line.y1); ctx.rotate(Math.atan2(line.y2 - line.y1, line.x2 - line.x1));
+    // The authoritative rectangle remains the outer clip. The crust has its own
+    // broken silhouette inside it, so neither its texture nor ends form a tile.
     ctx.beginPath(); ctx.rect(0, -width / 2, length, width); ctx.clip();
+    const steps = Math.max(16, Math.min(64, Math.ceil(length / 13)));
+    const cap = Math.max(Number.MIN_VALUE, Math.min(width * .42, length * .08));
+    const envelope = x => { const p = clamp01(Math.min(x, length - x) / cap); return Math.sqrt(p * (2 - p)); };
+    const shore = (x, side) => side * width * .5 * envelope(x) *
+      (.88 + .065 * Math.sin(x * .091 + side * 2) + .035 * Math.sin(x * .217 - side));
+    const channel = x => width * (.075 * Math.sin(x * .018 + time * .32) + .025 * Math.sin(x * .047 - time * .21));
+    const bank = (x, side) => channel(x) + side * width *
+      (.16 + .045 * Math.sin(x * .052 + side * 1.7) + .025 * Math.sin(x * .123));
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) { const x = length * i / steps; if (!i) ctx.moveTo(x, shore(x, -1)); else ctx.lineTo(x, shore(x, -1)); }
+    for (let i = steps; i >= 0; i--) { const x = length * i / steps; ctx.lineTo(x, shore(x, 1)); }
+    ctx.closePath(); ctx.clip();
+    // A continuous molten bed carries the flow; connected basalt banks provide
+    // thickness. Texture exists only on individually clipped pieces of crust.
     const heat = ctx.createLinearGradient(0, -width / 2, 0, width / 2);
-    heat.addColorStop(0, "#16101a"); heat.addColorStop(.22, "#432225"); heat.addColorStop(.43, "#d64a1b");
-    heat.addColorStop(.52, "#ffbf58"); heat.addColorStop(.65, "#6c2116"); heat.addColorStop(1, "#15141e");
+    heat.addColorStop(0, "#291b20"); heat.addColorStop(.27, "#6d251a"); heat.addColorStop(.43, "#df571d");
+    heat.addColorStop(.55, "#f5a13e"); heat.addColorStop(.70, "#7b2c1d"); heat.addColorStop(1, "#211c23");
     ctx.fillStyle = heat; ctx.globalAlpha = alpha; ctx.fillRect(0, -width / 2, length, width);
-    // Cooled floating crust breaks the molten channel into irregular islands.
-    const tileSpan = Math.max(65, width * 1.4), tileCount = Math.min(18, Math.ceil(length / tileSpan) + 1);
-    const crust = basaltTexture();
-    for (let i = 0; i < tileCount; i++) {
-      ctx.globalAlpha = alpha * .65;
-      ctx.drawImage(crust, i * tileSpan - (time * 8 % tileSpan), -width / 2, tileSpan + 1, width);
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (let layer = 0; layer < 3; layer++) {
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i++) { const x = length * i / steps, y = channel(x);
+        if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      ctx.strokeStyle = ["#ad3718", "#f08a2e", "#ffd17b"][layer];
+      ctx.lineWidth = width * [.39, .21, .035][layer]; ctx.globalAlpha = alpha * [.8, .85, .6][layer]; ctx.stroke();
+    }
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i++) { const x = length * i / steps; if (!i) ctx.moveTo(x, shore(x, side)); else ctx.lineTo(x, shore(x, side)); }
+      for (let i = steps; i >= 0; i--) { const x = length * i / steps; ctx.lineTo(x, bank(x, side)); }
+      ctx.closePath(); ctx.fillStyle = side < 0 ? "#392a2b" : "#211f28"; ctx.globalAlpha = alpha; ctx.fill();
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i++) { const x = length * i / steps, y = bank(x, side); if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      ctx.strokeStyle = side < 0 ? "#f1944d" : "#a94324"; ctx.lineWidth = Math.max(.8, width * .016); ctx.globalAlpha = alpha * .85; ctx.stroke();
     }
     const blocks = Math.min(stats.tier === "high" ? 22 : stats.tier === "medium" ? 14 : 8, Math.ceil(length / 24));
     for (let i = 0; i < blocks; i++) {
-      const x = length * (i + .35) / blocks, side = i % 2 ? 1 : -1;
-      const size = Math.min(width * (.34 + seed(i) * .25), length / blocks * .95);
-      rock(ctx, x, side * width * (.30 + .06 * Math.sin(time + i)), size, i * 2.399, time, alpha);
+      const x = length * (i + .35 + seed(i + 19) * .25) / blocks, side = i % 2 ? 1 : -1;
+      const size = Math.min(width * (.29 + seed(i) * .20), length / blocks * 1.12);
+      rock(ctx, x, side * width * (.30 + .045 * seed(i + 37)), size, i * 2.399, 0, alpha);
     }
+    // Thin advected rivulets vary along the connected channel. No large atlas
+    // silhouettes repeat down the lane; eruptions retain their separate atlas.
     const tendrils = tier().strands;
-    ctx.strokeStyle = "#ffdb8e"; ctx.lineCap = "round";
+    ctx.strokeStyle = "#ffdb8e";
     for (let i = 0; i < tendrils; i++) {
       const x = fract(seed(i + 93) - time * .055) * length;
-      const y = (seed(i + 65) - .5) * width * .4, reach = width * (.06 + .13 * seed(i));
+      const y = channel(x) + (seed(i + 65) - .5) * width * .20, reach = width * (.035 + .07 * seed(i));
       ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + 9, y - reach, x + 21, y + reach, x + 34, y - reach * .3);
       ctx.globalAlpha = alpha * (.24 + .32 * seed(i + 43)); ctx.lineWidth = .6 + seed(i + 1) * 1.5; ctx.stroke();
-    }
-    for (let i = 0; i < Math.min(3, Math.ceil(length / 300)); i++) {
-      stamp(ctx, "magma", time + i * .19, (i + .5) * length / Math.min(3, Math.ceil(length / 300)), 0,
-        Math.max(100, width * 1.7), width * 1.7, alpha * .62);
     }
     ctx.restore(); return true;
   }
