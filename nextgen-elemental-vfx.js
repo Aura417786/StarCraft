@@ -17,6 +17,7 @@ const NextgenVfx = (() => {
   const motionTime = time => calm() ? 0 : time;
 
   function beginFrame() {
+    if (typeof BlackHoleSurface !== "undefined") BlackHoleSurface.beginFrame();
     stats.peakFacets = Math.max(stats.peakFacets, stats.facets);
     stats.facets = stats.samples = stats.atlasDraws = stats.effects = 0;
     stats.tier = typeof visualQuality === "undefined" ? "high" : visualQuality.id;
@@ -411,6 +412,18 @@ const NextgenVfx = (() => {
     stats.effects++; const time = motionTime(age), span = r - inner;
     const sampled = backdrop(ctx, x, y, r * 1.12);
     ctx.save(); ringClip(ctx, x, y, r, inner);
+    if (!water && inner === 0 && typeof BlackHoleSurface !== "undefined") {
+      // The void surface is shared by wells, ultimate annuli and riftFold.
+      // Thin damaging annuli retain the full-width material below: cropping a
+      // disk's transparent outskirts into a narrow wave would hide its damage.
+      if (sampled) {
+        ctx.save(); ctx.translate(x,y); ctx.rotate(.025*Math.sin(time*.6));
+        ctx.globalAlpha=alpha*.33;
+        ctx.drawImage(sampled,-r*1.08,-r*1.08,r*2.16,r*2.16);ctx.restore();
+      }
+      BlackHoleSurface.draw(ctx,x,y,r,time,alpha,stats.tier);
+      ctx.restore();return true;
+    }
     if (sampled) {
       // Locally refract only the authoritative annulus; the open center and safe
       // corridor remain untouched. This is a bounded screen sample, not a blur.
@@ -487,7 +500,13 @@ const NextgenVfx = (() => {
     const time = motionTime(age), count = Math.min(64, Math.max(12, Math.ceil(length / 20)));
     ctx.save(); ctx.translate(line.x1, line.y1); ctx.rotate(Math.atan2(line.y2 - line.y1, line.x2 - line.x1));
     ctx.beginPath(); ctx.rect(0, -half, length, half * 2); ctx.clip();
-    ctx.fillStyle = "#06040f"; ctx.globalAlpha = alpha; ctx.fillRect(0, -half, length, half * 2);
+    const depth=ctx.createLinearGradient(0,-half,0,half);
+    depth.addColorStop(0,"#b076ff44");depth.addColorStop(.12,"#9468f833");
+    depth.addColorStop(.27,"#28377622");depth.addColorStop(.44,"#b995ff77");
+    depth.addColorStop(.48,"#eef4ffee");depth.addColorStop(.50,"#01020aee");
+    depth.addColorStop(.52,"#d5e5ffee");depth.addColorStop(.56,"#768af577");
+    depth.addColorStop(.77,"#3d287422");depth.addColorStop(1,"#a28bff44");
+    ctx.fillStyle = depth; ctx.globalAlpha = alpha; ctx.fillRect(0, -half, length, half * 2);
     for (let side of [-1, 1]) {
       for (let layer = 0; layer < 3; layer++) {
         ctx.beginPath();
@@ -495,9 +514,17 @@ const NextgenVfx = (() => {
           const x = i / count * length, y = side * half * (.81 - layer * .19) + Math.sin(i * 2.29 + time * .35) * half * .13;
           if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = layer === 0 ? "#c7aec7" : layer === 1 ? "#66536f" : "#2b1d40";
-        ctx.lineWidth = layer === 0 ? .85 : half * .22; ctx.globalAlpha = alpha * (layer ? .57 : .83); ctx.stroke();
+        ctx.strokeStyle = layer === 0 ? "#c9d5ff" : layer === 1 ? "#9468f8" : "#3931a4";
+        ctx.lineWidth = layer === 0 ? .85 : half * .15; ctx.globalAlpha = alpha * (layer ? .28 : .83); ctx.stroke();
       }
+    }
+    // Flowing glints stay within the unchanged seam thickness, exposing the
+    // torn edges without painting flat opaque bars across the black-hole core.
+    for(let i=0;i<12;i++){
+      const t=fract(i*.618+time*.16),px=t*length,side=i%2?1:-1;
+      const py=side*half*.75;ctx.strokeStyle=i%2?"#a2baff":"#dd9aff";
+      ctx.globalAlpha=alpha*(.4+seed(i)*.4);ctx.lineWidth=.8;
+      ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(Math.min(length,px+8+seed(i+4)*16),py+side*half*.09);ctx.stroke();
     }
     ctx.restore();
   }
@@ -553,5 +580,7 @@ const NextgenVfx = (() => {
     ctx.restore();
   }
   return Object.freeze({ beginFrame, phase, drawWaterSection, drawMagmaFissure, drawEruption, drawVoid, drawRift, drawWaterJet, drawRaySkin, stamp, rock,
-    diagnostics: () => ({ ...stats, budget: tier(), atlasReady: [...atlases].filter(([, v]) => v.ready).map(([k]) => k), sampleSize: 224, extraWebGLContexts: 0 }) });
+    diagnostics: () => ({ ...stats, budget: tier(), atlasReady: [...atlases].filter(([, v]) => v.ready).map(([k]) => k), sampleSize: 224,
+      extraWebGLContexts: typeof BlackHoleSurface === "undefined" ? 0 : BlackHoleSurface.diagnostics().extraWebGLContexts,
+      blackHole: typeof BlackHoleSurface === "undefined" ? null : BlackHoleSurface.diagnostics() }) });
 })();

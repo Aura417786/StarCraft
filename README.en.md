@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v35.1 Black-hole visual fix.** The Dimensional Maw's gravity field now has a dark horizon, a blue inner rim and detailed violet accretion flow. Inner and outer strands rotate at different speeds. Rift warnings remain visible, shockwave safe openings stay clear, and low quality retains the complete black-hole artwork.
+
 **v35 Elemental encounters.** Eleven bosses coordinate setup, interception and pursuit, with stronger enraged chains and distinct finales. Bosses no longer maintain a generic orb lattice. Vortices, closing bone cages, magma cover, mirrors and neural relays demand different responses. Environmental hits do not refund a shield. The finisher's warning locks its response: reserve a shield if stocked, or follow the announced passage when empty or shields are disabled. No emergency shield is supplied.
 
 Blender-authored water, magma and singularity animation joins geometry-aligned surfaces and refraction. Crimson's piercing cannon, Azure's tracking arcs and Auric's coverage field have separate effects and sound palettes. Elemental boss voices and music layers respond to elites, low life and encounter phase. [Design and verification](docs/nextgen-v35-plan.md)

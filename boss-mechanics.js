@@ -670,22 +670,20 @@ function drawAlienMechanic(ctx, hazard, quiet) {
     }
     case "riftFold": {
       const r = hazard.radius;
-      const depth = ctx.createRadialGradient(x, y, 3, x, y, r);
-      depth.addColorStop(0, "#180a23a0"); depth.addColorStop(.8, "#ad6ee72c"); depth.addColorStop(1, "#e69cff07");
-      ctx.fillStyle = depth;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      for (let index = 0; index < 5; index++) {
-        const a = index * Math.PI * .4 + (quiet ? 0 : p * 1.7) * hazard.side;
-        ctx.globalAlpha = active ? .63 : .35;
-        ctx.beginPath(); ctx.arc(x, y, r * (.32 + index * .12), a, a + 1.9); ctx.stroke();
-      }
       ctx.globalAlpha = 1;
+      NextgenVfx.drawVoid(ctx, {x, y, radius:r}, signatureMaterials.void,
+        quiet ? 0 : hazard.age, active ? .98 : .8);
+      // The disk pulls but is not a solid damage area. Only these late seams hit.
       for (const seam of riftSeams(hazard)) {
         const live = p > .68;
-        ctx.setLineDash(live ? [] : [6, 5]);
-        ctx.strokeStyle = color + (live ? "88" : "8a");
-        drawMechanicLine(ctx, ...seam, live ? hazard.thickness * 2 : 1.4);
-        if (live) { ctx.strokeStyle = "#fde1ff"; drawMechanicLine(ctx, ...seam, 2.8); }
+        if (live) {
+          ctx.setLineDash([]);
+          NextgenVfx.drawRift(ctx, {x1:seam[0],y1:seam[1],x2:seam[2],y2:seam[3],width:hazard.thickness*2},
+            signatureMaterials.void, quiet ? 0 : hazard.age, .95);
+        } else {
+          ctx.setLineDash([6,5]);ctx.strokeStyle=color+"bd";
+          drawMechanicLine(ctx,...seam,1.4);
+        }
       }
       break;
     }

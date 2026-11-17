@@ -10,6 +10,7 @@ parser.add_argument('--repo',required=True)
 parser.add_argument('--out',required=True)
 parser.add_argument('--version',required=True)
 parser.add_argument('--tag',required=True)
+parser.add_argument('--baseline',default='a5374770007bf1d6d47f3496a31ccad21aae3948')
 args=parser.parse_args()
 repo=pathlib.Path(args.repo).resolve()
 def git(*options):
@@ -62,7 +63,7 @@ with zipfile.ZipFile(archive) as z:
     for item in files:
         if hashlib.sha256(z.read('Game/'+item['path'])).hexdigest()!=item['sha256']:raise RuntimeError(item['path'])
 digest=hashlib.sha256(archive.read_bytes()).hexdigest()
-manifest={'schema':'star-breaker-frozen/2','version':args.version,'commit':commit,'tag':args.tag,'baseline':'a5374770007bf1d6d47f3496a31ccad21aae3948','zip':archive.name,'zipBytes':archive.stat().st_size,'zipSha256':digest,'runtimeBytes':sum(f['bytes'] for f in files),'fileCount':len(files),'files':files,'checks':{'crc':True,'everyArchiveFileSha256':True}}
+manifest={'schema':'star-breaker-frozen/2','version':args.version,'commit':commit,'tag':args.tag,'baseline':git('rev-parse',args.baseline).decode().strip(),'zip':archive.name,'zipBytes':archive.stat().st_size,'zipSha256':digest,'runtimeBytes':sum(f['bytes'] for f in files),'fileCount':len(files),'files':files,'checks':{'crc':True,'everyArchiveFileSha256':True}}
 (dest/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
 (dest/'SHA256.txt').write_text(f'{digest}  {archive.name}\n',encoding='ascii')
 print(json.dumps({k:v for k,v in manifest.items() if k!='files'},ensure_ascii=False,indent=2))
