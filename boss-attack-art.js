@@ -536,6 +536,16 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
   ctx.translate(x1, y1);
   ctx.rotate(Math.atan2(dy, dx));
   const width = Math.max(left, right, 1);
+  if (typeof NextgenVfx !== "undefined" && ["water", "magma", "void"].includes(kind)) {
+    const opacity = active ? .91 : .24 + phase * .25;
+    ctx.beginPath();ctx.moveTo(0,-left);ctx.lineTo(length,-right);ctx.lineTo(length,right);ctx.lineTo(0,left);ctx.closePath();ctx.clip();
+    if (kind === "water") NextgenVfx.drawWaterJet(ctx, length, left, right, age, opacity);
+    else if (kind === "magma") NextgenVfx.drawMagmaFissure(ctx, {x1:0,y1:0,x2:length,y2:0,width:width*2}, material, age, opacity);
+    else NextgenVfx.drawRift(ctx, {x1:0,y1:0,x2:length,y2:0,width:width*2}, material, age, opacity);
+    ctx.strokeStyle=material.rim;ctx.globalAlpha=active?.64:.80;ctx.lineWidth=1;
+    ctx.setLineDash(active?[]:[7,6]);ctx.beginPath();ctx.moveTo(0,-left);ctx.lineTo(length,-right);ctx.moveTo(0,left);ctx.lineTo(length,right);ctx.stroke();ctx.setLineDash([]);
+    ctx.restore();return;
+  }
   const depth = ctx.createLinearGradient(0, width * litSide, 0, -width * litSide);
   depth.addColorStop(0, material.rim);
   if (shaded) {
@@ -584,8 +594,8 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
   }
   ctx.globalAlpha = active ? .94 : .48 + phase * .42;
   if (kind) {
-    drawRayOrganic(ctx, kind, material, length, left, right, age, quiet);
     if (typeof NextgenVfx !== "undefined") NextgenVfx.drawRaySkin(ctx, length, left, right, kind, age, active ? .88 : .38);
+    else drawRayOrganic(ctx, kind, material, length, left, right, age, quiet);
   } else {
     const scan = active ? length : phase * length;
     const trace = ctx.createLinearGradient(0, 0, Math.max(1, scan), 0);
@@ -614,7 +624,7 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
     }
   }
   ctx.restore();
-  if (!quiet && visualQuality.id !== "low") {
+  if (!quiet && visualQuality.id !== "low" && (!kind || typeof NextgenVfx === "undefined")) {
     drawSignatureStream(ctx, { x1, y1, x2, y2, width: Math.min(left, right) * 2 },
       kind || "plasma", age, active ? .58 : .20 + phase * .12, visualQuality.id === "high" ? 22 : 12);
   }

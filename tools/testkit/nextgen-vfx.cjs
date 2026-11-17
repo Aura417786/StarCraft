@@ -58,10 +58,11 @@ async function main() {
       for(const moment of ["charge","release","residue"]) {
         const row=await page.evaluate(({quality,type,moment})=>{
           const scene=boss.pressureState;if(!scene)throw new Error("No pressure state");
-          const age=moment==="charge"?scene.warning*.77:scene.warning+(moment==="release"?.55:1.43);
+          const duration=scene.activeDuration || bossHazards.find(h=>h.kind==="ultimate")?.duration || 1.6;
+          const age=moment==="charge"?scene.warning*.77:scene.warning+duration*(moment==="release"?.35:.90);
           scene.age=age;scene.stage=moment==="charge"?"charge":"attack";
           for(const h of bossHazards)h.age=age;
-          updateBossPressureArt(1/120);pressureArt.burstAge=moment==="charge"?10:moment==="release"?.55:1.43;
+          updateBossPressureArt(1/120);pressureArt.burstAge=moment==="charge"?10:duration*(moment==="release"?.35:.90);
           previousTime=performance.now();__vfxReviewDraw(previousTime);
           const samples=[];for(let i=0;i<12;i++){const a=performance.now();__vfxReviewDraw(previousTime);samples.push(performance.now()-a);}
           return {quality,type,moment,diagnostics:NextgenVfx.diagnostics(),renderMs:samples,geometry:bossHazards.filter(h=>h.kind==="ultimate").map(bossUltimateGeometry)};
@@ -72,6 +73,37 @@ async function main() {
         report.frames.push({...row,file});
       }
     }
+    // All eleven families and all three routine weapons are exercised through
+    // their production drawing entry points in one explicitly isolated gallery.
+    report.gallery = await page.evaluate(() => {
+      setVisualQuality("high",false);reduceCombatMotion=false;NextgenVfx.beginFrame();
+      const gallery=document.createElement("canvas");gallery.width=1280;gallery.height=720;const ctx=gallery.getContext("2d");
+      ctx.fillStyle="#090e18";ctx.fillRect(0,0,1280,720);ctx.font="16px sans-serif";
+      const names=Object.keys(signatureMaterials);
+      for(let i=0;i<names.length;i++){
+        const x=(i%4)*320+20,y=Math.floor(i/4)*190+42;
+        ctx.fillStyle="#d9e3ed";ctx.fillText(names[i],x,y);
+        drawMaterialRay(ctx,{x1:x,y1:y+70,x2:x+275,y2:y+45,left:19,right:30,kind:names[i],active:true,phase:.4,age:1.8},false);
+      }
+      const diagnostic=NextgenVfx.diagnostics();
+      const weapons=[];
+      for(const [i,fighter]of["red","blue","yellow"].entries()){
+        selectedFighter=fighter;
+        drawFlightEngineWake(ctx,{x:220+i*400,y:660,width:125,height:70},fighter,1.3,true);
+        ctx.save();ctx.translate(290+i*400,660);drawFlightBoltWake(ctx,42,5,flightWakeColors[fighter],i,1.3,false,{auxiliary:false});ctx.restore();
+        weapons.push(fighter);
+      }
+      return {data:gallery.toDataURL("image/png").split(",")[1],names,weapons,diagnostic};
+    });
+    fs.writeFileSync(path.join(out,"material-and-flight-gallery.png"),Buffer.from(report.gallery.data,"base64"));delete report.gallery.data;
+    assert.equal(report.gallery.names.length,11);assert.ok(report.gallery.diagnostic.facets<=report.gallery.diagnostic.budget.facets);
+    const shake=await page.evaluate(()=>{
+      reduceCombatMotion=false;shakePreference="full";combatEffects.shake=combatEffects.shakeTime=0;
+      addCombatShake(5);combatEffects.clock+=.03;addCombatShake(5);
+      let max=0;for(let i=0;i<31;i++){combatEffects.clock+=.01;combatEffects.shakeTime=Math.max(0,combatEffects.shakeTime-.01);const o=combatShakeOffset();max=Math.max(max,Math.abs(o.x),Math.abs(o.y));}
+      const rest=combatShakeOffset();reduceCombatMotion=true;addCombatShake(5);return{max,rest,quiet:combatShakeOffset()};
+    });
+    assert.ok(shake.max<=6);assert.deepEqual(shake.rest,{x:0,y:0});assert.deepEqual(shake.quiet,{x:0,y:0});report.shake=shake;
     // Quiet mode is a distinct real production frame, not a CSS-only claim.
     await page.evaluate(()=>{setVisualQuality("high",false);reduceCombatMotion=true;previousTime=performance.now();__vfxReviewDraw(previousTime);});
     await page.screenshot({path:path.join(out,"void-reduced-motion.png")});

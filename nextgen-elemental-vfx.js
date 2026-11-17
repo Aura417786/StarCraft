@@ -129,6 +129,18 @@ const NextgenVfx = (() => {
       ctx.globalAlpha = .20;
       drawHadalSurface(ctx, center - width, top, width * 2, bottom - top, time * .65, direction > 0);
     }
+    if (!warning && !quiet) {
+      const r = Math.max(width, (bottom - top) / 2), cy = (top + bottom) / 2;
+      const sample = backdrop(ctx, center, cy, r);
+      if (sample) {
+        ctx.globalAlpha = .17;
+        const slices = 8, sh = 224 / slices;
+        for (let i = 0; i < slices; i++) {
+          const shift = Math.sin(i * 1.7 + time * .85) * Math.min(5, width * .10);
+          ctx.drawImage(sample, 0, i * sh, 224, sh, center - r + shift, cy - r + i * r * 2 / slices, r * 2, r * 2 / slices + .5);
+        }
+      }
+    }
     const stamps = Math.min(3, Math.ceil((bottom - top) / 160));
     for (let s = 0; s < stamps; s++) {
       const y = top + (bottom - top) * (s + .5) / stamps;
@@ -299,6 +311,30 @@ const NextgenVfx = (() => {
     ctx.restore(); return true;
   }
 
+  function drawWaterJet(ctx, length, left, right, age, alpha) {
+    const time = motionTime(age), half = Math.max(left, right), bands = stats.tier === "low" ? 7 : 13;
+    ctx.save();ctx.beginPath();ctx.moveTo(0,-left);ctx.lineTo(length,-right);ctx.lineTo(length,right);ctx.lineTo(0,left);ctx.closePath();ctx.clip();
+    const depth=ctx.createLinearGradient(0,-half,0,half);
+    depth.addColorStop(0,"#326f82");depth.addColorStop(.15,"#092b44");depth.addColorStop(.38,"#157b94");depth.addColorStop(.51,"#bcebec");depth.addColorStop(.64,"#2d91a3");depth.addColorStop(1,"#05223b");
+    ctx.fillStyle=depth;ctx.globalAlpha=alpha;ctx.fillRect(0,-half,length,half*2);
+    for(let i=0;i<bands;i++){
+      const fraction=(i+.5)/bands*2-1;
+      ctx.beginPath();
+      for(let j=0;j<=24;j++){
+        const t=j/24,x=t*length,w=left+(right-left)*t;
+        const y=fraction*w+Math.sin(t*24-time*3+i)*w*.04;
+        if(!j)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }
+      ctx.strokeStyle=i%3?"#a2e4e9":"#07283d";ctx.globalAlpha=alpha*(i%3?.19:.55);ctx.lineWidth=i%3?.7:half*.14;ctx.stroke();
+    }
+    ctx.fillStyle="#e7ffff";
+    for(let i=0;i<tier().strands;i++){
+      const t=fract(seed(i)+time*.37),w=left+(right-left)*t,x=t*length,y=(seed(i+27)-.5)*w*1.6;
+      ctx.globalAlpha=alpha*(.25+seed(i+67)*.35);ctx.beginPath();ctx.ellipse(x,y,2+seed(i+4)*7,.5+seed(i+9),0,0,TAU);ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawRift(ctx, line, material, age, alpha) {
     const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1), half = line.width / 2;
     if (!(length > 0 && half > 0)) return;
@@ -330,10 +366,22 @@ const NextgenVfx = (() => {
     ctx.save(); ctx.beginPath(); ctx.moveTo(0, -left); ctx.lineTo(length, -right); ctx.lineTo(length, right); ctx.lineTo(0, left); ctx.closePath(); ctx.clip();
     for (let i = 0; i < count; i++) {
       const x = length * (i + .4) / count, s = Math.min(width * .74, length / count * .45), local = kind === "fusion" ? ["bone", "glass", "nerve"][i % 3] : kind;
-      if (local === "bone" || local === "chitin") {
-        const upper = local === "bone" ? "#b09b84" : "#78a698", lower = local === "bone" ? "#4d4141" : "#183139";
-        polygon(ctx, [x - s, -width * .70, x + s * .60, -width * .43, x + s, 0, x, width * .45, x - s * .75, 0], upper, alpha);
-        polygon(ctx, [x - s * .75, 0, x, width * .45, x + s, 0, x + s * .6, width * .7, x - s, width * .45], lower, alpha);
+      if (local === "bone") {
+        // Porous joint heads and a pinched shaft, visibly unlike armor scales.
+        const marrow=ctx.createLinearGradient(0,-width*.65,0,width*.65);
+        marrow.addColorStop(0,"#ead8b9");marrow.addColorStop(.38,"#b69e80");marrow.addColorStop(.64,"#6b554c");marrow.addColorStop(1,"#d7bda0");
+        ctx.fillStyle=marrow;ctx.globalAlpha=alpha;ctx.beginPath();ctx.moveTo(x-s,-width*.52);
+        ctx.bezierCurveTo(x-s*.55,-width*.78,x-s*.50,-width*.23,x, -width*.23);
+        ctx.bezierCurveTo(x+s*.48,-width*.22,x+s*.56,-width*.76,x+s,-width*.48);
+        ctx.bezierCurveTo(x+s*1.22,-width*.12,x+s*1.20,width*.38,x+s*.72,width*.52);
+        ctx.bezierCurveTo(x+s*.35,width*.18,x-s*.34,width*.16,x-s*.76,width*.50);
+        ctx.bezierCurveTo(x-s*1.17,width*.33,x-s*1.17,-width*.20,x-s,-width*.52);ctx.closePath();ctx.fill();
+        ctx.strokeStyle="#342a30";ctx.globalAlpha=alpha*.65;ctx.lineWidth=.7;
+        ctx.beginPath();ctx.moveTo(x-s*.72,-width*.32);ctx.lineTo(x-s*.50,width*.16);ctx.lineTo(x-s*.68,width*.30);ctx.stroke();
+      } else if (local === "chitin") {
+        polygon(ctx, [x - s, -width * .70, x + s * .60, -width * .43, x + s, 0, x, width * .45, x - s * .75, 0], "#78a698", alpha);
+        polygon(ctx, [x - s * .75, 0, x, width * .45, x + s, 0, x + s * .6, width * .7, x - s, width * .45], "#183139", alpha);
+        polygon(ctx, [x-s*.72,-width*.56,x-s*.25,-width*.96,x+s*.12,-width*.43], "#b3cab6", alpha*.9);
       } else if (local === "glass") {
         polygon(ctx, [x - s, 0, x + s * .35, -width * .78, x + s, width * .10], "#8ac6d8", alpha * .54);
         polygon(ctx, [x - s, 0, x + s, width * .10, x - s * .20, width * .78], "#334a77", alpha * .78);
@@ -358,6 +406,6 @@ const NextgenVfx = (() => {
     }
     ctx.restore();
   }
-  return Object.freeze({ beginFrame, phase, drawWaterSection, drawMagmaFissure, drawEruption, drawVoid, drawRift, drawRaySkin, stamp, rock,
+  return Object.freeze({ beginFrame, phase, drawWaterSection, drawMagmaFissure, drawEruption, drawVoid, drawRift, drawWaterJet, drawRaySkin, stamp, rock,
     diagnostics: () => ({ ...stats, budget: tier(), atlasReady: [...atlases].filter(([, v]) => v.ready).map(([k]) => k), sampleSize: 224, extraWebGLContexts: 0 }) });
 })();

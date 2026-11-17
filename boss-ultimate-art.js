@@ -238,7 +238,10 @@ function drawUltimateChargeIdentity(ctx, target, scene) {
   const fade = .3 + charge * .7;
   if (typeof NextgenVfx !== "undefined" && ["tideWalls", "magmaRift", "voidCollapse"].includes(kind)) {
     if (kind === "magmaRift") NextgenVfx.drawEruption(ctx, { x: cx, y: cy, radius: r * .85 }, mat, time, fade * .80);
-    else NextgenVfx.drawVoid(ctx, { x: cx, y: cy, radius: r }, mat, time, fade * .82, kind === "tideWalls");
+    else if (kind === "voidCollapse") {
+      ctx.save();ctx.translate(cx,cy);ctx.rotate(-.18);ctx.scale(1,.62);
+      NextgenVfx.drawVoid(ctx, { x: 0, y: 0, radius: r }, mat, time, fade * .92);ctx.restore();
+    } else NextgenVfx.drawVoid(ctx, { x: cx, y: cy, radius: r }, mat, time, fade * .82, true);
     return;
   }
   ctx.save();
