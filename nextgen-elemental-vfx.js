@@ -107,7 +107,7 @@ const NextgenVfx = (() => {
     const depth = ctx.createLinearGradient(center - direction * width, 0, center + direction * width, 0);
     depth.addColorStop(0, "#031a2b"); depth.addColorStop(.25, "#075470"); depth.addColorStop(.56, "#1595ac");
     depth.addColorStop(.70, "#76d8de"); depth.addColorStop(.82, "#082638"); depth.addColorStop(1, "#217b91");
-    ctx.globalAlpha = alpha; ctx.fillStyle = depth; ctx.fillRect(center - width * 3, top, width * 6, bottom - top);
+    ctx.globalAlpha = alpha * .32; ctx.fillStyle = depth; ctx.fillRect(center - width * 3, top, width * 6, bottom - top);
     for (let c = 0; c < columns; c++) {
       const u = c / columns;
       for (let r = 0; r < rows; r++) {
@@ -121,7 +121,9 @@ const NextgenVfx = (() => {
         ctx.beginPath();ctx.moveTo(waterVertices[p1],waterVertices[p1+1]);
         ctx.lineTo(waterVertices[p2],waterVertices[p2+1]);ctx.lineTo(waterVertices[p2+2],waterVertices[p2+3]);
         ctx.lineTo(waterVertices[p1+2],waterVertices[p1+3]);ctx.closePath();
-        ctx.fillStyle=palette[Math.round(light*127)];ctx.globalAlpha=alpha*.86;ctx.fill();stats.facets++;
+        ctx.fillStyle=palette[Math.round(light*127)];
+        const edgeWeight=.50+.50*Math.sin((u+.5/columns)*Math.PI);
+        ctx.globalAlpha=alpha*.90*edgeWeight;ctx.fill();stats.facets++;
       }
     }
     // Fine GPU normals are a secondary material pass, not a stand-in for volume.
@@ -141,12 +143,15 @@ const NextgenVfx = (() => {
         }
       }
     }
-    const stamps = Math.min(3, Math.ceil((bottom - top) / 160));
-    for (let s = 0; s < stamps; s++) {
-      const y = top + (bottom - top) * (s + .5) / stamps;
-      stamp(ctx, "water", age + s * .17, crestAt(y), y, (bottom - top) / stamps * 1.35, width * 3.0, alpha * .72, direction * Math.PI / 2);
-    }
     const crestX = y => crestAt(y) + direction * width * (.45 + wave(y, .78));
+    // One coherent sheet owns the silhouette. A single frame contributes only
+    // porous foam inside the leading curl, never stacked copies of the wave.
+    ctx.save();ctx.beginPath();
+    for(let j=0;j<=24;j++){const y=top+(bottom-top)*j/24,x=crestX(y)-direction*width*.16;if(!j)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    for(let j=24;j>=0;j--){const y=top+(bottom-top)*j/24;ctx.lineTo(crestX(y)+direction*width*.19,y);}
+    ctx.closePath();ctx.clip();
+    stamp(ctx,"water",age,center,(top+bottom)/2,(bottom-top)*1.65,width*3.3,alpha*.38,direction*Math.PI/2);
+    ctx.restore();
     for (let lip = 0; lip < 3; lip++) {
       ctx.beginPath();
       for (let j = 0; j <= 44; j++) { const y = top + (bottom - top) * j / 44;
@@ -154,21 +159,21 @@ const NextgenVfx = (() => {
         if (!j) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
       ctx.strokeStyle = lip === 0 ? "#e5ffff" : lip === 1 ? "#9cdfdf" : "#07364e";
       ctx.lineWidth = lip === 0 ? Math.max(1.3, width * .042) : Math.max(2, width * .11);
-      ctx.globalAlpha = alpha * (lip === 0 ? .71 : .56); ctx.stroke();
+      ctx.globalAlpha = alpha * (lip === 0 ? .30 : .48); ctx.stroke();
     }
     // Foam has porous clumps, branching veins and advected droplets, never disks.
     ctx.fillStyle = "#e2fafa";
-    const flecks = quality.strands * 3;
+    const flecks = quality.strands * 4;
     for (let i = 0; i < flecks; i++) {
       const t = fract(seed(i) + time * (.04 + seed(i + 50) * .055));
       const y = top + (bottom - top) * t;
-      const x = crestX(y) - direction * width * seed(i + 80) * .52;
+      const x = crestX(y) - direction * width * (seed(i + 80) ** 2 * .42 - .07);
       const size = .5 + seed(i + 6) * Math.min(3.7, width * .08);
       ctx.globalAlpha = alpha * (.25 + seed(i + 2) * .65);
       ctx.beginPath(); ctx.ellipse(x,y,size*1.2,size*.62,-.4,0,TAU); ctx.fill();
     }
     // Authoritative outer edges stay explicit through both dark and bright folds.
-    ctx.strokeStyle = "#b6f6ff"; ctx.globalAlpha = warning ? .45 : .78; ctx.lineWidth = 1.1;
+    ctx.strokeStyle = "#b6f6ff"; ctx.globalAlpha = warning ? .45 : .43; ctx.lineWidth = 1.1;
     for (const side of [-1, 1]) { ctx.beginPath();
       for (let j = 0; j <= rows; j++) { const y = top + (bottom - top) * j / rows; const x = crestAt(y) + side * width;
         if (!j) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.stroke(); }
