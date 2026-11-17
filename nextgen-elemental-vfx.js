@@ -245,6 +245,51 @@ const NextgenVfx = (() => {
     const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1), width = line.width;
     if (!(length > 0 && width > 0)) return false;
     stats.effects++; time = motionTime(time);
+    // One small, periodic material bake, shared by all fissures. The upper half
+    // is flowing melt and cooling skin; the lower half is porous, shaded basalt.
+    // No pixels, noise grids or new canvases are generated on subsequent frames.
+    const texture = drawMagmaFissure.materialTexture ||= (() => {
+      const w = 384, h = 128, tile = document.createElement("canvas");
+      tile.width = w; tile.height = h * 2;
+      const c = tile.getContext("2d"), pixels = c.createImageData(w, h * 2);
+      const grid = (nx, ny, salt) => {
+        const values = new Float32Array(nx * ny);
+        for (let i = 0; i < values.length; i++) values[i] = seed(i + salt);
+        return { nx, ny, values };
+      };
+      const coarse = grid(8, 5, 131), middle = grid(31, 17, 471), fine = grid(97, 53, 917);
+      const noise = (field, u, v) => {
+        const x = fract(u) * field.nx, y = fract(v) * field.ny, ix = Math.floor(x), iy = Math.floor(y);
+        const fx = x - ix, fy = y - iy, tx = fx * fx * (3 - 2 * fx), ty = fy * fy * (3 - 2 * fy);
+        const row = iy * field.nx, nextRow = (iy + 1) % field.ny * field.nx, nextX = (ix + 1) % field.nx;
+        const a = field.values[row + ix] * (1 - tx) + field.values[row + nextX] * tx;
+        const b = field.values[nextRow + ix] * (1 - tx) + field.values[nextRow + nextX] * tx;
+        return a * (1 - ty) + b * ty;
+      };
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const u = x / w, v = y / h, broad = noise(coarse, u, v);
+        const wu = u + (broad - .5) * .065, wv = v + Math.sin(u * TAU * 3 + broad * 3) * .075;
+        const folded = noise(middle, wu, wv), grain = noise(fine, wu, wv);
+        const ridge = Math.max(0, 1 - Math.abs(folded - .49) * 19);
+        const crust = clamp01((broad * .5 + folded * .36 + grain * .14 - .51) * 5.8);
+        const heat = clamp01(.29 + broad * .47 + folded * .32 + ridge * .20 - crust * .61);
+        const pore = Math.max(0, .29 - grain) * 1.5, skin = crust * crust;
+        const i = (y * w + x) * 4;
+        pixels.data[i] = (179 + heat * 76) * (1 - skin) + (36 + grain * 24) * skin - pore * 54;
+        pixels.data[i + 1] = (29 + heat * heat * 158 + ridge * 19) * (1 - skin) + (24 + grain * 12) * skin - pore * 22;
+        pixels.data[i + 2] = (9 + heat * heat * 51) * (1 - skin) + (27 + grain * 10) * skin;
+        pixels.data[i + 3] = 255;
+        const relief = (noise(middle, wu + 1 / w, wv - 1 / h) - folded) * 108;
+        const stone = 19 + broad * 23 + folded * 18 + grain * 15 + relief - pore * 38;
+        const ember = ridge * Math.max(0, broad - .53) * 1.4;
+        const j = ((y + h) * w + x) * 4;
+        pixels.data[j] = stone * 1.12 + ember * 165;
+        pixels.data[j + 1] = stone * .83 + ember * 45;
+        pixels.data[j + 2] = stone * .86 + ember * 9;
+        pixels.data[j + 3] = 255;
+      }
+      c.putImageData(pixels, 0, 0); return tile;
+    })();
     ctx.save(); ctx.translate(line.x1, line.y1); ctx.rotate(Math.atan2(line.y2 - line.y1, line.x2 - line.x1));
     // The authoritative rectangle remains the outer clip. The crust has its own
     // broken silhouette inside it, so neither its texture nor ends form a tile.
@@ -278,44 +323,66 @@ const NextgenVfx = (() => {
     for (let i = 0; i <= steps; i++) { const x = length * i / steps; if (!i) ctx.moveTo(x, shore(x, -1)); else ctx.lineTo(x, shore(x, -1)); }
     for (let i = steps; i >= 0; i--) { const x = length * i / steps; ctx.lineTo(x, shore(x, 1)); }
     ctx.closePath(); ctx.clip();
-    // A continuous molten bed carries the flow; connected basalt banks provide
-    // thickness. Texture exists only on individually clipped pieces of crust.
-    const heat = ctx.createLinearGradient(0, -width / 2, 0, width / 2);
-    heat.addColorStop(0, "#291b20"); heat.addColorStop(.27, "#6d251a"); heat.addColorStop(.43, "#df571d");
-    heat.addColorStop(.55, "#f5a13e"); heat.addColorStop(.70, "#7b2c1d"); heat.addColorStop(1, "#211c23");
-    ctx.fillStyle = heat; ctx.globalAlpha = alpha; ctx.fillRect(0, -width / 2, length, width);
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-    for (let layer = 0; layer < 3; layer++) {
-      ctx.beginPath();
-      for (let i = 0; i <= steps; i++) { const x = length * i / steps, y = channel(x);
-        if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
-      ctx.strokeStyle = ["#ad3718", "#f08a2e", "#ffd17b"][layer];
-      ctx.lineWidth = width * [.39, .21, .035][layer]; ctx.globalAlpha = alpha * [.8, .85, .6][layer]; ctx.stroke();
-    }
+    // Rough banks are continuous material, not six flat triangles per rock.
+    ctx.globalAlpha = alpha; ctx.drawImage(texture, 0, 128, 384, 128, 0, -width / 2, length, width);
+    const bankLight = ctx.createLinearGradient(0, -width / 2, 0, width / 2);
+    bankLight.addColorStop(0, "#060913b8"); bankLight.addColorStop(.31, "#b45a304c");
+    bankLight.addColorStop(.5, "#3c161000"); bankLight.addColorStop(.70, "#8e482f35"); bankLight.addColorStop(1, "#070812bd");
+    ctx.fillStyle = bankLight; ctx.fillRect(0, -width / 2, length, width);
+    ctx.save(); ctx.beginPath();
+    for (let i = 0; i <= steps; i++) { const x = length * i / steps; if (!i) ctx.moveTo(x, bank(x, -1)); else ctx.lineTo(x, bank(x, -1)); }
+    for (let i = steps; i >= 0; i--) { const x = length * i / steps; ctx.lineTo(x, bank(x, 1)); }
+    ctx.closePath(); ctx.clip();
+    // A lane spans less than one period. Two seamless samples advect the same
+    // turbulent surface; neither a repeating large stamp nor a bright vector bar.
+    const period = Math.max(length * 1.28, width * 5), offset = fract(time * .026) * period;
+    ctx.globalAlpha = alpha;
+    for (let i = 0; i < 2; i++) ctx.drawImage(texture, 0, 0, 384, 128, i * period - offset, -width / 2, period, width);
+    ctx.lineJoin = ctx.lineCap = "round";
     for (const side of [-1, 1]) {
       ctx.beginPath();
-      for (let i = 0; i <= steps; i++) { const x = length * i / steps; if (!i) ctx.moveTo(x, shore(x, side)); else ctx.lineTo(x, shore(x, side)); }
-      for (let i = steps; i >= 0; i--) { const x = length * i / steps; ctx.lineTo(x, bank(x, side)); }
-      ctx.closePath(); ctx.fillStyle = side < 0 ? "#392a2b" : "#211f28"; ctx.globalAlpha = alpha; ctx.fill();
-      ctx.beginPath();
       for (let i = 0; i <= steps; i++) { const x = length * i / steps, y = bank(x, side); if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
-      ctx.strokeStyle = side < 0 ? "#f1944d" : "#a94324"; ctx.lineWidth = Math.max(.8, width * .016); ctx.globalAlpha = alpha * .85; ctx.stroke();
+      ctx.strokeStyle = "#210b12"; ctx.lineWidth = width * .095; ctx.globalAlpha = alpha * .47; ctx.stroke();
+      ctx.strokeStyle = "#8f2e17"; ctx.lineWidth = width * .035; ctx.globalAlpha = alpha * .38; ctx.stroke();
     }
+    ctx.restore();
     const blocks = Math.min(stats.tier === "high" ? 22 : stats.tier === "medium" ? 14 : 8, Math.ceil(length / 24));
-    for (let i = 0; i < blocks; i++) {
+    for (let i = 0; i < blocks && stats.facets < tier().facets; i++) {
       const x = length * (i + .35 + seed(i + 19) * .25) / blocks, side = i % 2 ? 1 : -1;
-      const size = Math.min(width * (.29 + seed(i) * .20), length / blocks * 1.12);
-      rock(ctx, x, side * width * (.30 + .045 * seed(i + 37)), size, i * 2.399, 0, alpha);
+      const size = Math.min(width * (.29 + seed(i) * .20), length / blocks * 1.12), y = side * width * (.30 + .045 * seed(i + 37));
+      const points = [];
+      for (let j = 0; j < 9; j++) {
+        const angle = j / 9 * TAU + i * 2.399, radius = size * (.70 + seed(i * 19 + j) * .30);
+        points.push(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius * .68);
+      }
+      polygon(ctx, points, "#30272c", alpha);
+      ctx.save(); ctx.beginPath(); ctx.moveTo(points[0], points[1]);
+      for (let j = 2; j < points.length; j += 2) ctx.lineTo(points[j], points[j + 1]);
+      ctx.closePath(); ctx.clip();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(texture, seed(i + 15) * 256, 128 + seed(i + 46) * 32, 96, 96, x - size, y - size, size * 2, size * 2);
+      const relief = ctx.createRadialGradient(x - size * .28, y - side * size * .34, 0, x, y, size);
+      relief.addColorStop(0, "#ca86564d"); relief.addColorStop(.32, "#69473317");
+      relief.addColorStop(.74, "#100f1a45"); relief.addColorStop(1, "#060811be");
+      ctx.fillStyle = relief; ctx.fillRect(x - size, y - size, size * 2, size * 2);
+      ctx.restore();
+      // Broken warm edge reflections face the melt; the far faces stay occluded.
+      ctx.strokeStyle = "#ca7444"; ctx.lineWidth = .7; ctx.globalAlpha = alpha * .42;
+      ctx.beginPath();
+      for (let j = 0; j < points.length; j += 2) {
+        const k = (j + 2) % points.length;
+        if ((points[j + 1] + points[k + 1]) * side < y * side * 2) { ctx.moveTo(points[j], points[j + 1]); ctx.lineTo(points[k], points[k + 1]); }
+      }
+      ctx.stroke();
     }
-    // Thin advected rivulets vary along the connected channel. No large atlas
-    // silhouettes repeat down the lane; eruptions retain their separate atlas.
-    const tendrils = tier().strands;
-    ctx.strokeStyle = "#ffdb8e";
+    // Small scattered glints ride the melt, rather than outlining its length.
+    const tendrils = Math.ceil(tier().strands / 2);
+    ctx.strokeStyle = "#ffd599";
     for (let i = 0; i < tendrils; i++) {
       const x = fract(seed(i + 93) - time * .055) * length;
-      const y = channel(x) + (seed(i + 65) - .5) * width * .20, reach = width * (.035 + .07 * seed(i));
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + 9, y - reach, x + 21, y + reach, x + 34, y - reach * .3);
-      ctx.globalAlpha = alpha * (.24 + .32 * seed(i + 43)); ctx.lineWidth = .6 + seed(i + 1) * 1.5; ctx.stroke();
+      const y = channel(x) + (seed(i + 65) - .5) * width * .18, reach = width * (.025 + .04 * seed(i));
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + 4, y - reach, x + 11, y + reach, x + 17, y - reach * .3);
+      ctx.globalAlpha = alpha * (.15 + .20 * seed(i + 43)); ctx.lineWidth = .4 + seed(i + 1) * .6; ctx.stroke();
     }
     ctx.restore(); return true;
   }
