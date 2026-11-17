@@ -111,6 +111,16 @@ const NextgenVfx = (() => {
     for (let r = 0; r <= rows; r++) { const y = top + (bottom - top) * r / rows; const x = crestAt(y) - width; if (!r) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
     for (let r = rows; r >= 0; r--) { const y = top + (bottom - top) * r / rows; ctx.lineTo(crestAt(y) + width, y); }
     ctx.closePath(); ctx.clip();
+    // The low-contrast danger skin spans the full mask, including the short
+    // rolled ends. It marks hazardous corners without an opaque rectangle.
+    ctx.strokeStyle = "#70bdca"; ctx.lineWidth = .8; ctx.globalAlpha = alpha * .30; ctx.stroke();
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      for (let r = 0; r <= rows; r++) { const y = top + span * r / rows;
+        const x = crestAt(y) + side * width * (.84 + .045 * Math.sin(y * .074 - time * 1.1));
+        if (!r) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      ctx.strokeStyle = "#68bac9"; ctx.lineWidth = .9; ctx.globalAlpha = alpha * .27; ctx.stroke();
+    }
     ctx.save(); ctx.beginPath();
     for (let r = 0; r <= rows; r++) { const y = top + span * r / rows; if (!r) ctx.moveTo(surfaceX(y, -1), y); else ctx.lineTo(surfaceX(y, -1), y); }
     for (let r = rows; r >= 0; r--) { const y = top + span * r / rows; ctx.lineTo(surfaceX(y, 1), y); }
@@ -247,6 +257,23 @@ const NextgenVfx = (() => {
     const channel = x => width * (.075 * Math.sin(x * .018 + time * .32) + .025 * Math.sin(x * .047 - time * .21));
     const bank = (x, side) => channel(x) + side * width *
       (.16 + .045 * Math.sin(x * .052 + side * 1.7) + .025 * Math.sin(x * .123));
+    // Sparse heat fractures and a fine exact edge retain danger readability in
+    // the corners outside the raised crust; no solid rectangular backing.
+    ctx.strokeStyle = "#bd8054"; ctx.lineWidth = .8; ctx.globalAlpha = alpha * .32; ctx.stroke();
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i++) { const x = length * i / steps;
+        const y = side * width * (.43 + .025 * Math.sin(x * .097 + side));
+        if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      ctx.strokeStyle = "#ce7845"; ctx.lineWidth = .9; ctx.globalAlpha = alpha * .30; ctx.stroke();
+    }
+    for (const end of [0, length]) {
+      const inward = end ? -1 : 1;
+      ctx.beginPath(); ctx.moveTo(end, -width * .42);
+      ctx.lineTo(end + inward * cap * .24, -width * .18); ctx.lineTo(end + inward * cap * .08, width * .08);
+      ctx.lineTo(end + inward * cap * .28, width * .29); ctx.lineTo(end, width * .43);
+      ctx.strokeStyle = "#da824b"; ctx.lineWidth = .9; ctx.globalAlpha = alpha * .32; ctx.stroke();
+    }
     ctx.beginPath();
     for (let i = 0; i <= steps; i++) { const x = length * i / steps; if (!i) ctx.moveTo(x, shore(x, -1)); else ctx.lineTo(x, shore(x, -1)); }
     for (let i = steps; i >= 0; i--) { const x = length * i / steps; ctx.lineTo(x, shore(x, 1)); }
