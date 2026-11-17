@@ -59,3 +59,5 @@ Settings include remappable keys, standard gamepad support, interface scale, sub
 The game uses HTML, CSS, JavaScript, Canvas, Three.js, and Web Audio. Serve the folder over local HTTP for live 3D rendering. Opening `index.html` directly also works with the compatible renderer.
 
 Switching windows now opens a pause menu; confirm Resume when you return. Reduced motion and shake settings keep normal score eligibility. Extended attack warnings or using Temporal Recall put a run in assisted records; death-screen boss retries stop score recording for that run. Historical saves are preserved.
+
+[v35 implementation, verification and limitations (Chinese)](docs/v35-nextgen-release.md).
