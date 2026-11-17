@@ -882,6 +882,10 @@ const gameAudio = (() => {
       return;
     }
     loadBank(audio);
+    // The initial bank may finish while muted. Reconcile on unmute/resume must
+    // retry its deferred fighter palette; requestPalette deduplicates in-flight
+    // and completed requests. Let the first music decode retain startup priority.
+    if (buffers.has("flight_harmony")) requestPalette("fighters");
     if (!factionScores && (warningActive || cinematicActive)) { stopMusic(); return; }
     const theme = cinematicActive && liveScore ? liveScore.theme
       : bossActive ? (factionScores ? currentFaction() : "boss") : scene === "menu" && nextgen ? "hangar" : "adventure";
