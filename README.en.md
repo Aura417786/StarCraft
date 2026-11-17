@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v35.5 Ten boss redesigns.** The Broodmother contracts its mantle when gathering the tide. The Marrow Stalker hinges its rib cage, the Rift Weaver draws threads with its legs, and the Pulse Binder closes its claws in sequence. Mirror Ray folds its fins, Thunder Wyrm passes current down its spine, and Spore Regent exhales through expanding sacs. The Dimensional Maw curls into its aperture, Neural King fires along its branches, and the Confluence uses three distinct organs for siphon, lance and burst.
+
 **v35.4 Cinder Maw redesign.** Overlapping basalt plates frame a hinged jaw and a recessed furnace. The Cinder Rift erupts in sections, sends molten rock through the fractures, then cools as the embers disperse.
 
 **v35.3 Cinematic UI.** Floating ability dials and edge-aligned readouts keep the battlefield open, while slender boss health tracks and timed cues mark threats. The hangar adds a fighter radar and revised refit, progress and sortie reports. Display, audio, controls and accessibility each have a settings tab, with separate master, music and effects levels.

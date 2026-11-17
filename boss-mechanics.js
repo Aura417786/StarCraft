@@ -443,6 +443,8 @@ function drawFusionLimbs(ctx, hazard, active, progress, quiet) {
 function drawAlienMechanic(ctx, hazard, quiet) {
   const { kind, x, y, color } = hazard;
   const active = mechanicActive(hazard), p = signatureProgress(hazard);
+  const elemental = !boss?.finale && typeof bossElementalVfx === "function" ? bossElementalVfx(boss?.type) : null;
+  if (elemental?.mechanic?.(ctx, hazard, { active, progress: p, quiet })) return;
   if (BossEnergyVfx.drawMechanic(ctx, hazard, quiet)) return;
   if (BossCreatureVfx.drawMechanic(ctx, hazard, { active, progress: p, quiet })) return;
   ctx.save();

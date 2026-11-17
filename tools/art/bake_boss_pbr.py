@@ -21,7 +21,7 @@ from time import monotonic
 import bpy
 
 sys.path.insert(0, str(Path(__file__).parent))
-from build_boss_models import CINDER_MAW_PALETTE, MODELS, PALETTES, Sculpt
+from build_boss_models import MODELS, Sculpt, model_palette
 
 
 # Scale and stretch of a material's structure, followed by relief, matte
@@ -106,10 +106,12 @@ class Graph:
                          Roughness=rough).outputs["Fac"]
 
 
-def design_material(material, index, glow, object_origin, *, cinder_maw=False):
+def design_material(material, index, glow, object_origin, *, cinder_maw=False, confluence=False):
     family, stretch, scale, relief, matte, mineral, strength = PROFILES[index]
     if cinder_maw:
         matte, mineral = .82, .13
+    if confluence:
+        matte, mineral = .58, .24
     graph = Graph(material)
     add = lambda a, b: graph.math("ADD", a, b)
     mul = lambda a, b: graph.math("MULTIPLY", a, b)
@@ -175,7 +177,9 @@ def design_material(material, index, glow, object_origin, *, cinder_maw=False):
         zones = graph.node("ShaderNodeSeparateXYZ", "Graft junctions", Vector=point)
         split = graph.remap("Tissue boundary", add(zones.outputs["X"], mul(broad, .67)), -.45, .67)
         accents = graph.mix("Teal organism and violet mantle", split, (.033, .25, .23, 1), (.31, .085, .20, 1))
-        albedo = graph.mix("Unequal grafts", .32, albedo, accents)
+        if confluence:
+            accents = graph.mix("Blue-black and violet grafts", split, (.010, .028, .044, 1), (.108, .022, .143, 1))
+        albedo = graph.mix("Unequal grafts", .46 if confluence else .32, albedo, accents)
 
     # OpenGL tangent relief is baked directly from the procedural bump response.
     height = add(mul(ridge, .43), add(mul(flecks, .14), mul(cavity, -.43)))
@@ -205,6 +209,11 @@ def design_material(material, index, glow, object_origin, *, cinder_maw=False):
         height_axis = graph.node("ShaderNodeSeparateXYZ", "Layered organ emission", Vector=point).outputs["Z"]
         violet = graph.remap("Independent organ tone", height_axis, -.55, .48)
         hue = graph.mix("Teal through magenta", violet, (.22, .74, 1.0, 1), hue)
+        if confluence:
+            lower = graph.remap("Burst organ pigment", height_axis, -.50, -.10)
+            upper = graph.remap("Lance organ pigment", height_axis, .22, .56)
+            hue = graph.mix("Violet burst and cold siphon", lower, (.96, .085, .58, 1), (.20, .50, .99, 1))
+            hue = graph.mix("Gold lance organ", upper, hue, (1., .43, .075, 1))
     if cinder_maw and signal:
         heat_color = graph.remap("Mottled core temperature", broad, .33, .61)
         hue = graph.mix("Orange to pale mineral heat", heat_color, (1.0, .16, .012, 1), (1.0, .66, .16, 1))
@@ -386,7 +395,7 @@ def build(index, output, size, threads, round_trip):
     scene.render.threads = threads
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
-    palette = CINDER_MAW_PALETTE if index == 2 else PALETTES[index if index < 12 else index - 11]
+    palette = model_palette(index)
     sculpt = AtlasSculpt(palette[:2], palette[2])
     sculpt_model(sculpt)
     objects = sculpt.organs(name)
@@ -396,7 +405,7 @@ def build(index, output, size, threads, round_trip):
     origin = bpy.data.objects.new("Material bake origin", None)
     bpy.context.collection.objects.link(origin)
     materials = [obj.data.materials[0] for obj in objects]
-    designs = [design_material(mat, identity, palette[2], origin, cinder_maw=index == 2)
+    designs = [design_material(mat, identity, palette[2], origin, cinder_maw=index == 2, confluence=index == 10)
                for mat in materials]
     print(f"UV {name} {coverage:.3f} {size}px", flush=True)
     maps = {}

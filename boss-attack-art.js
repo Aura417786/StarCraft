@@ -792,7 +792,9 @@ function drawAlienSignatureHazard(ctx, hazard, quiet) {
   const material = signatureMaterials[hazard.material] || signatureMaterials.fusion;
   const active = hazard.age >= hazard.warning;
   const progress = signatureProgress(hazard);
+  const elemental = typeof bossElementalVfx === "function" && !boss?.finale ? bossElementalVfx(boss?.type) : null;
   ctx.save();
+  if (elemental?.signature?.(ctx, hazard, { active, progress, quiet })) { ctx.restore(); return true; }
   if (hazard.kind === "tide") drawSignatureTide(ctx, hazard, material, active, progress, quiet);
   else if (hazard.kind === "vortex") drawSignatureVortex(ctx, hazard, material, active, progress, quiet);
   else if (hazard.kind === "filament") drawSignatureFilament(ctx, hazard, active, progress, quiet);

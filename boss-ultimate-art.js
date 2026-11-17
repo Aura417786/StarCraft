@@ -236,6 +236,7 @@ function drawUltimateChargeIdentity(ctx, target, scene) {
   const quiet = quietCombatMotion(), time = quiet ? 0 : scene.age;
   const cx = target.x - target.width * .27, cy = target.y, r = viewport.height * (.15 + charge * .10);
   const fade = .3 + charge * .7;
+  if (bossElementalVfx(target.type)?.charge?.(ctx, target, scene, {x:cx, y:cy, radius:r, charge, time, quiet, material:mat})) return;
   if (typeof NextgenVfx !== "undefined" && ["tideWalls", "magmaRift", "voidCollapse"].includes(kind)) {
     if (kind === "magmaRift") {
       if (!NextgenVfx.drawCinderCharge(ctx, cx, cy, r, charge, time, quiet)) {
@@ -362,6 +363,10 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
   ultimateClipDanger(ctx, hazard);
+  if (bossElementalVfx(target.type)?.ultimate?.(ctx, hazard, geometry, target, { active, quiet, alpha })) {
+    ctx.restore();
+    return;
+  }
   if (kind === "magmaRift") {
     const room = mechanicRoom();
     const layout = active ? geometry : bossUltimateGeometry({ ...hazard, age: hazard.warning + hazard.duration * .5 });
@@ -447,6 +452,10 @@ function drawBossUltimateAftershock(ctx, scene) {
   const cx = pressureArt.coreX * w, cy = pressureArt.coreY * h, front = cx - travel * w * 1.17;
   ctx.save();
   if (!scene.fullSeal) ultimateClipDanger(ctx, { noShield: true, gapY: scene.gapY, gapSize: scene.gapSize });
+  if (bossElementalVfx(boss?.type)?.aftershock?.(ctx, scene, {x:cx, y:cy, width:w, height:h, age, quiet, material:mat})) {
+    ctx.restore();
+    return true;
+  }
   if (scene.ultimateKind === "magmaRift" && NextgenVfx.drawCinderAftershock(ctx, cx, cy, w, h, age, quiet)) {
     ctx.restore();
     return true;
@@ -621,7 +630,8 @@ function drawBossUltimateHazard(ctx, hazard, quiet) {
       BossConfluenceVfx.safeGuide(ctx, safe.x, safe.y, safe.width, safe.height, active, time);
     }
   }
-  if (!BossEnergyVfx.drawUltimateNodes(ctx, hazard, geometry, quiet)) {
+  const elementalNodes = bossElementalVfx(boss.type)?.ultimateNodes?.(ctx, hazard, geometry, quiet);
+  if (!elementalNodes && !BossEnergyVfx.drawUltimateNodes(ctx, hazard, geometry, quiet)) {
     // Keep target silhouettes above the danger material and outside the gap clip.
     for (const node of geometry.nodes) {
       if (node.health <= 0) continue;
