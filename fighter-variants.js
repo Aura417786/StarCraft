@@ -61,10 +61,12 @@ function fighterWakeOrigin(ship, id) {
   const atlas = ship === player ? fighterAtlasPose(asset, ship, bank) : null;
   const geometry = atlas ?? shipRenderGeometry(asset, ship, true);
   const engines = atlas?.engines ?? asset.engines;
-  const center = engines.reduce(([x, y], [engineX, engineY]) => [x + engineX, y + engineY], [0, 0])
-    .map(value => value / engines.length);
-  const point = geometry.point(center);
   const skew = atlas ? atlas.residual * .035 : bank * .09;
   const squash = atlas ? 1 : 1 - Math.abs(bank) * .10;
-  return { x: geometry.anchorX + point.x + point.y * skew, y: geometry.anchorY + point.y * squash };
+  const sockets = engines.map(engine => {
+    const p = geometry.point(engine);
+    return { x: geometry.anchorX + p.x + p.y * skew, y: geometry.anchorY + p.y * squash };
+  });
+  const first = sockets[0], last = sockets[sockets.length - 1];
+  return { x: (first.x + last.x) / 2, y: (first.y + last.y) / 2, sockets };
 }

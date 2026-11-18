@@ -382,7 +382,7 @@ function renderSortieSettings() {
       sortieSettingLine(tr("画面震动", "Screen shake"), shake),
       sortieSettingLine(tr("减少演出动态", "Reduce effects motion"), motion),
       ...TacticalSystem.displayAssists("sortie"),
-      sortieElement("p", tr("延长攻击预警或使用 F 时隙回溯计入辅助纪录；阵亡后的 Boss 回溯不登记本局成绩与成就。关闭震动、减少动态和显示辅助不影响正式成绩。旧版纪录保持原样。", "Longer attack warnings or using the F Temporal Recall skill put a sortie in assisted records. Retrying a boss after death stops score and achievement recording for that run. Shake, reduced motion and display preferences do not affect ranked records. Older records are preserved."), "sortie-explainer"),
+      sortieElement("p", tr("延长攻击预警计入辅助纪录；阵亡后的 Boss 回溯不登记本局成绩与成就。关闭震动、减少动态和显示辅助不影响正式成绩。旧版纪录保持原样。", "Longer attack warnings put a sortie in assisted records. Retrying a boss after death stops score and achievement recording for that run. Shake, reduced motion and display preferences do not affect ranked records. Older records are preserved."), "sortie-explainer"),
     ],
   });
   updateFullscreenDisplay();

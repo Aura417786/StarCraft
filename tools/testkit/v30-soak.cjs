@@ -24,7 +24,7 @@ function fingerprint() {
 function installFrameSampler() {
   const raf = window.requestAnimationFrame.bind(window);
   window.soakSamples = { active: false, intervals: [], cpu: [], last: 0, frames: 0, paused: 0,
-    peakBossShots: 0, peakPlayerShots: 0, peakHazards: 0, peakHistoryBytes: 0 };
+    peakBossShots: 0, peakPlayerShots: 0, peakHazards: 0 };
   window.requestAnimationFrame = callback => {
     if (callback.name !== "drawFrame") return raf(callback);
     return raf(time => {
@@ -40,7 +40,6 @@ function installFrameSampler() {
       stats.peakBossShots = Math.max(stats.peakBossShots, bossProjectiles.length);
       stats.peakPlayerShots = Math.max(stats.peakPlayerShots, bullets.length);
       stats.peakHazards = Math.max(stats.peakHazards, bossHazards.length);
-      stats.peakHistoryBytes = Math.max(stats.peakHistoryBytes, battleRewind.bytes);
     });
   };
 }
@@ -59,7 +58,7 @@ async function main() {
   let page;
   try {
     for (const fixture of [{ route: "ember", fighter: "red", type: 0 },
-      { route: "frost", fighter: "blue", type: 5 }, { route: "rewind", fighter: "yellow", type: 10 }]) {
+      { route: "frost", fighter: "blue", type: 5 }, { route: "mimic", fighter: "yellow", type: 10 }]) {
       page = await open({ newPage: async options => {
         const created = await browser.newPage({ ...options, viewport: report.viewport });
         await created.addInitScript(installFrameSampler);
@@ -70,6 +69,7 @@ async function main() {
         setGameLanguage("zh-CN"); setVisualQuality("high", false);
         showScreen("battle", { mode: "campaign", fighter: fixture.fighter, difficulty: "hard", seed: 7631 });
         evolution.route = fixture.route; evolution.level = 3; evolution.cooldown = 0;
+        if (fixture.route === "mimic") rememberDefeatedBoss(fixture.type - 1);
         battleTime = 65 + fixture.type * 50; bossDefeated = fixture.type;
         raiseWeaponFloor(progressionPresetForBoss(fixture.type));
         ultimate.charges = 5; shield.charges = 2;
@@ -137,8 +137,7 @@ async function main() {
         soakSamples.active = false;
         return { samples: soakSamples, inputs: soakInputs, state, pause: pauseView,
           time: battleTime, bossType: boss?.type, bossPhase: boss?.phase, lives: player.lives,
-          rewindHistory: { count: battleRewind.history.length, bytes: battleRewind.bytes,
-            availableSeconds: battleRewind.availableSeconds, lastRewound: battleRewind.lastRewound, error: battleRewind.error } };
+          lastDefeatedBoss: evolution.lastDefeatedBoss };
       });
       const heapAfter = await cdp.send("Runtime.getHeapUsage");
       const row = { ...fixture, initial, measuredWallSeconds, frameMs: summarize(final.samples.intervals),
@@ -151,7 +150,7 @@ async function main() {
       assert.equal(final.bossType, fixture.type);
       assert.ok(final.inputs.F.successful > 0, `${fixture.route}: real F never successfully activated`);
       assert.ok(final.inputs.Space.successful > 0 && final.inputs.V.successful > 0);
-      assert.equal(final.rewindHistory.error, "");
+      if (fixture.route === "mimic") assert.equal(final.lastDefeatedBoss,fixture.type - 1);
       assert.ok(row.frameMs.n > 100, "Not enough actual RAF samples");
       save();
       console.log(`${fixture.route}: ${measuredWallSeconds.toFixed(1)}s, frame p95 ${row.frameMs.p95.toFixed(2)}ms, CPU p95 ${row.drawFrameCpuMs.p95.toFixed(2)}ms, F ${final.inputs.F.successful}/${final.inputs.F.attempts}`);
@@ -166,7 +165,7 @@ async function main() {
     await page.setViewportSize(report.viewport);
     await page.evaluate(() => {
       showScreen("battle", { mode: "practice", bossType: 5, seed: 7632 });
-      evolution.route = "rewind"; evolution.level = 2;
+      evolution.route = "mimic"; rememberDefeatedBoss(4); evolution.level = 2;
       player.lives = 2; ultimate.charges = 3; shield.charges = 1;
       spawnBoss(5); resetBossPresentation(); boss.phase = "recover";
       bossHitGrace = 0; shield.remaining = 0; player.lives = 1;
@@ -179,7 +178,7 @@ async function main() {
     report.deathRetry = await page.evaluate(() => ({ state, bossType: boss?.type, lives: player.lives,
       route: evolution.route, level: evolution.level, ultimate: ultimate.charges, shield: shield.charges,
       focus: document.activeElement.id, retried: sortieStats.retried }));
-    assert.deepEqual(report.deathRetry, { state: "battle", bossType: 5, lives: 2, route: "rewind", level: 2,
+    assert.deepEqual(report.deathRetry, { state: "battle", bossType: 5, lives: 2, route: "mimic", level: 2,
       ultimate: 3, shield: 1, focus: "game-canvas", retried: true });
     report.sourceFingerprintAtEnd = fingerprint();
     assert.equal(report.sourceFingerprintAtEnd, report.sourceFingerprint, "Runtime sources changed during the soak; rerun against a stable version");

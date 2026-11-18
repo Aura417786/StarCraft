@@ -1087,14 +1087,13 @@ const NextgenVfx = (() => {
     const image = horizonAtlas();
     const time = quiet ? 0 : age;
     const r = width * .5;
-    if (!image?.complete || !image.naturalWidth) {
-      if (typeof BlackHoleSurface !== "undefined")
-        BlackHoleSurface.draw(ctx,x,y,r*.68,time,opacity,stats.tier);
-      return;
-    }
-    const sampled = quiet ? null : backdrop(ctx,x,y,r*.77);
+    const ready = image?.complete && image.naturalWidth;
+    if (!ready && typeof BlackHoleSurface !== "undefined")
+      BlackHoleSurface.draw(ctx,x,y,r*.68,time,opacity,stats.tier);
+    const sampled = ready && !quiet ? backdrop(ctx,x,y,r*.77) : null;
     ctx.save();
     ctx.translate(x,y);
+    ctx.globalCompositeOperation="source-over";
     if (sampled) {
       // Light from the real field bends most just outside the event horizon.
       // Both rings share the existing bounded capture and preserve the HUD.
@@ -1108,9 +1107,15 @@ const NextgenVfx = (() => {
         ctx.restore();
       }
     }
+    ctx.rotate(-.105+.014*Math.sin(time*1.4));
+    // The gas fades as the spell forms. The horizon still occludes the world
+    // completely; its halo and foreground orbit have their own opacity.
+    ctx.beginPath();
+    ctx.ellipse(0,0,r*.249*1.045,r*.249*.945,-.22,0,TAU);
+    ctx.globalAlpha=1;ctx.fillStyle="#000";ctx.fill();
+    if (!ready) { ctx.restore();return; }
     const key = Math.floor(((time % 2.4 + 2.4) % 2.4) * 5);
     const cellW = image.naturalWidth/4, cellH = image.naturalHeight/3, height=width*cellH/cellW;
-    ctx.rotate(-.105+.014*Math.sin(time*1.4));
     ctx.globalAlpha=opacity;
     ctx.drawImage(image, key%4*cellW, Math.floor(key/4)*cellH,cellW,cellH,-r,-height/2,width,height);
     stats.horizonPasses++;
@@ -1120,7 +1125,7 @@ const NextgenVfx = (() => {
       ctx.beginPath();
       for(let i=layer;i<42;i+=2) {
         const v=(i*.61803399 + time*(.18+i%3*.041))%1;
-        const radial=.28+(1-v)*(.47+.11*Math.sin(i*27.5));
+        const radial=.324+(1-v)*(.426+.11*Math.sin(i*27.5));
         const a=i*2.39996+v*(1.15+v*.91);
         const ax=Math.cos(a)*radial, ay=Math.sin(a)*radial*.81;
         const b=a+.017+.025*v, tail=.003+(.011+.009*layer)*v;

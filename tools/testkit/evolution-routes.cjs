@@ -8,20 +8,20 @@ const output = path.resolve(process.argv[3] || "evolution-route-results");
 
 async function main() {
   fs.mkdirSync(output, { recursive: true });
-  const errors = [], evidence = { schema: "star-breaker-three-routes/1", allPassed: false, routes: [],
+  const errors = [], evidence = { schema: "star-breaker-three-routes/2", allPassed: false, routes: [],
     methodology: "Production choice dialog activated through DOM buttons; production F-key input dispatch; deterministic production frames inspect actual resource and hostile-state changes. Fixtures are staged, not natural progression." };
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true });
   let page;
   try {
     page = await open(browser, errors);
-    for (const route of ["ember", "frost", "rewind"]) {
+    for (const route of ["ember", "frost", "mimic"]) {
       await page.evaluate(() => { showScreen("battle", { seed: 5021 }); openEvolutionChoice(); });
       await page.locator(`[data-choice="${route}"]`).click();
       const first = await page.evaluate(() => ({ route: evolution.route, level: evolution.level, pending: evolution.pending,
         focus: document.activeElement.id }));
       assert.deepEqual(first, { route, level: 1, pending: false, focus: "game-canvas" });
       await page.evaluate(() => openEvolutionChoice());
-      for (const other of ["ember", "frost", "rewind"].filter(value => value !== route))
+      for (const other of ["ember", "frost", "mimic"].filter(value => value !== route))
         assert.equal(await page.locator(`[data-choice="${other}"]`).isDisabled(), true, "Route switching was still allowed");
       assert.equal(await page.evaluate(other => chooseEvolution(other), route === "ember" ? "frost" : "ember"), false);
       await page.locator(`[data-choice="${route}"]`).click();
@@ -34,39 +34,71 @@ async function main() {
         spec2: await page.evaluate(route => evolutionSkillSpec(route, 2), route),
         spec100: await page.evaluate(route => evolutionSkillSpec(route, 100), route) });
     }
-    const rewind = evidence.routes.find(item => item.route === "rewind");
-    assert.equal(rewind.spec1.duration, 3);
-    assert.equal(rewind.spec2.duration, 3.5);
-    assert.equal(rewind.spec100.duration, 52.5);
+    const mimic = evidence.routes.find(item => item.route === "mimic");
+    assert.equal(mimic.spec1.power, 1);
+    assert.equal(mimic.spec1.cooldown, 20);
+    assert.ok(mimic.spec100.power > mimic.spec2.power && mimic.spec2.power > 1);
+    assert.ok(mimic.spec100.cooldown < mimic.spec2.cooldown && mimic.spec100.cooldown >= 12);
     assert.ok(evidence.routes.find(item => item.route === "frost").spec100.duration > 7);
     assert.ok(evidence.routes.find(item => item.route === "ember").spec100.stacks > 8);
 
-    // Actual F event restores both player and enemies, and cannot refund its CD.
-    const beforeF = await page.evaluate(() => {
+    // Production final-phase entry, kill, choice UI, keyboard, cooldown and replacement.
+    await page.evaluate(() => {
       showScreen("battle", { mode: "campaign", fighter: "red", seed: 5022 });
-      openEvolutionChoice(); chooseEvolution("rewind");
-      battleTime = 10; spawnEnemy("gunner");
-      enemies[0].x = 900; enemies[0].y = 230; enemies[0].hp = .7;
-      player.lives = 4; player.y = 330; score = 800;
-      stepBattleRewind(0);
-      const expected = { time: battleTime, y: player.y, lives: player.lives, enemyX: enemies[0].x, enemyHp: enemies[0].hp, score };
-      battleTime = 13.2; enemies[0].x = 600; enemies[0].hp = .25;
-      player.lives = 1; player.y = 480; score = 900;
-      stepBattleRewind(.1);
-      return expected;
+      openEvolutionChoice(); chooseEvolution("mimic");
     });
     await page.keyboard.press("f");
-    evidence.rewindF = await page.evaluate(() => ({ time: battleTime, y: player.y, lives: player.lives,
-      enemyX: enemies[0].x, enemyHp: enemies[0].hp, score, cooldown: evolution.cooldown,
-      internalCooldown: battleRewind.cooldown, assisted: sortieStats.assisted, key: controlBindingLabel("focus") }));
-    const { cooldown, internalCooldown, assisted, key, ...restored } = evidence.rewindF;
-    assert.deepEqual(restored, beforeF);
-    assert.equal(cooldown, 18); assert.equal(internalCooldown, 18); assert.equal(assisted, true); assert.equal(key, "F");
-    await page.keyboard.press("f");
-    assert.equal(await page.evaluate(() => evolution.cooldown), 18);
-    await page.evaluate(() => { for (let i = 0; i < 35; i++) retryTestFrame(1 / 60); });
-    await page.screenshot({ path: path.join(output, "rewind-F-restored.png") });
+    assert.equal(await page.evaluate(() => evolution.cooldown), 0);
+    const imprints = [];
+    for (let type=0; type<11; type++) {
+      const phases = await page.evaluate(type => {
+        spawnBoss(type); resetBossPresentation();
+        const arrival = evolution.lastDefeatedBoss;
+        beginBossFinale(boss); resetBossPresentation();
+        const finale = evolution.lastDefeatedBoss;
+        defeatBoss(boss); resetBossPresentation();
+        return { arrival, finale, kill: evolution.lastDefeatedBoss, cooldown: evolution.cooldown };
+      }, type);
+      const previous = type === 0 ? null : type-1;
+      assert.equal(phases.arrival, previous);
+      assert.equal(phases.finale, previous);
+      assert.equal(phases.kill,type);
+      if(type>0) assert.ok(phases.cooldown>0, "A kill refunded cooldown");
+      await page.evaluate(() => {
+        for(let i=0;i<1260;i++) updateEvolution(1/60);
+        spawnEnemy("gunner");
+        enemies[0].x = viewport.width*.68;
+        enemies[0].y = player.y;
+      });
+      await page.keyboard.press("f");
+      const cast = await page.evaluate(() => ({
+        kind:friendlyBossMimic?.h.ultimateKind, name:learnedApexName(),
+        expected:bossUltimateKinds[evolution.lastDefeatedBoss], cooldown:evolution.cooldown,
+        hostile:bossHazards.some(h => h.owner==="player"), assisted:!!sortieStats.assisted,
+        repeated:requestEvolutionSkill(), hud:evolutionReadout.textContent
+      }));
+      assert.equal(cast.kind, cast.expected); assert.equal(cast.hostile,false);
+      assert.equal(cast.assisted,false); assert.equal(cast.repeated,false);
+      assert.equal(cast.cooldown,20); assert.ok(cast.hud.includes(cast.name));
+      if(type===0) assert.equal(cast.kind,"tideWalls");
+      if(type===8) assert.equal(cast.kind,"voidCollapse");
+      imprints.push({type,phases,cast});
+      await page.evaluate(() => { for(let i=0;i<190;i++) updateEvolution(1/60); });
+      assert.equal(await page.evaluate(() => friendlyBossMimic),null);
+    }
+    evidence.imprints=imprints;
+    const cleared = await page.evaluate(() => {
+      evolution.cooldown = 0;
+      if (!requestEvolutionSkill()) throw Error("Expected an imprinted ultimate");
+      const before = evolution.cooldown;
+      clearBossFinaleAttacks();
+      return {before, after:evolution.cooldown, expired:friendlyBossMimic===null, imprint:evolution.lastDefeatedBoss};
+    });
+    assert.deepEqual(cleared,{before:20, after:20, expired:true, imprint:10});
+    evidence.finaleClear=cleared;
 
+    await page.evaluate(() => showScreen("battle", {mode:"rush", seed:5022}));
+    assert.equal(await page.evaluate(() => evolution.lastDefeatedBoss),null);
     // Actual F freezes positions and attack timers; the player's projectiles and
     // movement remain live. No stat-only assertion can substitute for this.
     const frozen = await page.evaluate(() => {

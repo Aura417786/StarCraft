@@ -2,7 +2,7 @@
 
 // Old numeric fields remain zero for archived build/render compatibility.
 // New sorties choose exactly one route; only its rank may then increase.
-const evolution = { route: "", level: 0, cooldown: 0, frozenRemaining: 0, skillFlash: 0,
+const evolution = { route: "", lastDefeatedBoss: null, level: 0, cooldown: 0, frozenRemaining: 0, skillFlash: 0,
   pierce: 0, blast: 0, aegis: 0, capstone: "", resetUsed: false, reassignments: 0,
   resetConfirm: false, pending: false, choice: "", pulses: [],
   links: { falcon: false, phalanx: false, lance: false }, refits: 0 };
@@ -10,11 +10,11 @@ const evolutionScreen = document.querySelector("#evolution-screen");
 const evolutionTitle = document.querySelector("#evolution-title");
 const evolutionDescription = document.querySelector("#evolution-description");
 const evolutionReadout = document.querySelector("#evolution-readout");
-const evolutionKeys = ["ember", "frost", "rewind"];
+const evolutionKeys = ["ember", "frost", "mimic"];
 const evolutionCards = ["pierce", "blast", "aegis"].map(kind => document.querySelector("#evolution-card-" + kind));
-const evolutionNames = { ember: "烬火焚心", frost: "极寒风暴", rewind: "时隙回溯" };
-const evolutionEnglishNames = { ember: "Heartfire Detonation", frost: "Absolute Blizzard", rewind: "Temporal Recall" };
-const evolutionColors = { ember: "#ff754c", frost: "#7eeaff", rewind: "#c0a0ff" };
+const evolutionNames = { ember: "烬火焚心", frost: "极寒风暴", mimic: "夺魄拟态" };
+const evolutionEnglishNames = { ember: "Heartfire Detonation", frost: "Absolute Blizzard", mimic: "Apex Mimicry" };
+const evolutionColors = { ember: "#ff754c", frost: "#7eeaff", mimic: "#c0a0ff" };
 const evolutionBackground = new Map();
 const evolutionResetButton = document.createElement("button");
 evolutionResetButton.hidden = true;
@@ -37,8 +37,14 @@ function evolutionSkillSpec(route = evolution.route, rank = evolution.level) {
     const duration = 1.8 + .9 * growth;
     return { duration, cooldown: 16 + 2 * duration };
   }
-  const duration = 3 + (level - 1) * .5;
-  return { duration, cooldown: Math.max(18, 8 + duration * 2.5) };
+  return { power: 1 + .18 * growth, cooldown: 12 + 8 / (1 + .45 * growth) };
+}
+function rememberDefeatedBoss(type) {
+  if (Number.isInteger(type) && bossUltimateNames[type]) evolution.lastDefeatedBoss = type;
+}
+function learnedApexName() {
+  const names = bossUltimateNames[evolution.lastDefeatedBoss];
+  return names ? tr(...names) : tr("击破首领后解锁", "Defeat a boss to imprint");
 }
 function evolutionPowerMultiplier() {
   return !evolution.route ? 1 : 1 + Math.log2(1 + evolution.level) * (evolution.route === "ember" ? .10 : .055);
@@ -53,7 +59,9 @@ function updateEvolutionDisplay() {
     : tr(evolutionSkillKey() + " 释放", evolutionSkillKey() + " ready");
   const freeze = evolutionIsFrozen() ? tr(" · 冰封 " + evolution.frozenRemaining.toFixed(1) + " 秒",
     " · Frozen " + evolution.frozenRemaining.toFixed(1) + "s") : "";
-  const text = evolutionName(evolution.route) + " · Lv " + evolution.level + " · " + label + freeze;
+  const title = evolution.route === "mimic" ? evolutionName("mimic") + " · " + learnedApexName() : evolutionName(evolution.route);
+  const available = evolution.route !== "mimic" || evolution.lastDefeatedBoss !== null;
+  const text = title + " · Lv " + evolution.level + (available ? " · " + label + freeze : "");
   if (evolutionReadout.textContent !== text) {
     evolutionReadout.textContent = text;
     evolutionReadout.style.setProperty("--evolution-ready", String(clamp(1 - cd / evolutionSkillSpec().cooldown, 0, 1)));
@@ -69,11 +77,12 @@ function evolutionCardDetails(kind) {
     : kind === "frost"
     ? tr(key + " 冻结全场敌军与攻击 " + spec.duration.toFixed(1) + " 秒，自己可移动和开火；冷却 " + spec.cooldown.toFixed(1) + " 秒。",
       key + " freezes all hostiles and attacks for " + spec.duration.toFixed(1) + "s. You can move and fire; " + spec.cooldown.toFixed(1) + "s cooldown.")
-    : tr(key + " 将当前战斗片段回溯 " + spec.duration.toFixed(1) + " 秒，恢复场面与生命；冷却 " + spec.cooldown.toFixed(1) + " 秒。",
-      key + " rewinds this combat segment by " + spec.duration.toFixed(1) + "s, restoring the battlefield and lives; " + spec.cooldown.toFixed(1) + "s cooldown.");
+    : tr("每次击破首领即习得它的最强招式。按 " + key + " 释放「" + learnedApexName() + "」。",
+      "Imprint the last defeated boss’s ultimate. Press " + key + " to cast " + learnedApexName() + ".");
   return { name: evolutionName(kind), level: tr(current + "级 → " + next + "级", "Lv " + current + " → " + next),
     effect, tone: kind, disabled: evolutionRankBlocked(kind),
-    art: kind === "rewind" ? tr("每级 +0.5 秒。限本阶段；不返还冷却，使用后计辅助纪录。", "Each rank adds 0.5s. Phase boundaries apply; no cooldown refund. Assisted records after use.")
+    art: kind === "mimic" ? tr("威力 ×" + spec.power.toFixed(2) + " · 冷却 " + spec.cooldown.toFixed(1) + " 秒",
+      "Power ×" + spec.power.toFixed(2) + " · Cooldown " + spec.cooldown.toFixed(1) + "s")
       : tr("本局只选一条路线 · 等级无上限 · 成长逐渐放缓", "One route per sortie · Unlimited ranks · Diminishing growth"),
     unavailable: tr("本局已锁定其他路线", "Another route is locked in") };
 }
@@ -108,13 +117,13 @@ function setEvolutionBackgroundInert(inert) {
 }
 function openEvolutionChoice() {
   if (state !== "battle" || evolution.pending) return false;
-  if (typeof resetBattleRewind === "function") resetBattleRewind("evolution");
   evolution.pending = true; evolution.choice = evolution.route;
   clearMovement(); cancelUltimate(true);
   clearCombatRounds(bullets);
   clearCombatRounds(bossProjectiles);
   clearCombatRounds(enemyProjectiles);
   bossHazards.length = 0;
+  clearBossMimic();
   evolution.pulses.length = 0;
   clearEvolutionWeaponTransients(); clearFighterCombatTransients();
   movementHint.hidden = true; evolutionScreen.hidden = false;
@@ -132,15 +141,15 @@ function chooseEvolution(kind) {
   powerupNotice.textContent = evolutionName(kind) + tr(" 升至 " + evolution.level + " 级", " upgraded to Lv " + evolution.level);
   powerupNotice.dataset.type = kind === "frost" ? "blue" : "red";
   powerupNotice.hidden = false; upgradeNoticeTime = 3; statusMessage.textContent = powerupNotice.textContent;
-  if (typeof resetBattleRewind === "function") resetBattleRewind("evolution");
   canvas.focus({ preventScroll: true }); updatePauseHint();
   if (typeof completeFlightTutorialEvolution === "function") completeFlightTutorialEvolution();
   return true;
 }
 function resetEvolution() {
-  Object.assign(evolution, { route: "", level: 0, cooldown: 0, frozenRemaining: 0, skillFlash: 0,
+  Object.assign(evolution, { route: "", lastDefeatedBoss: null, level: 0, cooldown: 0, frozenRemaining: 0, skillFlash: 0,
     pending: false, pierce: 0, blast: 0, aegis: 0, choice: "", capstone: "", resetUsed: false,
     resetConfirm: false, reassignments: 0, refits: 0 });
+  clearBossMimic();
   evolution.pulses.length = 0; refreshEvolutionLinks(); resetEvolutionWeapons();
   evolutionScreen.hidden = true; setEvolutionBackgroundInert(false); updateEvolutionDisplay();
 }
@@ -181,18 +190,19 @@ function requestEvolutionSkill() {
     evolution.cooldown = spec.cooldown; evolution.frozenRemaining = spec.duration;
     gameAudio.perfectShield?.();
   } else {
-    if (typeof requestBattleRewind !== "function" || !requestBattleRewind(spec.duration, spec.cooldown)) {
-      statusMessage.textContent = tr("当前阶段尚未积累可回溯的战场记录。", "No rewind history is available in this combat phase yet.");
+    if (!startBossMimic(evolution.lastDefeatedBoss, evolution.level)) {
+      statusMessage.textContent = tr("击破首领后可拟态它的最强招式。", "Defeat a boss to imprint its ultimate.");
       return false;
     }
-    evolution.cooldown = spec.cooldown; gameAudio.perfectShield?.();
+    evolution.cooldown = spec.cooldown;
   }
   evolution.skillFlash = .7; updateEvolutionDisplay();
-  statusMessage.textContent = evolutionName(evolution.route) + tr("已释放", " activated");
+  statusMessage.textContent = (evolution.route === "mimic" ? learnedApexName() : evolutionName(evolution.route)) + tr("已释放", " activated");
   return true;
 }
 function updateEvolution(seconds) {
   if (!isBattleActive() || seconds <= 0) return;
+  stepBossMimic(seconds);
   evolution.cooldown = Math.max(0, evolution.cooldown - seconds);
   evolution.frozenRemaining = Math.max(0, evolution.frozenRemaining - seconds);
   evolution.skillFlash = Math.max(0, evolution.skillFlash - seconds);
@@ -206,6 +216,7 @@ function updateEvolution(seconds) {
 }
 function drawEvolution() {
   if (state !== "battle") return;
+  drawBossMimic(context);
   context.save();
   for (const target of [...enemies, ...(boss ? [boss] : [])]) {
     if (target.emberStacks > 0 && target.emberUntil > battleTime) {
@@ -249,7 +260,7 @@ function drawEvolution() {
   if (evolution.skillFlash > 0) {
     if (typeof drawFlightSkillVeil === "function")
       drawFlightSkillVeil(context, viewport, player, evolutionColors[evolution.route],
-        1 - evolution.skillFlash / .7, evolution.skillFlash / .7, evolution.route === "rewind");
+        1 - evolution.skillFlash / .7, evolution.skillFlash / .7, false);
   }
   for (const pulse of evolution.pulses) {
     const progress = Math.min(1, pulse.age / pulse.duration);

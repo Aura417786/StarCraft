@@ -26,8 +26,9 @@ const ElementalFluidVfx = (() => {
     plates ||= loadPlate("assets/vfx/elemental-fluid-materials.webp",surface=>{plates=surface;});
   }
 
-  // Each strip follows a different part of the overturning lip. Both ends
-  // inherit alpha from the water itself; the open lane stays visible.
+  // Four authored poses run from swell through barrel, overturn and washout.
+  // Their motion-compensated inbetweens are baked; the browser only blends
+  // adjacent atlas cells. Each front rolls on its own clock.
   function drawBreakingMass(ctx, crest, start, end, width, direction, time, strength, quiet) {
     if (!breaker) warmWater();
     if (breaker.complete===false || !breaker.width) return;
@@ -42,20 +43,22 @@ const ElementalFluidVfx = (() => {
       ctx.drawImage(mist,x-w*.52,start,w,span);ctx.restore();return;
     }
     const lower = (start+end)*.5 >= viewport.height*.5;
-    const h = Math.min(span, Math.max(width*2.42, span*.71));
-    const w = Math.min(viewport.width*.42, Math.max(width*(direction<0?2.57:2.89),h*.91),h*1.97);
+    const phase=quiet ? .31 : frac(time*.38 + (direction<0 ? .12 : .59) + (lower ? 0 : .27));
+    const heave=Math.sin(phase*TAU), overturn=Math.cos(phase*TAU);
+    const h = Math.min(span, Math.max(width*2.66,span*.94))*(.98+.018*heave);
+    const w = Math.min(viewport.width*.47, Math.max(width*2.55,h*1.24),h*1.61);
     const centerY = lower ? start+h*.50 : end-h*.50;
-    const sourceWidth = breaker.width, sourceHeight = breaker.height;
-    const strips = 12, t = (quiet ? .35 : time)+(direction>0?1.72:.16);
+    const sw=breaker.width/4, sh=breaker.height/4;
+    const cursor=phase*16, index=Math.floor(cursor), next=(index+1)%16, blend=cursor-index;
+    const dx=(-.49+.017*overturn)*w, dy=-h*.5;
     ctx.save(); ctx.translate(crest(centerY),centerY);
     ctx.scale(direction<0 ? 1 : -1, lower ? 1 : -1);
-    ctx.globalAlpha *= strength;
-    for (let i=0; i<strips; i++) {
-      const v = i/strips, crestWeight = (1-v)*(1-v);
-      const fold = crestWeight * (Math.sin(t*4.4+v*4.1)*.075 + Math.sin(t*7.1-v*9.0)*.023);
-      const y0=Math.round(sourceHeight*v), y1=Math.round(sourceHeight*(i+1)/strips);
-      ctx.drawImage(breaker,0,y0,sourceWidth,y1-y0,(-.51+fold)*w,(v-.5)*h,
-        w*(1+crestWeight*.033*Math.cos(t*4.4+v*4.1)), h/strips+.35);
+    const opacity=ctx.globalAlpha*strength;
+    ctx.globalAlpha=opacity;
+    ctx.drawImage(breaker,(index%4)*sw,Math.floor(index/4)*sh,sw,sh,dx,dy,w,h);
+    if(!quiet && blend>.035){
+      ctx.globalAlpha=opacity*blend;
+      ctx.drawImage(breaker,(next%4)*sw,Math.floor(next/4)*sh,sw,sh,dx,dy,w,h);
     }
     ctx.restore();
   }
@@ -88,20 +91,40 @@ const ElementalFluidVfx = (() => {
     return fade;
   }
 
+  // Each section uses the same normalized end caps. Store their exact sampled
+  // shape once, and reuse crest positions between the clip and the six bands.
+  const ribbonProfiles = new Map();
+  function ribbonProfile(detail) {
+    let profile = ribbonProfiles.get(detail);
+    if (!profile) {
+      const near = new Float64Array(detail + 1), far = new Float64Array(detail + 1);
+      for (let i = 0; i <= detail; i++) {
+        const tip = Math.max(0, Math.sin(Math.PI * (i / detail)));
+        near[i] = .08 + .92 * Math.pow(tip, .29);
+        far[i] = .07 + .93 * Math.pow(tip, .34);
+      }
+      profile = { near, far, centers: new Float64Array(detail + 1) };
+      ribbonProfiles.set(detail, profile);
+    }
+    return profile;
+  }
+
   function clipRibbon(ctx, crest, start, end, width, detail) {
     const half = width / 2, height = end - start;
+    const { near, far, centers } = ribbonProfile(detail);
     ctx.beginPath();
     for (let i = 0; i <= detail; i++) {
-      const u = i/detail, tip=Math.pow(Math.max(0,Math.sin(Math.PI*u)),.29);
-      const y = start + height*u, x = crest(y) + half*(.08+.92*tip);
+      const y = start + height * (i / detail);
+      centers[i] = crest(y);
+      const x = centers[i] + half * near[i];
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     for (let i = detail; i >= 0; i--) {
-      const u=i/detail,tip=Math.pow(Math.max(0,Math.sin(Math.PI*u)),.34);
-      const y = start + height*u;
-      ctx.lineTo(crest(y) - half*(.07+.93*tip), y);
+      const y = start + height * (i / detail);
+      ctx.lineTo(centers[i] - half * far[i], y);
     }
     ctx.closePath(); ctx.clip();
+    return centers;
   }
 
   function refractScene(ctx,x,y,width,height,time,quiet) {
@@ -168,16 +191,26 @@ const ElementalFluidVfx = (() => {
 
   function waterRibbon(ctx, crest, start, end, width, direction, time, strength, quiet) {
     if (!(width > 1 && end > start)) return;
+    const outerStart=start, outerEnd=end, thickness=width, span=end-start;
+    if (breaker && breaker.width && breaker.complete!==false) {
+      if(span<Math.max(34,width*.35)){
+        drawBreakingMass(ctx,crest,start,end,width,direction,time,strength,quiet);
+        return;
+      }
+      // The refracting sheet lives in the belly. The overhanging lip, spray
+      // and foot own the outer silhouette, including when the wave overturns.
+      start+=span*.21; end-=span*.17; width*=.70;
+    }
     const detail = quiet ? 12 : 24, height = end - start;
     const center = crest((start + end) / 2);
     ctx.save(); ctx.globalAlpha *= strength;
-    clipRibbon(ctx,crest,start,end,width,detail);
+    const centers=clipRibbon(ctx,crest,start,end,width,detail);
     refractScene(ctx,center-width*1.05,start,width*2.1,height,time,quiet);
     const body = ctx.createLinearGradient(center - width * direction * .49, 0,
       center + width * direction * .48, 0);
-    body.addColorStop(0, "#082d4200"); body.addColorStop(.17, "#155d7937");
-    body.addColorStop(.41, "#0c45699e"); body.addColorStop(.66, "#167899de");
-    body.addColorStop(.84, "#58b7d461"); body.addColorStop(1, "#abe4f403");
+    body.addColorStop(0, "#062a2b00"); body.addColorStop(.17, "#104b5437");
+    body.addColorStop(.41, "#073b439e"); body.addColorStop(.66, "#166d70de");
+    body.addColorStop(.84, "#58bbae61"); body.addColorStop(1, "#b5efe503");
     ctx.fillStyle = body;
     ctx.beginPath();
     ctx.moveTo(crest(start),start);
@@ -207,7 +240,7 @@ const ElementalFluidVfx = (() => {
       ctx.beginPath();
       for (let i = 0; i <= detail; i++) {
         const y = start + height * i / detail;
-        const x = crest(y) + bias + amplitude * Math.sin(y * .065 - flow * (10 + band) + band * 2.4);
+        const x = centers[i] + bias + amplitude * Math.sin(y * .065 - flow * (10 + band) + band * 2.4);
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
@@ -226,7 +259,7 @@ const ElementalFluidVfx = (() => {
     }
     breakingLip(ctx,crest,start,end,width,direction,quiet?0:time,strength,quiet);
     ctx.restore();
-    drawBreakingMass(ctx,crest,start,end,width,direction,time,strength,quiet);
+    drawBreakingMass(ctx,crest,outerStart,outerEnd,thickness,direction,time,strength,quiet);
   }
 
   function whirlpool(ctx, x, y, radius, core, time, spin, strength, quiet) {
@@ -492,7 +525,7 @@ const ElementalFluidVfx = (() => {
     const p = geometry.progress, strength = alpha * tail(p);
     if (hazard.ultimateKind === "tideWalls") {
       for (const [i,r] of geometry.rects.entries()) {
-        const direction = i < 2 ? -1 : 1;
+        const direction = (i < 2 ? -1 : 1) * (hazard.owner === "player" ? -1 : 1);
         const crest = y => r.x + r.width * .5 + r.width * .09 * Math.sin(y * .046 - time * 9);
         waterRibbon(ctx,crest,r.y,r.y+r.height,r.width,direction,time,strength,quiet);
       }

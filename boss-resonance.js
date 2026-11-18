@@ -10,12 +10,12 @@ const BossResonance = (() => {
     ["熔脉分流","Basalt Discharge","横穿裂缝间的冷岩","Cross the cold basalt between the branching faults"],
     ["牵丝剥茧","Loom Unspooling","从丝轴外侧退出收缩网","Slip outside the silk spool as the web contracts"],
     ["双钳换极","Polarity Vice","从螯口的上下两端脱身","Escape past the upper or lower jaw tips"],
-    ["折镜三棱","Parallax Prism","沿三棱镜未折射的一边脱离","Pass the open side of the refracting prism"],
-    ["脊雷逐节","Vertebral Relay","沿断脊后的暗段横穿","Cross behind the traveling spinal discharge"],
+    ["折镜三棱","Parallax Prism","走棱镜缺口","Take the open prism edge"],
+    ["脊雷逐节","Vertebral Relay","从雷脊暗段穿过","Cross behind the pulse"],
     ["菌毯再生","Fruiting Bodies","从孢囊之间切出菌毯","Cut between the fruiting bodies before they swell"],
     ["坍缩缺弧","Broken Horizon","穿过吸积环的缺口","Leave through the break in the accretion rim"],
     ["逆行突触","Retrograde Signal","沿熄灭的分支移出神经网","Follow a spent branch out of the nerve tree"],
-    ["群芯离合","Divided Heart","从分离的器官间出去，再躲开合流核心","Cross between the separating organs, then clear the returning core"],
+    ["群芯离合","Divided Heart","穿过间隙再避核心","Slip between organs, then evade the core"],
   ];
   const materials = ["water","bone","magma","silk","chitin","glass","plasma","spore","void","nerve","fusion"];
   const directions = [1,-1,1,-1,-1,1,1,-1,1,-1,1];

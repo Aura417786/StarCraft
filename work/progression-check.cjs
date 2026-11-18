@@ -93,8 +93,9 @@ const gameAudio={ muted:false,
   overdrive(){audioCalls.push({name:'overdrive',args:[]});},
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
-const sandbox = vm.createContext({ document, window, Math, Number, Set, structuredClone, gameAudio });
-for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => file !== 'audio.js' && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
+const browser = require("../tools/testkit/legacy-browser-context.cjs").prepareBrowser({document, nodes, canvas, createNode:mockNode});
+const sandbox = vm.createContext({ ...browser, document, window, Math, Number, Set, structuredClone, gameAudio });
+for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1].split("?")[0]).filter(file => !['audio.js','sortie-ui.js'].includes(file) && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox);
 // Explicit Resume models the v23 visible pause contract in legacy simulation tests.
 function focusAndConfirmResume() { emit(window, 'focus'); vm.runInContext('if (pauseView) resumeGame()', sandbox); }
 function visibilityAndConfirmResume() { emit(document, 'visibilitychange'); if (!document.hidden) vm.runInContext('if (pauseView) resumeGame()', sandbox); }

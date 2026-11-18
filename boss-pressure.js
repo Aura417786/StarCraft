@@ -182,7 +182,7 @@ function buildBossPressureCombo(target) {
 const quickAlienPlans = Object.fromEntries(Object.keys(alienPatterns).map(key=>[key,buildBossPressureCombo]));
 
 
-function makeBossUltimate(target, warning, noShield) {
+function makeBossUltimate(target, warning, noShield, destination = bossHazards) {
   const room=mechanicRoom(),color=alienSignatureColors[alienPressurePlans[target.type].material];
   const h={kind:"ultimate",ultimateKind:bossUltimateKinds[target.type],age:0,warning,duration:1.6,
     lockX:target.lockX,lockY:target.lockY,gapY:target.gapY,gapSize:target.gapSize,
@@ -205,7 +205,7 @@ function makeBossUltimate(target, warning, noShield) {
     mechanicNode(room.right,alienLane(.78),r*1.2,7,"lance"),
     mechanicNode(room.left+room.width*.68,alienLane(.5),r*1.1,6,"burst")];
   h.material=alienPressurePlans[target.type].material;
-  bossHazards.push(h);return h;
+  destination?.push(h);return h;
 }
 
 // This same geometry is consumed by collision, the fixture, and the renderer.

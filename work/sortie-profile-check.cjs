@@ -114,17 +114,22 @@ test("Rush resume survives reopen and finishing it does not affect any ranked re
   assert.equal(reopened.data.rushByDifficulty.veteran.fast, 1);
 });
 
-test("44 current and legacy badges grant cosmetics only for earned conditions and survive save recovery", () => {
+test("Current and legacy badges grant cosmetics only for earned conditions and survive save recovery", () => {
   const awards = require("../achievements.js");
   const storage = memoryStorage();
   const save = profile.createStore(storage);
-  assert.equal(awards.ids.length, 44);
+  assert.equal(awards.ids.length, 45);
+  assert.deepEqual(awards.routeBuildsFor("mimic",3),["build-mimic"]);
+  assert.deepEqual(awards.routeBuildsFor("mimic",2),[]);
+  assert.deepEqual(awards.routeBuildsFor("rewind",3),[]);
   assert.equal(new Set(awards.ids).size, awards.ids.length);
   assert.equal(save.equipAward("skin", "frost"), false);
   const result = save.finish({ ...rushClear, mode: "campaign", fighter: "red", difficulty: "abyss",
-    bossRecords: rushClear.bossRecords.map(record => ({ ...record, builds: ["build-wing", "build-crossfire"] })) });
+    bossRecords: rushClear.bossRecords.map(record => ({ ...record, builds: ["build-wing", "build-crossfire", "build-rewind", "build-mimic"] })) });
   assert.ok(result.newAwards.includes("fly-red"));
   assert.ok(result.newAwards.includes("build-crossfire"));
+  assert.ok(result.newAwards.includes("build-mimic"));
+  assert.ok(result.newAwards.includes("build-rewind"));
   assert.ok(result.newAwards.includes("clean-10"));
   assert.equal(save.equipAward("skin", "frost"), true);
   assert.equal(save.equipAward("theme", "archive"), true);

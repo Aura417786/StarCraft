@@ -2,11 +2,11 @@
 
 const balanceStep = 1 / 60;
 // Old fixture names are input aliases only, never mixed legacy ranks.
-const balanceBuildAliases = { wings: "ember", falcon: "frost", aegis: "rewind",
-  hunter: "frost", guardbreaker: "ember", intercept: "rewind" };
+const balanceBuildAliases = { rewind: "mimic", wings: "ember", falcon: "frost", aegis: "mimic",
+  hunter: "frost", guardbreaker: "ember", intercept: "mimic" };
 function balanceBuildRoute(build) {
   const route = balanceBuildAliases[build] ?? build;
-  return ["ember", "frost", "rewind"].includes(route) ? route : "";
+  return ["ember", "frost", "mimic"].includes(route) ? route : "";
 }
 function balanceEvolutionState() { return { route: evolution.route, level: evolution.level }; }
 function balanceRound(number) { return Math.round(number * 1000) / 1000; }

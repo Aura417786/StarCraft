@@ -14,7 +14,7 @@ const bossTypes = [
     patterns: ["mirrorPrism", "mirrorBlades", "mirrorDecoy"] },
   { name: "沉渊震鳗", enName: "Tidal Wyrm", color: "#79c8ff", patterns: ["wyrmPulse", "wyrmCurrent", "wyrmStreak"] },
   { name: "裂梦孢皇", enName: "Spore Regent", color: "#cee689", patterns: ["sporeSwarm", "sporeField", "sporePollen"] },
-  { name: "维度噬口", enName: "Rift Devourer", color: "#ff9b76", patterns: ["mawEclipse", "mawScars", "mawFragments"] },
+  { name: "葬星渊皇", enName: "Stargrave Sovereign", color: "#ff9b76", patterns: ["mawEclipse", "mawScars", "mawFragments"] },
   { name: "无昼神经王", enName: "Noctilucent Leviathan", color: "#f7a4cf", patterns: ["neuralSynapse", "neuralPulse", "neuralRupture"] },
   { name: "群渊合生体", enName: "Abyssal Confluence", color: "#eb97ff", patterns: ["fusionBind", "fusionCorridor", "fusionPrism"] },
 ];
@@ -166,6 +166,7 @@ function clearAlienThreats() {
 }
 
 function clearBossFinaleAttacks() {
+  clearBossMimic();
   clearAlienThreats();
   clearCombatRounds(enemyProjectiles);
   clearCombatRounds(bullets);
@@ -280,7 +281,6 @@ function bossFireProtectionFor(type) {
 function spawnBoss(type = chooseBossType()) {
   if (!Number.isInteger(type) || !bossTypes[type]) return;
   const alreadyRoared = pendingBossType === type && pendingBossRoared;
-  if (typeof resetBattleRewind === "function") resetBattleRewind("boss-arrival");
   if (typeof captureBossRetryCheckpoint === "function") captureBossRetryCheckpoint(type);
   if (typeof warmBossVfxMaterial === "function" && type < 10) warmBossVfxMaterial(type);
   const arena = bossArena(type);
@@ -509,12 +509,13 @@ function bossHealthFloor(target) {
 
 function defeatBoss(target = boss) {
   if (!target || target !== boss) return;
-  if (typeof resetBattleRewind === "function") resetBattleRewind("boss-cleared");
   if (typeof clearBossRetryCheckpoint === "function") clearBossRetryCheckpoint();
   const fallen = target;
+  clearBossMimic();
   if (typeof sortieBossCleared === "function") sortieBossCleared(fallen);
   const motion = fallen.finale ? captureBossPresentationMotion() : null;
   boss = null;
+  rememberDefeatedBoss(fallen.type);
   bossDefeated = Math.max(bossDefeated, fallen.type + 1);
   const points = fallen.alienFinal ? 6000 : 2000;
   score += points;

@@ -1,5 +1,8 @@
 # Star Breaker · 星际突围
 
+**v36.1 · Apex Mimicry.** Choose the third evolution to cast your last defeated boss's ultimate with **F**. Carry Hadal Confluence into the next fight or unleash the Stargrave Sovereign's Lightless Collapse. Your imprint changes on each boss kill. All three fighters share their restored swept-wing, twin-engine silhouettes across the hangar, prologue and battle.
+
+
 **v36 · Rift Echoes.** Watch Crimson's coils build pressure, follow Azure's discharge from mark to mark, or catch a strike on Auric's segmented shield. Each of the eleven bosses answers a broken shell with a different organ attack and musical motif. Read the tell and attack during its recovery.
 
 During Lightless Collapse, violet streams fold into a dark core that eclipses the starfield. Watch the countdown and shield cue when a boss seals the arena. Other attacks show their reach through dissipating spray, molten fissures and arcs.
@@ -53,7 +56,7 @@ Pick a fighter, cross five sectors, and survive eleven alien boss finales. Star 
 Public demos may run different versions. Open the game over HTTP to enable its WebGL boss models.
 
 - **Three fighters, three ways to aim.** Crimson holds and releases C for a piercing cannon. Azure builds marks and discharges them in a three-hit chain. Auric earns suppression fields by managing charge and distance. Each ship has a different special.
-- **Commit to one evolution.** Heartfire builds marks to detonate. Absolute Blizzard freezes hostiles while you can keep attacking. Temporal Recall returns to an earlier moment in this phase; recorded hits remain, and using it marks the run assisted. You cannot change routes, but later victories keep raising its level. Campaign merit still buys persistent refits.
+- **Commit to one evolution.** Heartfire builds marks to detonate. Absolute Blizzard freezes hostiles while you can keep attacking. Apex Mimicry releases the last defeated boss's ultimate. You cannot change routes, but later victories keep raising its level. Campaign merit still buys persistent refits.
 - **Use the terrain.** Break rocks to send fragments through enemy formations, take cover behind destructible wrecks, and steer against the gravity tide. Watch for mines, shield escorts, and splitters.
 - **Read the fight.** Follow three radio perspectives through eleven finales. Adaptive music tracks the fight. Fly through the gate, light all eleven waypoints, and read your final report. Return for Weekly Rush, badges, and hangar cosmetics; retired badges remain in your legacy collection.
 
@@ -76,7 +79,6 @@ Shoot blue orbs for fire rate, yellow for firing lanes, and red for damage. Rare
 
 After a boss-fight death, **Retry this boss** restores that encounter's original checkpoint. Repeated retries use the same checkpoint; the next boss creates a new one. **Restart** still starts a new run. The retry button is absent after victory or a death between bosses. Campaign, Boss Rush, Practice, Daily Challenge and Weekly Rush support retries; a retried run is unranked in every mode.
 
-**Two different rewinds:** Temporal Recall is an F-key skill used while alive. It stays within the current combat phase, cannot cross boss transformations or rewards, and uses assisted records without erasing prior hits. The death-screen retry restarts the whole boss encounter and stops score and achievement recording for that run. Neither provides a save you can resume after closing the page.
 
 [Share playtest feedback](https://github.com/Aura417786/StarCraft/issues/new?title=Star%20Breaker%20playtest%20feedback) · [Fullscreen bug comparison](media/fullscreen-compare.mp4)
 
@@ -84,6 +86,6 @@ Settings include remappable keys, standard gamepad support, interface scale, sub
 
 The game uses HTML, CSS, JavaScript, Canvas, Three.js, and Web Audio. Serve the folder over local HTTP for live 3D rendering. Opening `index.html` directly also works with the compatible renderer.
 
-Switching windows now opens a pause menu; confirm Resume when you return. Reduced motion and shake settings keep normal score eligibility. Extended attack warnings or using Temporal Recall put a run in assisted records; death-screen boss retries stop score recording for that run. Historical saves are preserved.
+Switching windows now opens a pause menu; confirm Resume when you return. Reduced motion and shake settings keep normal score eligibility. Extended attack warnings put a run in assisted records; death-screen boss retries stop score recording for that run. Historical saves are preserved.
 
 [v35 implementation, verification and limitations (Chinese)](docs/v35-nextgen-release.md).

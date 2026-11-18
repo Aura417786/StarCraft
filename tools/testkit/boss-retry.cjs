@@ -61,7 +61,7 @@ async function open(browser, errors, held = true) {
       fighter: sortieFighter,
       weapon: { ...weapon },
       evolution: { route: evolution.route, level: evolution.level, cooldown: evolution.cooldown,
-        frozenRemaining: evolution.frozenRemaining,
+        frozenRemaining: evolution.frozenRemaining, lastDefeatedBoss: evolution.lastDefeatedBoss,
         pierce: evolution.pierce, blast: evolution.blast, aegis: evolution.aegis,
         capstone: evolution.capstone, resetUsed: evolution.resetUsed, reassignments: evolution.reassignments,
         links: { ...evolution.links }, refits: evolution.refits },
@@ -126,7 +126,7 @@ async function stage(page, fixture) {
     weapon.damageLevel = 7; weapon.speedLevel = 5; weapon.damage = 14.75;
     weapon.interval = .173; weapon.lanes = 4; weapon.tier = 3;
     Object.assign(evolution, { pierce: 2, blast: 1, aegis: 2, capstone: "", resetUsed: true, reassignments: 1, refits: 1 });
-    Object.assign(evolution, { route: { red: "ember", blue: "frost", yellow: "rewind" }[sortieFighter],
+    Object.assign(evolution, { lastDefeatedBoss: 0, route: { red: "ember", blue: "frost", yellow: "mimic" }[sortieFighter],
       level: 7, cooldown: 6.75, frozenRemaining: 0 });
     evolution.links.falcon = true;
     player.lives = 4; player.maxLives = 7;

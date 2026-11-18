@@ -9,6 +9,7 @@ const source = fs.readFileSync(path.join(__dirname, "..", "alien-lives.js"), "ut
 function setup(language = "zh") {
   const player = {};
   const lifeDisplay = {
+    parentElement: { querySelector() { return null; } },
     setAttribute(name, value) { this[name] = value; },
   };
   const runtime = vm.createContext({

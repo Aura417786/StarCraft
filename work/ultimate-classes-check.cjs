@@ -13,7 +13,7 @@ function arena() {
   const sandbox = vm.createContext({
     document: {
       querySelector(id) {
-        if (!hud.has(id)) hud.set(id, { textContent: "", dataset: {}, style: {}, setAttribute() {}, addEventListener() {} });
+        if (!hud.has(id)) hud.set(id, { textContent: "", dataset: {}, style: {setProperty() {}}, classList: {contains() { return false; }}, setAttribute() {}, addEventListener() {} });
         return hud.get(id);
       },
       querySelectorAll: () => [],

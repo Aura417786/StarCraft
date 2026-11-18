@@ -153,7 +153,7 @@ function preloadFighterAtlas(id) {
   if (fighterAtlasImages.has(id)) return fighterAtlasImages.get(id);
   const image = new Image();
   image.decoding = "async";
-  image.src = `assets/fighters/atlas/${id}.webp`;
+  image.src = fighterAtlasCatalog[id].src;
   fighterAtlasImages.set(id, image);
   return image;
 }

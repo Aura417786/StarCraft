@@ -16,6 +16,7 @@ function signatureArena() {
     const battleTime = 0;
     const tr = (zh, en) => en;
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const evolutionWeapons = { absorbed: [] };
     const gameAudio = { bossAttack() {} };
     const addCombatShake = () => {};
     const consumeEvolutionShieldProjectile = () => false;
@@ -52,7 +53,7 @@ function signatureArena() {
       return { peak, kinds: [...kinds], threatensStationary, readable, name: boss.attackLabel[1] };
     }
   `);
-  for (const file of ["bosses.js", "hostile-projectiles.js", "fire-control.js", "alien-attacks.js", "boss-mechanics.js", "alien-pressure.js", "boss-pressure-copy.js", "boss-pressure.js", "boss-finales.js"]) {
+  for (const file of ["bosses.js", "hostile-projectiles.js", "fire-control.js", "alien-attacks.js", "boss-mechanics.js", "alien-pressure.js", "boss-pressure-copy.js", "boss-pressure.js", "boss-resonance.js", "boss-finales.js"]) {
     run(fs.readFileSync(path.join(__dirname, "..", file), "utf8"));
   }
   // The production HUD writes to DOM. These checks only exercise the simulation.

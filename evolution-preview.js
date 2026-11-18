@@ -1,7 +1,7 @@
 "use strict";
 
 const evolutionPreview = { elapsed: 0, lastTime: null, lastPaint: -Infinity, signature: "" };
-const evolutionPreviewColors = { ember: "#ff9b69", frost: "#a3efff", rewind: "#c9b0ff" };
+const evolutionPreviewColors = { ember: "#ff9b69", frost: "#a3efff", mimic: "#c9b0ff" };
 
 function previewPulse(ctx, x, y, length, width, color, angle = 0) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.fillStyle = color;
@@ -61,23 +61,27 @@ function previewFrost(ctx, ship, level, time, quiet) {
   const flight=quiet?.45:time%.4/.4;
   previewPulse(ctx,ship.x+ship.width*.4+flight*35,ship.y,8,2,"#fff0bd");
 }
-function previewRewind(ctx, ship, level, time, quiet) {
-  const p=quiet?.52:(time%2.6)/2.6;
-  const path=[{x:47,y:ship.y+12},{x:64,y:ship.y-12},{x:83,y:ship.y}];
-  ctx.strokeStyle="#b7a4f86b";ctx.setLineDash([3,3]);ctx.beginPath();
-  for(let i=0;i<path.length;i++){if(!i)ctx.moveTo(path[i].x,path[i].y);else ctx.lineTo(path[i].x,path[i].y);}ctx.stroke();ctx.setLineDash([]);
-  for(let i=0;i<path.length;i++) previewBaseShip(ctx,{...ship,...path[i],width:ship.width*.62,height:ship.height*.62},.13+i*.13);
-  const destination=path[0],current=path[2],back=Math.min(1,p*1.4);
-  previewBaseShip(ctx,{...ship,x:current.x+(destination.x-current.x)*back,y:current.y+(destination.y-current.y)*back,width:ship.width*.82,height:ship.height*.82},.9);
-  ctx.strokeStyle="#d1b7ff";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(127,ship.y,15,-.25,Math.PI*1.65);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(132,ship.y-15);ctx.lineTo(123,ship.y-17);ctx.lineTo(126,ship.y-9);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(127,ship.y);ctx.lineTo(127,ship.y-8);ctx.moveTo(127,ship.y);ctx.lineTo(133,ship.y+4);ctx.stroke();
+function previewMimic(ctx, ship, level, time, quiet) {
+  const type = evolution.lastDefeatedBoss;
+  const tint = bossTypes[type]?.color || "#b995ff";
+  const phase = quiet ? .68 : (time % 2.8) / 2.8;
+  previewTarget(ctx, 129, ship.y, tint);
+  if (type === null) return;
+  const traveling = phase < .5;
+  const x = traveling ? 126 - phase * 117 : 67 + (phase - .5) * 121;
+  const size = traveling ? 7 : 8 + Math.min(4, Math.log2(level + 1));
+  ctx.strokeStyle = tint;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(x, ship.y, size, size * .67, -.5, 0, Math.PI * 2);
+  ctx.stroke();
+  previewPulse(ctx, x + 3, ship.y, size * 1.4, 3, "#f7eaff", traveling ? Math.PI : 0);
 }
 function previewEvolutionMetric(route, level) {
   if(!level)return tr("尚未选择路线","No route selected");
   if(route==="ember")return tr((8+Math.floor(3*Math.log2(level)))+" 层 · 12 秒冷却",(8+Math.floor(3*Math.log2(level)))+" marks · 12s CD");
   if(route==="frost")return tr("冻结 "+(1.8+.9*Math.log2(level)).toFixed(1)+" 秒",(1.8+.9*Math.log2(level)).toFixed(1)+"s freeze");
-  return tr("回溯 "+(3+.5*(level-1)).toFixed(1)+" 秒",(3+.5*(level-1)).toFixed(1)+"s recall");
+  return learnedApexName() + " · " + evolutionSkillSpec("mimic",level).cooldown.toFixed(1) + "s";
 }
 function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
   const route=Object.hasOwn(evolutionPreviewColors,choice)?choice:null;
@@ -88,10 +92,10 @@ function paintEvolutionPreviewPane(ctx, choice, right, time, quiet) {
   ctx.fillStyle=bg;ctx.fillRect(0,0,160,148);ctx.fillStyle=color;ctx.globalAlpha=right?.6:.2;ctx.fillRect(0,0,160,2);ctx.globalAlpha=1;
   ctx.strokeStyle="#88a8cb16";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(9,71);ctx.lineTo(151,71);ctx.stroke();
   const ship={x:47,y:68,width:73,height:49,visualBank:0};
-  if(route!=="rewind"||!level)previewBaseShip(ctx,ship);
+  previewBaseShip(ctx,ship);
   if(level&&route==="ember")previewEmber(ctx,ship,level,time,quiet);
   else if(level&&route==="frost")previewFrost(ctx,ship,level,time,quiet);
-  else if(level&&route==="rewind")previewRewind(ctx,ship,level,time,quiet);
+  else if(level&&route==="mimic")previewMimic(ctx,ship,level,time,quiet);
   else {previewTarget(ctx,128,ship.y,"#7b8da4");const p=quiet?.48:time%.5/.5;previewPulse(ctx,80+p*40,ship.y,8,2,"#eed1a0");}
   ctx.globalAlpha=1;ctx.fillStyle=right?color:"#9caec2";ctx.font="600 11px system-ui,sans-serif";
   ctx.fillText((right?tr("升级后","Upgraded"):tr("当前","Current"))+" · Lv "+level,10,119,145);
@@ -103,7 +107,7 @@ function drawEvolutionChoicePreviews(now) {
   const quiet=typeof quietCombatMotion==="function"?quietCombatMotion():reducedMotion.matches;
   if(evolutionPreview.lastTime!==null&&!quiet)evolutionPreview.elapsed+=Math.max(0,Math.min(.05,(now-evolutionPreview.lastTime)/1000));
   evolutionPreview.lastTime=now;
-  const signature=[quiet,shipRenderAssets.crimson.ready,evolution.route,evolution.level,gameLanguage,...evolutionCards.map(card=>card.dataset.choice)].join("/");
+  const signature=[quiet,shipRenderAssets.crimson.ready,evolution.route,evolution.level,evolution.lastDefeatedBoss,gameLanguage,...evolutionCards.map(card=>card.dataset.choice)].join("/");
   if(signature===evolutionPreview.signature&&(quiet||now-evolutionPreview.lastPaint<1000/30))return;
   evolutionPreview.signature=signature;evolutionPreview.lastPaint=now;
   for(const card of evolutionCards){

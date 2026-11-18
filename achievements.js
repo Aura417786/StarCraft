@@ -7,6 +7,7 @@ const StarBreakerAwards = (() => {
   const buildBadges = {
     "build-ember": [["烬火之心", "Heart of Cinders"], ["使用三级以上烬火焚心击破首领。", "Defeat a boss with Heartfire Detonation rank 3 or higher."]],
     "build-frost": [["绝对冰域", "Absolute Zero"], ["使用三级以上极寒风暴击破首领。", "Defeat a boss with Absolute Blizzard rank 3 or higher."]],
+    "build-mimic": [["万相猎手", "Apex Hunter"], ["使用三级以上夺魄拟态击破首领。", "Defeat a boss with Apex Mimicry rank 3 or higher."]],
     "build-rewind": [["时隙行者", "Timewalker"], ["使用三级以上时隙回溯击破首领。", "Defeat a boss with Temporal Recall rank 3 or higher."]],
     "build-wing": [["穿甲专家", "Hull Piercer"], ["用三级翼刃击破一只首领。", "Defeat a boss with Wingblade III."]],
     "build-falcon": [["护航指挥官", "Escort Commander"], ["用三级僚机击破一只首领。", "Defeat a boss with Falcon III."]],
@@ -68,7 +69,7 @@ const StarBreakerAwards = (() => {
   }
 
   function routeBuildsFor(route, level) {
-    return level >= 3 && ["ember", "frost", "rewind"].includes(route) ? ["build-" + route] : [];
+    return level >= 3 && ["ember", "frost", "mimic"].includes(route) ? ["build-" + route] : [];
   }
 
   function hasDailyStreak(daily, day) {
@@ -107,7 +108,7 @@ const StarBreakerAwards = (() => {
   }
 
   function words(id, bossName, fighterName, difficultyName) {
-    if (["build-wing", "build-falcon", "build-aegis", "build-crossfire", "build-escort"].includes(id)) {
+    if (["build-rewind", "build-wing", "build-falcon", "build-aegis", "build-crossfire", "build-escort"].includes(id)) {
       const copy = names[id];
       return [["旧版 · " + copy[0][0], "Legacy · " + copy[0][1]], ["旧版进化成就，已获得的徽章保留。", "Retired evolution achievement. Previously earned badges are preserved."]];
     }

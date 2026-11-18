@@ -122,21 +122,60 @@ def render(phase):
             weight=smooth(tip-.165,tip-.102,abs_x)*(1-smooth(tip-.034,fork_end,abs_x))
             layer(np.array([.79,.23,.75]) if k else np.array([.67,.21,.83]),
                   np.exp(-distance**2*1.55)*weight*(.45+.16*np.sin(angle_s+j)**2))
-    # Stable black occultation with a nearly white irregular inner lip. Only
-    # a few faint gravitationally bent fragments sit against its outer rim.
+    # Project one inclined gas orbit onto the screen. The approaching and
+    # receding halves have distinct depths; the shadow occults only the far one.
+    tilt=-.31+.052*np.sin(phase)
+    u=x*np.cos(tilt)+y*np.sin(tilt)
+    v=-x*np.sin(tilt)+y*np.cos(tilt)
+    inclination=.495+.026*np.cos(phase-.45)
+    orbit_r=np.hypot(u,v/inclination)
+    orbit_a=np.arctan2(v/inclination,u)
+    centerline=.365+.014*np.sin(orbit_a*3-phase)+.008*np.cos(2*orbit_a+phase)
+    belt=(orbit_r-centerline)/(.074+.014*np.sin(orbit_a))
+    turbulence=.32*np.sin(orbit_a*5+phase+belt)+.18*np.sin(orbit_a*9-2*phase)
+    lamp=.55+.45*(.5+.5*np.cos(orbit_a-2.75))**2
+    body=np.exp(-belt**2*1.6)*(1-smooth(1.02,1.44,np.abs(belt)))
+    ridges=np.exp(-((belt+.28+.19*turbulence)/.17)**2)+.47*np.exp(-((belt-.36+turbulence*.35)/.20)**2)
+    ore=material(.39+.18*np.clip(belt,-1,1),orbit_a+.20*np.sin(phase)+.21*belt)
+    gas=np.array([.24,.052,.34])+ore[...,:3]*np.array([.56,.32,.60])
+    gas+=ridges[...,None]*lamp[...,None]*np.array([.65,.39,.54])
+    density=.91*body*(.77+.17*ore[...,3])
+    front=smooth(-.23,.25,np.sin(orbit_a))
+    layer(np.clip(gas,0,1),density*(1-front))
+    # The far-side crossing produces a second, lensed image above the
+    # silhouette. It is broad at its approaching shoulder and disappears
+    # behind the pole before reappearing as a dimmer, receding filament.
+    chord=u/.390
+    rise=np.sqrt(np.maximum(0,1-chord**2))
+    crest=-rise*(.263+.027*np.cos(phase-.5)+.023*chord)
+    shoulder=smooth(-1.01,-.72,chord)*(1-smooth(.58,1.01,chord))
+    flare=.39+.61*np.exp(-((chord+.46+.12*np.sin(phase))/.43)**2)
+    height=(v-crest)/(.006+.016*rise*flare)
+    secondary=(np.exp(-height**2*.72)*.63+np.exp(-((height+.14)/.27)**2)*.31)*shoulder*flare
+    layer(np.array([.96,.68,.96]),secondary)
+
+    # A slightly oblate, perfectly absorbing silhouette gives the orbit a
+    # tangible object to pass behind. All atmospheric illumination stays outside it.
+    silhouette_angle=-.22
+    sx=x*np.cos(silhouette_angle)+y*np.sin(silhouette_angle)
+    sy=-x*np.sin(silhouette_angle)+y*np.cos(silhouette_angle)
+    silhouette=np.hypot(sx/1.045,sy/.945)
     rim_r = .254+.0018*np.sin(angle*3+.15*np.sin(phase))
-    limb=rad-rim_r
+    limb=silhouette-rim_r
     grain=.86+.14*np.sin(angle*27+2.7*np.sin(angle*8+.5*np.sin(phase)))
     hotspot=.53+.47*(.5+.5*np.cos(angle*2-.64))**2
     for width,color,gain in [(.043,[.82,.18,.65],.65),(.021,[1,.35,.80],.76),(.008,[1,.87,.99],.98)]:
         layer(np.array(color),np.exp(-(limb/(width*(1+.29*hotspot)))**2)*gain*grain)
     layer(np.array([1.0,.88,.97]),np.exp(-((limb-.013)/.016)**2)*hotspot**3*.82)
-    inside=1-smooth(.246,.255,rad)
-    halo=smooth(.16,.256,rad)**4
-    core=np.zeros((*rad.shape,3),np.float32)
-    core[:]=[.006,.004,.025]
-    core+=halo[...,None]*np.array([.105,.024,.138])
-    layer(core,inside)
+    for j in range(4):
+        orbit=-2.55+j*1.44+.23*np.sin(phase-j*.67)
+        deviation=np.arctan2(np.sin(angle-orbit),np.cos(angle-orbit))
+        depth=.277+.014*j+.016*deviation**2
+        arc=np.exp(-(deviation/(.22+.04*j))**2*1.8)
+        bent_star=np.exp(-((silhouette-depth)/.0035)**2)*arc
+        layer(np.array([.93,.78,1]),bent_star*(.55+.30*np.cos(phase+j)**2))
+    layer(np.array([0,0,0]),1-smooth(.249,.254,silhouette))
+    layer(np.clip(gas,0,1),density*front)
     premul = np.divide(rgb,alpha[...,None],out=np.zeros_like(rgb),where=alpha[...,None]>.001)
     alpha *= (1-smooth(.505,.602,np.abs(y)))*(1-smooth(.93,.992,np.abs(x)))
     return Image.fromarray(np.uint8(np.clip(np.dstack((premul,alpha)),0,1)*255+.5))
@@ -146,7 +185,9 @@ def bake_horizon():
     sheet=Image.new("RGBA",(4*size[0],3*size[1]))
     for i in range(count):
         sheet.paste(render(i*np.pi*2/count),((i%4)*size[0],(i//4)*size[1]))
-    sheet.save(folder/"void-inclined-horizon.webp",method=6,quality=91,alpha_quality=100)
+    # Lossy YUV coding adds near-black chroma to an opaque, truly black
+    # silhouette. Lossless WebP keeps that optical contract at every key.
+    sheet.save(folder/"void-inclined-horizon.webp",method=5,lossless=True)
 
 
 if __name__ == "__main__":

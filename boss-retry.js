@@ -93,6 +93,7 @@ function retryBossFromCheckpoint() {
   enemyCooldown = saved.enemyCooldown; enemySpawnCount = saved.enemySpawnCount;
   powerupCooldown = saved.powerupCooldown; powerupSpawnCount = saved.powerupSpawnCount;
   Object.assign(weapon, saved.weapon);
+  clearBossMimic();
   Object.assign(evolution, saved.evolution);
   Object.assign(momentum, saved.momentum);
   Object.assign(firingStyle, saved.firingStyle);

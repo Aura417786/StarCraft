@@ -89,8 +89,9 @@ const gameAudio={ muted:false,
   overdrive(){audioCalls.push({name:'overdrive',args:[]});},
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
-const sandbox = vm.createContext({ document, window, Math, Number, Set, structuredClone, gameAudio });
-for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => !['audio.js', 'sortie-ui.js'].includes(file) && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox, { filename: file });
+const browser = require("../tools/testkit/legacy-browser-context.cjs").prepareBrowser({document, nodes, canvas, createNode:mockNode});
+const sandbox = vm.createContext({ ...browser, document, window, Math, Number, Set, structuredClone, gameAudio });
+for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1].split("?")[0]).filter(file => !['audio.js', 'sortie-ui.js'].includes(file) && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox, { filename: file });
 const position = () => vm.runInContext('({ x: player.x, y: player.y })', sandbox);
 const bounds = vm.runInContext('flightBounds', sandbox);
 // Explicit Resume models the v23 visible pause contract in legacy simulation tests.

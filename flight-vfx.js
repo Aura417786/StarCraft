@@ -23,7 +23,7 @@ function flightVfxNoise(index) {
 const flightVfxDust = Array.from({ length: 182 }, (_, i) => {
   const z = flightVfxNoise(i * 5 + 2), layer = i % 3;
   const wobble = flightVfxNoise(i * 5 + 3) * flightVfxTau;
-  return { x: flightVfxNoise(i * 5), y: flightVfxNoise(i * 5 + 1), z, sinWobble: Math.sin(wobble), cosWobble: Math.cos(wobble),
+  return { x: flightVfxNoise(i * 5), y: flightVfxNoise(i * 5 + 1), z, wobble, sinWobble: Math.sin(wobble), cosWobble: Math.cos(wobble),
     speed: (4 + 31 * z ** 2) * (layer * .28 + .58), radius: .38 + z ** 3 * (layer === 2 ? 1.28 : .77),
     band: flightVfxNoise(i * 5 + 4) };
 });
@@ -412,6 +412,22 @@ function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false)
   const radius = ship.height * (profile.radius + (.10 + .018 * rage) * energy) * (still ? .81 : 1);
   const opacity = ctx.globalAlpha * (still ? .73 : .99);
   ctx.save();
+  // Both physical nozzles feed the existing plume. Only its short attachment
+  // at the hull changes; downstream material, flow phase and spark paths match.
+  if (origin.sockets?.length === 2) {
+    const mergeX = origin.x - ship.width * .14;
+    for (const socket of origin.sockets) {
+      const dx = mergeX - socket.x, dy = origin.y - socket.y;
+      const throat = Math.min(radius * .66, ship.height * .036);
+      ctx.save();
+      ctx.translate(socket.x + 1, socket.y);
+      ctx.rotate(Math.atan2(dy, dx));
+      const span = Math.hypot(dx,dy) * 1.20;
+      drawFlightExhaustMaterial(ctx, palette, span, throat, phase, opacity * (1 - boost), still, tier);
+      drawFlightExhaustMaterial(ctx, "nitrous", span, throat, phase, opacity * boost, still, tier);
+      ctx.restore();
+    }
+  }
   ctx.translate(origin.x + 2, origin.y);
   if (actualShip && !still) ctx.rotate(shipVisuals.bank * .064);
   ctx.scale(-1, 1);

@@ -9,7 +9,8 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 
 const required = [
-  "battlefield.js", "journey.js", "journey-art.js", "boss-attack-art.js", "boss-confluence-vfx.js", "boss-pressure-art.js", "boss-ultimate-art.js",
+  "index.html", "boss-mimicry.js", "evolution-preview.js", "ship-renderer.js", "fighter-atlas-data.js",
+  "fighter-variants.js", "opening-story.js", "battlefield.js", "journey.js", "journey-art.js", "boss-attack-art.js", "boss-confluence-vfx.js", "boss-pressure-art.js", "boss-ultimate-art.js",
   "elemental-armored-vfx.js", "elemental-cosmic-vfx.js", "nextgen-elemental-vfx.js",
   "assets/vfx/nextgen/tidal-breaker.webp", "assets/vfx/nextgen/void-inclined-horizon.webp",
   "assets/vfx/nextgen/void-collapse-front.webp", "assets/vfx/nextgen/void-shear.webp", "boss-vfx-materials.js",
@@ -21,6 +22,8 @@ const required = [
   "assets/scenery/orbital-material.png", "assets/vfx/nextgen/water-atlas.webp",
   "assets/vfx/nextgen/boss-organs.webp", "assets/vfx/nextgen/boss-ejecta.webp",
   "assets/vfx/fighters/crimson.webp", "assets/vfx/fighters/azure.webp", "assets/vfx/fighters/auric.webp",
+  ...["red", "blue", "yellow"].flatMap(id =>
+    ["hangar", "body", "atlas"].map(view => `assets/fighters/classic/${id}-${view}.webp`)),
   "assets/audio/encounters/manifest.json", "assets/audio/encounters/enc_water_signature.ogg",
   "assets/audio/encounters/enc_victory.ogg",
 ];
@@ -43,13 +46,13 @@ async function verifyAssets(page, base, manifest, report) {
     selected.set(name, rows.get(name));
   }
   for (const row of manifest.files) {
-    if (row.path.startsWith("assets/audio/encounters/") || row.path.startsWith("assets/vfx/materials/")) selected.set(row.path, row);
+    if (row.path.startsWith("assets/fighters/classic/") || row.path.startsWith("assets/vfx/nextgen/") || row.path.startsWith("assets/audio/encounters/") || row.path.startsWith("assets/vfx/materials/")) selected.set(row.path, row);
   }
   const files = Array.from(selected.values()).sort((a, b) => a.path.localeCompare(b.path));
   for (let start = 0; start < files.length; start += 4) {
     const results = await Promise.all(files.slice(start, start + 4).map(async file => {
       assert.ok(file.path.split("/").every(segment => /^[a-z0-9_.-]+$/i.test(segment) && ![".", ".."].includes(segment)), file.path);
-      const canonical = new URL(file.path, base);
+      const canonical = new URL(file.path === "index.html" ? "./" : file.path, base);
       const target = report.entry.resources.find(href => {
         const resource = new URL(href);
         return resource.origin === canonical.origin && resource.pathname === canonical.pathname;
@@ -87,13 +90,13 @@ async function visitor(page, base, out, report) {
     bossStageBeacons: document.querySelectorAll(".boss-phase-beacons i").length,
     resources: Array.from(document.querySelectorAll("script[src],link[rel=stylesheet]"), tag => tag.src || tag.href),
   }));
-  assert.match(report.entry.title, /\bv36\b/i);
-  assert.equal(report.entry.version, "36");
+  assert.ok(report.entry.title.includes(report.version));
+  assert.equal(report.entry.version, report.version.slice(1));
   assert.equal(report.entry.bossStageBeacons, 3);
   assert.match(report.entry.heading, /星际突围|Star\s*Breaker/i);
   assert.ok(report.entry.canvas);
   const referenced = new Set(report.entry.resources);
-  for (const entry of ["boss-resonance.js?v=36","audio.js?v=36","audio-catalog.js?v=36","tactical-hud.css?v=36","tactical-hangar.css?v=36"]) {
+  for (const entry of ["boss-mimicry.js","boss-resonance.js","audio.js","audio-catalog.js","tactical-hud.css","tactical-hangar.css"].map(file => file + "?v=" + report.entry.version)) {
     assert.ok(referenced.has(new URL(entry,base).href), "Homepage omits release resource "+entry);
   }
   await page.screenshot({path:path.join(out,"visitor-hangar.png")});

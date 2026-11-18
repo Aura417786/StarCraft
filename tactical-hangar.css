@@ -393,9 +393,9 @@
 .evolution-screen .evolution-card-art { color: #c5b8aa; }
 
 /* The ship itself carries the report scene. The text hierarchy stays open. */
-.battlefield { --hangar-report-ship: url("assets/fighters/kestrel/red.webp"); }
-.battlefield:has(#ultimate-hud[data-fighter="blue"]) { --hangar-report-ship: url("assets/fighters/kestrel/blue.webp"); }
-.battlefield:has(#ultimate-hud[data-fighter="yellow"]) { --hangar-report-ship: url("assets/fighters/kestrel/yellow.webp"); }
+.battlefield { --hangar-report-ship: url("assets/fighters/classic/red-body.webp"); }
+.battlefield:has(#ultimate-hud[data-fighter="blue"]) { --hangar-report-ship: url("assets/fighters/classic/blue-body.webp"); }
+.battlefield:has(#ultimate-hud[data-fighter="yellow"]) { --hangar-report-ship: url("assets/fighters/classic/yellow-body.webp"); }
 .game-over-screen {
   --report-accent: #e19883;
   isolation: isolate;

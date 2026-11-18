@@ -11,6 +11,7 @@ function sandbox(width = 1280, height = 720) {
   const world = vm.createContext({ width, height });
   const run = code => vm.runInContext(code, world);
   run(`
+    const evolutionWeapons = { absorbed: [] };
     const viewport = { width, height };
     const hull = Math.min(180, width * .24, height * .28);
     const flightBounds = { top: Math.min(height / 2, (width <= 740 ? Math.min(200, height * .49) : 90) + hull / 3 + 8),

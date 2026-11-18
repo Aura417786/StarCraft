@@ -355,7 +355,7 @@ function updateFighterSelection() {
   for (const option of fighterOptions) option.checked = option.value === fighter.id;
   if (hangarFighterImage.dataset.fighter !== fighter.id) {
     hangarFighterImage.dataset.fighter = fighter.id;
-    hangarFighterImage.src = `assets/fighters/hangar/${fighter.id}.webp`;
+    hangarFighterImage.src = fighterAtlasCatalog[fighter.id].hangar;
   }
   hangarFighterImage.alt = tr(...fighter.label);
   document.querySelector("#fighter-label").textContent = tr(...fighter.label);
@@ -382,7 +382,6 @@ if (hangarFighterImage.complete && !hangarFighterImage.naturalWidth) restoreHang
 readyFighter();
 
 function showScreen(nextState, options = {}) {
-  if (typeof resetBattleRewind === "function") resetBattleRewind("run", true);
   if (typeof clearBossRetryCheckpoint === "function") clearBossRetryCheckpoint();
   if (typeof clearFlightTutorial === "function" && clearFlightTutorial()) sortieStats = null;
   if (state === "battle") completeSortie({ abandoned: true });
@@ -1434,7 +1433,6 @@ function advanceCombatStep(realSeconds) {
       resolveBattlefieldCover(); updateEliteMines(seconds);
       updatePlayerDamage(seconds); updateEnemyProjectileDamage(); updateBossDamage();
     }
-    if (typeof stepBattleRewind === "function") stepBattleRewind(seconds);
   }
 }
 

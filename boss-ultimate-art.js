@@ -381,8 +381,15 @@ function drawBossUltimateGeometry(ctx,hazard,geometry,target) {
     bossLaneFringe={surface,paint:surface.getContext("2d"),mask:null};
   }
   const fringe=bossLaneFringe,{surface,paint}=fringe;
-  if (!fringe.mask || surface.width!==w || surface.height!==h*2) {
-    surface.width=w;surface.height=h*2;
+  // The tide's charge camera changes the pixel width almost every frame.
+  // Reserve backing pixels separately from the exact visible strip below.
+  const tide=hazard.ultimateKind==="tideWalls";
+  const bufferWidth=tide ? Math.ceil(w/256)*256 : w;
+  const bufferHeight=tide ? Math.ceil(h*2/16)*16 : h*2;
+  if (!fringe.mask || surface.width!==bufferWidth || surface.height!==bufferHeight || fringe.rows!==h) {
+    if(surface.width!==bufferWidth) surface.width=bufferWidth;
+    if(surface.height!==bufferHeight) surface.height=bufferHeight;
+    fringe.rows=h;
     fringe.mask=paint.createLinearGradient(0,0,0,h*2);
     for(const [stop,alpha] of [[0,0],[.15,.09],[.38,.73],[.5,1],[.62,.73],[.85,.09],[1,0]])
       fringe.mask.addColorStop(stop,"rgba(0,0,0,"+alpha+")");

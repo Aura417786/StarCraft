@@ -20,6 +20,7 @@ const nodes = new Map();
 for (const id of ['game-canvas', 'start-screen', 'battle-screen', 'start-button', 'menu-button', 'status', 'movement-hint', 'game-app', 'fullscreen-button', 'fighter-art', 'asset-status', 'pause-hint', 'score', 'battle-clock', 'enemy-strength', 'player-lives', 'shield-status', 'game-over-screen', 'restart-button', 'result-menu-button', 'final-score', 'final-time', 'final-kills', 'weapon-speed', 'weapon-lanes', 'weapon-damage', 'powerup-notice', 'boss-hud', 'boss-name', 'boss-action', 'sound-button', 'boss-warning', 'boss-warning-name', 'ultimate-hud', 'ultimate-count', 'ultimate-meter', 'ultimate-fill', 'ultimate-label', 'shield-hud', 'shield-count', 'shield-meter', 'shield-fill', 'shield-label']) {
   nodes.set('#' + id, {
     hidden: false, disabled: false, inert: false, dataset: {}, style: {}, attributes: {}, addEventListener: on, setAttribute(name,value) { this.attributes[name]=value; },
+    getAttribute(name) { return this.attributes[name] ?? null; },
     hasAttribute(name) { return Object.hasOwn(this.attributes, name); },
     removeAttribute(name) { delete this.attributes[name]; },
     focus() {
@@ -30,7 +31,8 @@ for (const id of ['game-canvas', 'start-screen', 'battle-screen', 'start-button'
   });
 }
 function mockNode() {
-  return { hidden: false, disabled: false, inert: false, dataset: {}, style: {}, attributes: {}, textContent: '', addEventListener: on,
+  return { hidden: false, disabled: false, inert: false, dataset: {},
+    style: { setProperty(name, value) { this[name] = value; } }, attributes: {}, textContent: '', addEventListener: on,
     setAttribute(name,value) { this.attributes[name]=value; },
     getAttribute(name) { return this.attributes[name] ?? null; },
     hasAttribute(name) { return Object.hasOwn(this.attributes,name); },
@@ -73,21 +75,65 @@ canvas.height = 720;
 let surface = { width: 1280, height: 720 };
 canvas.getBoundingClientRect = () => surface;
 nodes.get('#fighter-art').complete = true;
-nodes.get('#fighter-art').naturalWidth = 1536;
+// This fixture only needs a decoded portrait. Browser tests verify its actual pixels.
+nodes.get('#fighter-art').naturalWidth = 1;
+nodes.get('#player-lives').parentElement = { querySelector: () => null };
+for (const element of nodes.values()) {
+  const classes = new Set();
+  element.classList = {
+    contains: name => classes.has(name),
+    add: name => classes.add(name),
+    remove: name => classes.delete(name),
+    toggle(name, force = !classes.has(name)) {
+      if (force) classes.add(name);
+      else classes.delete(name);
+      return force;
+    },
+  };
+}
 let captureDraws = false;
 const drawOperations = [];
 function mockCanvasContext(record) {
-  return new Proxy({}, {get(target,name) {
+  const identity = { a:1, b:0, c:0, d:1, e:0, f:0 };
+  let matrix = { ...identity };
+  const stack = [];
+  function apply(a, b, c, d, e, f) {
+    const m = matrix;
+    matrix = {
+      a:m.a*a+m.c*b, b:m.b*a+m.d*b, c:m.a*c+m.c*d, d:m.b*c+m.d*d,
+      e:m.a*e+m.c*f+m.e, f:m.b*e+m.d*f+m.f,
+    };
+  }
+  return new Proxy({ globalAlpha: 1, globalCompositeOperation: 'source-over', filter: 'none' }, {get(target,name) {
     if(name in target)return target[name];
     return (...args)=>{
       if(record&&captureDraws)drawOperations.push({name,args});
-      if(name==='createLinearGradient'||name==='createRadialGradient')return {addColorStop(){}};
+      if (name === 'getTransform') return { ...matrix };
+      if (name === 'save') stack.push({ ...matrix });
+      if (name === 'restore' && stack.length) matrix = stack.pop();
+      if (name === 'translate') apply(1, 0, 0, 1, ...args);
+      if (name === 'scale') apply(args[0], 0, 0, args[1], 0, 0);
+      if (name === 'rotate') {
+        const sin = Math.sin(args[0]), cos = Math.cos(args[0]);
+        apply(cos, sin, -sin, cos, 0, 0);
+      }
+      if (name === 'transform') apply(...args);
+      if (name === 'setTransform') {
+        matrix = args.length === 1 ? { ...args[0] } : { ...identity };
+        if (args.length === 6) apply(...args);
+      }
+      if(name==='createLinearGradient'||name==='createRadialGradient')return {
+        addColorStop(offset, color) {
+          if (record && captureDraws) drawOperations.push({ name: 'addColorStop', args: [offset, color] });
+        },
+      };
       if(name==='createImageData')return {width:args[0],height:args[1],data:new Uint8ClampedArray(args[0]*args[1]*4)};
     };
   },set(target,name,value){target[name]=value;if(record&&captureDraws)drawOperations.push({name:'set:'+String(name),args:[value]});return true;}});
 }
 canvas.getContext = () => mockCanvasContext(true);
 document.querySelector = (selector) => nodes.get(selector);
+document.getElementById = id => nodes.get('#' + id) ?? null;
 const slots = Array.from({length:5},()=>({dataset:{}}));
 const protectionSlots = Array.from({length:2},()=>({dataset:{}}));
 document.querySelectorAll = selector => selector === ".ultimate-slot" ? slots : selector === ".shield-slot" ? protectionSlots : selector === '.evolution-card' ? evolutionCards : [];
@@ -116,8 +162,18 @@ const gameAudio={ muted:false,
   overdrive(){audioCalls.push({name:'overdrive',args:[]});},
   perfectShield(){audioCalls.push({name:'perfectShield',args:[]});},
 };
-const sandbox = vm.createContext({ document, window, Math, Number, Set, structuredClone, performance, gameAudio });
-for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1]).filter(file => !['audio.js', 'sortie-ui.js'].includes(file) && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox, { filename: file });
+class PendingImage {
+  complete = false;
+  naturalWidth = 0;
+  naturalHeight = 0;
+  addEventListener = on;
+}
+class MockPath2D {
+  constructor() { return mockCanvasContext(false); }
+}
+const sandbox = vm.createContext({ document, window, Math, Number, Set, structuredClone, performance, gameAudio,
+  Image: PendingImage, Path2D: MockPath2D });
+for (const file of [...fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8').matchAll(/<script src="([^"]+)" defer>/g)].map(match => match[1].split("?")[0]).filter(file => !['audio.js', 'sortie-ui.js'].includes(file) && !file.startsWith('vendor/'))) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), sandbox, { filename: file });
 // v23 contract: returning to the window alone stays paused. These legacy
 // timer/collision cases explicitly model pressing Resume after refocusing.
 // final-core.cjs separately checks the real dialog and absence of auto-resume.
@@ -656,7 +712,9 @@ check('muzzle flashes share the exact symmetry axis of each emitted volley', () 
     const flashes=drawOperations.filter(op=>op.name==='ellipse'&&op.args[0]>0);
     assert.equal(flashes.length,lanes);
     assert.deepEqual(flashes.map(op=>op.args[1]),emitted().map(b=>b.y));
-    assert.deepEqual(drawOperations.filter(op=>op.name==='translate').map(op=>op.args[1]),emitted().map(b=>b.y));
+    const origins = drawOperations.filter(op => op.name === 'translate');
+    assert.deepEqual(origins[0].args, [0, 0], 'No interpolation offset at alpha=1');
+    assert.deepEqual(origins.slice(1).map(op => op.args[1]), emitted().map(b => b.y));
   }
 });
 
@@ -1104,7 +1162,8 @@ check('the fusion corridor is reachable from either edge while charging in a tal
   }
 });
 check('the alternate Broodmother chain intercepts the tide gap then lashes that announced altitude', () => {
-  readyBoss(0,'boss.pressureComboIndex=0;prepareAlienAttack(boss);');
+  // Ordinal 3 selects the alternate native finisher. Ordinal 1 spends the third beat on resonance.
+  readyBoss(0,'boss.pressureComboIndex=2;prepareAlienAttack(boss);');
   const result=execute(`(() => {
     const wave=bossHazards.find(h=>h.kind==='tide'),well=bossHazards.find(h=>h.kind==='vortex'),lash=bossHazards.find(h=>h.lash);
     const warningSafe=!alienHazardHitsPlayer(lash);
@@ -1134,7 +1193,7 @@ check('mirror reflection announces a fixed light sheet and never emits a generic
 check('a sideways dodge solves the fusion seam while preserving the tide gap in compact and wide windows', () => {
   for(const size of [{width:640,height:360},{width:1280,height:720},{width:2560,height:1440}])for(const escape of [false,true]){
     readyBoss(10);surface=size;emit(window,'resize');
-    execute(`player.y=player.previousY=alienLane(.30);boss.enraged=true;boss.attackIndex=0;prepareAlienAttack(boss);bossHitGrace=0;
+    execute(`player.y=player.previousY=alienLane(.30);boss.enraged=true;boss.pressureComboIndex=-1;boss.fractureResponseIndex=0;prepareAlienAttack(boss);bossHitGrace=0;
       var seamProbe=bossHazards.find(h=>h.kind==='seam'),tideProbe=bossHazards.find(h=>h.kind==='tide');
       bossHazards.splice(0,bossHazards.length,tideProbe,seamProbe);
       player.x=player.previousX=seamProbe.x;player.y=player.previousY=tideProbe.gapY;
@@ -1147,13 +1206,16 @@ check('a sideways dodge solves the fusion seam while preserving the tide gap in 
 });
 check('attacking shells reduce damage but leave an opening after each attack', () => {
   for (const [type,enraged,expected] of [[0,false,.78],[10,false,.78],[10,true,.62]]) {
+    // Probe below the sustained-fire budget to measure shell exposure independently.
     for (const source of ['main','ultimate']) {
-      readyBoss(type,`boss.enraged=${enraged};boss.phase="attack";`);
-      execute(`applyBossHit({source:"${source}",damageLog:boss.healthLog+Math.log(.02)});`);
+      readyBoss(type,`boss.enraged=${enraged};prepareAlienAttack(boss);boss.phase="attack";`);
+      execute(`applyBossHit({source:"${source}",damageLog:boss.healthLog+Math.log(.002)});`);
       const specialFactor=type===10&&source==='ultimate'?.78:1;
-      near(1-bossState().boss.hp,.02*expected*specialFactor);
-      execute(`boss.phase="recover";applyBossHit({source:"${source}",damageLog:boss.healthLog+Math.log(.02)});`);
-      near(1-bossState().boss.hp,(.02*expected+.02)*specialFactor);
+      near(1-bossState().boss.hp,.002*expected*specialFactor);
+      execute(`boss.phase="recover";applyBossHit({source:"${source}",damageLog:boss.healthLog+Math.log(.002)});`);
+      near(1-bossState().boss.hp,(.002*expected+.002*1.18)*specialFactor);
+      execute(`rewardAlienCounter(boss);applyBossHit({source:"${source}",damageLog:boss.healthLog+Math.log(.002)});`);
+      near(1-bossState().boss.hp,.002*(expected+1.18+1.42)*specialFactor);
     }
   }
 });
@@ -1460,7 +1522,8 @@ check('energy cannon drawings balance context state and never draw nonfinite coo
     captureDraws=true; drawOperations.length=0; execute('drawUltimate();'); captureDraws=false;
     assert.equal(drawOperations.filter(d=>d.name==='save').length,drawOperations.filter(d=>d.name==='restore').length);
     assert.ok(drawOperations.flatMap(d=>d.args).filter(v=>typeof v==='number').every(Number.isFinite));
-    assert.ok(drawOperations.some(d=>d.name==='ellipse'));
+    assert.ok(drawOperations.some(d=>d.name==='drawImage' || d.name==='fill'),
+      'Plasma must draw a visible material or a filled shape in each phase');
     if(phase==='firing')assert.ok(drawOperations.some(d=>d.name==='set:globalCompositeOperation'&&d.args[0]==='screen'));
     assert.ok(drawOperations.filter(d=>d.name==='fillRect').every(d=>Math.abs(d.args[3])<surface.height*.5));
   }
@@ -1940,7 +2003,10 @@ check('enemy hulls and telegraphs draw finite geometry, balanced canvas state an
     captureDraws=true; drawOperations.length=0; execute('drawEnemies();drawEnemyThreats();'); captureDraws=false;
     assert.deepEqual(enemyCombat(),before);
     assert.equal(drawOperations.filter(d=>d.name==='save').length,drawOperations.filter(d=>d.name==='restore').length);
-    assert.ok(drawOperations.flatMap(d=>d.args).filter(v=>typeof v==='number').every(Number.isFinite));
+    for(const op of drawOperations) {
+      const numbers=op.args.filter(value=>typeof value==='number');
+      assert.ok(numbers.every(Number.isFinite), `non-finite Canvas ${op.name}(${numbers.join(', ')})`);
+    }
     assert.equal(drawOperations.filter(d=>d.name==='fillText').length,0);
     assert.ok(drawOperations.some(d=>d.name==='setLineDash'&&d.args[0].length>0));
   }
@@ -1971,7 +2037,7 @@ check('reward choice freezes combat and sound, clears hazards and refunds an unf
   frames(200); key('Space'); key('KeyV'); key('ArrowDown'); frames(20);
   assert.deepEqual({time:scene().battleTime,shield:protection(),weapon:weaponState(),ultimate:ult(),position:position()},frozen);
   assert.equal(audioCalls.filter(c=>c.name==='sync').at(-1).args[0],false);
-  execute('chooseEvolution("rewind");'); step(); step(); assert.ok(scene().battleTime>frozen.time);
+  execute('chooseEvolution("mimic");'); step(); step(); assert.ok(scene().battleTime>frozen.time);
   assert.equal(ult().charges,2); assert.equal(protection().charges,frozen.shield.charges);
 });
 check('number shortcuts, pointer clicks and focus trapping cannot double-pick or bypass the evolution dialog', () => {
@@ -2008,12 +2074,12 @@ check('energy orbs consume a projectile and acquiring a new route cannot change 
   execute('bullets[0].previousX=300;bullets[0].x=800;resolveProjectileHits();'); assert.deepEqual(scene().enemies.map(enemy=>enemy.hp),[9,10]);
 });
 check('a sortie locks one route and repeated Boss rewards can raise it past the retired rank-three cap', () => {
-  for(const route of ['ember','frost','rewind']) {
+  for(const route of ['ember','frost','mimic']) {
     isolatedBattle('ultimate.charges=2;shield.charges=1;shield.energy=7;');
     const lives=health().lives;
     for(let rank=1;rank<=20;rank++) {
       assert.equal(execute('openEvolutionChoice()'),true);
-      if(rank>1) for(const other of ['ember','frost','rewind'].filter(kind=>kind!==route)) {
+      if(rank>1) for(const other of ['ember','frost','mimic'].filter(kind=>kind!==route)) {
         assert.equal(execute(`chooseEvolution("${other}")`),false);
         assert.equal(evolutionState().pending,true);
       }
@@ -2160,13 +2226,27 @@ check('spread velocities diverge symmetrically and all lanes maintain the same s
     assert.ok(after.every((b,i)=>b.previousY===before[i].y));
   }
 });
-check('Shift switches once per press, both Shift keys share a hold latch, and pointer switching restores canvas focus', () => {
-  isolatedBattle(); assert.equal(execute('firingStyle.mode'),'spread'); assert.equal(key('ShiftLeft').prevented,true);
-  assert.equal(execute('firingStyle.mode'),'focus'); key('ShiftLeft','keydown',{repeat:true}); key('ShiftRight'); assert.equal(execute('firingStyle.mode'),'focus');
-  key('ShiftLeft','keyup'); key('ShiftLeft'); assert.equal(execute('firingStyle.mode'),'focus');
-  key('ShiftLeft','keyup'); key('ShiftRight','keyup'); key('ShiftRight'); assert.equal(execute('firingStyle.mode'),'spread'); key('ShiftRight','keyup');
-  nodes.get('#stance-button').focus(); emit(nodes.get('#stance-button'),'click'); assert.equal(execute('firingStyle.mode'),'focus');
-  assert.equal(document.activeElement,canvas); assert.equal(nodes.get('#stance-button').attributes['aria-pressed'],'true');
+check('a Shift tap switches stance on release; holding either alias boosts without switching', () => {
+  isolatedBattle();
+  assert.equal(execute('firingStyle.mode'), 'spread');
+  assert.equal(key('ShiftLeft').prevented, true);
+  key('ShiftLeft','keydown',{repeat:true});
+  key('ShiftRight');
+  key('ShiftLeft','keyup');
+  assert.equal(execute('firingStyle.mode'), 'spread');
+  key('ShiftRight','keyup');
+  assert.equal(execute('firingStyle.mode'), 'focus');
+  key('ShiftRight');
+  frames(7);
+  assert.equal(execute('flightBoostActive()'), true);
+  key('ShiftRight','keyup');
+  assert.equal(execute('flightBoostActive()'), false);
+  assert.equal(execute('firingStyle.mode'), 'focus');
+  nodes.get('#stance-button').focus();
+  emit(nodes.get('#stance-button'), 'click');
+  assert.equal(execute('firingStyle.mode'), 'spread');
+  assert.equal(document.activeElement, canvas);
+  assert.equal(nodes.get('#stance-button').attributes['aria-pressed'], 'false');
 });
 check('menu, hidden tabs and evolution dialog reject stance changes, and resize preserves the selected style', () => {
   isolatedBattle(); key('ShiftLeft','keydown',{ctrlKey:true}); assert.equal(execute('firingStyle.mode'),'spread');
@@ -2235,10 +2315,21 @@ check('diagonal projectile resolves earliest collision time rather than final ob
 check('slanted shots clean up beyond every edge, rage effects draw finite geometry and reduced motion removes flicker', () => {
   isolatedBattle('weapon.lanes=4;resetWeapons();updateShooting(0);shotCooldown=999;bullets[0].y=-100;bullets[1].y=viewport.height+100;bullets[2].x=viewport.width+1;updatePowerups(0);');
   assert.equal(shots().length,1); comboKills(20); execute('reducedMotion.matches=true;');
-  captureDraws=true; drawOperations.length=0; execute('drawOverdrive();'); captureDraws=false;
-  assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
-  assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
-  assert.equal(drawOperations.filter(op=>op.name==='moveTo').length,2);
+  function frame(time) {
+    // Reset the mock's globalAlpha; this unit context doesn't simulate a Canvas save stack.
+    execute('context.globalAlpha=1;');
+    captureDraws = true;
+    drawOperations.length = 0;
+    try {
+      execute('drawFlightEngineWake(context, {...player}, "red", ' + time + ', isOverdriveActive());');
+    } finally { captureDraws = false; }
+    assert.ok(drawOperations.every(op => op.args.every(value => typeof value !== 'number' || Number.isFinite(value))));
+    assert.equal(drawOperations.filter(op => op.name === 'save').length, drawOperations.filter(op => op.name === 'restore').length);
+    return drawOperations.filter(op => op.name === 'drawImage').map(op => op.args.slice(1));
+  }
+  const still = frame(1);
+  assert.ok(still.length > 0, 'The current overdrive exhaust must emit a material sample');
+  assert.deepEqual(frame(1.6), still);
   execute('reducedMotion.matches=false;');
 });
 
@@ -2258,10 +2349,14 @@ check('direct Boss death fixture freezes battle for exactly 1.25 seconds then of
   assert.equal(execute('isBossDeathPlaying()'),true); assert.equal(evolutionState().pending,false);
   assert.equal(ult().charges,2); assert.equal(ult().phase,'idle'); assert.equal(shots().length,0);
   const time=scene().battleTime, score=scene().score, shield=protection();
-  key('KeyD'); key('Space'); key('KeyV'); const location=position(); frames(20);
+  key('KeyD'); key('Space'); key('KeyV'); const location=position(); step(0); frames(20);
   near(scene().battleTime,time); samePosition(position(),location); assert.deepEqual(protection(),shield);
-  assert.equal(execute('toggleFiringStyle()'),false); near(effectsState().deathRemaining,.25);
-  execute('updateCombatEffects(.249);'); assert.equal(evolutionState().pending,false);
+  assert.equal(execute('toggleFiringStyle()'),false);
+  const remaining=effectsState().deathRemaining;
+  near(execute('bossPresentation.duration'),1.25);
+  near(remaining,.25);
+  near(1.25-remaining,execute('bossPresentation.realAge'));
+  execute(`updateCombatEffects(${remaining}-.001);`); assert.equal(evolutionState().pending,false);
   execute('updateCombatEffects(.001);'); assert.equal(evolutionState().pending,true); assert.equal(execute('isBossDeathPlaying()'),false);
   execute('defeatBoss(globalThis.finalFallen);updateCombatEffects(10);'); assert.equal(scene().score,score);
   execute('chooseEvolution("ember");updateCombatEffects(10);'); assert.equal(evolutionState().pending,false); assert.equal(evolutionState().route,'ember'); assert.equal(evolutionState().level,1);
@@ -2370,7 +2465,7 @@ check('many ordinary and Boss shells yield only one perfect guard and refund per
   assert.equal(protection().charges,1);
 });
 check('perfect guard refunds one use on every route and preserves recharge progress until the shield is full', () => {
-  for(const route of ['', 'ember', 'frost', 'rewind']) {
+  for(const route of ['', 'ember', 'frost', 'mimic']) {
     activateParry(`evolution.route="${route}";evolution.level=${route?4:0};shield.energy=evolutionShieldChargeTime()*.9;`);
     const period=execute('evolutionShieldChargeTime()');
     execute(contactShell()+'updateEnemyProjectileDamage();');
@@ -2615,11 +2710,14 @@ check('linked charge and red cannon show a small ice-blue signature with finite 
   for(const reduced of [false,true]) for(const phase of ['charging','firing']) {
     earnCannonLink(`ultimate.charges=1;reducedMotion.matches=${reduced};`);
     execute(`requestUltimate();updateUltimate(${phase==='charging'?.2:.6});`);
+    if (phase === 'firing') execute('updateUltimate(.075);');
     captureDraws=true;drawOperations.length=0;execute('drawUltimate();');captureDraws=false;
     assert.equal(drawOperations.filter(op=>op.name==='save').length,drawOperations.filter(op=>op.name==='restore').length);
     assert.ok(drawOperations.every(op=>op.args.every(value=>typeof value!=='number'||Number.isFinite(value))));
-    assert.ok(drawOperations.some(op=>op.name==='set:strokeStyle'&&op.args[0]===(phase==='firing'?'#c1f4ff':'#c0efffa0')));
-    assert.ok(drawOperations.some(op=>op.name==='ellipse'));
+    if (phase === 'charging')
+      assert.ok(drawOperations.some(op=>op.name==='set:strokeStyle' && op.args[0]==='#91eaff'), 'Linked corona should have its blue arc');
+    else
+      assert.ok(drawOperations.some(op=>op.name==='addColorStop' && op.args[1]==='#d4f1ffc9'), 'Linked plasma should have its blue flash');
     if(phase==='firing') {
       if(!reduced)assert.ok(drawOperations.some(op=>op.name==='createLinearGradient'));
       assert.ok(drawOperations.filter(op=>op.name==='lineTo').length>20);

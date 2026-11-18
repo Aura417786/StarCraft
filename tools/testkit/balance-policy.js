@@ -109,7 +109,7 @@ function balanceHazardRisk(x, y, horizon, shots) {
 function balanceChooseAction(controls, mode) {
   if (evolution.pending) {
     const options = evolutionChoiceOptions().filter(kind => !evolutionCardDetails(kind).disabled);
-    const priority = [evolution.route, balanceBuildRoute(controls.build), "ember", "frost", "rewind"];
+    const priority = [evolution.route, balanceBuildRoute(controls.build), "ember", "frost", "mimic"];
     const choice = priority.find(kind => options.includes(kind));
     if (choice) chooseEvolution(choice);
   }
@@ -186,14 +186,11 @@ function balanceChooseAction(controls, mode) {
   }
   const imminent = [.017, .045, .075, .105, .16].some(time =>
     balanceHazardRisk(moveX(best.vx, time), moveY(best.vy, time), time, nearby) > 45);
-  const hurt = player.lives < (controls.previousLives ?? player.lives);
-  controls.previousLives = player.lives;
   const marked = [...enemies, ...(boss ? [boss] : [])].some(target => target.hp > 0
     && target.emberStacks > 0 && target.emberUntil > battleTime && (target !== boss || bossCanTakeDamage(target)));
-  const rewindAvailable = typeof battleRewind === "object" && battleRewind.availableSeconds > .25;
   const wantsSkill = evolution.route === "ember" ? marked
     : evolution.route === "frost" ? imminent
-    : evolution.route === "rewind" && rewindAvailable && (hurt || imminent);
+    : evolution.route === "mimic" && Number.isInteger(evolution.lastDefeatedBoss) && (bossCanTakeDamage(boss) || enemies.length >= 2);
   if (wantsSkill && evolution.cooldown <= 0) {
     balanceTap("KeyF");
     if (evolution.cooldown > 0) controls.routeSkills++;

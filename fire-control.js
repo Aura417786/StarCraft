@@ -209,14 +209,8 @@ function makeProjectileSlot(pool, friendly) {
 for (let index = 0; index < 128; index++) sparePlayerProjectiles.push(makeProjectileSlot(sparePlayerProjectiles, true));
 for (let index = 0; index < 260; index++) spareHostileProjectiles.push(makeProjectileSlot(spareHostileProjectiles, false));
 
-function combatProjectilesCanRecycle() {
-  // Rewind restores the original object identities held by its history. The
-  // rewind route keeps natively allocated projectiles for that entire sortie.
-  return evolution.route !== "rewind";
-}
-
 function acquirePlayerRound(x, y, angle, vx, vy, halfHeight, length, color, core) {
-  const spare = combatProjectilesCanRecycle() ? sparePlayerProjectiles.pop() : null;
+  const spare = sparePlayerProjectiles.pop();
   const shot = spare?.shot ?? {};
   shot.x = shot.previousX = x;
   shot.y = shot.previousY = y;
@@ -236,7 +230,7 @@ function acquirePlayerRoundSeeker(shot) {
 }
 
 function acquireHostileRound(x, y, vx, vy, radius) {
-  const spare = combatProjectilesCanRecycle() ? spareHostileProjectiles.pop() : null;
+  const spare = spareHostileProjectiles.pop();
   const shot = spare?.shot ?? {};
   shot.x = shot.previousX = x;
   shot.y = shot.previousY = y;
@@ -249,7 +243,7 @@ function acquireHostileRound(x, y, vx, vy, radius) {
 
 function queueCombatRoundForRecycle(shot) {
   const slot = projectilePoolSlots.get(shot);
-  if (!slot || !combatProjectilesCanRecycle()) return;
+  if (!slot) return;
   if (slot.hits || !evolutionWeapons.absorbed.includes(shot)) retiredCombatProjectiles.push(slot);
 }
 
