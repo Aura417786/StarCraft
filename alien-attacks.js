@@ -641,6 +641,7 @@ function alienHazardHitsPlayer(hazard) {
   if (hazard.age < hazard.warning || hazard.age >= hazard.warning + hazard.duration) return false;
   if (hazard.kind === "pressureSeal") return pressureSealHitsPlayer(hazard);
   if (hazard.kind === "ultimate") return bossUltimateHitsPlayer(hazard);
+  if (hazard.kind === "resonance") return BossResonance.hits(hazard, player);
   if (alienMechanicKinds.has(hazard.kind)) return alienMechanicHits(hazard, player);
   const radius = player.height * .16;
   if (alienSignatureKinds.has(hazard.kind)) {
@@ -677,6 +678,7 @@ function alienHazardHitsPlayer(hazard) {
 
 function drawAlienHazard(ctx, hazard, quiet) {
   if (hazard.age < (hazard.tellAt ?? 0)) return;
+  if (hazard.kind === "resonance") { BossResonance.draw(ctx, hazard, quiet); return; }
   if (hazard.kind === "ultimate") {
     if(typeof drawBossUltimateHazard === "function") drawBossUltimateHazard(ctx,hazard,quiet);
     return;
@@ -697,24 +699,13 @@ function drawAlienHazard(ctx, hazard, quiet) {
   ctx.shadowBlur = quiet ? 0 : active ? 16 : 6;
   const half = hazard.thickness / 2;
   if (hazard.kind === "guide") {
-    ctx.globalAlpha = .11; ctx.fillRect(0, hazard.y - half, hazard.right, hazard.thickness);
-    ctx.globalAlpha = .68;
-    ctx.setLineDash([9, 8]);
-    ctx.beginPath();
-    ctx.moveTo(0, hazard.y - half); ctx.lineTo(hazard.right, hazard.y - half);
-    ctx.moveTo(0, hazard.y + half); ctx.lineTo(hazard.right, hazard.y + half);
-    ctx.stroke();
+    signatureGuide(ctx,hazard.y,hazard.thickness,active,-1,hazard.right,quiet ? 0 : hazard.age);
   } else if (hazard.kind === "band") {
     const upper = Math.max(0, hazard.y - half), lower = hazard.y + half;
-    ctx.globalAlpha = active ? .37 : .1;
-    ctx.fillRect(0, 0, hazard.right, upper);
-    ctx.fillRect(0, lower, hazard.right, viewport.height - lower);
-    ctx.globalAlpha = active ? .95 : .5;
-    if (!active) ctx.setLineDash([5, 8]);
-    ctx.beginPath();
-    ctx.moveTo(0, upper); ctx.lineTo(hazard.right, upper);
-    ctx.moveTo(0, lower); ctx.lineTo(hazard.right, lower);
-    ctx.stroke();
+    const strength = active ? .84 : .51;
+    drawBossFieldWash(ctx,0,0,hazard.right,upper,hazard.color,strength);
+    drawBossFieldWash(ctx,0,lower,hazard.right,viewport.height-lower,hazard.color,strength);
+    signatureGuide(ctx,hazard.y,hazard.thickness,active,-1,hazard.right,quiet ? 0 : hazard.age);
   } else if (hazard.kind === "beam") {
     if (hazard.lash && active) {
       const trailing = (hazard.age - hazard.warning) / hazard.duration;
@@ -732,7 +723,7 @@ function drawAlienHazard(ctx, hazard, quiet) {
       ctx.fill();
     } else {
       ctx.globalAlpha = active ? .74 : .12 + progress * .12;
-      ctx.fillRect(0, hazard.y - half, hazard.right, hazard.thickness);
+      drawBossFieldWash(ctx,0,hazard.y-half,hazard.right,hazard.thickness,hazard.color,1);
     }
     ctx.globalAlpha = active ? .95 : .67;
     if (!active) ctx.setLineDash([10, 6]); else ctx.strokeStyle = "#fff2e1";
@@ -757,13 +748,9 @@ function drawAlienHazard(ctx, hazard, quiet) {
     ctx.stroke();
   } else if (hazard.kind === "seam") {
     ctx.globalAlpha = active ? .54 : .11 + progress * .13;
-    ctx.fillRect(hazard.x - half, 0, hazard.thickness, viewport.height);
+    drawBossFieldWash(ctx,hazard.x-half,0,hazard.thickness,viewport.height,hazard.color,1);
     ctx.globalAlpha = active ? .96 : .76;
-    if (!active) ctx.setLineDash([11, 7]);
-    ctx.beginPath();
-    ctx.moveTo(hazard.x - half, 0); ctx.lineTo(hazard.x - half, viewport.height);
-    ctx.moveTo(hazard.x + half, 0); ctx.lineTo(hazard.x + half, viewport.height);
-    ctx.stroke();
+    bossRangeMarks(ctx,hazard.x-half,0,hazard.thickness,viewport.height,hazard.color,true);
     if (active) {
       ctx.strokeStyle = "#fff1dd";
       ctx.beginPath();

@@ -10,13 +10,59 @@ const ElementalFluidVfx = (() => {
   const hash = n => { const v = Math.sin(n * 78.233 + .173) * 43758.5453; return v - Math.floor(v); };
   const frac = v => v - Math.floor(v);
   let plates;
+  let breaker;
+  function loadPlate(file,onDecoded) {
+    const image=new Image();
+    image.decoding="async";image.src=file;
+    if(typeof image.decode==="function") image.decode().then(()=>{
+      // Rasterize the full source ahead of the first multi-strip crop. Keep
+      // the original Image as the compatible fallback for older browsers.
+      if(typeof createImageBitmap==="function")return createImageBitmap(image).then(onDecoded);
+    }).catch(()=>{});
+    return image;
+  }
+  function warmWater() {
+    breaker ||= loadPlate("assets/vfx/nextgen/tidal-breaker.webp",surface=>{breaker=surface;});
+    plates ||= loadPlate("assets/vfx/elemental-fluid-materials.webp",surface=>{plates=surface;});
+  }
+
+  // Each strip follows a different part of the overturning lip. Both ends
+  // inherit alpha from the water itself; the open lane stays visible.
+  function drawBreakingMass(ctx, crest, start, end, width, direction, time, strength, quiet) {
+    if (!breaker) warmWater();
+    if (breaker.complete===false || !breaker.width) return;
+    const span = end-start;
+    if (span < 8) return;
+    if (span < Math.max(34,width*.35)) {
+      // A shallow splinter of ocean throws a puff of foam; a whole breaker
+      // compressed into these few pixels would read like a horizontal line.
+      const x=crest((start+end)*.5), mist=pressureArtMist("#a2dcd5");
+      const w=Math.min(width*1.3,span*4.1);
+      ctx.save();ctx.globalAlpha*=strength*.86;
+      ctx.drawImage(mist,x-w*.52,start,w,span);ctx.restore();return;
+    }
+    const lower = (start+end)*.5 >= viewport.height*.5;
+    const h = Math.min(span, Math.max(width*2.42, span*.71));
+    const w = Math.min(viewport.width*.42, Math.max(width*(direction<0?2.57:2.89),h*.91),h*1.97);
+    const centerY = lower ? start+h*.50 : end-h*.50;
+    const sourceWidth = breaker.width, sourceHeight = breaker.height;
+    const strips = 12, t = (quiet ? .35 : time)+(direction>0?1.72:.16);
+    ctx.save(); ctx.translate(crest(centerY),centerY);
+    ctx.scale(direction<0 ? 1 : -1, lower ? 1 : -1);
+    ctx.globalAlpha *= strength;
+    for (let i=0; i<strips; i++) {
+      const v = i/strips, crestWeight = (1-v)*(1-v);
+      const fold = crestWeight * (Math.sin(t*4.4+v*4.1)*.075 + Math.sin(t*7.1-v*9.0)*.023);
+      const y0=Math.round(sourceHeight*v), y1=Math.round(sourceHeight*(i+1)/strips);
+      ctx.drawImage(breaker,0,y0,sourceWidth,y1-y0,(-.51+fold)*w,(v-.5)*h,
+        w*(1+crestWeight*.033*Math.cos(t*4.4+v*4.1)), h/strips+.35);
+    }
+    ctx.restore();
+  }
 
   function materialPlate(ctx, name, index, x, y, width, height) {
-    if (!plates) {
-      plates = new Image();
-      plates.src = "assets/vfx/elemental-fluid-materials.webp";
-    }
-    if (!plates.complete || plates.naturalWidth !== 768) {
+    if (!plates) plates=loadPlate("assets/vfx/elemental-fluid-materials.webp",surface=>{plates=surface;});
+    if (plates.complete===false || plates.width !== 768) {
       const material = name === "spore" ? spore : water;
       const light = ctx.createRadialGradient(x + width * .44, y + height * .43, 0,
         x + width / 2, y + height / 2, width * .48);
@@ -35,18 +81,89 @@ const ElementalFluidVfx = (() => {
     ctx.clip("evenodd");
   }
 
+  function foamGradient(ctx,tint,start,end) {
+    const fade=ctx.createLinearGradient(0,start,0,end);
+    fade.addColorStop(0,tint+"18");fade.addColorStop(.12,tint);
+    fade.addColorStop(.88,tint);fade.addColorStop(1,tint+"15");
+    return fade;
+  }
+
   function clipRibbon(ctx, crest, start, end, width, detail) {
     const half = width / 2, height = end - start;
     ctx.beginPath();
     for (let i = 0; i <= detail; i++) {
-      const y = start + height * i / detail, x = crest(y) + half;
+      const u = i/detail, tip=Math.pow(Math.max(0,Math.sin(Math.PI*u)),.29);
+      const y = start + height*u, x = crest(y) + half*(.08+.92*tip);
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     for (let i = detail; i >= 0; i--) {
-      const y = start + height * i / detail;
-      ctx.lineTo(crest(y) - half, y);
+      const u=i/detail,tip=Math.pow(Math.max(0,Math.sin(Math.PI*u)),.34);
+      const y = start + height*u;
+      ctx.lineTo(crest(y) - half*(.07+.93*tip), y);
     }
     ctx.closePath(); ctx.clip();
+  }
+
+  function refractScene(ctx,x,y,width,height,time,quiet) {
+    if(quiet || visualQuality.id!=="high" || !(width>4 && height>4))return;
+    const matrix=ctx.getTransform();
+    if(matrix.a<=0||matrix.d<=0||Math.abs(matrix.b)+Math.abs(matrix.c)>.01)return;
+    const sx=x*matrix.a+matrix.e,sy=y*matrix.d+matrix.f;
+    if(sx+width*matrix.a<=0||sy+height*matrix.d<=0||sx>=ctx.canvas.width||sy>=ctx.canvas.height)return;
+    // A seal may contain several overlapping pieces of water. All of them
+    // bend the same scene underneath; repeatedly sampling the canvas after
+    // painting a band recursively bent that band and flushed GPU work.
+    const refractionScene=NextgenVfx.refractionSource(ctx);
+    ctx.save();ctx.globalAlpha*=.59;
+    for(let i=0;i<6;i++){
+      const dy=height*i/6,roll=Math.sin(time*2.1+i*.94);
+      const shear=Math.min(7,width*.067)*roll;
+      ctx.drawImage(refractionScene,sx,sy+dy*matrix.d,width*matrix.a,height*matrix.d/6,
+        x+shear,y+dy,width*1.035,height/6+.6);
+    }
+    ctx.restore();
+  }
+
+  const lipNoise=Array.from({length:22},(_,i)=>hash(i+32));
+  const spraySeeds=Array.from({length:40},(_,i)=>({
+    phase:hash(i+21),speed:.07+.12*hash(i+1),offset:.40-hash(i+28)*.44,
+    radius:.55+hash(i+120)**2*2.1,aspect:1.15+hash(i)*.82
+  }));
+  const foamPatches=Array.from({length:8},(_,i)=>({
+    width:1.1+hash(i+81)*.31,height:1.7+hash(i+11),offset:.19+.15*hash(i)
+  }));
+  const lipGradients=new WeakMap();
+  let breakingLipShape;
+  function breakingLip(ctx,crest,start,end,width,dir,age,strength,quiet) {
+    if(!breakingLipShape){
+      breakingLipShape=new Path2D();
+      breakingLipShape.moveTo(-.84,-.48);
+      breakingLipShape.bezierCurveTo(.23,-1,.69,-.58,.54,-.13);
+      breakingLipShape.bezierCurveTo(.63,.23,.19,.23,.10,.08);
+      breakingLipShape.quadraticCurveTo(.48,-.26,-.86,.68);
+      breakingLipShape.closePath();
+    }
+    let deck=lipGradients.get(ctx);
+    if(!deck){
+      deck=ctx.createLinearGradient(0,-1,0,.61);
+      deck.addColorStop(0,"#def7ee");deck.addColorStop(.23,"#83cbcc");deck.addColorStop(.49,"#267a96");deck.addColorStop(1,"#0c435e");
+      lipGradients.set(ctx,deck);
+    }
+    const rows=quiet?9:22,span=end-start;
+    for(let i=0;i<rows;i++){
+      const n=lipNoise[i], t=quiet?.4:frac(age*(.47+.15*n)+n);
+      const y=start+(i+.45)*span/rows, scale=Math.min(width*.41,span/rows*1.1)*(.57+.5*n);
+      const x=crest(y)+dir*width*(.24+.055*Math.sin(age*3+i));
+      ctx.save();ctx.translate(x,y);ctx.scale(dir*scale,scale);
+      ctx.fillStyle=deck;ctx.globalAlpha=strength*(.49+.21*n);
+      ctx.fill(breakingLipShape);
+      if(!quiet){
+        ctx.strokeStyle="#dffbf1";ctx.lineWidth=.95/scale;ctx.globalAlpha=strength*(1-t)*.87;
+        const sx=.31+t*.62,sy=-.32-.84*t+.96*t*t;
+        ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+.1,sy-.13+.12*t);ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 
   function waterRibbon(ctx, crest, start, end, width, direction, time, strength, quiet) {
@@ -55,6 +172,7 @@ const ElementalFluidVfx = (() => {
     const center = crest((start + end) / 2);
     ctx.save(); ctx.globalAlpha *= strength;
     clipRibbon(ctx,crest,start,end,width,detail);
+    refractScene(ctx,center-width*1.05,start,width*2.1,height,time,quiet);
     const body = ctx.createLinearGradient(center - width * direction * .49, 0,
       center + width * direction * .48, 0);
     body.addColorStop(0, "#082d4200"); body.addColorStop(.17, "#155d7937");
@@ -73,18 +191,17 @@ const ElementalFluidVfx = (() => {
     ctx.globalAlpha *= .85;
     for (let i = 0; i < columns; i++) {
       const y = start + (i + .18 + .25 * Math.sin(flow * 2.7 + i * 2.1)) * height / columns;
-      const w = width * (1.1 + hash(i + 81) * .31), h = height / columns * (1.7 + hash(i + 11));
-      const x = crest(y) + width * direction * (.19 + .15 * hash(i));
+      const patch=foamPatches[i];
+      const w = width*patch.width, h = height/columns*patch.height;
+      const x = crest(y) + width*direction*patch.offset;
       materialPlate(ctx, "water", i % 3, x - w * .55, y - h * .55, w, h);
     }
     ctx.globalAlpha = strength;
+    const coreFade=foamGradient(ctx,water.core,start,end),edgeFade=foamGradient(ctx,water.edge,start,end);
     for (let band = 0; band < (quiet ? 3 : 6); band++) {
       const amplitude = width * (.037 + .011 * band);
       const bias = direction * width * (.29 - .099 * band);
-      const tint = band < 2 ? water.core : water.edge, fade = ctx.createLinearGradient(0,start,0,end);
-      fade.addColorStop(0,tint+"18");fade.addColorStop(.12,tint);
-      fade.addColorStop(.88,tint);fade.addColorStop(1,tint+"15");
-      ctx.strokeStyle = fade;
+      ctx.strokeStyle = band<2 ? coreFade : edgeFade;
       ctx.globalAlpha = strength * (band === 0 ? .61 : .30 - .031 * band);
       ctx.lineWidth = Math.max(.8, width * (band === 0 ? .019 : .012));
       ctx.beginPath();
@@ -100,19 +217,22 @@ const ElementalFluidVfx = (() => {
       ctx.fillStyle = "#d0f9f3";
       ctx.beginPath();
       for (let i = 0; i < count; i++) {
-        const v = frac(hash(i + 21) + time * (.07 + .12 * hash(i + 1)));
-        const y = start + height * v, x = crest(y) + direction * width * (.40 - hash(i + 28) * .44);
-        const r = .55 + hash(i + 120) ** 2 * 2.1;
-        ctx.moveTo(x + r,y); ctx.ellipse(x,y,r,r * (1.15 + hash(i) * .82), 0, 0, TAU);
+        const s = spraySeeds[i], v=frac(s.phase+time*s.speed);
+        const y = start+height*v, x=crest(y)+direction*width*s.offset;
+        const r=s.radius;
+        ctx.moveTo(x+r,y);ctx.ellipse(x,y,r,r*s.aspect,0,0,TAU);
       }
       ctx.globalAlpha = strength * .72; ctx.fill();
     }
+    breakingLip(ctx,crest,start,end,width,direction,quiet?0:time,strength,quiet);
     ctx.restore();
+    drawBreakingMass(ctx,crest,start,end,width,direction,time,strength,quiet);
   }
 
   function whirlpool(ctx, x, y, radius, core, time, spin, strength, quiet) {
     if (radius <= 1) return;
     ctx.save(); diskClip(ctx, x, y, radius);
+    refractScene(ctx,x-radius,y-radius,radius*2,radius*2,time*spin,quiet);
     const depth = ctx.createRadialGradient(x,y,0,x,y,radius);
     depth.addColorStop(0, "#020911"); depth.addColorStop(.25, "#062331");
     depth.addColorStop(.72, "#167989ab"); depth.addColorStop(1, "#18455604");
@@ -373,10 +493,8 @@ const ElementalFluidVfx = (() => {
     if (hazard.ultimateKind === "tideWalls") {
       for (const [i,r] of geometry.rects.entries()) {
         const direction = i < 2 ? -1 : 1;
-        ctx.save(); ctx.beginPath(); ctx.rect(r.x,r.y,r.width,r.height); ctx.clip();
         const crest = y => r.x + r.width * .5 + r.width * .09 * Math.sin(y * .046 - time * 9);
         waterRibbon(ctx,crest,r.y,r.y+r.height,r.width,direction,time,strength,quiet);
-        ctx.restore();
       }
       return true;
     }
@@ -441,5 +559,5 @@ const ElementalFluidVfx = (() => {
     }
     return false;
   }
-  return Object.freeze({ mechanic, signature, ultimate, charge, aftershock });
+  return Object.freeze({ mechanic, signature, ultimate, charge, aftershock, waterRibbon, warmWater });
 })();

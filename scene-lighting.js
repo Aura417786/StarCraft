@@ -21,6 +21,29 @@ const sceneLightFields = new Map();
 const sceneLightHalos = new Map();
 const sceneLightReceiver = {};
 let sceneLightHullTile;
+// A pressure front reaches distant dust after nearby dust. Its clock belongs
+// to the cast, so a pause, rewind or defeated boss cannot leave a stray gust.
+const sceneCastWake = { x:0, y:0, age:0, radius:0, speed:0, gain:0, inward:false, twist:0 };
+const sceneryWakeOffset = { x:0, y:0, roll:0 };
+
+function sampleCastWake(x, y, scale) {
+  const out = sceneryWakeOffset, wave = sceneCastWake;
+  out.x = out.y = out.roll = 0;
+  if (!wave.gain) return out;
+  const dx = x - wave.x, dy = y - wave.y;
+  const distance = Math.hypot(dx,dy);
+  if (distance < 1 || distance >= wave.radius) return out;
+  const time = wave.age - distance / wave.speed;
+  if (time <= 0 || time > 1.25) return out;
+  const k = wave.gain * scale * (1-distance/wave.radius) *
+    -Math.expm1(-16*time) * Math.exp(-3.6*time);
+  const radial = k * (wave.inward ? -1 : 1);
+  const cross = k * wave.twist * Math.sin(9*time);
+  out.x = (dx*radial - dy*cross)/distance;
+  out.y = (dy*radial + dx*cross)/distance;
+  out.roll = cross * .004;
+  return out;
+}
 
 function sceneLightColor(color) { return "#" + color.toString(16).padStart(6, "0"); }
 function sceneLightMixColor(a, b, weight) {
@@ -31,13 +54,14 @@ function sceneLightMixColor(a, b, weight) {
   return sceneLightColor((r << 16) | (g << 8) | blue);
 }
 
-function addSceneLightSource(x, y, radius, color, strength) {
+function addSceneLightSource(x, y, radius, color, strength, endX = x, material = "") {
   const frame = sceneLightFrame;
   if (frame.count >= sceneLightSources.length || !(strength > 0) || !(radius > 0)
     || !Number.isFinite(x + y + radius + strength) || !/^#[0-9a-f]{6}$/i.test(color)) return;
   const source = sceneLightSources[frame.count++];
   source.x = x; source.y = y; source.radius = radius;
   source.color = color; source.strength = strength;
+  source.endX = endX; source.material = material;
 }
 
 function prepareSceneLighting(world) {
@@ -56,7 +80,7 @@ function prepareSceneLighting(world) {
   frame.shadeColor = sceneLightMixColor(from.shade, to.shade, blend);
   frame.keyStrength = from.strength + (to.strength - from.strength) * blend;
   frame.fillStrength = from.bounce + (to.bounce - from.bounce) * blend;
-  frame.count = 0; frame.secondaryHulls = 0;
+  frame.count = 0; frame.secondaryHulls = 0; sceneCastWake.gain = 0;
   if (state !== "battle" || evolution.pending) return;
 
   const calm = frame.quiet ? .48 : 1;
@@ -75,8 +99,9 @@ function prepareSceneLighting(world) {
     } else {
       const shot = ultimate.shot;
       const start = shot?.startX ?? origin.x;
-      const x = ultimate.kind === "red" ? Math.min(world.width, start + Math.max(0, (shot?.x ?? start) - start) * .24) : origin.x + 74;
-      addSceneLightSource(x, shot?.y ?? origin.y, 264, tint, .72 * calm);
+      const x = ultimate.kind === "red" ? start : origin.x + 74;
+      const end = ultimate.kind === "red" ? clamp(shot?.x ?? x, x, world.width) : x;
+      addSceneLightSource(x, shot?.y ?? origin.y, 264, tint, .72 * calm, end);
     }
   } else if (muzzleFlash > 0) {
     const origin = muzzlePosition();
@@ -84,20 +109,33 @@ function prepareSceneLighting(world) {
   }
   if (shield.remaining > 0)
     addSceneLightSource(player.x + player.width * .12, player.y, shield.flash > 0 ? 190 : 115,
-      "#ff9a80", (shield.flash > 0 ? .58 : .21) * calm);
+      fighterProfile().id === "blue" ? "#82ddff" : fighterProfile().id === "yellow" ? "#ffcf70" : "#ff9a80",
+      (shield.flash > 0 ? .58 : .21) * calm);
   // Environmental response follows an existing attack; it fades smoothly rather
   // than strobes. Reserve remaining light slots for the two strongest hazards.
   if (typeof bossHazards !== "undefined") {
-    for (const hazard of bossHazards) {
-      if (frame.count >= sceneLightSources.length || hazard.age < (hazard.tellAt || 0)) continue;
+    for (const hazard of boss?.finale?.hazards ?? bossHazards) {
+      if (hazard.age < (hazard.tellAt || 0)) continue;
       const active = hazard.age >= hazard.warning, material = hazard.material || (boss ? pressureMaterialNames[boss.type] : null);
       if (!active || !material || !signatureMaterials[material]) continue;
       const p = clamp((hazard.age - hazard.warning) / Math.max(.01, hazard.duration || 1), 0, 1);
       const x = Number.isFinite(hazard.x) ? hazard.x : Number.isFinite(hazard.lockX) ? hazard.lockX : boss?.x;
       const y = Number.isFinite(hazard.y) ? hazard.y : Number.isFinite(hazard.lockY) ? hazard.lockY : boss?.y;
       if (!Number.isFinite(x + y)) continue;
+      const age = hazard.age - hazard.warning;
+      if (!frame.quiet && boss && age >= 0 && age < 2.2 &&
+          (!sceneCastWake.gain || age < sceneCastWake.age)) {
+        const inward = material === "void" || material === "silk";
+        sceneCastWake.x = x; sceneCastWake.y = y; sceneCastWake.age = age;
+        sceneCastWake.radius = world.height * 1.1;
+        sceneCastWake.speed = world.height * (material === "plasma" ? 1.8 : 1.04);
+        sceneCastWake.gain = (inward ? 32 : material === "magma" ? 43 : 27) * world.height / 720;
+        sceneCastWake.inward = inward;
+        sceneCastWake.twist = material === "water" || inward ? 1.13 : .42;
+      }
+      if (frame.count >= sceneLightSources.length) continue;
       const energy = material === "magma" ? .43 : material === "plasma" ? .32 : material === "void" ? .13 : .23;
-      addSceneLightSource(x, y, Math.min(world.height * .43, (hazard.radius || 100) * 2.4), signatureMaterials[material].rim, energy * Math.sin(Math.PI * Math.min(.98, .16 + p * .82)) * calm);
+      addSceneLightSource(x, y, Math.min(world.height * .43, (hazard.radius || 100) * 2.4), signatureMaterials[material].rim, energy * Math.sin(Math.PI * Math.min(.98, .16 + p * .82)) * calm, x, material);
     }
   }
 }
@@ -109,17 +147,17 @@ function sampleSceneLight(x, y, out = {}) {
   out.keyColor = frame.keyColor; out.fillColor = frame.fillColor; out.shadeColor = frame.shadeColor;
   out.keyDx = keyX / span; out.keyDy = keyY / span;
   out.keyStrength = frame.keyStrength; out.fillStrength = frame.fillStrength;
-  out.color = frame.keyColor; out.strength = 0; out.dx = out.keyDx; out.dy = out.keyDy;
+  out.color = frame.keyColor; out.strength = 0; out.dx = out.keyDx; out.dy = out.keyDy; out.material = "";
   for (let i = 0; i < frame.count; i++) {
     const source = sceneLightSources[i];
-    const dx = source.x - x, dy = source.y - y;
+    const dx = clamp(x, source.x, source.endX) - x, dy = source.y - y;
     const distanceSquared = dx * dx + dy * dy;
     const reach = distanceSquared / (source.radius * source.radius);
     if (reach >= 1) continue;
     const strength = source.strength * (1 - reach) ** 2;
     if (strength <= out.strength) continue;
     const distance = Math.sqrt(distanceSquared);
-    out.color = source.color; out.strength = strength;
+    out.color = source.color; out.strength = strength; out.material = source.material;
     if (distance > .01) { out.dx = dx / distance; out.dy = dy / distance; }
   }
   return out;

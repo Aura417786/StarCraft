@@ -111,7 +111,7 @@ function updateJourneyScene(seconds) {
   journeyState.waiting = null;
 }
 
-function drawActiveJourney(layer) {
+function drawActiveJourney(layer, ctx = context) {
   const scene = journeyState.scene;
   if (state === "menu") return;
   if (!scene) {
@@ -119,12 +119,12 @@ function drawActiveJourney(layer) {
       const elapsed = gravityTide.phase === "warning"
         ? 4 + gravityTide.elapsed / gravityRules.warning * 7.4
         : 11.4 + gravityTide.elapsed / gravityRules.duration * 12.6;
-      drawJourneyScene({ id: "rift", elapsed, duration: journeySceneDuration }, layer);
+      drawJourneyScene({ id: "rift", elapsed, duration: journeySceneDuration }, layer, ctx);
     }
     return;
   }
-  context.save();
-  context.globalAlpha *= 1 - scene.blend;
-  drawJourneyScene(scene, layer);
-  context.restore();
+  ctx.save();
+  ctx.globalAlpha *= 1 - scene.blend;
+  drawJourneyScene(scene, layer, ctx);
+  ctx.restore();
 }

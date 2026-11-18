@@ -1,5 +1,9 @@
 # Star Breaker · 星际突围
 
+**v36 · Rift Echoes.** Watch Crimson's coils build pressure, follow Azure's discharge from mark to mark, or catch a strike on Auric's segmented shield. Each of the eleven bosses answers a broken shell with a different organ attack and musical motif. Read the tell and attack during its recovery.
+
+During Lightless Collapse, violet streams fold into a dark core that eclipses the starfield. Watch the countdown and shield cue when a boss seals the arena. Other attacks show their reach through dissipating spray, molten fissures and arcs.
+
 **High-refresh rendering and dense combat optimizations.** Interpolated ship and projectile positions follow the display refresh while combat uses a fixed simulation step. Pooled combat objects and cached glow reduce repeated work in dense battles.
 
 **High-resolution hangar fighters.** View Crimson, Azure and Auric at an angle to see the recessed barrels, armor seams and canopy reflections in fullscreen.

@@ -257,6 +257,9 @@ function drawEvolutionWeapons(ctx = context) {
     if (typeof drawEvolutionDroneBody === "function") drawEvolutionDroneBody(ctx, drone, evolution.blast, quiet, time);
     else if (typeof drawShipPBR === "function") drawShipPBR(ctx, drone, "crimson", null, quiet, time);
     if (evolutionWeapons.droneFlash > 0) {
+      if (fighterProfile().id === "blue" && typeof FighterMaterialFx !== "undefined") {
+        FighterMaterialFx.plate(ctx, "blue", drone.muzzleX + 7, drone.muzzleY, 26, 19, time, evolutionWeapons.droneFlash/.12);
+      }
       ctx.save(); ctx.fillStyle = "#d9fff5"; ctx.globalAlpha = Math.min(1, evolutionWeapons.droneFlash / .12);
       ctx.beginPath(); ctx.ellipse(drone.muzzleX + 3, drone.muzzleY, 5, 2.2, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
@@ -296,11 +299,13 @@ const fighterCombat = { stability: 0, redHeld: false, redCooldown: 0, redFlash: 
   marked: null, stacks: 0, marks: new WeakMap(), capacitor: 1, field: null, arcs: [] };
 
 function resetFighterCombat() {
+  if (typeof FighterMaterialFx !== "undefined") FighterMaterialFx.reset();
   Object.assign(fighterCombat, { stability: 0, redHeld: false, redCooldown: 0, redFlash: 0,
     marked: null, stacks: 0, marks: new WeakMap(), capacitor: 1, field: null, arcs: [] });
   updateFighterSystemsHud();
 }
 function clearFighterCombatTransients() {
+  if (typeof FighterMaterialFx !== "undefined") FighterMaterialFx.reset();
   cancelFighterCharge();
   fighterCombat.marked = null;
   fighterCombat.stacks = 0;
@@ -315,11 +320,12 @@ function beginFighterCharge() {
   fighterCombat.stability = 0;
   const muzzle = muzzlePosition();
   addEvolutionPulse(muzzle.x, muzzle.y, 26, "#ffad96", .18);
-  gameAudio.shoot?.(false, 1, "red");
+  gameAudio.fighterSkill?.("red", "prime", { x: muzzle.x, y: muzzle.y });
   updateFighterSystemsHud();
   return true;
 }
 function cancelFighterCharge() {
+  if (fighterCombat.redHeld) gameAudio.stopFighterCharge?.();
   fighterCombat.redHeld = false;
   fighterCombat.stability = 0;
 }
@@ -349,6 +355,7 @@ function releaseFighterCharge() {
   bullets.push(shot);
   fighterCombat.redCooldown = fighterCombatRules.redCycle;
   fighterCombat.redFlash = .18;
+  if (typeof FighterMaterialFx !== "undefined") FighterMaterialFx.vent(muzzle, power);
   muzzleFlash = .09;
   addEvolutionPulse(muzzle.x, muzzle.y, 48 + 24 * power, color, .22);
   gameAudio.fighterSkill?.("red", "pierce", { x: muzzle.x, y: muzzle.y, power: .65 + power * .5 });
@@ -418,7 +425,7 @@ function updateFighterCombat(seconds) {
       field.pulses++;
       field.nextPulse += fighterCombatRules.auricPulsePeriod;
       const radius = fighterCombatRules.auricRadius;
-      addEvolutionPulse(field.x, field.y, radius, "#ffce79", .30);
+      gameAudio.fighterSkill?.("yellow", "pulse", { x: field.x, y: field.y, power: .52 + field.pulses * .08 });
       for (const target of [...enemies, ...activeBosses()]) {
         const contact = fighterFieldContact(target, field);
         if (contact) directFighterHit(target, field, 1, "auric-field", contact);
@@ -455,6 +462,7 @@ function spawnFighterRound(bullet, volley, primary) {
   if (volley === "azure-seeker") {
     if (primary) gameAudio.fighterSkill?.("blue", "missile", { x: bullet.x, y: bullet.y, power: .5 });
     bullet.seeker = acquirePlayerRoundSeeker(bullet);
+    if (typeof FighterMaterialFx !== "undefined") FighterMaterialFx.startSeeker(bullet);
     bullet.color = "#75d6fb"; bullet.core = "#e3fcff";
     bullet.length *= .76;
   } else if (volley.startsWith("auric-")) {
@@ -515,6 +523,7 @@ function fighterProjectileDamage(shot, target) {
 function steerFighterRound(bullet, seconds) {
   const seeker = bullet.seeker;
   if (!seeker) return;
+  if (typeof FighterMaterialFx !== "undefined") FighterMaterialFx.trackSeeker(bullet);
   seeker.retarget -= seconds;
   if (seeker.retarget <= 0) {
     seeker.retarget = .105;
@@ -555,6 +564,10 @@ function steerFighterRound(bullet, seconds) {
 }
 function onFighterProjectileImpact(shot, target) {
   if (!isBattleActive()) return;
+  if (shot.source === "crimson-heavy" && typeof FighterMaterialFx !== "undefined") {
+    const point = fighterImpactGeometry(shot, target);
+    FighterMaterialFx.pierce(point, shot);
+  }
   splitEvolutionImpact(shot, target);
   if (shot.auric === "auric-spread" && !fighterCombat.field && fighterCombat.capacitor >= .999
     && isAuricCloseShot(shot, target)) {
@@ -562,7 +575,7 @@ function onFighterProjectileImpact(shot, target) {
     fighterCombat.capacitor = 0;
     fighterCombat.field = { x: impact.x, y: impact.y, age: 0, nextPulse: .04, pulses: 0,
       damage: Math.min(220, Math.exp(evolutionBaseDpsLog()) * .21) };
-    gameAudio.fighterSkill?.("yellow", "shield", { x: impact.x, y: impact.y, power: .8 });
+    gameAudio.fighterSkill?.("yellow", "field", { x: impact.x, y: impact.y, power: .8 });
   }
   if (!shot.seeker) return;
   const status = fighterCombat.marks.get(target);
@@ -570,7 +583,10 @@ function onFighterProjectileImpact(shot, target) {
   fighterCombat.marks.set(target, { count: count >= fighterCombatRules.ionStacks ? 0 : count, time: battleTime });
   fighterCombat.marked = target;
   fighterCombat.stacks = count % fighterCombatRules.ionStacks;
-  if (count < fighterCombatRules.ionStacks) return;
+  if (count < fighterCombatRules.ionStacks) {
+    gameAudio.fighterSkill?.("blue", "mark", { x: target.x, y: target.y, power: .45 + count * .13 });
+    return;
+  }
   const neighbors = [...enemies, ...activeBosses()].filter(other => other !== target && other.hp > 0
     && Math.hypot(other.x - target.x, other.y - target.y) <= fighterCombatRules.ionRadius)
     .sort((a, b) => Math.hypot(a.x - target.x, a.y - target.y) - Math.hypot(b.x - target.x, b.y - target.y));
@@ -578,14 +594,17 @@ function onFighterProjectileImpact(shot, target) {
   // If the pack has fewer bodies, the spare arcs return to the mark.
   const destinations = [target, neighbors[0] ?? target, neighbors[1] ?? neighbors[0] ?? target];
   gameAudio.fighterSkill?.("blue", "chain", { x: target.x, y: target.y });
-  let origin = { x: shot.x, y: shot.y - 8 };
+  // The escort conducts the first of the three existing damage packets.
+  // Sharing the same muzzle with its drawing keeps the beam attached in flight.
+  const escort = getEvolutionDronePositions(player, 1)[0];
+  let origin = { x: escort.muzzleX, y: escort.muzzleY };
+  gameAudio.fighterSkill?.("blue", "wing", { x: origin.x, y: origin.y, power: .64 });
   for (const [index, destination] of destinations.entries()) {
     directFighterHit(destination, shot, [.52, .34, .32][index], "azure-chain");
     if (fighterCombat.arcs.length >= 12) fighterCombat.arcs.shift();
-    fighterCombat.arcs.push({ x: origin.x, y: origin.y,
-      toX: destination.x, toY: destination.y + (index - 1) * 9, remaining: .19 });
+    fighterCombat.arcs.push({ x: origin.x, y: origin.y, index,
+      toX: destination.x, toY: destination.y + (index - 1) * 9, remaining: .47 });
     origin = { x: destination.x, y: destination.y + (index - 1) * 9 };
-    addEvolutionPulse(destination.x, destination.y, 25, "#88e6ff", .23);
   }
 }
 function fighterWeaponCopy(kind = fighterProfile().id) {
@@ -599,7 +618,7 @@ fighterSystemsReadout.className = "fighter-systems-readout";
 fighterSystemsReadout.setAttribute("role", "meter");
 fighterSystemsReadout.setAttribute("aria-valuemin", "0");
 fighterSystemsReadout.setAttribute("aria-valuemax", "100");
-document.querySelector(".weapon-readout")?.append?.(fighterSystemsReadout);
+(document.querySelector(".tactical-loadout") ?? document.querySelector(".weapon-readout"))?.append?.(fighterSystemsReadout);
 let fighterSystemsDisplayKey = "";
 function updateFighterSystemsHud() {
   const id = fighterProfile().id;
@@ -627,13 +646,16 @@ function updateFighterSystemsHud() {
   if (key === fighterSystemsDisplayKey) return;
   fighterSystemsDisplayKey = key;
   fighterSystemsReadout.dataset.fighter = id;
+  // Field discharge has three discrete pulses; the capacitor refills between casts.
+  const instrument = id === "yellow" && field ? clamp(1 - field.pulses / 3, 0, 1) : value / 100;
+  fighterSystemsReadout.style.setProperty("--system-charge", String(instrument));
   fighterSystemsReadout.textContent = label + link;
   fighterSystemsReadout.setAttribute("aria-label", label + link);
-  fighterSystemsReadout.setAttribute("aria-valuenow", String(value));
+  fighterSystemsReadout.setAttribute("aria-valuenow", String(Math.round(instrument * 100)));
 }
 function drawFighterCombat(ctx = context) {
   if (state !== "battle") return;
-  const { field, arcs, marked, stacks, stability, capacitor, redFlash } = fighterCombat;
+  const { field, stability, capacitor, redFlash } = fighterCombat;
   const id = fighterProfile().id;
   ctx.save();
   if (id === "yellow" && !field && capacitor >= .999) {
@@ -654,33 +676,7 @@ function drawFighterCombat(ctx = context) {
     }
     ctx.globalAlpha = 1;
   }
-  if (field) {
-    const radius = fighterCombatRules.auricRadius;
-    ctx.strokeStyle = "#efbd7170"; ctx.lineWidth = 1.6;
-    ctx.fillStyle = "#ffaa3510"; ctx.beginPath(); ctx.arc(field.x, field.y, radius, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
-    ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(field.x, field.y, radius - 7, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
-  }
-  for (const arc of arcs) {
-    ctx.globalAlpha = clamp(arc.remaining / .19, 0, 1) * (quietCombatMotion() ? .56 : 1);
-    ctx.strokeStyle = "#8ae8ff"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(arc.x, arc.y);
-    ctx.lineTo(arc.x + (arc.toX - arc.x) * .38 - 5, arc.y + (arc.toY - arc.y) * .38 + 9);
-    ctx.lineTo(arc.x + (arc.toX - arc.x) * .73 + 5, arc.y + (arc.toY - arc.y) * .73 - 7);
-    ctx.lineTo(arc.toX, arc.toY); ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-  if (marked?.hp > 0 && stacks > 0 && battleTime - (fighterCombat.marks.get(marked)?.time ?? 0) < 1.6) {
-    ctx.fillStyle = "#92e6ff";
-    for (let index = 0; index < stacks; index++) ctx.fillRect(marked.x - 7 + index * 8, marked.y + marked.height * .48 + 6, 5, 2);
-  }
-  if (id === "red" && (fighterCombat.redHeld || redFlash > 0)) {
-    const tip = muzzlePosition(), charge = Math.max(stability, redFlash / .18);
-    ctx.strokeStyle = "#ff9d81";
-    ctx.lineWidth = 1 + charge * 2;
-    ctx.beginPath();
-    ctx.arc(tip.x + 5, tip.y, 8 + charge * 13, -.85, .85);
-    ctx.stroke();
-  }
+  if (typeof FighterMaterialFx !== "undefined") FighterMaterialFx.drawWeapons(ctx, id, fighterCombat);
   if (id === "red" && (fighterCombat.redHeld || redFlash > 0) || id === "yellow") {
     const progress = id === "red" ? Math.max(stability, redFlash / .18) : capacitor;
     const x = player.x - 22, y = player.y + player.height * .54 + 6;

@@ -19,18 +19,23 @@ function wav(name, value) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH,
+  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, ignoreDefaultArgs: ["--mute-audio"],
     args: ["--autoplay-policy=no-user-gesture-required"] });
   const page = await browser.newPage();
   const errors = [], requests = [];
   page.on("pageerror", error => errors.push(error.message));
-  page.on("request", request => { if (/audio\/nextgen|audio.*bank/.test(request.url())) requests.push(request.url()); });
+  page.on("request", request => { if (/audio\/(nextgen|encounters)|audio.*bank/.test(request.url())) requests.push(request.url()); });
   await page.addInitScript(() => {
     window.requestAnimationFrame = () => 0;
-    const proof = window.audioProof = { sources: [], gains: [], decodedBytes: 0, decoded: 0, pending: null, sourceGain: new WeakMap() };
+    const proof = window.audioProof = { sources: [], gains: [], decodedBytes: 0, decoded: 0, pending: null,
+      sourceGain: new WeakMap(), names: new WeakMap() };
     const decode = AudioContext.prototype.decodeAudioData;
     AudioContext.prototype.decodeAudioData = async function (bytes) {
+      const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+        byte => byte.toString(16).padStart(2, "0")).join("");
+      const name = Object.entries(starBreakerAudioCatalog.encounters?.clips ?? {}).find(([, clip]) => clip.sha256 === digest)?.[0];
       const clip = await decode.call(this, bytes);
+      if (name) proof.names.set(clip, name);
       proof.decoded++; proof.decodedBytes += clip.length * clip.numberOfChannels * 4;
       return clip;
     };
@@ -44,7 +49,7 @@ function wav(name, value) {
     AudioBufferSourceNode.prototype.start = function (at, offset) {
       if (this.buffer) {
         const data = this.buffer.getChannelData(0);
-        proof.sources.push({ node: this, gain: proof.sourceGain.get(this), at, offset, loop: this.loop, duration: this.buffer.duration,
+        proof.sources.push({ node: this, name: proof.names.get(this.buffer), gain: proof.sourceGain.get(this), at, offset, loop: this.loop, duration: this.buffer.duration,
           seam: Math.abs(data[0] - data[data.length - 1]), ended: false });
         const trace = proof.sources.at(-1);
         this.addEventListener("ended", () => { trace.ended = true; });
@@ -117,6 +122,7 @@ function wav(name, value) {
     });
     const hangar = await capture("hangar", 4);
     assert.ok(hangar.left > .0001, "hangar music is audible after unlock");
+    assert.ok(await page.evaluate(() => audioProof.sources.some(s => s.name === "enc_sector_hangar")), "hangar chimes played");
     await page.evaluate(() => gameAudio.sync(true, false, false, { scene: "battle", lives: 3, elite: true }));
     await page.waitForTimeout(1000);
     await capture("elite-to-low-life", 5, "setTimeout(()=>gameAudio.sync(true,false,false,{scene:'battle',lives:1,elite:true}),1600)");
@@ -125,6 +131,11 @@ function wav(name, value) {
     assert.equal(report.lowLife.state.lowLife, true);
     assert.equal(report.lowLife.state.musicLayers, 3);
     assert.ok(Math.abs(report.lowLife.gains.at(-1) - .66) < .001, "low-life counterline actually reaches its scheduled gain");
+    for (const region of ["belt", "wreck", "citadel", "rift"]) {
+      await page.evaluate(region => gameAudio.sync(true, false, false, { scene: "battle", region, lives: 3 }), region);
+      await page.waitForFunction(region => audioProof.sources.some(s => s.name === "enc_sector_"+region && !s.ended), region, {polling: 50});
+      await capture("flight-" + region, 2);
+    }
     for (let index = 0; index < 11; index++) {
       await page.evaluate(index => {
         gameAudio.sync(true, true, false, { scene: "battle", bossType: index, bossHealth: .8, lives: 3,
@@ -133,11 +144,23 @@ function wav(name, value) {
       }, index);
       await page.waitForTimeout(900);
       const family = await page.evaluate(index => starBreakerAudioCatalog.nextgen.bosses[index].family, index);
-      await capture("boss-" + (index + 1) + "-" + family, 2.6,
-        `gameAudio.bossSkill('tide',{bossId:${index + 1},phase:'tell',x:1000,y:360});
-         setTimeout(()=>gameAudio.bossSkill('tide',{bossId:${index + 1},phase:'active',x:1000,y:360}),900);
-         setTimeout(()=>gameAudio.bossSkill('tide',{bossId:${index + 1},phase:'impact',x:1000,y:360}),1400);
-         setTimeout(()=>gameAudio.bossSkill('tide',{bossId:${index + 1},phase:'tail',x:1000,y:360}),2000);`);
+      await page.waitForFunction(index => gameAudio.diagnostics.musicSolo === starBreakerAudioCatalog.encounters.bosses[index].theme, index, {polling: 50});
+      await capture("boss-" + (index + 1) + "-" + family, 6.1,
+        `const bossId=${index+1}, profile=starBreakerAudioCatalog.encounters.bosses[bossId-1];
+         const emit=(skill,phase)=>gameAudio.bossSkill(skill,{bossId,phase,x:870,y:300,power:1});
+         emit(profile.signature,'tell');
+         setTimeout(()=>emit(profile.signature,'active'),760);
+         setTimeout(()=>emit(profile.signature,'impact'),1680);
+         setTimeout(()=>emit('resonance','active'),2320);
+         setTimeout(()=>emit(profile.ultimate,'active'),3650);
+         setTimeout(()=>emit(profile.ultimate,'tail'),5180);`);
+      const names = await page.evaluate(() => [...new Set(audioProof.sources.map(x => x.name).filter(Boolean))]);
+      for (const sound of ["theme", "signature", "resonance", "ultimate"]) {
+        assert.ok(names.includes("enc_"+family+"_"+sound), "production decoded source played for "+family+"/"+sound);
+      }
+      if (index === 0) await capture("water-jet-and-lash", 2.3,
+        "gameAudio.bossSkill('seam',{bossId:1,phase:'active',x:880,y:350});"
+        + "setTimeout(()=>gameAudio.bossSkill('beam',{bossId:1,phase:'active',x:620,y:240}),1150)");
       const loops = await page.evaluate(() => audioProof.sources.filter(x => x.loop && !x.ended)
         .map(({ at, duration, seam }) => ({ at, duration, seam })));
       report.music.push({ index, loops });
@@ -145,10 +168,13 @@ function wav(name, value) {
       assert.ok(loops.length <= 10, "at most two crossfading scores");
     }
     for (const ship of ["red", "blue", "yellow"]) {
-      await capture("fighter-" + ship, 4.5,
-        `gameAudio.chargeUltimate(.88,'${ship}');setTimeout(()=>gameAudio.fireUltimate('${ship}'),900);
-         setTimeout(()=>gameAudio.fighterSkill('${ship}','shield'),2700);
-         setTimeout(()=>gameAudio.fighterSkill('${ship}','perfect'),3400);`);
+      const detail = ship === "red" ? "prime" : ship === "blue" ? "mark" : "field";
+      await capture("fighter-" + ship, 6,
+        `gameAudio.shoot(false,2,'${ship}');setTimeout(()=>gameAudio.fighterSkill('${ship}','${detail}'),230);
+         setTimeout(()=>{${ship==="red" ? "gameAudio.stopFighterCharge();gameAudio.fighterSkill('red','pierce')" : ship==="yellow" ? "gameAudio.fighterSkill('yellow','pulse')" : "gameAudio.fighterSkill('blue','chain')"}},845);
+         setTimeout(()=>gameAudio.chargeUltimate(.88,'${ship}'),1440);setTimeout(()=>gameAudio.fireUltimate('${ship}'),2320);
+         setTimeout(()=>gameAudio.fighterSkill('${ship}','shield'),3950);
+         setTimeout(()=>gameAudio.fighterSkill('${ship}','perfect'),5050);`);
     }
     await capture("dense-final-stage", 5,
       "gameAudio.sync(true,true,true,{scene:'battle',bossType:10,bossPhase:'finale',bossHealth:.2,lives:1});" +
@@ -170,6 +196,14 @@ function wav(name, value) {
     const death = await capture("player-destruction", 1.2,
       "gameAudio.fighterSkill('red','destroy');gameAudio.sync(false,false,false,{scene:'over'})");
     assert.ok(death.peak > .01, "destruction tail survives the results-screen transition");
+    await page.evaluate(() => {gameAudio.sync(true,false,false,{scene:"battle",lives:3}); gameAudio.victorySequence(true);});
+    await page.waitForFunction(() => audioProof.sources.some(s => !s.loop && Math.abs(s.duration-15)<.01 && !s.ended), null, {polling: 50});
+    await capture("stargate-victory", 5);
+    assert.ok(await page.evaluate(() => audioProof.sources.some(s => s.name === "enc_victory")), "authored ending plays");
+    report.encounterSources = await page.evaluate(() => [...new Set(audioProof.sources.map(s => s.name).filter(Boolean))].sort());
+    const allClips = await page.evaluate(() => Object.keys(starBreakerAudioCatalog.encounters.clips).sort());
+    assert.deepEqual(report.encounterSources, allClips, "all authored encounter clips actually began playback");
+    await page.evaluate(() => gameAudio.victorySequence(false));
     await page.evaluate(() => gameAudio.setMuted(true));
     await page.waitForTimeout(300);
     const silent = await capture("muted", .5);

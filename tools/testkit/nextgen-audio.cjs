@@ -37,5 +37,30 @@ for (const boss of manifest.bosses) {
   }
 }
 console.log("PASS authored clip hashes, offline parity, all Boss lifecycles and compressed size budget");
+const encounterPath = path.join(root, "assets/audio/encounters");
+const encounter = JSON.parse(fs.readFileSync(path.join(encounterPath, "manifest.json"), "utf8"));
+const runtime = vm.createContext({});
+vm.runInContext(fs.readFileSync(path.join(root, "audio-catalog.js"), "utf8") + "\nglobalThis.bank=starBreakerAudioCatalog.encounters", runtime);
+assert.deepEqual(JSON.parse(JSON.stringify(runtime.bank)), encounter, "runtime and authored manifest agree");
+for (const group of Object.keys(encounter.groups)) vm.runInContext(fs.readFileSync(path.join(encounterPath, group+".js"), "utf8"), offline);
+let encounterBytes = 0;
+for (const [name, clip] of Object.entries(encounter.clips)) {
+  const data = fs.readFileSync(path.join(encounterPath, name+".ogg"));
+  assert.deepEqual(data, Buffer.from(offline.starBreakerNextgenAudio[name], "base64"));
+  assert.equal(crypto.createHash("sha256").update(data).digest("hex"), clip.sha256);
+  assert.ok(clip.peakDbFS < -1);
+  if (clip.bpm) {
+    assert.ok(Math.abs(clip.duration - 16*60/clip.bpm) < .001, name + " ends on the four-bar grid");
+    assert.ok(fs.statSync(path.join(encounterPath, name+".mid")).size > 128);
+  }
+  encounterBytes += data.length;
+}
+assert.ok(encounterBytes < 2*1024*1024);
+assert.equal(new Set(encounter.bosses.map(row => row.theme)).size, 11);
+assert.deepEqual(Object.keys(encounter.regions).sort(), ["belt","citadel","hangar","rift","wreck"]);
+for (const row of encounter.bosses) for (const suffix of ["signature","resonance","ultimate","theme"]) {
+  assert.ok(encounter.clips[row.group+"_"+suffix]);
+}
+console.log("PASS encounter bank, 11 individual score motifs, phase and region cues, sample-grid lengths, offline and HTTP checksums");
 if (process.argv.includes("--contract-only")) process.exit(0);
 console.log("Browser checks run by tools/testkit/nextgen-audio-browser.cjs");

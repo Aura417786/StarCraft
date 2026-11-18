@@ -147,6 +147,9 @@ function renderSortieChallenges(profile) {
     [tr("今日最快击破", "Today's fastest clear"), sortieTime(today?.bestTime)],
     [tr("今日辅助最快", "Assisted best time"), sortieTime(todayAssisted?.bestTime)]
   ]));
+  rush.dataset.challenge = "rush";
+  weeklyCard.dataset.challenge = "weekly";
+  todayCard.dataset.challenge = "daily";
   summary.append(rush, weeklyCard, todayCard);
   const practice = sortieChallengeCard(sortieWord("practice"),
     tr("三条生命，固定赤焰和武器等级。先在战役中击败首领以解锁练习。",

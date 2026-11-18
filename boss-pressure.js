@@ -119,18 +119,35 @@ const bossPressureCombos = [
 
 function buildBossPressureCombo(target) {
   const ordinal = target.pressureComboIndex = (target.pressureComboIndex ?? -1) + 1;
-  const variant = ordinal % 2;
+  const previous = target.comboLog?.at(-1);
+  const room = mechanicRoom();
+  const aggressive = player.x > room.left + room.width * .72;
+  // Crossing into close range provokes the trapping opener. A long retreat
+  // instead draws the pressure front. Neither decision changes an existing tell.
+  const retreating = previous && previous.lockX-player.x>room.width*.18;
+  const rushIn = previous && aggressive && !target.lastPressureAdvance;
+  const variant = rushIn ? 1 : retreating ? 0 : ordinal % 2;
+  target.lastPressureAdvance = aggressive;
+  const responseTurn = target.enraged
+    ? (target.fractureResponseIndex = (target.fractureResponseIndex ?? -1) + 1) % 2 === 0
+    : ordinal % 3 === 1;
   const [cn,en,hint,enHint,...stages] = bossPressureCombos[target.type][variant];
   const material = alienPressurePlans[target.type].material;
   const id = target.type + ":" + ordinal;
   const begin = bossHazards.length;
-  target.attackLabel=[cn,en,hint,enHint];
+  const reply = BossResonance.names[target.type];
+  target.attackLabel = responseTurn ? [cn + " · " + reply[0], en + " / " + reply[1],
+    hint.split("，")[0] + "。第三拍 · " + reply[2],
+    enHint.split(",")[0] + ". Third beat · " + reply[3]] : [cn,en,hint,enHint];
   target.attackMotion=["coil","lunge","recoil","sweep","lunge","sweep","sweep","recoil","coil","recoil","coil"][target.type];
   const offsets = target.type===9 ? [0,1.08,3.65] : target.enraged ? [0,1.24,3.32] : [0,1.42,3.65];
   const stageEnds=[];
   for(let stage=0;stage<3;stage++) {
     const start=bossHazards.length;
-    stages[stage](target);
+    if (stage === 2 && responseTurn) {
+      const values = BossResonance.cast(target);
+      queueAlienHazard(target, "resonance", target.telegraphDuration, values);
+    } else stages[stage](target);
     const added=bossHazards.slice(start);
     for(const h of added) {
       h.warning += offsets[stage];
@@ -399,7 +416,7 @@ function damageBossUltimateNodes(shot, missile = false) {
       if(!hit)continue;
       (shot.ultimateNodeHits??=new WeakSet()).add(node);
       node.health=Math.max(0,node.health-(missile?2:Number.isInteger(shot.waveIndex)?2:6));
-      if(!node.health){combatBurst(node.x,node.y,.55,hazard.color);gameAudio.bossAttack("burst",node.x,node.y);}
+      if(!node.health){BossResonance.sever(boss,node.x,node.y,node.radius);combatBurst(node.x,node.y,.55,hazard.color);gameAudio.bossAttack("burst",node.x,node.y);}
     }
   }
 }

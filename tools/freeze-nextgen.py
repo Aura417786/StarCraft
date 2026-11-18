@@ -46,7 +46,7 @@ python -m http.server 4173 --bind 127.0.0.1 --directory Game
 建议通过 HTTP 启动，以加载实时 3D 模型；直接双击 HTML 使用兼容画面。
 所有运行资源都在 Game 内。存档属于当前浏览器、主机和端口；请保持同一网址。
 首次打开有玩法说明；从机库的「飞行手册」可重看。?qa=1 开启测试诊断。
-WASD / 方向键移动，空格大招，V 护盾，F 进化技能，Shift 射击姿态，Esc 暂停。
+WASD / 方向键移动，空格大招，V 护盾，F 进化技能，轻点 Shift 切换姿态，长按加速，Esc 暂停。
 
 Extract the full ZIP, open a terminal beside START.txt, then run the Python
 command above. Open the localhost URL in Chrome or Edge. Use HTTP to enable

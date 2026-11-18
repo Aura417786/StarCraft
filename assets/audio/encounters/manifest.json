@@ -1,0 +1,647 @@
+{
+  "clips": {
+    "enc_water_signature": {
+      "group": "enc_water",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 4830,
+      "sha256": "059d96aad551667ebbb72ee2e21d1e74a1b9fe71162d0bdfa25e518dc1352330",
+      "peakDbFS": -3.564
+    },
+    "enc_water_resonance": {
+      "group": "enc_water",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 6812,
+      "sha256": "44ec54fb3e9240b13419e7e7debad280b31300b2d54734fab47619b1e692cb99",
+      "peakDbFS": -4.653
+    },
+    "enc_water_ultimate": {
+      "group": "enc_water",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 7953,
+      "sha256": "e074aaaf1ccf03bd82bfc82d9dc2d07e4ec5ebbb0e1eba3b013828557027edb9",
+      "peakDbFS": -3.268
+    },
+    "enc_water_theme": {
+      "group": "enc_water",
+      "duration": 8.5714375,
+      "bpm": 112,
+      "bytes": 70107,
+      "sha256": "de588e9d01e8f96320d837057600ecc283b51a177db2c1201f73024aac01d842",
+      "peakDbFS": -6.26
+    },
+    "enc_bone_signature": {
+      "group": "enc_bone",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 5842,
+      "sha256": "676edad847e11382cbc97ca3fc867cf2731d52d67b3eb45d97683b56e15c2124",
+      "peakDbFS": -3.534
+    },
+    "enc_bone_resonance": {
+      "group": "enc_bone",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 6683,
+      "sha256": "8b3599a9726187783cbc8f6cefdd50476af1534e84c432e3845d1ce798ea1277",
+      "peakDbFS": -3.833
+    },
+    "enc_bone_ultimate": {
+      "group": "enc_bone",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 9487,
+      "sha256": "b9041d7e4539e36b7eb36c64e79daf0968a7955b353b4a033b0baa2833d44d65",
+      "peakDbFS": -1.6
+    },
+    "enc_bone_theme": {
+      "group": "enc_bone",
+      "duration": 8.5714375,
+      "bpm": 112,
+      "bytes": 61286,
+      "sha256": "0548784f378282e9f29f40c0c5a2a6772e34633120e792bf89185c7a3b68fcd2",
+      "peakDbFS": -7.138
+    },
+    "enc_magma_signature": {
+      "group": "enc_magma",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 5569,
+      "sha256": "3caf5152fe3c0cb2586088735b4306109f61ff47cde97bb792a31bd51b905e79",
+      "peakDbFS": -3.357
+    },
+    "enc_magma_resonance": {
+      "group": "enc_magma",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 6120,
+      "sha256": "8c635e961d8fa263a1e4eb38818fbb6c4b6e9018b8b075a7c054ef669d3b08e2",
+      "peakDbFS": -4.123
+    },
+    "enc_magma_ultimate": {
+      "group": "enc_magma",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 10649,
+      "sha256": "bd19a31d2afef721c47e87251de7fe239c7e86b52703d93f3053e7a6443837d9",
+      "peakDbFS": -1.486
+    },
+    "enc_magma_theme": {
+      "group": "enc_magma",
+      "duration": 7.7419375,
+      "bpm": 124,
+      "bytes": 53134,
+      "sha256": "8a02d80eb26acdb569c591b8c840c7d38f4479631054c893953ad83e6aad01c6",
+      "peakDbFS": -6.669
+    },
+    "enc_silk_signature": {
+      "group": "enc_silk",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 5352,
+      "sha256": "2e32b0509d09eec73e9f951bc93c5ac2a94881da6d8176945c06cc04519f9214",
+      "peakDbFS": -4.933
+    },
+    "enc_silk_resonance": {
+      "group": "enc_silk",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 6180,
+      "sha256": "fdb3446011ddbdd90070af12b0cb2cda6a6e0f872356dbe7d6b2f217459b89b8",
+      "peakDbFS": -4.564
+    },
+    "enc_silk_ultimate": {
+      "group": "enc_silk",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 8658,
+      "sha256": "9fb3dd83f705c90629395a47495e08dc1e4852c89dec504ecbb237f7cc6fa51d",
+      "peakDbFS": -4.68
+    },
+    "enc_silk_theme": {
+      "group": "enc_silk",
+      "duration": 9.230770833333333,
+      "bpm": 104,
+      "bytes": 78663,
+      "sha256": "b815624cca072c5daef83e0e81b928fdf4769f1651b4f987ce4089a5e0bdc831",
+      "peakDbFS": -6.942
+    },
+    "enc_chitin_signature": {
+      "group": "enc_chitin",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 5875,
+      "sha256": "f6e57c277d2b73a7a34aae9fb8395d378ffc0c61379dc22fa3cc2b5319652704",
+      "peakDbFS": -3.28
+    },
+    "enc_chitin_resonance": {
+      "group": "enc_chitin",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 7444,
+      "sha256": "ac0fd58fc8e120e06e002a6c008bcea0dca2cf1668af07cb98ae1a19b241e08e",
+      "peakDbFS": -4.4
+    },
+    "enc_chitin_ultimate": {
+      "group": "enc_chitin",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 11505,
+      "sha256": "25393b6053ef89ca8d8ea97d1e8fccfe3e09dbf18d8e064d8661cb2c9ba56f23",
+      "peakDbFS": -3.151
+    },
+    "enc_chitin_theme": {
+      "group": "enc_chitin",
+      "duration": 7.7419375,
+      "bpm": 124,
+      "bytes": 66001,
+      "sha256": "0a6c3dd2d561379f582cc26847a68b1c458d1bdee31463c88cfb88b694e0c158",
+      "peakDbFS": -4.802
+    },
+    "enc_crystal_signature": {
+      "group": "enc_crystal",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 7183,
+      "sha256": "5a92d83ae9b958f05a33cfb823306cffd6fd5b3080bd550ac0e17aaea93ca1bf",
+      "peakDbFS": -4.785
+    },
+    "enc_crystal_resonance": {
+      "group": "enc_crystal",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 8049,
+      "sha256": "d63ef898ec2bf7f9908913a45d628e0635df2213b2fc66dfa8eadc8b49c729bd",
+      "peakDbFS": -4.398
+    },
+    "enc_crystal_ultimate": {
+      "group": "enc_crystal",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 11689,
+      "sha256": "8e1fbdca793c52add58a6cea656d283e08d545559e2dfd22814c976c44732823",
+      "peakDbFS": -4.346
+    },
+    "enc_crystal_theme": {
+      "group": "enc_crystal",
+      "duration": 7.7419375,
+      "bpm": 124,
+      "bytes": 75093,
+      "sha256": "156135f584152273379ec78d46e595258f740f505418ac3a9da8ac13066e6603",
+      "peakDbFS": -6.13
+    },
+    "enc_plasma_signature": {
+      "group": "enc_plasma",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 4864,
+      "sha256": "3150da7cbf1c05abfd1e4e50b2699dfb5905879c8fe0104e7bcac757b07c35fc",
+      "peakDbFS": -1.823
+    },
+    "enc_plasma_resonance": {
+      "group": "enc_plasma",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 6458,
+      "sha256": "0c359cf94eb1f8c61edb3ccdcfdd7c7a2b0b73245380d11f90a7a017e206c305",
+      "peakDbFS": -3.84
+    },
+    "enc_plasma_ultimate": {
+      "group": "enc_plasma",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 7273,
+      "sha256": "c27de5b5f333ac69538bb4484c4c2f37d35f3dfbb873fc556328ba7811e88266",
+      "peakDbFS": -1.324
+    },
+    "enc_plasma_theme": {
+      "group": "enc_plasma",
+      "duration": 8.5714375,
+      "bpm": 112,
+      "bytes": 76721,
+      "sha256": "f47adb35352ffd53f0e5cd3ff12e27f573c479f6a83bc437c137148a40047ebf",
+      "peakDbFS": -5.959
+    },
+    "enc_spore_signature": {
+      "group": "enc_spore",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 4794,
+      "sha256": "15f99ccd97d0994a326fc88f95fb50010bb3ab9a3c1ea036e8cf5d712d3bb43f",
+      "peakDbFS": -3.052
+    },
+    "enc_spore_resonance": {
+      "group": "enc_spore",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 6090,
+      "sha256": "2ad32a736a6109b4cad51d7a193de932cbdb6d2149a5611f594f9fc45e71ecf2",
+      "peakDbFS": -3.858
+    },
+    "enc_spore_ultimate": {
+      "group": "enc_spore",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 8107,
+      "sha256": "5b68202ba37d1517ff643e1fed7a16737b74975e60e7feea0f91bcd1318edc41",
+      "peakDbFS": -4.192
+    },
+    "enc_spore_theme": {
+      "group": "enc_spore",
+      "duration": 8.5714375,
+      "bpm": 112,
+      "bytes": 71732,
+      "sha256": "3dc60d0c3c7ea1475342b5cb1af2abb631f20cec9dd3caf41c66c16c402ee6e5",
+      "peakDbFS": -6.369
+    },
+    "enc_void_signature": {
+      "group": "enc_void",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 5039,
+      "sha256": "f6c969730ccc3376f395ca20727a824700baba5b144034414122753fba13fa49",
+      "peakDbFS": -2.997
+    },
+    "enc_void_resonance": {
+      "group": "enc_void",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 7080,
+      "sha256": "3b0ed8ff12832983052283f28155746951f2e61d10761d9f5ba697f4594ce53e",
+      "peakDbFS": -5.111
+    },
+    "enc_void_ultimate": {
+      "group": "enc_void",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 8251,
+      "sha256": "d67beea5613c47ddb7c56c7ef56b2aace81cc6e819465eaf2fc5b12672c60b6b",
+      "peakDbFS": -2.757
+    },
+    "enc_void_theme": {
+      "group": "enc_void",
+      "duration": 9.230770833333333,
+      "bpm": 104,
+      "bytes": 78035,
+      "sha256": "4a6da47d3b8e76c1da58f04f3fad388417322c4114360befb737e9891cf11824",
+      "peakDbFS": -6.24
+    },
+    "enc_nerve_signature": {
+      "group": "enc_nerve",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 4451,
+      "sha256": "0e5c3ae3e2b92fa4caf3ac336379711c020ee12363d65c68f74a0c7b01d27e72",
+      "peakDbFS": -4.163
+    },
+    "enc_nerve_resonance": {
+      "group": "enc_nerve",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 6512,
+      "sha256": "2a861b49876f0b623786118218f205902b1936ee84492be4ba61285f30d9573e",
+      "peakDbFS": -3.142
+    },
+    "enc_nerve_ultimate": {
+      "group": "enc_nerve",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 7613,
+      "sha256": "f8e7cd8f27e3086100d985dd3f95df6275014f821bb0785ecc39103f18d7be89",
+      "peakDbFS": -4.253
+    },
+    "enc_nerve_theme": {
+      "group": "enc_nerve",
+      "duration": 9.230770833333333,
+      "bpm": 104,
+      "bytes": 80237,
+      "sha256": "fe5a28f4f8d11cb0d489fb6d476bd611ceab1fcf3ba331ccd58cb4e465ca2f61",
+      "peakDbFS": -5.917
+    },
+    "enc_fusion_signature": {
+      "group": "enc_fusion",
+      "duration": 1.02,
+      "bpm": null,
+      "bytes": 4336,
+      "sha256": "118e36d2bc69a013db2f891f9e561efa124f5b7eab2b1db7b6c978379e3e4fb0",
+      "peakDbFS": -3.854
+    },
+    "enc_fusion_resonance": {
+      "group": "enc_fusion",
+      "duration": 1.34,
+      "bpm": null,
+      "bytes": 5856,
+      "sha256": "74acb83f774f641738d809c0c57e2e27165d74201cc44aab5fa1d14ff40e0731",
+      "peakDbFS": -4.302
+    },
+    "enc_fusion_ultimate": {
+      "group": "enc_fusion",
+      "duration": 1.75,
+      "bpm": null,
+      "bytes": 7210,
+      "sha256": "2f1a04defe4a4a642a1201dacdabee0c6d91571dc73f95a4f77a6cb5c23834b8",
+      "peakDbFS": -1.61
+    },
+    "enc_fusion_theme": {
+      "group": "enc_fusion",
+      "duration": 9.230770833333333,
+      "bpm": 104,
+      "bytes": 70714,
+      "sha256": "0f4fac6d8fef31a4c7ff08725dddd1e38c00d8636012f14278f6f0264c0b1323",
+      "peakDbFS": -6.476
+    },
+    "enc_water_seam": {
+      "group": "enc_water",
+      "duration": 0.83,
+      "bpm": null,
+      "bytes": 3893,
+      "sha256": "c58599443958c08587490f6d04fefa13b55e947dc5d68b0d20b22c5c11439a52",
+      "peakDbFS": -2.689
+    },
+    "enc_water_lash": {
+      "group": "enc_water",
+      "duration": 0.65,
+      "bpm": null,
+      "bytes": 2848,
+      "sha256": "19ddb44c3583b77af32ef3f381556d2cab9eef1ff8efef3f6d3faf1995cf8289",
+      "peakDbFS": -2.284
+    },
+    "enc_red_prime": {
+      "group": "enc_fighters",
+      "duration": 0.72,
+      "bpm": null,
+      "bytes": 3738,
+      "sha256": "fd7bb0484d4fb155e2de84db4ac8d366894ee144d91c5267617fcc7a78af11f3",
+      "peakDbFS": -5.362
+    },
+    "enc_blue_mark": {
+      "group": "enc_fighters",
+      "duration": 0.16,
+      "bpm": null,
+      "bytes": 1007,
+      "sha256": "bc31687d740321e9d1d6c7c05b3ee122fcfd072359a795d2c84b143c8b5a034d",
+      "peakDbFS": -4.468
+    },
+    "enc_gold_field": {
+      "group": "enc_fighters",
+      "duration": 0.6,
+      "bpm": null,
+      "bytes": 2642,
+      "sha256": "1de77c7f50e4676be4d47ffedc5cca285bfc1f6c23dc8d9310ab5ddd75f76d6d",
+      "peakDbFS": -3.804
+    },
+    "enc_gold_pulse": {
+      "group": "enc_fighters",
+      "duration": 0.28,
+      "bpm": null,
+      "bytes": 1382,
+      "sha256": "2aaf5656b20500b74c385e5be0dd5d150d3fc17578e781787227a1fb969fafc7",
+      "peakDbFS": -4.678
+    },
+    "enc_sector_hangar": {
+      "group": "enc_sector_hangar",
+      "duration": 11.4285625,
+      "bpm": 84,
+      "bytes": 120091,
+      "sha256": "429c094d86af247935acdab9214d27830f26fe9ade6845be30750f42572c0e68",
+      "peakDbFS": -7.253
+    },
+    "enc_sector_belt": {
+      "group": "enc_sector_belt",
+      "duration": 8.275854166666667,
+      "bpm": 116,
+      "bytes": 61238,
+      "sha256": "b79ce954fa43afe04abd56d03fcdd3789a352a06ebaf253711a4614e50ca27af",
+      "peakDbFS": -6.731
+    },
+    "enc_sector_wreck": {
+      "group": "enc_sector_wreck",
+      "duration": 8.275854166666667,
+      "bpm": 116,
+      "bytes": 59106,
+      "sha256": "087fb6b86d031ad6393e1a86312403b01436e734ed5606acd6d413a02381143a",
+      "peakDbFS": -6.223
+    },
+    "enc_sector_citadel": {
+      "group": "enc_sector_citadel",
+      "duration": 8.275854166666667,
+      "bpm": 116,
+      "bytes": 78320,
+      "sha256": "8f34e93fc6d1c6678b66a0cd10d6c938332d84f9dfdf8c1a8de06c79504580b9",
+      "peakDbFS": -6.59
+    },
+    "enc_sector_rift": {
+      "group": "enc_sector_rift",
+      "duration": 8.275854166666667,
+      "bpm": 116,
+      "bytes": 85006,
+      "sha256": "fe3552932b1d24eea5bb377587481d7761b0310b1dde3ca5c0eca5b407d44c68",
+      "peakDbFS": -6.136
+    },
+    "enc_victory": {
+      "group": "enc_victory",
+      "duration": 15.0,
+      "bpm": null,
+      "bytes": 76318,
+      "sha256": "15eb40563423a5160df04a4fb81ad37d039143be252e512caa7137996023da34",
+      "peakDbFS": -4.103
+    }
+  },
+  "groups": {
+    "enc_water": [
+      "enc_water_signature",
+      "enc_water_resonance",
+      "enc_water_ultimate",
+      "enc_water_theme",
+      "enc_water_seam",
+      "enc_water_lash"
+    ],
+    "enc_bone": [
+      "enc_bone_signature",
+      "enc_bone_resonance",
+      "enc_bone_ultimate",
+      "enc_bone_theme"
+    ],
+    "enc_magma": [
+      "enc_magma_signature",
+      "enc_magma_resonance",
+      "enc_magma_ultimate",
+      "enc_magma_theme"
+    ],
+    "enc_silk": [
+      "enc_silk_signature",
+      "enc_silk_resonance",
+      "enc_silk_ultimate",
+      "enc_silk_theme"
+    ],
+    "enc_chitin": [
+      "enc_chitin_signature",
+      "enc_chitin_resonance",
+      "enc_chitin_ultimate",
+      "enc_chitin_theme"
+    ],
+    "enc_crystal": [
+      "enc_crystal_signature",
+      "enc_crystal_resonance",
+      "enc_crystal_ultimate",
+      "enc_crystal_theme"
+    ],
+    "enc_plasma": [
+      "enc_plasma_signature",
+      "enc_plasma_resonance",
+      "enc_plasma_ultimate",
+      "enc_plasma_theme"
+    ],
+    "enc_spore": [
+      "enc_spore_signature",
+      "enc_spore_resonance",
+      "enc_spore_ultimate",
+      "enc_spore_theme"
+    ],
+    "enc_void": [
+      "enc_void_signature",
+      "enc_void_resonance",
+      "enc_void_ultimate",
+      "enc_void_theme"
+    ],
+    "enc_nerve": [
+      "enc_nerve_signature",
+      "enc_nerve_resonance",
+      "enc_nerve_ultimate",
+      "enc_nerve_theme"
+    ],
+    "enc_fusion": [
+      "enc_fusion_signature",
+      "enc_fusion_resonance",
+      "enc_fusion_ultimate",
+      "enc_fusion_theme"
+    ],
+    "enc_fighters": [
+      "enc_red_prime",
+      "enc_blue_mark",
+      "enc_gold_field",
+      "enc_gold_pulse"
+    ],
+    "enc_sector_hangar": [
+      "enc_sector_hangar"
+    ],
+    "enc_sector_belt": [
+      "enc_sector_belt"
+    ],
+    "enc_sector_wreck": [
+      "enc_sector_wreck"
+    ],
+    "enc_sector_citadel": [
+      "enc_sector_citadel"
+    ],
+    "enc_sector_rift": [
+      "enc_sector_rift"
+    ],
+    "enc_victory": [
+      "enc_victory"
+    ]
+  },
+  "bosses": [
+    {
+      "group": "enc_water",
+      "theme": "enc_water_theme",
+      "title": "Sinking Light",
+      "signature": "tide",
+      "ultimate": "tideWalls"
+    },
+    {
+      "group": "enc_bone",
+      "theme": "enc_bone_theme",
+      "title": "Dry Trophies",
+      "signature": "ribCage",
+      "ultimate": "boneNova"
+    },
+    {
+      "group": "enc_magma",
+      "theme": "enc_magma_theme",
+      "title": "Furnace Vents",
+      "signature": "magmaCover",
+      "ultimate": "magmaRift"
+    },
+    {
+      "group": "enc_silk",
+      "theme": "enc_silk_theme",
+      "title": "The Unspooling",
+      "signature": "loom",
+      "ultimate": "silkCage"
+    },
+    {
+      "group": "enc_chitin",
+      "theme": "enc_chitin_theme",
+      "title": "Lockstep",
+      "signature": "pincerLock",
+      "ultimate": "pincer"
+    },
+    {
+      "group": "enc_crystal",
+      "theme": "enc_crystal_theme",
+      "title": "Parallax",
+      "signature": "mirrorDecoys",
+      "ultimate": "mirrorArray"
+    },
+    {
+      "group": "enc_plasma",
+      "theme": "enc_plasma_theme",
+      "title": "Countercurrent",
+      "signature": "tailConduit",
+      "ultimate": "stormRing"
+    },
+    {
+      "group": "enc_spore",
+      "theme": "enc_spore_theme",
+      "title": "Fruit of Sleep",
+      "signature": "sporeNests",
+      "ultimate": "sporeBloom"
+    },
+    {
+      "group": "enc_void",
+      "theme": "enc_void_theme",
+      "title": "Entropy Well",
+      "signature": "riftFold",
+      "ultimate": "voidCollapse"
+    },
+    {
+      "group": "enc_nerve",
+      "theme": "enc_nerve_theme",
+      "title": "Relay Choir",
+      "signature": "neuralRelay",
+      "ultimate": "neuralGrid"
+    },
+    {
+      "group": "enc_fusion",
+      "theme": "enc_fusion_theme",
+      "title": "Three Bodies",
+      "signature": "fusionLimbs",
+      "ultimate": "fusion"
+    }
+  ],
+  "regions": {
+    "hangar": {
+      "theme": "enc_sector_hangar",
+      "title": "Dock Lights"
+    },
+    "belt": {
+      "theme": "enc_sector_belt",
+      "title": "Debris Waltz"
+    },
+    "wreck": {
+      "theme": "enc_sector_wreck",
+      "title": "Ember Wake"
+    },
+    "citadel": {
+      "theme": "enc_sector_citadel",
+      "title": "Hull Sonar"
+    },
+    "rift": {
+      "theme": "enc_sector_rift",
+      "title": "Orbital Shear"
+    }
+  }
+}

@@ -117,6 +117,12 @@ function updateBossHealthHud() {
   if (stage.hidden !== hidden) stage.hidden = hidden;
   if (!boss) return;
   const life = clamp(boss.hp, 0, 1);
+  const seal = boss.pressureState;
+  const threatStep = seal && seal.age < seal.pulseAt ? Math.round(40 * clamp(seal.age / seal.pulseAt, 0, 1)) : -1;
+  if (track.dataset.threatStep !== String(threatStep)) {
+    track.dataset.threatStep = String(threatStep);
+    track.style.setProperty("--impact-progress", String(Math.max(0, threatStep) / 40));
+  }
   const lag = clamp(boss.displayHp ?? life, life, 1);
   const phase = bossHealthStage(boss);
   const finale = !!boss.finale;
@@ -135,6 +141,7 @@ function updateBossHealthHud() {
   track.style.setProperty("--boss-lag", lag * 100 + "%");
   if (bossHud.panel.classList.contains("tactical-boss")) {
     bossHud.panel.dataset.bossType = String(boss.type);
+    bossHud.panel.dataset.lifePhase = finale ? "3" : boss.enraged ? "2" : "1";
     const threshold = bossRules.shellThreshold;
     track.style.setProperty("--tactical-core", finale ? life : clamp(life / threshold, 0, 1));
     track.style.setProperty("--tactical-core-lag", finale ? lag : clamp(lag / threshold, 0, 1));
@@ -249,6 +256,8 @@ function resizeBossEncounter(oldWidth, oldHeight, oldBounds) {
   }
   boss.previousX = boss.x;
   boss.previousY = boss.y;
+  boss.previousResonanceLock = null;
+  if (boss.resonanceFragments) boss.resonanceFragments.length = 0;
   if (boss.finale) resizeBossFinale(boss);
   bossHitGrace = Math.max(bossHitGrace, bossRules.grace);
   player.x = Math.min(player.x, bossPlayerRight());
@@ -591,6 +600,7 @@ function drawBossBattle(alpha = 1) {
     context.translate(flightRenderX(boss, alpha) - boss.x, flightRenderY(boss, alpha) - boss.y);
     if (boss.finale) drawBossFinale(context, boss, quiet);
     else drawBossShip(context, boss, quiet);
+    BossResonance.emitter(context, boss, quiet);
     if (bossCounterActive(boss)) drawBossCounterCue(context, boss);
     context.restore();
   }

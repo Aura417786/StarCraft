@@ -115,13 +115,16 @@ const ElementalArmoredVfx = (() => {
     ctx.lineCap = "round";
     for (let strand = 0; strand < count; strand++) {
       const across = (strand / (count - 1) - .5) * width * .84;
-      const slack = width * (.15 + random(seed + strand * 1.37) * .25) * (active ? 1 : 1.55);
+      const tension = active ? .7 + .3*Math.cos(drift*11 + seed*1.3) : .55;
+      const slack = (strand%2 ? -1 : 1) * Math.min(l*.085,width*2.1) *
+        (.36 + random(seed + strand * 1.37)*.9) * (1.34-tension*.57);
       ctx.strokeStyle = palettes.silk.deep;
       ctx.lineWidth = width * (active ? .34 : .22);
       ctx.globalAlpha = opacity * (active ? .50 : .24);
       ctx.beginPath();
       ctx.moveTo(0, across * .27);
-      ctx.bezierCurveTo(l * .20, across - slack, l * .68, across + slack, l, across * .27);
+      ctx.bezierCurveTo(l*.16,across+slack*.68,l*.37,across+slack,l*.58,across+slack*.71);
+      ctx.quadraticCurveTo(l*.84,across+slack*.53,l,across*.27);
       ctx.stroke();
       ctx.strokeStyle = strand % 3 ? palettes.silk.edge : palettes.silk.core;
       ctx.lineWidth = Math.max(.62, width * (strand % 3 ? .055 : .088));
@@ -132,7 +135,8 @@ const ElementalArmoredVfx = (() => {
         ctx.fillStyle = palettes.silk.core;
         ctx.globalAlpha = opacity * (.36 + .36 * Math.sin(t * Math.PI));
         ctx.beginPath();
-        ctx.ellipse(t * l, across + Math.sin(t * Math.PI * 2) * slack * .4, width * .49, width * .14, 0, 0, TAU);
+        ctx.ellipse(t*l, across*(.27+.73*Math.sin(t*Math.PI))+Math.sin(t*Math.PI)*slack*.73,
+          width*.27,width*.16,-.21+seed*.13,0,TAU);
         ctx.fill();
       }
     }

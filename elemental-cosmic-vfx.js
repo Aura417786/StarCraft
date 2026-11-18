@@ -180,7 +180,16 @@ const ElementalCosmicVfx = (() => {
       }
       ctx.fillStyle = refraction;
       ctx.globalAlpha = strength;
-      ctx.fillRect(0, -half, length, half * 2);
+      // Spectral sheets meet at the facet. The two refracted edges diverge
+      // through the glass, then reunite at the next optical node.
+      const swell=quiet ? .71 : .64+.28*Math.sin(time*3.8+line.x1*.015);
+      ctx.beginPath();ctx.moveTo(0,0);
+      ctx.bezierCurveTo(length*.09,-half*.11,length*.26,-half*swell,length*.55,-half*.48);
+      ctx.quadraticCurveTo(length*.82,-half*.17,length,0);
+      ctx.bezierCurveTo(length*.81,half*.21,length*.60,half*.94,length*.37,half*.48);
+      ctx.quadraticCurveTo(length*.16,half*.14,0,0);ctx.fill();
+      ctx.lineWidth=Math.max(.75,half*.14);ctx.strokeStyle="#edfbff";ctx.beginPath();
+      ctx.moveTo(0,0);ctx.quadraticCurveTo(length*.46,-half*.29,length,0);ctx.stroke();
       const count = quiet ? 4 : 12;
       for (let i = 0; i < count; i++) {
         const q = fraction(i * .618 - time * (.60 + i % 3 * .14));
@@ -206,7 +215,19 @@ const ElementalCosmicVfx = (() => {
       myelin.addColorStop(1, "#7f235600");
       ctx.fillStyle = myelin;
       ctx.globalAlpha = strength;
-      ctx.fillRect(0, -half, length, half * 2);
+      const pathY = f => half*.33*Math.sin(pi*f)*Math.sin(7*f+phase*2.1-time*2.4);
+      // The myelin sheath swells around ganglia; the bioelectric pulse runs
+      // inside that same curved membrane rather than down a parallel rail.
+      ctx.beginPath();ctx.moveTo(0,0);
+      for(let i=0;i<=24;i++){
+        const f=i/24, r=half*Math.sin(pi*f)**.44*(.29+.44*Math.sin(f*14-phase+time*.88)**4);
+        ctx.lineTo(f*length,pathY(f)-r);
+      }
+      for(let i=24;i>=0;i--){
+        const f=i/24, r=half*Math.sin(pi*f)**.44*(.37+.49*Math.sin(f*14-phase+time*.88)**4);
+        ctx.lineTo(f*length,pathY(f)+r);
+      }
+      ctx.fill();
       const count = quiet ? 7 : 18;
       for (let i = 0; i < count; i++) {
         const f = i / count;
@@ -218,8 +239,9 @@ const ElementalCosmicVfx = (() => {
         ctx.lineWidth = 1.05;
         ctx.strokeStyle = relayColor[i % 3 + 1];
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.quadraticCurveTo(x + reach * .55, s * half * .32, x + reach, s * half * .86);
+        const stem=pathY(f);
+        ctx.moveTo(x, stem);
+        ctx.quadraticCurveTo(x + reach * .55, stem+s * half * .32, x + reach, stem+s * half * .86);
         ctx.moveTo(x + reach * .55, s * half * .34);
         ctx.lineTo(x + reach * .14, s * half * .68);
         ctx.stroke();
@@ -227,20 +249,25 @@ const ElementalCosmicVfx = (() => {
       ctx.globalAlpha = strength;
       ctx.strokeStyle = "#fca3c7";
       ctx.lineWidth = Math.min(2.3, half * .35);
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(length, 0); ctx.stroke();
+      ctx.beginPath();ctx.moveTo(0,0);
+      for(let i=1;i<=18;i++)ctx.lineTo(length*i/18,pathY(i/18));
+      ctx.stroke();
       const pulse = fraction(-time * .71 + phase);
       const wave = ctx.createLinearGradient((pulse - .095) * length, 0, (pulse + .035) * length, 0);
       wave.addColorStop(0, "#ffb1d100");
       wave.addColorStop(.82, "#ffe3f4e0");
       wave.addColorStop(1, "#fff7fb00");
-      ctx.fillStyle = wave; ctx.fillRect((pulse - .095) * length, -half * .28, length * .13, half * .56);
+      ctx.fillStyle = wave;ctx.beginPath();
+      ctx.ellipse(pulse*length,pathY(pulse),length*.075,Math.max(.6,half*.34),0,0,tau);ctx.fill();
     });
   }
 
   function tearRay(ctx, line, time, strength, quiet) {
     withRay(ctx, line, (length, half) => {
-      NextgenVfx.drawRift(ctx, { x1: 0, y1: 0, x2: length, y2: 0, width: half * 2 },
-        signatureMaterials.void, time, strength * .85);
+      // A single repeating material pass carries vitreous folds along the shear.
+      if (!NextgenVfx.drawShear(ctx,length,half,quiet ? 0 : time,strength)) {
+        NextgenVfx.drawRift(ctx,{x1:0,y1:0,x2:length,y2:0,width:half*2},signatureMaterials.void,time,strength);
+      }
       const beats = quiet ? 8 : 24;
       for (let i = 0; i < beats; i++) {
         const p = fraction((i + 1) * .754877 + time * (.11 + i % 3 * .057));
@@ -255,20 +282,7 @@ const ElementalCosmicVfx = (() => {
 
   function gravityHalo(ctx, x, y, r, time, alpha, quiet) {
     if (r <= 1 || alpha <= 0) return;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, tau);
-    ctx.clip();
-    NextgenVfx.drawVoid(ctx, { x, y, radius: r }, signatureMaterials.void, time, alpha);
-    const gain = quiet ? 3 : 8;
-    for (let i = 0; i < gain; i++) {
-      const tilt = -.26 + .065 * i;
-      const pulse = Math.cos(time * .91 + i * .64);
-      const size = r * (.51 + .055 * i + .025 * pulse);
-      lens(ctx, x, y, size, size * (.32 + i % 2 * .22), tilt,
-        i % 3 ? "#896ff2" : "#cbd9ff", (.16 + i % 3 * .08) * alpha);
-    }
-    ctx.restore();
+    NextgenVfx.drawHorizon(ctx,x,y,2.22*r,time,alpha,quiet);
   }
 
   function neuron(ctx, node, time, live, opacity, quiet) {
@@ -419,18 +433,28 @@ const ElementalCosmicVfx = (() => {
 
   function ultimate(ctx, hazard, geometry, target, { active, quiet, alpha }) {
     const kind = hazard.ultimateKind;
-    if (!active || !["mirrorArray", "voidCollapse", "neuralGrid"].includes(kind)) return false;
+    if (!["mirrorArray", "voidCollapse", "neuralGrid"].includes(kind) || (!active && kind !== "voidCollapse")) return false;
     const time = quiet ? 0 : hazard.age;
     ctx.save();
     if (kind === "voidCollapse") {
-      for (const shape of geometry.circles) {
-        const { x, y, radius, innerRadius } = shape;
-        if (innerRadius > 0) {
-          NextgenVfx.drawVoid(ctx, shape, signatureMaterials.void, time, alpha * .91);
-          circle(ctx, x, y, radius - .6, "#ae9bfd", .9, alpha * .62);
-        } else gravityHalo(ctx, x, y, radius, time, alpha, quiet);
+      const ring = geometry.circles[0], core = geometry.circles[1];
+      if (ring) {
+        const p = Math.max(0, (hazard.age-hazard.warning)/hazard.duration);
+        const charging = ease(hazard.age/Math.max(.01,hazard.warning));
+        const room = mechanicRoom();
+        const reach = Math.min(room.width*.42,room.height*.47);
+        const base = Math.min(viewport.width*.70, viewport.height*.79,reach*3.65);
+        if(active) {
+          NextgenVfx.drawCollapseFront(ctx,ring,time,alpha,quiet);
+          for(const line of geometry.segments) tearRay(ctx,line,time,alpha,quiet);
+        }
+        const diameter = active ? base*(1-.43*ease(p)) : base*(.34+.66*charging);
+        NextgenVfx.drawHorizon(ctx,ring.x,ring.y,diameter,time,
+          active ? alpha : .07+.76*charging,quiet);
+        if (active) {
+          if(core?.radius>1) circle(ctx,core.x,core.y,core.radius,"#f2b8ef",1.45,alpha*.88);
+        }
       }
-      for (const line of geometry.segments) tearRay(ctx, line, time, alpha, quiet);
     } else if (kind === "mirrorArray") {
       for (const line of geometry.segments) lightRay(ctx, line, time, alpha, quiet);
     } else {

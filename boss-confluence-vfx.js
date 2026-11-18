@@ -377,15 +377,15 @@ const BossConfluenceVfx = (() => {
     if (width < 1 || height < 1) return;
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    const count = width < 720 ? 3 : 5;
+    const count = width < 720 ? 2 : 3;
     const edgeWidth = width / count;
     const glow = Math.min(24, height * .17);
     for (const side of [0, 1]) {
       const edge = y + side * height;
       const inward = side ? -1 : 1;
       for (let i = 0; i < count; i++) {
-        const start = x + (i + .12) * edgeWidth;
-        const end = start + edgeWidth * (.58 + .18 * Math.sin(i * 2.3 + side));
+        const start = x + (i + .27 + .10 * Math.sin(i*4.1+side)) * edgeWidth;
+        const end = start + Math.min(52,edgeWidth * .27);
         const middle = (start + end) * .5;
         const rail = ctx.createLinearGradient(start, 0, end, 0);
         rail.addColorStop(0, "transparent");
@@ -397,7 +397,7 @@ const BossConfluenceVfx = (() => {
         ctx.lineWidth = active ? 1 : 1.25;
         ctx.beginPath();
         ctx.moveTo(start, edge);
-        ctx.lineTo(end, edge);
+        ctx.quadraticCurveTo(middle,edge + inward * glow * .24,end, edge + inward * 1.8);
         ctx.stroke();
         ctx.globalAlpha = active ? .25 : .3;
         ctx.beginPath();

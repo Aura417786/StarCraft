@@ -1,6 +1,24 @@
 "use strict";
 
-// 仅本展示入口使用预设进度。正式 index.html 不载入本脚本。
+// The legacy URL opens this mode in the exact same production shell.
+const showcaseStyle = document.createElement("link");
+showcaseStyle.rel = "stylesheet";
+showcaseStyle.href = "showcase.css";
+document.head.append(showcaseStyle);
+document.title = "星际突围 · 30 秒实机演示";
+const showcaseControls = document.createElement("aside");
+showcaseControls.id = "showcase-controls";
+showcaseControls.className = "showcase-controls";
+showcaseControls.setAttribute("aria-label", "实机演示");
+showcaseControls.innerHTML = `<p id="showcase-status" role="status">30 秒实机演示，包含三架战机和两场首领战斗。</p>
+  <div class="showcase-actions"><button id="showcase-watch" type="button">观看30秒演示</button>
+  <button id="showcase-record" type="button">录制30秒演示</button>
+  <a id="showcase-download" hidden>下载演示视频</a><a href="index.html">进入正式游戏</a></div>`;
+document.body.append(showcaseControls);
+document.querySelector("#flight-guide[open]")?.close();
+if (location.protocol === "file:") {
+  document.querySelector("#showcase-status").textContent = "观看 30 秒实机演示。录制时，请在浏览器的共享窗口选择本标签页。";
+}
 const showcase = {
   running: false,
   elapsed: 0,
@@ -23,7 +41,7 @@ const showcaseDownload = document.querySelector("#showcase-download");
 const showcaseScenes = [
   { start: 0, title: "渊潮母体，深空来客", subtitle: "触须随身躯呼吸，蓄力时留意发亮的器官", sector: 3, time: 96 },
   { start: 7, title: "连击点燃暴走", subtitle: "持续击杀，释放更快、更猛烈的主炮", sector: 1, time: 60 },
-  { start: 13, title: "进化，决定你的战斗方式", subtitle: "破阵翼刃 · 星隼僚机 · 赤金壁垒", sector: 0, time: 180 },
+  { start: 13, title: "曜金压制场", subtitle: "近距扩散命中后，金色场域连续脉冲三次", sector: 0, time: 180 },
   { start: 20, title: "群渊合生体", subtitle: "预判控制与追击，抓住连招间的反击时机", sector: 4, time: 680 },
   { start: 27, title: "星际突围", subtitle: "电脑浏览器 · 免费试玩 · 挑战你的第一只首领", sector: 0, time: 0 },
 ];
@@ -52,9 +70,6 @@ isBattleActive = function () {
 const showcaseOriginalPlayerUpdate = updatePlayer;
 updatePlayer = function (seconds) {
   if (!showcase.running) return showcaseOriginalPlayerUpdate(seconds);
-  showcase.elapsed += Math.max(0, seconds);
-  const sceneIndex = showcaseScenes.findLastIndex(scene => showcase.elapsed >= scene.start);
-  if (sceneIndex !== showcase.scene) enterShowcaseScene(sceneIndex);
   if (!isBossPresentationPlaying()) updateShowcaseMovement(seconds);
 };
 const showcaseOriginalNotices = drawBattlefieldEventNotice;
@@ -73,8 +88,12 @@ function enterShowcaseScene(index) {
   showcase.scene = index;
   showcase.sceneStarted = showcase.elapsed;
   showcase.events.clear();
-  selectedFighter = "red";
-  showScreen("battle");
+  const fighter = ["red", "blue", "yellow", "red", "red"][index];
+  showScreen("battle", { fighter, seed: 4225 + index });
+  // Production practice mode excludes campaign unlocks. Mark this staged
+  // sortie finalized so stage transitions never submit a session result.
+  sortieStats.mode = "practice";
+  sortieStats.result = { showcase: true };
   movementHint.hidden = true;
   pauseHint.hidden = true;
   enemyCooldown = powerupCooldown = nextBossTime = Infinity;
@@ -113,19 +132,15 @@ function enterShowcaseScene(index) {
     }
     enemyCooldown = 0.5;
   } else if (index === 2) {
-    evolution.pierce = 3;
-    evolution.blast = 2;
-    evolution.aegis = 1;
     enemyCooldown = 0.5;
     for (let i = 0; i < 4; i++) {
       spawnEnemy(i === 2 ? "armored" : "scout");
       const target = enemies.at(-1);
-      target.x -= viewport.width * 0.18;
+      target.x = muzzlePosition().x + auricCloseRange() * (.60 + i * .08);
       target.previousX = target.x;
+      target.y = target.previousY = target.baseY = player.y + (i - 1) * 23;
     }
   } else if (index === 3) {
-    evolution.pierce = 2;
-    evolution.aegis = 1;
     spawnBoss(10);
   } else {
     shotCooldown = Infinity;
@@ -208,7 +223,7 @@ function finishShowcase() {
   window.clearTimeout(showcase.stopTimer);
   if (showcase.recorder?.state === "recording") showcase.recorder.stop();
   showcaseStatus.textContent = showcase.recorder ? "演示录制完成，正在整理视频…" : "30 秒演示完成。可重新观看或录制。";
-  showcaseWatch.disabled = showcaseRecord.disabled = false;
+  showcaseWatch.disabled = showcaseRecord.disabled = Boolean(showcase.recorder);
   gameAudio.sync(false, false);
   showScreen("menu");
 }
@@ -217,18 +232,26 @@ async function startShowcase(record) {
   showcaseWatch.disabled = showcaseRecord.disabled = true;
   showcaseDownload.hidden = true;
   showcaseStatus.textContent = "正在准备实机素材…";
+  let screenStream = null;
   try {
     const audioReady = gameAudio.unlock();
+    // Local-file images can be displayed by Canvas but make captureStream
+    // origin-unclean. Ask for browser-mediated tab capture on the actual click.
+    if (record && location.protocol === "file:") {
+      if (!navigator.mediaDevices?.getDisplayMedia)
+        throw new Error("浏览器未提供标签页录制。可通过本地 HTTP 服务打开此页录制，或直接观看。");
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: "browser", frameRate: 30 }, audio: false,
+        preferCurrentTab: true, selfBrowserSurface: "include"
+      });
+    }
     await Promise.all(Array.from(document.images, image => image.decode().catch(() => {})));
     if (!showcase.images.length) {
       for (let index = 0; index < battlefieldSectors.length; index++) showcase.images.push(sceneryLayer(index));
       await Promise.all(showcase.images.map(layer => layer.image.decode()));
-      const originalSceneryLayer = sceneryLayer;
-      sceneryLayer = function (index) { return showcase.images[index] || originalSceneryLayer(index); };
     }
     const ready = await audioReady;
-    if (!ready) throw new Error("请允许浏览器播放声音后重试。");
-    gameAudio.setMuted(false);
+    if (ready) gameAudio.setMuted(false);
     showcase.elapsed = 0;
     showcase.scene = -1;
     showcase.chunks = [];
@@ -236,37 +259,52 @@ async function startShowcase(record) {
     showcase.running = true;
     document.body.dataset.showcaseActive = "true";
     enterShowcaseScene(0);
-    if (record) beginShowcaseRecording();
+    if (record) beginShowcaseRecording(screenStream);
+    const started = performance.now();
+    const advance = now => {
+      if (!showcase.running) return;
+      showcase.elapsed = Math.min(30, Math.max(0, (now - started) / 1000));
+      let index = showcaseScenes.length - 1;
+      while (index > 0 && showcase.elapsed < showcaseScenes[index].start) index--;
+      if (index !== showcase.scene) enterShowcaseScene(index);
+      if (showcase.elapsed < 30) requestAnimationFrame(advance);
+    };
+    requestAnimationFrame(advance);
     showcase.stopTimer = window.setTimeout(finishShowcase, 30000);
   } catch (error) {
-    showcase.running = false;
+    if (showcase.running) finishShowcase();
+    screenStream?.getTracks().forEach(track => track.stop());
     document.body.dataset.showcaseActive = "false";
     showcaseWatch.disabled = showcaseRecord.disabled = false;
     showcaseStatus.textContent = String(error.message || error);
   }
 }
 
-function beginShowcaseRecording() {
-  if (!canvas.captureStream || !window.MediaRecorder) throw new Error("此浏览器暂不支持录制，请使用最新版 Edge 或 Chrome。");
-  const tracks = canvas.captureStream(30).getVideoTracks();
+function beginShowcaseRecording(screenStream) {
+  if ((!screenStream && !canvas.captureStream) || !window.MediaRecorder) throw new Error("此浏览器暂不支持录制，请使用最新版 Edge 或 Chrome。");
+  const tracks = (screenStream || canvas.captureStream(30)).getVideoTracks();
   if (showcase.audioStream) tracks.push(...showcase.audioStream.getAudioTracks());
   showcase.stream = new MediaStream(tracks);
-  const mimeType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]
+  const mimeType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"]
     .find(type => MediaRecorder.isTypeSupported(type));
-  showcase.recorder = new MediaRecorder(showcase.stream, { mimeType, videoBitsPerSecond: 6500000 });
+  const encoder = { videoBitsPerSecond: 6500000 };
+  if (mimeType) encoder.mimeType = mimeType;
+  showcase.recorder = new MediaRecorder(showcase.stream, encoder);
   showcase.recorder.addEventListener("dataavailable", event => {
     if (event.data.size) showcase.chunks.push(event.data);
   });
   showcase.recorder.addEventListener("stop", () => {
-    const recording = new Blob(showcase.chunks, { type: mimeType });
+    const type = showcase.recorder.mimeType || showcase.chunks[0]?.type || "video/webm";
+    const recording = new Blob(showcase.chunks, { type });
     if (showcase.downloadUrl) URL.revokeObjectURL(showcase.downloadUrl);
     showcase.downloadUrl = URL.createObjectURL(recording);
     showcaseDownload.href = showcase.downloadUrl;
-    showcaseDownload.download = "星际突围-v13-30秒实机演示.webm";
+    showcaseDownload.download = "星际突围-30秒实机演示." + (type.includes("mp4") ? "mp4" : "webm");
     showcaseDownload.hidden = false;
     const soundLabel = showcase.stream.getAudioTracks().length ? "含原创游戏音频" : "无音轨";
     showcaseStatus.textContent = `录制完成 · ${(recording.size / 1024 / 1024).toFixed(1)} MB · ${soundLabel}`;
     for (const track of showcase.stream.getVideoTracks()) track.stop();
+    showcaseWatch.disabled = showcaseRecord.disabled = false;
   });
   showcase.recorder.start(250);
 }

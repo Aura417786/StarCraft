@@ -292,6 +292,9 @@ uniform mat3 pose;
 uniform vec3 keyTint;
 uniform vec3 bounceTint;
 uniform vec2 environment;
+uniform vec3 localLight;
+uniform vec3 localTint;
+uniform vec2 waterLight;
 uniform sampler2D detailAtlas;
 float hash(vec3 p) {
   p = fract(p * .3183099 + vec3(.17, .31, .43)) * 17.0;
@@ -303,16 +306,16 @@ float noise(vec3 p) {
   return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), u.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), u.x), u.y),
     mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), u.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), u.x), u.y), u.z);
 }
-float materialSample(vec2 p, float rock) {
+vec3 materialSample(vec2 p, float rock) {
   vec2 mirror = 1.0 - abs(fract(p * .5) * 2.0 - 1.0);
-  return texture2D(detailAtlas, vec2(.009 + mirror.x * .982, .509 - rock * .5 + mirror.y * .482)).r;
+  return texture2D(detailAtlas, vec2(.009 + mirror.x * .982, .509 - rock * .5 + mirror.y * .482)).rgb;
 }
-float materialDetail(vec3 p, float rock) {
+vec3 materialDetail(vec3 p, float rock) {
   vec3 weights = pow(abs(normalize(surfaceNormal)), vec3(5.0));
   weights /= weights.x + weights.y + weights.z;
-  vec3 samples = vec3(materialSample(p.zy + vec2(.31,.57), rock), materialSample(p.xz + vec2(.73,.23), rock),
-    materialSample(p.xy + vec2(.56,.33), rock));
-  return dot(samples, weights) - .5;
+  return materialSample(p.zy + vec2(.31,.57), rock) * weights.x
+       + materialSample(p.xz + vec2(.73,.23), rock) * weights.y
+       + materialSample(p.xy + vec2(.56,.33), rock) * weights.z;
 }
 void main() {
   vec3 p = surface;
@@ -336,7 +339,8 @@ void main() {
   float seam = smoothstep(.78, .98, stratum) * smoothstep(.35, .65, large);
   float scratches = smoothstep(.70, .90, noise(p * vec3(11.0, 184.0, 140.0)));
   float stone = noise(p * 24.0 + (large - .5) * .61), rubble = noise(p * 88.0);
-  float textureValue = materialDetail(p * mix(vec3(1.65, 2.95, 2.75), vec3(1.42), rock), rock);
+  vec3 packedDetail = materialDetail(p * mix(vec3(1.65, 2.95, 2.75), vec3(1.42), rock), rock);
+  float textureValue = packedDetail.r - .5;
   float fracture = abs(stone - .49);
   float fissure = (1.0 - smoothstep(.015, .052, fracture)) * smoothstep(.41, .65, large);
   float lip = smoothstep(.038, .085, fracture) * (1.0 - smoothstep(.087, .13, fracture)) * smoothstep(.45, .69, large);
@@ -347,7 +351,7 @@ void main() {
   float key = max(0.0, dot(n, l));
   float fill = max(0.0, dot(n, normalize(vec3(.63, -.30, .31))));
   float rim = pow(1.0 - max(0.0, n.z), 3.0) * max(0.0, dot(n, normalize(vec3(-.48, .63, .04))));
-  float gloss = pow(max(0.0, dot(n, normalize(l + v))), mix(19.0, 6.0, rock)) * mix(.31, .055, rock);
+  float gloss = pow(max(0.0, dot(n, normalize(l + v))), mix(49.0, 5.0, packedDetail.b)) * mix(.34, .065, rock);
   vec3 shade = finish.rgb * (.22 + keyTint * key * .86 + bounceTint * fill * .72);
   shade *= mix(.68 + large * .36 + grain * .12 - scratches * .22 + textureValue * 1.93,
     .51 + large * .42 + grain * .16 + rubble * .16 + fine * .07 - seam * .19 - fissure * .18 + lip * .12 + textureValue * 2.39, rock);
@@ -357,6 +361,17 @@ void main() {
   shade += edgeTint * (rim * mix(.16, .13, rock) + fill * .11);
   shade += vec3(.10,.039,.013) * smoothstep(.56, .83, large * .82 + grain * .18) * (1.0 - rock) * key;
   shade += finish.rgb * emit * (.42 + large * .3);
+  // Cavities retain reflected skylight; exposed ridges catch local cannon and elemental light.
+  shade *= mix(.74, 1.08, packedDetail.g);
+  float caustic = 1.0;
+  if (waterLight.x > .0) {
+    vec2 uv = p.xy + .36 * p.z;
+    float ripple = sin(uv.x * 24.0 + waterLight.y + 2.0 * sin(uv.y * 10.0 - waterLight.y))
+                 + sin(uv.y * 21.0 - waterLight.y + sin(uv.x * 15.0));
+    caustic = .65 + 1.7 * (1.0 - smoothstep(.02,.34,abs(ripple)));
+  }
+  shade += localTint * (finish.rgb * .7 + vec3((1.0 - packedDetail.b) * .16))
+    * max(0.0, dot(n, localLight)) * packedDetail.g * caustic;
   shade = mix(shade, bounceTint * .68, environment.x);
   shade = mix(shade, vec3(.95, .87, .69), environment.y * .48);
   gl_FragColor = vec4(clamp(shade, 0.0, 1.0), 1.0);
@@ -375,10 +390,27 @@ function loadSpacePropDetail(gl, uniform) {
   atlas.onload = () => {
     if (gl.isContextLost()) return;
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+    try {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+    } catch (error) {
+      if (error.name !== "SecurityError") throw error;
+      // Some browsers give each file:// resource an opaque origin. Retain
+      // material contrast in that mode using an origin-clean detail texture.
+      const side = 64, pixels = new Uint8Array(side * side * 4);
+      let seed = 0x6734fe03;
+      for (let i = 0; i < pixels.length; i += 4) {
+        seed = (Math.imul(1664525,seed) + 1013904223) >>> 0;
+        const grain = seed >>> 25;
+        pixels[i] = 74 + grain;
+        pixels[i+1] = 134 + (grain >> 1);
+        pixels[i+2] = 196 - (grain >> 1);
+        pixels[i+3] = 255;
+      }
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, side, side, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    }
     gl.generateMipmap(gl.TEXTURE_2D);
   };
-  atlas.src = "assets/scenery/prop-material-detail.webp";
+  atlas.src = "assets/scenery/orbital-material.png";
   return atlas;
 }
 
@@ -410,7 +442,7 @@ function spacePropGraphics() {
     gl.useProgram(program);
     const attributes = ["position", "normal", "material"].map(name => gl.getAttribLocation(program, name));
     for (const attribute of attributes) gl.enableVertexAttribArray(attribute);
-    const uniforms = Object.fromEntries(["pose", "extent", "keyTint", "bounceTint", "environment"].map(name => [name, gl.getUniformLocation(program, name)]));
+    const uniforms = Object.fromEntries(["pose", "extent", "keyTint", "bounceTint", "environment", "localTint", "localLight", "waterLight"].map(name => [name, gl.getUniformLocation(program, name)]));
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
     gl.enable(gl.SCISSOR_TEST);
     gl.uniform2f(uniforms.extent, 1.7, 1.7);
@@ -422,6 +454,7 @@ function spacePropGraphics() {
   return spacePropDevice;
 }
 
+const propLightSample = {};
 function spacePropRenderGpu(device, mesh, matrix, pose, key, bounce, resolution) {
   const { gl, uniforms, attributes, surface } = device;
   if (device.boundMesh !== mesh) {
@@ -446,12 +479,22 @@ function spacePropRenderGpu(device, mesh, matrix, pose, key, bounce, resolution)
   gl.uniformMatrix3fv(uniforms.pose, false, matrix);
   gl.uniform3fv(uniforms.keyTint, key); gl.uniform3fv(uniforms.bounceTint, bounce);
   gl.uniform2f(uniforms.environment, pose.haze || 0, pose.flash || 0);
+  const light = typeof sampleSceneLight === "function" ? sampleSceneLight(pose.x, pose.y, propLightSample) : null;
+  if (light?.strength > .002) {
+    const rgb = parseInt(light.color.slice(1), 16), intensity = light.strength / 255;
+    gl.uniform3f(uniforms.localTint, (rgb >> 16) * intensity, ((rgb >> 8) & 255) * intensity, (rgb & 255) * intensity);
+    gl.uniform3f(uniforms.localLight, light.dx * .85, -light.dy * .85, .53);
+  } else gl.uniform3f(uniforms.localTint, 0, 0, 0);
+  const water = light?.material === "water";
+  gl.uniform2f(uniforms.waterLight, water ? 1 : 0, water && !sceneLightFrame.quiet ? (battlefieldState.clock % 120) * 1.65 : 0);
   gl.drawArrays(gl.TRIANGLES, 0, mesh.data.length / 10);
 }
 
 function spacePropRenderCanvas(ctx, mesh, matrix, pose, key, bounce) {
   const m = matrix, data = mesh.data, faces = [];
   const softness = 1 - (pose.haze || 0) * .38, flash = (pose.flash || 0) * .34;
+  const local = typeof sampleSceneLight === "function" ? sampleSceneLight(pose.x, pose.y, propLightSample) : null;
+  const tint = local?.strength > .002 ? parseInt(local.color.slice(1), 16) : 0;
   const vertexColor = (i, material) => {
     const nx = data[i + 3], ny = data[i + 4], nz = data[i + 5];
     const x = m[0] * nx + m[3] * ny + m[6] * nz;
@@ -461,8 +504,10 @@ function spacePropRenderCanvas(ctx, mesh, matrix, pose, key, bounce) {
     const fill = Math.max(0, .72 * x - .55 * y + .33 * z) * .32;
     const gloss = Math.max(0, -.24 * x + .40 * y + .885 * z) ** (material ? 18 : 6) * (material ? .18 : .045);
     const emission = material === 2 ? .43 : 0;
+    const incident = tint ? Math.max(0, x * local.dx - y * local.dy + z * .53) * local.strength : 0;
     return key.map((channel, j) => Math.round(Math.min(255,
-      (data[i + 6 + j] * (.24 + diffuse * channel + fill * bounce[j] + emission) + gloss * channel) * 255 * softness + flash * 255)));
+      (data[i + 6 + j] * (.24 + diffuse * channel + fill * bounce[j] + emission) + gloss * channel) * 255 * softness +
+      incident * ((tint >> (16 - j * 8)) & 255) * (.12 + .58 * data[i + 6 + j]) + flash * 255)));
   };
   for (let i = 0; i < data.length; i += 30) {
     const vertices = [i, i + 10, i + 20].map(at => {

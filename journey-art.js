@@ -327,13 +327,12 @@ function drawJourneyRift(ctx, scene) {
   }
   ctx.restore();
 }
-function drawJourneyScene(scene, layer) {
+function drawJourneyScene(scene, layer, ctx = context) {
   if (!scene || !(viewport.width > 0 && viewport.height > 0)) return;
   const foreground = layer === "front";
   if (foreground && scene.id !== "belt" && scene.id !== "wreck") return;
   const envelope = journeyArtEnvelope(scene);
   if (envelope <= 0) return;
-  const ctx = context;
   ctx.save();
   ctx.globalAlpha *= envelope;
   // The near layer runs behind every combat actor and its meshes pass beyond the frame edges.

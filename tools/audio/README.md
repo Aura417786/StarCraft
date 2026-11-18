@@ -1,5 +1,15 @@
 # 《星际突围》音频制作
 
+## v36 遭遇配乐与战斗反馈
+
+11 只 Boss 各有一条四小节主题，另配机关启动、共鸣和终极技能三种释放声。渊潮母体的高压水柱和触须横扫另有专用素材。普通蓄力重炮使用可独立取消的升压声，苍电的前两枚标记使用短促双音，曜金的力场展开与每次脉冲分别发声。机库、碎星航道、余烬墓场、深空壁垒和虚空之眼各有环境分轨。曙光轨道沿用巡航乐谱，通关时原有的圆号与竖琴动机交给长笛与合唱收束。
+
+四小节独奏与原配乐共用拍点。Boss 的三档血量控制独奏力度，终极技能压低独奏、让出起音后再恢复。不同区域的分轨交叉淡化，后到的解码从当前音乐相位加入。游戏按遭遇加载本组素材，文件双击模式读取相同字节的本地 JS 音库。
+
+运行 `python tools/audio/render_encounters.py --synth <FluidSynth.exe> --soundfont <MuseScore_General.sf3> --ffmpeg <ffmpeg.exe> --work <临时目录>` 可重建 56 段 Ogg 和 17 份 MIDI。16 条循环乐谱各写三遍，以中间一遍的乐器延音和混响导出循环边界。结局乐谱为八小节，一次播放。原始拟音由确定性颗粒、瞬态、共振器和滤波噪声产生，FFmpeg 负责均衡、限幅和 Opus 编码。[素材清单](../../assets/audio/encounters/manifest.json) · [音色库许可](../../assets/audio-LICENSE.md)
+
+`nextgen-audio.cjs --contract-only` 验证线上文件、离线音库、清单、四小节样本长度及峰值。`nextgen-audio-browser.cjs <证据目录>` 在实际 Chrome 混音器录制 27 个场景，并用解码前的 SHA-256 辨认真正开始播放的素材。`analyze_nextgen.py` 按章节合成为试听 MP3，并统计每章真峰值与响度。编曲、混音流程沿用项目固定的 GitHub Skill。[Compose Game Music](https://github.com/sora16bit/codex-game-music-skill) · [Audio Design](https://github.com/gamedev-skills/awesome-gamedev-agent-skills/blob/main/skills/disciplines/audio-design/SKILL.md)
+
 ## v35 原创材质音与动态配乐
 
 新增 105 段离线渲染音频：11 个 Boss 材质家族各含预警、三种释放、命中、消散；三架战机各有 11 种声音；另有两条机库分轨及四条精英/低生命压力分轨。新音频 Ogg 合计约 2.8 MB，双击版另有逐字节一致的离线库。详见 [资源与许可证说明](../../assets/audio/nextgen/README.md)。

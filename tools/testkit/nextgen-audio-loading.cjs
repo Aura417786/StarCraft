@@ -8,7 +8,7 @@ const vm = require("node:vm");
 const root = path.resolve(__dirname, "../..");
 let releaseBase;
 const baseGate = new Promise(resolve => { releaseBase = resolve; });
-const fetched = [], decoded = [], sources = [];
+const fetched = [], decoded = [], sources = [], oscillators = [];
 const parameter = () => ({ value: 0, setValueAtTime(value) { this.value = value; },
   linearRampToValueAtTime(value) { this.value = value; }, exponentialRampToValueAtTime(value) { this.value = value; },
   cancelScheduledValues() {} });
@@ -26,7 +26,11 @@ class Context {
     const source = { ...node(), playbackRate: parameter(), start() { sources.push(this.buffer?.name); }, stop() {} };
     return source;
   }
-  createOscillator() { return { ...node(), frequency: parameter(), start() {}, stop() {} }; }
+  createOscillator() {
+    const voice = { ...node(), frequency: parameter(), start() {}, stop(at) { this.stopAt = at; } };
+    oscillators.push(voice);
+    return voice;
+  }
   async decodeAudioData(bytes) {
     const name = new TextDecoder().decode(bytes);
     if (name !== "ng_red_shield") await baseGate;
@@ -37,6 +41,8 @@ class Context {
   async close() { this.state = "closed"; }
 }
 const catalog = { stems: { flight_harmony: 4, flight_pulse: 4 }, effects: [], factions: {},
+  encounters: { bosses: [], regions: {}, groups: {enc_fighters:["enc_red_prime"]},
+    clips: {enc_red_prime: {group:"enc_fighters"}} },
   nextgen: { groups: { fighters: ["ng_red_shield"] }, bosses: [], clips: Object.fromEntries([
     "ng_red_shield", "ng_flight_alert", "ng_hangar_harmony", "ng_hangar_detail",
   ].map(name => [name, { duration: 4, group: name === "ng_red_shield" ? "fighters" : "music", loop: name !== "ng_red_shield" }])) } };
@@ -57,6 +63,12 @@ const flush = async () => { for (let index = 0; index < 40; index++) await Promi
   await api.unlock();
   assert.ok(fetched.includes("flight_harmony"), "base decode has started");
   assert.equal(decoded.length, 0, "base decoder is held at the external boundary");
+  const before = oscillators.length;
+  assert.equal(api.fighterSkill("red","prime"), true, "cold heavy-cannon input has immediate audio");
+  assert.equal(oscillators.length, before + 1);
+  const windup = oscillators.at(-1);
+  api.stopFighterCharge();
+  assert.ok(windup.stopAt < .05, "cancel releases the cold windup within 50ms");
   api.setMuted(true);
   releaseBase();
   await flush();

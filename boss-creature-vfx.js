@@ -493,5 +493,5 @@ const BossCreatureVfx = (() => {
     disc(ctx, node.x - r * .36, node.y - r * .35, r * .61, "#e8ffff", alpha);
   }
 
-  return Object.freeze({ drawMechanic, drawUltimate, drawPrismNode });
+  return Object.freeze({ drawMechanic, drawUltimate, drawPrismNode, bone });
 })();

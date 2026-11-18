@@ -162,13 +162,15 @@ function finaleClaws(target, bounds, side) {
 
 function finaleMirror(target, bounds) {
   target.finale.activeNode = target.finale.beat % 2;
+  target.finale.mirrorTurnAt = target.finale.age;
   const height = Math.min(bounds.height * .18, 78);
   const y = player.y;
   for (const [index, sign] of [[0, -1], [1, 1]]) {
-    finaleHazard(target, "wire", { ax: index ? target.x : bounds.left - 24,
+    const ray = finaleHazard(target, "wire", { ax: index ? target.x : bounds.left - 24,
       ay: clamp(y + height * sign, bounds.top - 18, bounds.bottom + 18),
       bx: index ? bounds.left - 30 : bounds.right + 32, by: clamp(y - height * sign, bounds.top, bounds.bottom),
       width: 16, warning: 1.08 + index * .32, color: "#c5bdff", material: "prism" });
+    target.finale.mirrorTurnUntil=target.finale.age+ray.warning+Math.max(.72,ray.duration);
   }
 }
 
@@ -267,7 +269,12 @@ function buildBossFinaleCombo(target,bounds,side) {
     if(["wire","blast","seam"].includes(h.type))h.duration=Math.max(.72,h.duration);
   }
   const stage=(number,type,values)=>{
-    const h=finaleHazard(target,type,{...values,material});
+    // Under 40% the third beat reads the pilot's last exit instead of repeating
+    // the initial lock. Severable final apparatus keeps its original counter.
+    const fractured = number === 2 && target.hp < .4 && f.beat % 2 === 1;
+    const h = fractured
+      ? finaleHazard(target,"resonance",{...BossResonance.cast(target,true),node:values.node})
+      : finaleHazard(target,type,{...values,material});
     h.warning += number===1?1.2:2.85;
     h.duration=Math.max(.8,h.duration);
     h.comboStage=number;h.comboRole=number===1?"intercept":"punish";
@@ -417,6 +424,7 @@ function bossFinaleContact(target) {
   const radius = player.height * .16;
   return target.finale.hazards.find(hazard => {
     if (hazard.hitPlayer || hazard.age < hazard.warning || hazard.age >= hazard.warning+hazard.duration) return false;
+    if (hazard.type === "resonance") return BossResonance.hits(hazard, player);
     if (hazard.type === "tide") {
       if (Math.abs(player.y - hazard.gap.center) <= Math.max(0, hazard.gap.half - radius)) return false;
       const delta = player.x - finaleTideX(hazard, player.y, hazard.age);
@@ -485,7 +493,10 @@ function bossFinaleDamageMultiplier(target, shot) {
       finaleHazard(target, "wire", { ax: g.x, ay: g.y, bx: player.x, by: player.y,
         width: 12, warning: .92, duration: .21, color: "#efb5ff", material: "prism" });
     }
-    return node ? .13 : .56;
+    // The broad mirrored hull turns edge-on while the new diamond aligns.
+    // The marked facet remains fully vulnerable throughout this counter.
+    const turning = f.age < (f.mirrorTurnUntil ?? 0);
+    return node ? .13 : turning ? .05 : .56;
   }
   if (node && node.hp > 0 && (mode !== "synapse" || node.index === f.activeNode)) {
     const log = shot.damageLog ?? Math.log(shot.damage ?? weapon.damage);
@@ -493,6 +504,7 @@ function bossFinaleDamageMultiplier(target, shot) {
     node.hp = Math.max(0, node.hp - hit);
     if (!node.hp) {
       const g = finaleNodeGeometry(target, node);
+      BossResonance.sever(target,g.x,g.y,g.radius);
       combatBurst(g.x, g.y, .82, target.color, true);
       gameAudio.bossAttack("burst", g.x, g.y);
       if (mode === "synapse") f.activeNode = f.nodes.find(part => part.hp > 0)?.index ?? -1;
@@ -536,18 +548,9 @@ function drawFinaleVent(ctx, hazard, active, progress, quiet) {
   for (const [edge, height, side] of [[top, top, -1], [bottom, viewport.height - bottom, 1]]) {
     if (height < 1) continue;
     const depth = Math.min(height, quiet ? 78 : 142);
-    const heat = ctx.createLinearGradient(0, edge, 0, edge + side * depth);
-    heat.addColorStop(0, material.rim);
-    heat.addColorStop(.22, material.mid);
-    heat.addColorStop(.61, material.dark);
-    heat.addColorStop(1, "transparent");
-    ctx.globalAlpha = charge * .64;
-    ctx.fillStyle = heat;
-    ctx.fillRect(0, edge + (side < 0 ? -depth : 0), viewport.width, depth);
+    drawBossFieldWash(ctx,0,edge + (side < 0 ? -depth : 0),viewport.width,depth,material.rim,charge*.89,quiet?0:hazard.age);
     ctx.globalAlpha = charge;
     ctx.strokeStyle = material.rim;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.moveTo(0, edge); ctx.lineTo(viewport.width, edge); ctx.stroke();
     ctx.lineWidth = quiet ? 1.35 : 2.15;
     const points = quiet ? 18 : 30;
     ctx.beginPath(); ctx.moveTo(0, edge);
@@ -576,6 +579,7 @@ function drawFinaleWire(ctx, hazard, active, progress, quiet) {
 
 function drawFinaleHazard(ctx, hazard, quiet) {
   if (hazard.age < (hazard.tellAt??0)) return;
+  if (hazard.type === "resonance") { BossResonance.draw(ctx, hazard, quiet); return; }
   const active = hazard.age >= hazard.warning;
   const progress = active ? clamp((hazard.age - hazard.warning) / hazard.duration, 0, 1)
     : clamp(hazard.age / hazard.warning, 0, 1);
@@ -861,6 +865,17 @@ function drawFinaleShellBody(ctx, target, w, h, quiet, action) {
 
 function drawFinaleNodes(ctx, target, quiet) {
   const f = target.finale;
+  if (f.mode==="mirror" && f.age<(f.mirrorTurnUntil??0)) {
+    const turn=clamp((f.age-f.mirrorTurnAt)/(f.mirrorTurnUntil-f.mirrorTurnAt),0,1);
+    const r=target.width*.42,x=target.x,y=target.y;
+    const spread=(quiet?.33:.19+.68*Math.abs(Math.cos(turn*Math.PI)))*r;
+    ctx.save();ctx.beginPath();ctx.moveTo(x-spread,y);
+    ctx.lineTo(x,y-r*.72);ctx.lineTo(x+spread,y);ctx.lineTo(x,y+r*.72);ctx.closePath();
+    const spec=ctx.createLinearGradient(x-spread,y-r*.2,x+spread,y+r*.2);
+    spec.addColorStop(0,"#9cc9e521");spec.addColorStop(.47,"#a6cfe072");
+    spec.addColorStop(.53,"#e6e7fa90");spec.addColorStop(1,"#8e83bc15");
+    ctx.fillStyle=spec;ctx.fill();ctx.strokeStyle="#b4d5f8a8";ctx.lineWidth=1;ctx.stroke();ctx.restore();
+  }
   for (const node of f.nodes) {
     if (node.hp <= 0) continue;
     const g = finaleNodeGeometry(target, node);

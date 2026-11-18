@@ -433,7 +433,19 @@ function drawPressureParticles(ctx) {
   ctx.restore();
 }
 
-function drawBossPressureArt(layer) {
+function drawPressureWorldBase(ctx, scene) {
+  if (scene) {
+    const strength = scene.stage === "charge" ? Math.min(1, scene.age / scene.warning)
+      : scene.ultimateKind ? .72 : Math.max(0, 1 - (scene.age - scene.warning) / .5);
+    ctx.fillStyle = "#02040b";
+    ctx.globalAlpha = strength * .25;
+    ctx.fillRect(0, 0, viewport.width, viewport.height);
+    ctx.globalAlpha = 1;
+    if (scene.stage === "charge") drawPressureConvergence(ctx, boss, scene, pressureArt.color, quietCombatMotion());
+  }
+}
+
+function drawBossPressureArt(layer, worldPrepared = false) {
   if (state !== "battle" || !boss || boss.finale || boss.hp <= 0 || evolution.pending) return;
   const scene = boss.pressureState;
   if (!scene && pressureArt.burstAge > 1.3 && pressureArt.releaseAge > .3) return;
@@ -441,16 +453,8 @@ function drawBossPressureArt(layer) {
   const color = pressureArt.color;
   ctx.save();
   if (layer === "back") {
-    if (scene) {
-      const strength = scene.stage === "charge" ? Math.min(1, scene.age / scene.warning)
-        : scene.ultimateKind ? .72 : Math.max(0, 1 - (scene.age - scene.warning) / .5);
-      ctx.fillStyle = "#02040b";
-      ctx.globalAlpha = strength * .25;
-      ctx.fillRect(0, 0, viewport.width, viewport.height);
-      ctx.globalAlpha = 1;
-      if (scene.stage === "charge") drawPressureConvergence(ctx, boss, scene, color, quietCombatMotion());
-    }
-    if (typeof drawBossUltimateArt === "function") drawBossUltimateArt(ctx, boss, scene, "back");
+    if (!worldPrepared) drawPressureWorldBase(ctx, scene);
+    if (typeof drawBossUltimateArt === "function") drawBossUltimateArt(ctx, boss, scene, "back", worldPrepared);
     if (pressureArt.burstAge < .2 && visualQuality.id !== "low" && !quietCombatMotion()) {
       const x = pressureArt.coreX * viewport.width, y = pressureArt.coreY * viewport.height;
       const radius = viewport.height * .36;
@@ -481,13 +485,13 @@ function drawBossPressureArt(layer) {
       }
       ctx.globalCompositeOperation = "source-over";
     }
-    // Only the edge afterglow is layered above actors. Telegraphs are drawn later.
+    // Impact spill originates at the core and decays into the starfield.
     if (pressureArt.burstAge < .3 && visualQuality.id !== "low") {
       const fade = (1 - pressureArt.burstAge / .3) * .14;
       ctx.globalAlpha = fade;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(2, 2, viewport.width - 4, viewport.height - 4);
+      const size = viewport.height * 1.05;
+      ctx.drawImage(pressureArtGlow(color), pressureArt.coreX*viewport.width-size,
+        pressureArt.coreY*viewport.height-size*.62,size*2,size*1.24);
     }
   }
   ctx.restore();
@@ -497,21 +501,17 @@ function drawPressureSealWarning(ctx, hazard, quiet) {
   const active = hazard.age >= hazard.warning;
   const progress = clamp(hazard.age / Math.max(.01, hazard.warning), 0, 1);
   const width = viewport.width;
-  const top = flightBounds.top, bottom = flightBounds.bottom;
-  const left = Math.max(6, flightBounds.left - player.width * .25);
   const right = width - 9;
   const color = hazard.fullSeal ? "#ffa29a" : "#9eebda";
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
   if (hazard.fullSeal) {
-    const rail = ctx.createLinearGradient(0, top, 0, bottom);
-    const edge = active ? "#ff50744b" : "#ff507426";
-    rail.addColorStop(0, edge);
-    rail.addColorStop(.19, "transparent");
-    rail.addColorStop(.81, "transparent");
-    rail.addColorStop(1, edge);
-    ctx.fillStyle = rail;
-    ctx.fillRect(left, top, right - left, bottom - top);
+    const tint = boss ? signatureMaterials[pressureMaterialNames[boss.type]].rim : color;
+    const radius = viewport.height * (.33 + .22 * progress);
+    const sourceX = boss ? boss.x-boss.width*.28 : width*.76;
+    const sourceY = boss?.y ?? viewport.height*.5;
+    drawBossFieldWash(ctx,sourceX-radius,sourceY-radius*.72,radius*2,radius*1.44,
+      tint,(active ? .82 : .18+.51*progress), quiet ? 0 : hazard.age);
   } else {
     signatureGuide(ctx, hazard.gapY, hazard.gapSize, active, -1, right, quiet ? 0 : hazard.age);
   }

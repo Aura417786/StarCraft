@@ -6,7 +6,7 @@ const NextgenVfx = (() => {
   const TAU = Math.PI * 2;
   const budgets = Object.freeze({ low: { facets: 180, strands: 8, samples: 0 },
     medium: { facets: 420, strands: 16, samples: 1 }, high: { facets: 760, strands: 28, samples: 2 } });
-  const stats = { facets: 0, samples: 0, atlasDraws: 0, effects: 0, tier: "high", peakFacets: 0 };
+  const stats = { facets: 0, samples: 0, atlasDraws: 0, horizonPasses: 0, effects: 0, tier: "high", peakFacets: 0 };
   const atlases = new Map();
   const scheduledMaterials = new Set();
   let sampleCanvas, sampleContext, basaltTile, magmaTile, waterNormalTile, waterFoamTile, sporeMistTile;
@@ -67,7 +67,7 @@ const NextgenVfx = (() => {
   function beginFrame() {
     if (typeof BlackHoleSurface !== "undefined") BlackHoleSurface.beginFrame();
     stats.peakFacets = Math.max(stats.peakFacets, stats.facets);
-    stats.facets = stats.samples = stats.atlasDraws = stats.effects = 0;
+    stats.facets = stats.samples = stats.atlasDraws = stats.horizonPasses = stats.effects = 0;
     stats.tier = typeof visualQuality === "undefined" ? "high" : visualQuality.id;
   }
   function phase(h) {
@@ -100,22 +100,26 @@ const NextgenVfx = (() => {
   }
   function warmMaterial(name) {
     if (scheduledMaterials.has(name)) return;
-    const work = name === "water" ? [waterNormalTexture, waterFoamTexture]
-      : name === "magma" ? [basaltTexture, magmaTexture]
-      : name === "spore" ? [sporeMistTexture] : [];
-    if (!work.length) return;
+    if (name === "void") {
+      scheduledMaterials.add(name);
+      horizonAtlas();
+      return;
+    }
+    if (name !== "water" && name !== "magma" && name !== "spore") return;
     scheduledMaterials.add(name);
     if (name !== "spore") atlas(name);
+    if (name === "water" && typeof ElementalFluidVfx !== "undefined") ElementalFluidVfx.warmWater();
     if (name === "magma") cinderMaterial();
-    const schedule = typeof requestIdleCallback === "function"
-      ? job => requestIdleCallback(job, { timeout: 1500 })
-      : job => setTimeout(job, 32);
-    function warmNext() {
-      const bake = work.shift();
-      bake();
-      if (work.length) schedule(warmNext);
+    if (typeof preloadBossSurface !== "function") return;
+    if (name === "water") {
+      preloadBossSurface("current", image => { waterNormalTile ??= image; },waterNormalTexture);
+      preloadBossSurface("foam", image => { waterFoamTile ??= image; },waterFoamTexture);
+    } else if (name === "magma") {
+      preloadBossSurface("basalt", image => { basaltTile ??= image; },basaltTexture);
+      preloadBossSurface("melt", image => { magmaTile ??= image; },magmaTexture);
+    } else {
+      preloadBossSurface("mist", image => { sporeMistTile ??= image; },sporeMistTexture);
     }
-    schedule(warmNext);
   }
   function polygon(ctx, points, fill, alpha = 1) {
     if (stats.facets >= tier().facets) return;
@@ -129,7 +133,31 @@ const NextgenVfx = (() => {
     if (inner > 0) ctx.arc(x, y, Math.min(inner, outer), 0, TAU, true);
     ctx.clip();
   }
-  function backdrop(ctx, x, y, r) {
+  let sceneCanvas, scenePaint, sceneInput, sceneStamp = -1;
+  let effectTarget, worldSource;
+  function supplyWorldSource(target, source) { effectTarget=target; worldSource=source; }
+  function getSuppliedWorld(target) { return target===effectTarget ? worldSource : null; }
+  function refractionSource(ctx) {
+    if (ctx === effectTarget) return worldSource;
+    const stamp = typeof previousTime === "number" ? previousTime : performance.now();
+    const input = ctx.canvas;
+    if (!sceneCanvas) {
+      sceneCanvas = document.createElement("canvas");
+      scenePaint = sceneCanvas.getContext("2d");
+    }
+    if (sceneCanvas.width !== input.width || sceneCanvas.height !== input.height) {
+      sceneCanvas.width = input.width; sceneCanvas.height = input.height;
+      sceneStamp = -1;
+    }
+    if (sceneStamp !== stamp || sceneInput !== input) {
+      // Water columns and foam strips share a single unwarped native-size scene.
+      scenePaint.globalCompositeOperation = "copy";
+      scenePaint.drawImage(input, 0, 0);
+      sceneStamp = stamp; sceneInput = input;
+    }
+    return sceneCanvas;
+  }
+  function backdrop(ctx, x, y, r, water = false) {
     if (calm() || stats.samples >= tier().samples || !(r > 2) || !ctx.canvas) return null;
     const tr = ctx.getTransform?.();
     // Only axis-aligned canvas transforms: rotated rays must not sample the HUD.
@@ -138,7 +166,8 @@ const NextgenVfx = (() => {
     if (sampleCanvas.width !== 224) { sampleCanvas.width = sampleCanvas.height = 224; sampleContext = sampleCanvas.getContext("2d"); }
     sampleContext ||= sampleCanvas.getContext("2d");
     sampleContext.clearRect(0, 0, 224, 224);
-    sampleContext.drawImage(ctx.canvas, (x - r) * tr.a + tr.e, (y - r) * tr.d + tr.f,
+    const input = ctx === effectTarget ? worldSource : water && stats.tier === "high" ? refractionSource(ctx) : ctx.canvas;
+    sampleContext.drawImage(input, (x - r) * tr.a + tr.e, (y - r) * tr.d + tr.f,
       r * 2 * tr.a, r * 2 * tr.d, 0, 0, 224, 224);
     stats.samples++;
     return sampleCanvas;
@@ -175,7 +204,7 @@ const NextgenVfx = (() => {
       (q * (.92 + .035 * Math.sin(y * .033 + time * .8)) + .025 * Math.sin(y * .043 + time * 1.4));
     const center = crestAt((top + bottom) / 2), cy = (top + bottom) / 2, sampleRadius = Math.max(width, span / 2);
     // Capture the underlying scene before painting water, not the water itself.
-    const sample = !warning && !quiet ? backdrop(ctx, center, cy, sampleRadius) : null;
+    const sample = !warning && !quiet ? backdrop(ctx, center, cy, sampleRadius, true) : null;
     ctx.save(); ctx.beginPath();
     for (let r = 0; r <= rows; r++) { const y = top + (bottom - top) * r / rows; const x = crestAt(y) - width; if (!r) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
     for (let r = rows; r >= 0; r--) { const y = top + (bottom - top) * r / rows; ctx.lineTo(crestAt(y) + width, y); }
@@ -993,11 +1022,124 @@ const NextgenVfx = (() => {
     return true;
   }
 
+  let horizonSheet, collapseFront, shearStrands;
+  function horizonAtlas() {
+    if (!horizonSheet && typeof Image === "function") {
+      horizonSheet = new Image();
+      horizonSheet.decoding = "async";
+      horizonSheet.src = "assets/vfx/nextgen/void-inclined-horizon.webp";
+      collapseFront = new Image();
+      collapseFront.decoding = "async";
+      collapseFront.src = "assets/vfx/nextgen/void-collapse-front.webp";
+      shearStrands = new Image();
+      shearStrands.decoding = "async";
+      shearStrands.src = "assets/vfx/nextgen/void-shear.webp";
+    }
+    return horizonSheet;
+  }
+
+  function drawShear(ctx, length, half, age, opacity) {
+    horizonAtlas();
+    if (!shearStrands?.complete || !shearStrands.naturalWidth) return false;
+    if (!(half > 0 && length > 0)) return true;
+    const height=half*2, scaleX=height/shearStrands.naturalHeight*2.7;
+    const repeatWidth=shearStrands.naturalWidth*scaleX;
+    const offset=(age*53)%shearStrands.naturalWidth;
+    const previousAlpha=ctx.globalAlpha;
+    ctx.globalAlpha=opacity;
+    // The caller clips to the real ray, including its rounded ends. Blit the
+    // same scrolling material inside that clip; repeating a transformed
+    // CanvasPattern can force a synchronous raster of the whole target.
+    for (let x=-offset*scaleX;x<length;x+=repeatWidth) {
+      ctx.drawImage(shearStrands,x,-half,repeatWidth,height);
+    }
+    ctx.globalAlpha=previousAlpha;
+    stats.horizonPasses++;
+    return true;
+  }
+
+  function drawCollapseFront(ctx, ring, age, opacity, quiet) {
+    horizonAtlas();
+    const {x,y,radius:r,innerRadius:inner} = ring;
+    if (!(r>inner)) return;
+    if (!collapseFront?.complete || !collapseFront.naturalWidth) {
+      drawVoid(ctx,ring,signatureMaterials.void,age,opacity);
+      return;
+    }
+    const t=quiet ? 0 : age;
+    ctx.save();ctx.translate(x,y);
+    ringClip(ctx,0,0,r,inner);
+    ctx.rotate(t*.25);
+    ctx.globalAlpha=opacity;
+    // The photograph's torn ridges are densest at 94% of the source radius.
+    // Align that density with the middle of the actual damaging thickness.
+    const radius=(r+inner)*.5/.94;
+    ctx.drawImage(collapseFront,-radius,-radius,radius*2,radius*2);
+    stats.horizonPasses++;
+    ctx.restore();
+  }
+
+  // The radiating source lives inside the shrinking annulus. Their sizes and
+  // silhouettes are independent: the annulus is harmful; its empty centre
+  // becomes a contact only when the combat geometry supplies a second circle.
+  function drawHorizon(ctx, x, y, width, age, opacity, quiet) {
+    if (!(width > 0 && opacity > 0)) return;
+    const image = horizonAtlas();
+    const time = quiet ? 0 : age;
+    const r = width * .5;
+    if (!image?.complete || !image.naturalWidth) {
+      if (typeof BlackHoleSurface !== "undefined")
+        BlackHoleSurface.draw(ctx,x,y,r*.68,time,opacity,stats.tier);
+      return;
+    }
+    const sampled = quiet ? null : backdrop(ctx,x,y,r*.77);
+    ctx.save();
+    ctx.translate(x,y);
+    if (sampled) {
+      // Light from the real field bends most just outside the event horizon.
+      // Both rings share the existing bounded capture and preserve the HUD.
+      for(let band=0;band<2;band++) {
+        const outer=r*(band ? .57 : .73), inner=r*(band ? .26 : .57);
+        ctx.save(); ringClip(ctx,0,0,outer,inner);
+        ctx.globalAlpha=opacity*(band ? .39 : .17);
+        ctx.rotate((band ? .16 : .045)+.018*Math.sin(time));
+        const span=r*(band ? 1.10 : .84);
+        ctx.drawImage(sampled,-span,-span,2*span,2*span);
+        ctx.restore();
+      }
+    }
+    const key = Math.floor(((time % 2.4 + 2.4) % 2.4) * 5);
+    const cellW = image.naturalWidth/4, cellH = image.naturalHeight/3, height=width*cellH/cellW;
+    ctx.rotate(-.105+.014*Math.sin(time*1.4));
+    ctx.globalAlpha=opacity;
+    ctx.drawImage(image, key%4*cellW, Math.floor(key/4)*cellH,cellW,cellH,-r,-height/2,width,height);
+    stats.horizonPasses++;
+    // Dust falls in on curved trajectories. Two batched paths share one
+    // source atlas; their tangents follow the same winding as the corona.
+    for(let layer=0;layer<2;layer++) {
+      ctx.beginPath();
+      for(let i=layer;i<42;i+=2) {
+        const v=(i*.61803399 + time*(.18+i%3*.041))%1;
+        const radial=.28+(1-v)*(.47+.11*Math.sin(i*27.5));
+        const a=i*2.39996+v*(1.15+v*.91);
+        const ax=Math.cos(a)*radial, ay=Math.sin(a)*radial*.81;
+        const b=a+.017+.025*v, tail=.003+(.011+.009*layer)*v;
+        ctx.moveTo(r*ax,r*ay);
+        ctx.lineTo(r*Math.cos(b)*(radial-tail),r*Math.sin(b)*(radial-tail)*.81);
+      }
+      ctx.lineWidth=r*(layer ? .0038 : .0022);
+      ctx.strokeStyle=layer ? "#fcb0e9" : "#ac9cfc";
+      ctx.globalAlpha=opacity*(layer ? .78 : .52);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawVoid(ctx, circle, material, age, alpha, water = false) {
     const { x, y, radius: r } = circle, inner = circle.innerRadius || 0;
     if (!(r > inner && r > 0)) return false;
     stats.effects++; const time = motionTime(age), span = r - inner;
-    const sampled = backdrop(ctx, x, y, r * 1.12);
+    const sampled = backdrop(ctx, x, y, r * 1.12, water);
     ctx.save(); ringClip(ctx, x, y, r, inner);
     if (!water && inner === 0 && typeof BlackHoleSurface !== "undefined") {
       // The void surface is shared by wells, ultimate annuli and riftFold.
@@ -1166,9 +1308,9 @@ const NextgenVfx = (() => {
     }
     ctx.restore();
   }
-  return Object.freeze({ beginFrame, phase, warmMaterial, drawWaterSection, drawMagmaFissure, drawEruption, drawMagmaShell,
+  return Object.freeze({ beginFrame, phase, warmMaterial, refractionSource, supplyWorldSource, getSuppliedWorld, drawWaterSection, drawMagmaFissure, drawEruption, drawMagmaShell,
     drawCinderRift, drawCinderCharge, drawCinderAftershock,
-    drawSporeCloud, drawSporePod, drawVortex, drawVoid, drawRift, drawWaterJet, drawRaySkin, stamp, rock,
+    drawSporeCloud, drawSporePod, drawVortex, drawVoid, drawHorizon, drawCollapseFront, drawShear, drawRift, drawWaterJet, drawRaySkin, stamp, rock,
     diagnostics: () => ({ ...stats, budget: tier(), atlasReady: [...atlases].filter(([, v]) => v.ready).map(([k]) => k), sampleSize: 224,
       extraWebGLContexts: typeof BlackHoleSurface === "undefined" ? 0 : BlackHoleSurface.diagnostics().extraWebGLContexts,
       blackHole: typeof BlackHoleSurface === "undefined" ? null : BlackHoleSurface.diagnostics() }) });

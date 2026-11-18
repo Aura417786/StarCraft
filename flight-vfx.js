@@ -116,9 +116,10 @@ function drawFlightBoltWake(ctx, length, half, tint, index, time, hostile = fals
   const tier = flightVfxTier();
   if (!tier || flightVfxStill()) return;
   if (!hostile) {
-    const fighter = typeof selectedFighter === "string" ? selectedFighter : "red";
+    const fighter = typeof fighterProfile === "function" ? fighterProfile().id : "red";
     const auxiliary = !!bullet?.auxiliary, lance = bullet?.visual === "lance" || bullet?.visual === "counter";
     const span = Math.min(auxiliary ? 32 : lance ? 92 : 66, length * (lance ? 2.2 : 1.5) + 10);
+    if (bullet?.seeker && typeof FighterMaterialFx !== "undefined" && FighterMaterialFx.seekerWake(ctx, bullet, half)) return;
     ctx.save(); ctx.strokeStyle = tint; ctx.fillStyle = tint; ctx.globalAlpha *= auxiliary ? .32 : .52;
     if (lance || fighter === "red") {
       const glow = ctx.createLinearGradient(-span,0,length*.20,0);glow.addColorStop(0,tint+"00");glow.addColorStop(.68,tint+"57");glow.addColorStop(1,tint+"c4");
@@ -226,6 +227,27 @@ function drawFlightProjectileBody(ctx, bullet, half, length, glow, crowded) {
   }
   ctx.fillStyle = bullet.color; ctx.fill(shape.body);
   ctx.fillStyle = bullet.core; ctx.fill(shape.core);
+  if (bullet.source === "crimson-heavy") {
+    // Compressed shock diamonds move behind a single visible armour penetrator.
+    ctx.save();
+    const jet = ctx.createLinearGradient(-length * .85, 0, length * .61, 0);
+    jet.addColorStop(0, "#7d1c1700"); jet.addColorStop(.43, "#d93f2b6f"); jet.addColorStop(1, "#ffd38b");
+    ctx.fillStyle = jet; ctx.beginPath();ctx.moveTo(-length * .86,0);
+    ctx.quadraticCurveTo(-length * .16,-half*1.7,length*.61,-half*.39);
+    ctx.lineTo(length*.74,0);ctx.lineTo(length*.61,half*.39);
+    ctx.quadraticCurveTo(-length*.16,half*1.45,-length*.86,0);ctx.fill();
+    if (!crowded && !flightVfxStill()) {
+      const phase = flightVfxWrap(battleTime*4,1);
+      for(let i=0;i<4;i++){
+        const u=(i+phase)/4,x=length*(.31-.89*u);
+        ctx.globalAlpha=(1-u)*.83;ctx.strokeStyle="#ffcc82";ctx.lineWidth=.9;
+        ctx.beginPath();ctx.ellipse(x,0,1.2+u,half*(.4+.39*u),0,-1.72,1.72);ctx.stroke();
+      }
+    }
+    ctx.restore();
+  } else if (bullet.visual === "drone") {
+    ctx.fillStyle="#defbff";ctx.fillRect(length*.27,-half*.93,length*.26,Math.max(.55,half*.30));
+  }
 }
 
 const flightExhaustProfiles = {
@@ -396,6 +418,17 @@ function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false)
   ctx.globalCompositeOperation = "source-over";
   drawFlightExhaustMaterial(ctx, palette, length, radius, phase, opacity * (1 - boost), still, tier);
   drawFlightExhaustMaterial(ctx, "nitrous", length, radius, phase, opacity * boost, still, tier);
+  if (palette === "red" && tier && !still && boost < .97) {
+    // A stacked supersonic cell train collapses into the broad turbulent plume.
+    ctx.save();ctx.strokeStyle = "#ffce88";ctx.lineWidth = .8;
+    for (let i=0; i<4; i++) {
+      const u=(i+.5)/4,x=length*(.06+.55*u),w=length*.042,h=radius*(.65-.34*u);
+      ctx.globalAlpha=opacity*(1-boost)*(.31+.13*thrust)*(1-u*.65);
+      ctx.beginPath();ctx.moveTo(x-w,0);ctx.quadraticCurveTo(x,-h,x+w,0);
+      ctx.quadraticCurveTo(x,h,x-w,0);ctx.stroke();
+    }
+    ctx.restore();
+  }
   if (!still && tier) drawFlightExhaustSparks(ctx, boost > .5 ? flightExhaustProfiles.nitrous : profile,
     length, radius, clock, energy, tier, opacity, boost);
   ctx.restore();

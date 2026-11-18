@@ -116,45 +116,22 @@ function drawPressureColumn(ctx, hazard, quiet) {
   const fade = Math.min(1, (1 - progress) * 4.5);
   ctx.save();
   ctx.translate(hazard.x, 0);
-  const body = ctx.createLinearGradient(-half, 0, half, 0);
-  body.addColorStop(0, "#3976ae12");
-  body.addColorStop(.20, "#1676aab8");
-  body.addColorStop(.54, "#a7ecf6f5");
-  body.addColorStop(.76, "#3a9cc9c2");
-  body.addColorStop(1, "#10356e20");
-  ctx.globalAlpha = fade;
-  ctx.fillStyle = body;
-  ctx.fillRect(-half, 0, hazard.thickness, height);
-  ctx.strokeStyle = "#a6ecf7";
-  ctx.globalAlpha = .43 + fade * .40;
-  ctx.lineWidth = 1.2;
-  ctx.setLineDash([8, 8]);
-  ctx.beginPath();
-  ctx.moveTo(-half, 0); ctx.lineTo(-half, height);
-  ctx.moveTo(half, 0); ctx.lineTo(half, height);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  if (!quiet) {
-    ctx.lineWidth = 1.6;
-    const drift = progress * 9;
-    for (let ribbon = 0; ribbon < 5; ribbon++) {
-      const center = -half * .58 + half * .29 * ribbon;
-      ctx.globalAlpha = fade * (.21 + (ribbon % 3) * .13);
-      ctx.beginPath();
-      for (let step = 0; step <= 12; step++) {
-        const y = height * step / 12;
-        const x = center + half * Math.sin(step * .84 + ribbon * 2 + drift) * .23;
-        if (step) ctx.lineTo(x, y);
-        else ctx.moveTo(x, y);
-      }
-      ctx.stroke();
-    }
-    ctx.fillStyle = "#dcfcff";
-    ctx.globalAlpha = fade * .76;
-    for (let bead = 0; bead < 13; bead++) {
-      const y = ((bead * .173 + 1 - progress * 1.3) % 1 + 1) % 1 * height;
-      const x = Math.sin(bead * 9.31 + progress * 4) * half * .70;
-      ctx.fillRect(x, y, 1.5 + bead % 2, 3 + bead % 4);
+  ctx.beginPath();ctx.rect(-half,0,half*2,height);ctx.clip();
+  ctx.save();ctx.rotate(Math.PI/2);
+  NextgenVfx.drawWaterJet(ctx,height,half,half,quiet?0:hazard.age,.91*fade);
+  ctx.restore();
+  // A sequence of oblique compression collars travels down the fluid. Their
+  // fine capillary rings carry a different speed from the large spray pockets.
+  const count=quiet?4:10;
+  for(let i=0;i<count;i++){
+    const f=(i/count+(quiet?0:progress*1.47))%1,y=height*f;
+    const pulse=Math.sin(f*Math.PI),r=half*(.85+.10*pulse);
+    ctx.beginPath();ctx.ellipse(0,y,r,Math.max(1,r*.27),-.12,0,Math.PI*2);
+    ctx.strokeStyle=i%3?"#a1dade":"#ecfff5";ctx.lineWidth=i%3?.85:1.6;ctx.globalAlpha=fade*(.27+.48*pulse);ctx.stroke();
+    if(!quiet && i%2===0){
+      const size=r*.34;
+      ctx.fillStyle="#d6f9f2";ctx.globalAlpha=.57*fade;
+      ctx.beginPath();ctx.ellipse(-r*.62,y-size*.49,size*.19,size*.76,-.25,0,Math.PI*2);ctx.fill();
     }
   }
   ctx.restore();

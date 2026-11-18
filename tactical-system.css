@@ -1,4 +1,22 @@
 /* Screen-space system menus with a single text-led selection rail. */
+.pause-sector-route {
+  display: flex; padding: 0; margin: 5px 0 0; list-style: none; width: min(510px, 80vw);
+}
+.pause-sector-route[hidden] { display: none; }
+.pause-sector-route li {
+  flex: 1; position: relative; padding: 16px 6px 0 0; color: #bec7cc;
+  font: 500 clamp(10px, .9vw, 13px)/1.25 var(--tac-font, system-ui); overflow-wrap: anywhere;
+}
+.pause-sector-route li::before {
+  content: ""; position: absolute; top: 4px; left: 0; width: 7px; height: 7px;
+  border: 1px solid var(--sector-color); transform: rotate(45deg);
+}
+.pause-sector-route li:not(:last-child)::after { content: ""; position: absolute; top: 8px; left: 13px; right: 5px; height: 1px; background: #9caebb57; }
+.pause-sector-route [aria-current] { color: var(--sector-color); font-weight: 760; }
+.pause-sector-route [aria-current]::before { background: var(--sector-color); box-shadow: 0 0 8px var(--sector-color); }
+.app .tactical-tool:has(button:focus-visible) { outline: 1px solid var(--tac-gold,#e6c388); outline-offset: 1px; border-radius: 50%; }
+.app .tactical-tabs [role="tab"][aria-selected="true"] { background-image: linear-gradient(110deg,#cfb4781f,transparent 85%); }
+@media (max-height: 450px) { .pause-sector-route li:not([aria-current]) { font-size: 0; } }
 .app .battlefield:has(> #start-screen:not([hidden])) > .masthead .header-actions:has(.tactical-tool) {
   display: flex;
 }
@@ -120,9 +138,20 @@
   --system-scrim: linear-gradient(90deg, #170d14f5 0%, #110f1bdb 57%, #0c101aa1 100%);
 }
 .app .pause-heading {
+  position: relative;
   gap: 13px;
   justify-items: start;
   text-align: left;
+}
+@media (min-width: 980px) and (min-height: 580px) {
+  .app .pause-screen[data-pause-view="menu"] {
+    isolation: isolate; background: linear-gradient(105deg,#070c14f7 4%,#0a1019e0 46%,#0a1019ad);
+  }
+  .app .pause-screen[data-pause-view="menu"]::before {
+    content: ""; position: absolute; inset: 0 0 0 32%; z-index: -1; pointer-events: none;
+    background: linear-gradient(0deg,#050b15b0,transparent 57%), var(--pause-region) center / cover;
+    mask: linear-gradient(90deg,transparent 0%,#0009 45%,#000 100%);
+  }
 }
 .app .pause-heading > .eyebrow { display: none; }
 .app .pause-heading h2,

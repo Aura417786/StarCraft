@@ -54,7 +54,10 @@ function updateEvolutionDisplay() {
   const freeze = evolutionIsFrozen() ? tr(" · 冰封 " + evolution.frozenRemaining.toFixed(1) + " 秒",
     " · Frozen " + evolution.frozenRemaining.toFixed(1) + "s") : "";
   const text = evolutionName(evolution.route) + " · Lv " + evolution.level + " · " + label + freeze;
-  if (evolutionReadout.textContent !== text) evolutionReadout.textContent = text;
+  if (evolutionReadout.textContent !== text) {
+    evolutionReadout.textContent = text;
+    evolutionReadout.style.setProperty("--evolution-ready", String(clamp(1 - cd / evolutionSkillSpec().cooldown, 0, 1)));
+  }
   evolutionReadout.dataset.route = evolution.route;
 }
 function evolutionCardDetails(kind) {

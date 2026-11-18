@@ -262,6 +262,49 @@
 .tactical-boss .boss-health-labels span { font-size: 11px; line-height: 1.12; }
 .tactical-boss #boss-shell-life { color: #ffd690; }
 .tactical-boss #boss-finale-label { margin-inline-start: auto; }
+/* The three lights follow armor, exposed core and finale. The small rail under
+   the health gauge follows the actual seal pulse even if combat time freezes. */
+.boss-phase-beacons { display: flex; align-items: center; justify-content: center; gap: 3px; }
+.boss-phase-beacons i { width: 3px; height: 9px; background: #a7a09a62; transform: skewX(-19deg); }
+.boss-phase-beacons i:first-child,
+.tactical-boss:is([data-life-phase="2"],[data-life-phase="3"]) .boss-phase-beacons i:nth-child(2),
+.tactical-boss[data-life-phase="3"] .boss-phase-beacons i:nth-child(3) { background: var(--boss-sigil); box-shadow: 0 0 4px currentColor; }
+.tactical-boss .tactical-boss-core { clip-path: polygon(0 0,100% 0,calc(100% - 5px) 100%,5px 100%); }
+.tactical-boss .boss-health-fill { background: linear-gradient(90deg, color-mix(in srgb,var(--boss-sigil),#392132 55%),var(--boss-sigil) 76%,#fff6df); }
+.tactical-boss #boss-track { position: relative; }
+.tactical-boss #boss-track:not([data-threat-step="-1"])[data-threat-step]::after {
+  content: ""; position: absolute; bottom: -3px; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, #ffe4a0 80%, #fff);
+  transform: scaleX(var(--impact-progress,0)); transform-origin: left;
+}
+.tactical-loadout .fighter-systems-readout {
+  display: grid; align-content: end; position: absolute; bottom: calc(100% + 4px); left: 0;
+  width: max-content; min-width: 132px; max-width: min(44vw, 310px); margin: 0; padding: 0 0 9px;
+  border: 0; background: none; color: var(--fighter-light); text-shadow: var(--hud-shadow);
+  font: 600 clamp(11px,.85vw,14px)/1.25 var(--tac-font), sans-serif; font-variant-numeric: tabular-nums;
+}
+.tactical-loadout .fighter-systems-readout::before,.tactical-loadout .fighter-systems-readout::after {
+  content: ""; position: absolute; inset: auto 0 0; height: 4px; background: var(--fighter-signal);
+  clip-path: polygon(0 0,100% 0,calc(100% - 6px) 100%,0 100%);
+}
+.tactical-loadout .fighter-systems-readout::before { opacity: .33; }
+.tactical-loadout .fighter-systems-readout::after { clip-path: inset(0 calc((1 - var(--system-charge,0)) * 100%) 0 0); }
+.tactical-loadout .fighter-systems-readout[data-fighter="blue"]::before,
+.tactical-loadout .fighter-systems-readout[data-fighter="blue"]::after {
+  height: 5px; mask: linear-gradient(110deg,#000 88%,transparent 88%) 0 0 / 33.3333% 100% repeat-x;
+}
+.tactical-loadout .fighter-systems-readout[data-fighter="yellow"]::before,
+.tactical-loadout .fighter-systems-readout[data-fighter="yellow"]::after {
+  mask: repeating-linear-gradient(90deg,#000 0 7px,transparent 7px 9px);
+}
+.app .tactical-loadout #evolution-readout:not([hidden]) {
+  left: 0; bottom: calc(100% + 39px); max-width: min(44vw, 340px); width: max-content;
+  border: 0; background: linear-gradient(90deg,#080e18b0,transparent); padding-bottom: 5px;
+}
+.app #evolution-readout:not([hidden])::after {
+  content: ""; position: absolute; inset: auto 0 0; height: 2px; background: currentColor;
+  transform: scaleX(var(--evolution-ready,1)); transform-origin: left; pointer-events: none;
+}
 .tactical-boss .boss-action { text-align: center; color: var(--hud-secondary); font-size: 11px; line-height: 1.24; margin-top: 4px; }
 .app[data-boss-phase="rupture"] .tactical-boss .tactical-boss-armor::after {
   content: "";

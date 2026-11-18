@@ -14,6 +14,7 @@ const TacticalSystem = (() => {
   let pauseFullscreen;
   let pauseMapping;
   let pauseTelemetry;
+  let pauseRoute;
   const pauseInputs = [];
 
   function settingsTabs(host, name, groups, active, onSelect = () => {}) {
@@ -216,6 +217,18 @@ const TacticalSystem = (() => {
       const clock = battleClock.textContent.trim();
       pauseTelemetry.hidden = pauseView !== "menu" || !clock;
       pauseTelemetry.textContent = clock + (boss ? ` · ${boss.name}` : "");
+      pauseRoute.hidden = pauseView !== "menu";
+      if (!pauseRoute.hidden) {
+        const activeSector = battlefieldSectors[battlefieldState.sector];
+        if (activeSector) pauseScreen.style.setProperty("--pause-region", `url("${activeSector.asset}")`);
+        pauseRoute.setAttribute("aria-label", tr("当前星域", "Current sector"));
+        Array.from(pauseRoute.children).forEach((item, index) => {
+          const sector = battlefieldSectors[index];
+          item.textContent = tr(sector.name, sector.enName);
+          if (index === battlefieldState.sector) item.setAttribute("aria-current", "location");
+          else item.removeAttribute("aria-current");
+        });
+      }
     }
     pauseCancelButton.textContent = tr("取消", "Cancel");
     if (!pauseTabSwitch || pauseView !== "settings") return;
@@ -260,6 +273,14 @@ const TacticalSystem = (() => {
     pauseTelemetry = sortieElement("p", "", "tactical-pause-telemetry");
     pauseTelemetry.hidden = true;
     pauseScreen.querySelector(".pause-heading").append(pauseTelemetry);
+    pauseRoute = sortieElement("ol", "", "pause-sector-route");
+    pauseRoute.hidden = true;
+    for (const sector of battlefieldSectors) {
+      const item = document.createElement("li");
+      item.style.setProperty("--sector-color", sector.color);
+      pauseRoute.append(item);
+    }
+    pauseTelemetry.after(pauseRoute);
     initPauseSettings();
     prepareTools();
     flightControlsDialog?.addEventListener("close", () => {

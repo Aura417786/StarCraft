@@ -162,9 +162,9 @@ function drawOrbitSurface(ctx, plate, frame, age) {
   ctx.restore();
 }
 
-function sceneryDrawSector(sector, alpha, age) {
+function sceneryDrawSector(sector, alpha, age, ctx = context) {
   if (alpha <= 0) return;
-  const ctx = context, w = viewport.width, h = viewport.height;
+  const w = viewport.width, h = viewport.height;
   const layer = sceneryLayer(sector, state === "menu");
   // Keep the menu's orbit visible while the first battle panorama downloads.
   const backdrop = layer?.ready ? layer : alpha === 1 ? sceneryCache.get("menu") : null;
@@ -177,8 +177,8 @@ function sceneryDrawSector(sector, alpha, age) {
   } else if (alpha === 1) { ctx.fillStyle = battlefieldSectors[sector].dark; ctx.fillRect(0, 0, w, h); }
   ctx.restore();
 }
-function sceneryDrawParticles() {
-  const ctx = context, w = viewport.width, h = viewport.height, quiet = reducedMotion.matches;
+function sceneryDrawParticles(ctx = context) {
+  const w = viewport.width, h = viewport.height, quiet = reducedMotion.matches;
   const clock = quiet ? 0 : battlefieldState.clock + battlefieldState.ambientClock;
   for (const star of sceneryStars) {
     const span = w + 30;
@@ -194,7 +194,8 @@ function sceneryDrawParticles() {
     const x = ((particle.x * span - clock * speed) % span + span) % span - 30;
     const y = particle.y * h - battlefieldState.driftY * (1 + particle.depth * 1.3);
     ctx.fillStyle = `rgba(${sceneryDustTints[battlefieldState.sector]},${0.046 + particle.depth * 0.057})`;
-    ctx.beginPath(); ctx.arc(x, y, 0.5 + particle.depth * 0.55, 0, Math.PI * 2); ctx.fill();
+    const wake = sampleCastWake(x,y,.72 + particle.depth);
+    ctx.beginPath(); ctx.arc(x+wake.x, y+wake.y, 0.5 + particle.depth * 0.55, 0, Math.PI * 2); ctx.fill();
   }
   const journey = sceneryJourney();
   // A light cone and velocity gradient separate mid-distance mesh silhouettes from the distant plate.
@@ -208,10 +209,11 @@ function sceneryDrawParticles() {
       const x = ((sceneryHash(i * 7.4 + 12) * span - clock * speed) % span + span) % span - size * 1.5;
       const y = i ? size * .15 : h - size * .13;
       if (x + size * .68 < 0 || x - size * .68 > w) continue;
+      const wake = sampleCastWake(x,y,i ? .32 : .61);
       drawSpaceProp(ctx, kind, {
-        x: x - battlefieldState.driftX * (1.8 + i * .55), y: y - battlefieldState.driftY * (1.8 + i * .55),
+        x: x + wake.x - battlefieldState.driftX * (1.8 + i * .55), y: y + wake.y - battlefieldState.driftY * (1.8 + i * .55),
         width: size, height: size * (kind === "rock" ? .93 : .76), variant: i + index,
-        pitch: -.23 + clock * (.071 + i * .012), yaw: -.52 - clock * .094 + i * .81, roll: i * 1.7 + clock * .068,
+        pitch: -.23 + clock * (.071 + i * .012), yaw: -.52 - clock * .094 + i * .81, roll: i * 1.7 + clock * .068 + wake.roll,
         alpha: strength * (i ? 2.52 : 1.72), haze: i ? .16 : .42, sector: index,
       });
     }
@@ -255,19 +257,19 @@ function drawSceneryOcclusion(ctx, target) {
   ctx.restore();
 }
 
-function drawBattlefield(showHud = true) {
-  const ctx = context, w = viewport.width, h = viewport.height, journey = sceneryJourney();
+function drawBattlefield(showHud = true, ctx = context) {
+  const w = viewport.width, h = viewport.height, journey = sceneryJourney();
   ctx.save(); ctx.fillStyle = "#03060c"; ctx.fillRect(0, 0, w, h);
-  sceneryDrawSector(journey.current, 1, journey.currentAge);
-  if (journey.blend > 0) sceneryDrawSector(journey.next, journey.blend, journey.nextAge);
+  sceneryDrawSector(journey.current, 1, journey.currentAge, ctx);
+  if (journey.blend > 0) sceneryDrawSector(journey.next, journey.blend, journey.nextAge, ctx);
   // Dim the blended scenery once so the landmarks stay visible and combat effects read clearly.
   if (state !== "menu") {
     ctx.fillStyle = "#03060c66";
     ctx.fillRect(0, 0, w, h);
   }
   drawSceneryMoon(ctx, journey);
-  sceneryDrawParticles();
-  drawActiveJourney("back");
+  sceneryDrawParticles(ctx);
+  drawActiveJourney("back", ctx);
   if (h !== sceneryVignetteHeight) {
     sceneryVignette = ctx.createLinearGradient(0, 0, 0, h);
     sceneryVignette.addColorStop(0, "#02040b40"); sceneryVignette.addColorStop(0.12, "#02040b18");

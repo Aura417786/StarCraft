@@ -131,6 +131,36 @@ function signatureGuide(ctx, y, size, active, direction = -1, right = viewport.w
   BossConfluenceVfx.safeGuide(ctx, 0, y - size / 2, right, size, active, time, direction);
 }
 
+// Translucent material in world space. Both cached textures reach zero alpha
+// before their own pixel bounds, including the narrow ends of a hazard.
+function drawBossFieldWash(ctx, x, y, width, height, color, intensity, time = 0) {
+  if (!(width > 0 && height > 0 && intensity > 0)) return;
+  const drift = Math.sin(time*1.73)*.032;
+  ctx.save();
+  ctx.globalAlpha *= intensity;
+  ctx.drawImage(pressureArtGlow(color), x, y, width, height);
+  ctx.drawImage(pressureArtMist(color), x+width*(.055+drift), y+height*.08, width*.91, height*.86);
+  ctx.restore();
+}
+
+// The two short crests mark the exact edges near the pilot. The empty space
+// between marks lets the eye follow the world rather than a rectangular rail.
+function bossRangeMarks(ctx, x, y, width, height, color, vertical = false) {
+  const length = vertical ? height : width, breadth = vertical ? width : height;
+  if (length < 1 || breadth < 1) return;
+  ctx.save(); ctx.translate(vertical ? x+width : x,y);
+  if (vertical) ctx.rotate(Math.PI/2);
+  ctx.strokeStyle=color;ctx.lineWidth=1.3;ctx.setLineDash([]);ctx.lineCap="round";
+  const half=Math.min(10,length*.037);
+  ctx.beginPath();
+  for (const at of [.19,.52,.84]) {
+    const px=at*length;
+    ctx.moveTo(px-half,Math.min(3,breadth*.1));ctx.quadraticCurveTo(px,0,px+half,Math.min(2,breadth*.08));
+    ctx.moveTo(px-half,breadth-Math.min(2,breadth*.08));ctx.quadraticCurveTo(px,breadth,px+half,breadth-Math.min(3,breadth*.1));
+  }
+  ctx.stroke();ctx.restore();
+}
+
 function traceSignatureFront(ctx, crestAt, top, bottom, offset) {
   const steps = 14;
   for (let index = 0; index <= steps; index++) {

@@ -353,7 +353,51 @@ function ultimateClipDanger(ctx, hazard) {
   ctx.rect(0, bottom, viewport.width, viewport.height - bottom); ctx.clip();
 }
 
-function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
+let bossLaneFringe;
+
+function drawBossUltimateGeometry(ctx,hazard,geometry,target) {
+  if (!hazard.noShield || typeof ctx.getTransform!=="function") {
+    paintBossUltimateGeometry(ctx,hazard,geometry,target);
+    return;
+  }
+  const m=ctx.getTransform();
+  if (m.a<=0 || m.d<=0 || Math.abs(m.b)+Math.abs(m.c)>.001) {
+    paintBossUltimateGeometry(ctx,hazard,geometry,target);
+    return;
+  }
+  // The regular renderer supplies the completed world before painting the
+  // spell, so sunlight, additive emission, refraction, and soft-light interact
+  // with the true scene. Preview canvases can take their own one-frame copy.
+  const supplied=NextgenVfx.getSuppliedWorld(ctx);
+  const world=supplied || NextgenVfx.refractionSource(ctx);
+  if(!supplied)NextgenVfx.supplyWorldSource(ctx,world);
+  try { paintBossUltimateGeometry(ctx,hazard,geometry,target); }
+  finally { if(!supplied)NextgenVfx.supplyWorldSource(null,null); }
+  const band=Math.max(8,Math.min(22,viewport.height*.028));
+  const top=hazard.gapY-hazard.gapSize*.5, bottom=hazard.gapY+hazard.gapSize*.5;
+  const w=Math.ceil(viewport.width*m.a), h=Math.ceil(band*m.d);
+  if (!bossLaneFringe) {
+    const surface=document.createElement("canvas");
+    bossLaneFringe={surface,paint:surface.getContext("2d"),mask:null};
+  }
+  const fringe=bossLaneFringe,{surface,paint}=fringe;
+  if (!fringe.mask || surface.width!==w || surface.height!==h*2) {
+    surface.width=w;surface.height=h*2;
+    fringe.mask=paint.createLinearGradient(0,0,0,h*2);
+    for(const [stop,alpha] of [[0,0],[.15,.09],[.38,.73],[.5,1],[.62,.73],[.85,.09],[1,0]])
+      fringe.mask.addColorStop(stop,"rgba(0,0,0,"+alpha+")");
+  }
+  paint.clearRect(0,0,w,h*2);
+  paint.drawImage(world,m.e,(top-band)*m.d+m.f,viewport.width*m.a,band*m.d,0,0,w,h);
+  paint.drawImage(world,m.e,bottom*m.d+m.f,viewport.width*m.a,band*m.d,0,h,w,h);
+  paint.globalCompositeOperation="destination-in";
+  paint.fillStyle=fringe.mask;paint.fillRect(0,0,w,h*2);
+  paint.globalCompositeOperation="source-over";
+  ctx.save();ctx.globalAlpha=1;ctx.globalCompositeOperation="source-over";
+  ctx.drawImage(surface,0,0,w,h,0,top-band,viewport.width,band);
+  ctx.drawImage(surface,0,h,w,h,0,bottom,viewport.width,band);ctx.restore();
+}
+function paintBossUltimateGeometry(ctx, hazard, geometry, target) {
   const quiet = quietCombatMotion();
   const time = quiet ? 0 : hazard.age;
   const active = hazard.age >= hazard.warning;
@@ -419,9 +463,9 @@ function drawBossUltimateGeometry(ctx, hazard, geometry, target) {
   ctx.restore();
 }
 
-function drawBossUltimateArt(ctx, target, scene, layer) {
+function drawBossUltimateArt(ctx, target, scene, layer, chargeDrawn = false) {
   if (layer !== "back" || !scene?.ultimateKind || typeof bossUltimateGeometry !== "function") return;
-  if (scene.stage === "charge") drawUltimateChargeIdentity(ctx, target, scene);
+  if (!chargeDrawn && scene.stage === "charge") drawUltimateChargeIdentity(ctx, target, scene);
   for (const hazard of bossHazards) {
     if (hazard.kind !== "ultimate" || hazard.age < (hazard.tellAt || 0) || hazard.age >= hazard.warning + hazard.duration) continue;
     drawBossUltimateGeometry(ctx, hazard, bossUltimateGeometry(hazard), target);
@@ -570,39 +614,11 @@ function drawBossUltimateHazard(ctx, hazard, quiet) {
     ctx.setLineDash([7, 6]);
     for (const rect of geometry.rects) {
       const { x, y, width, height } = rect;
-      const vertical = height > width;
-      const length = vertical ? height : width;
-      const depth = vertical ? width : height;
       ctx.save();
-      ctx.translate(vertical ? x + width : x, y);
-      if (vertical) ctx.rotate(Math.PI / 2);
-      const gradient = ctx.createLinearGradient(0, 0, 0, depth);
-      gradient.addColorStop(0, mat.rim + "28");
-      gradient.addColorStop(.16, mat.rim + "09");
-      gradient.addColorStop(.77, "transparent");
-      gradient.addColorStop(1, mat.rim + "16");
-      const opacity = .50 + .23 * Math.min(1, hazard.age / Math.max(.01, hazard.warning));
-      ctx.globalAlpha = opacity;
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.moveTo(0, depth * .25);
-      ctx.bezierCurveTo(length * .11, 0, length * .86, 0, length, depth * .14);
-      ctx.quadraticCurveTo(length * .92, depth * .96, length * .81, depth);
-      ctx.lineTo(length * .12, depth);
-      ctx.quadraticCurveTo(0, depth * .85, 0, depth * .25);
-      ctx.fill();
-      const rail = ctx.createLinearGradient(0, 0, length, 0);
-      rail.addColorStop(0, "transparent");
-      rail.addColorStop(.21, mat.rim);
-      rail.addColorStop(.79, mat.rim);
-      rail.addColorStop(1, "transparent");
-      ctx.strokeStyle = rail;
-      ctx.lineWidth = 1.15;
-      ctx.setLineDash([2, 11]);
-      ctx.beginPath();
-      ctx.moveTo(0, .7); ctx.lineTo(length, .7);
-      ctx.moveTo(0, depth - .7); ctx.lineTo(length, depth - .7);
-      ctx.stroke();
+      const charge = clamp(hazard.age / Math.max(.01,hazard.warning),0,1);
+      drawBossFieldWash(ctx,x,y,width,height,mat.rim,.48+.32*charge,quiet?0:hazard.age);
+      ctx.globalAlpha=.52+.22*charge;
+      bossRangeMarks(ctx,x,y,width,height,mat.rim,height>width);
       ctx.restore();
     }
     for (const circle of geometry.circles) {
@@ -612,15 +628,18 @@ function drawBossUltimateHazard(ctx, hazard, quiet) {
       }
     }
     for (const line of geometry.segments) {
-      const dx = line.x2 - line.x1, dy = line.y2 - line.y1, d = Math.max(1, Math.hypot(dx, dy));
-      const nx = -dy / d * line.width / 2, ny = dx / d * line.width / 2;
-      ctx.beginPath();
-      ctx.moveTo(line.x1 + nx, line.y1 + ny); ctx.lineTo(line.x2 + nx, line.y2 + ny);
-      ctx.moveTo(line.x1 - nx, line.y1 - ny); ctx.lineTo(line.x2 - nx, line.y2 - ny);
-      ctx.stroke();
+      const dx=line.x2-line.x1, dy=line.y2-line.y1, length=Math.hypot(dx,dy);
+      ctx.save();ctx.translate(line.x1,line.y1);ctx.rotate(Math.atan2(dy,dx));
+      drawBossFieldWash(ctx,0,-line.width*.5,length,line.width,mat.rim,.79);
+      bossRangeMarks(ctx,0,-line.width*.5,length,line.width,mat.rim);
+      ctx.restore();
     }
     ctx.restore();
   }
+  ctx.save();
+  ultimateClipDanger(ctx,hazard);
+  BossResonance.ultimateImpact(ctx,boss,hazard,geometry,quiet);
+  ctx.restore();
   const time = quiet ? 0 : hazard.age;
   // The no-shield gap is already marked by the seal warning on this frame.
   if (hazard.noShield) {

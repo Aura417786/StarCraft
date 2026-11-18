@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080b14">
+  <meta name="application-version" content="36">
   <meta name="description" content="星际突围是一款横向太空射击游戏。迎战十一只异形，躲开破壳后的专属连招。">
-  <title>星际突围 · 裂星回响</title>
+  <title>星际突围 · 裂星回响 v36</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff414e' d='M30 16 3 3 9 16 3 29Z'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="combat-hud.css">
@@ -17,70 +18,71 @@
   <link rel="stylesheet" href="hangar-menu.css">
   <link rel="stylesheet" href="opening.css">
   <link rel="stylesheet" href="tactical-ui.css">
-  <link rel="stylesheet" href="tactical-hangar.css">
-  <link rel="stylesheet" href="tactical-hud.css">
-  <link rel="stylesheet" href="tactical-system.css">
+  <link rel="stylesheet" href="tactical-hangar.css?v=36">
+  <link rel="stylesheet" href="tactical-hud.css?v=36">
+  <link rel="stylesheet" href="tactical-system.css?v=36">
   <script src="i18n.js" defer></script>
   <script src="render-quality.js" defer></script>
-  <script src="audio-catalog.js" defer></script>
-  <script src="audio.js" data-faction-scores defer></script>
+  <script src="audio-catalog.js?v=36" defer></script>
+  <script src="audio.js?v=36" data-faction-scores defer></script>
   <script src="fighter-atlas-data.js" defer></script>
   <script src="ship-renderer.js?v=high-refresh-2" defer></script>
   <script src="fighter-variants.js" defer></script>
   <script src="vendor/three-starbreaker.min.js" defer></script>
   <script src="alien-material.js" defer></script>
-  <script src="alien-models.js?v=high-refresh-2" defer></script>
+  <script src="alien-models.js?v=36" defer></script>
   <script src="alien-boss-art.js" defer></script>
   <script src="hadal-surface.js" defer></script>
   <script src="blackhole-surface.js?v=high-refresh-2" defer></script>
-  <script src="nextgen-elemental-vfx.js" defer></script>
-  <script src="boss-confluence-vfx.js" defer></script>
-  <script src="boss-creature-vfx.js" defer></script>
+  <script src="nextgen-elemental-vfx.js?v=36" defer></script>
+  <script src="boss-confluence-vfx.js?v=36" defer></script>
+  <script src="boss-creature-vfx.js?v=36" defer></script>
   <script src="boss-energy-vfx.js" defer></script>
-  <script src="elemental-fluid-vfx.js" defer></script>
-  <script src="elemental-armored-vfx.js" defer></script>
-  <script src="elemental-cosmic-vfx.js" defer></script>
+  <script src="elemental-fluid-vfx.js?v=36" defer></script>
+  <script src="elemental-armored-vfx.js?v=36" defer></script>
+  <script src="elemental-cosmic-vfx.js?v=36" defer></script>
   <script src="elemental-confluence-vfx.js" defer></script>
   <script src="boss-elemental-vfx.js" defer></script>
-  <script src="boss-attack-art.js" defer></script>
+  <script src="boss-attack-art.js?v=36" defer></script>
+  <script src="boss-resonance.js?v=36" defer></script>
   <script src="boss-fragments-data.js" defer></script>
   <script src="boss-arrival-vfx.js" defer></script>
   <script src="boss-presentation.js" defer></script>
   <script src="hostile-projectiles.js?v=high-refresh-2" defer></script>
-  <script src="alien-attacks.js?v=high-refresh-2" defer></script>
-  <script src="boss-mechanics.js" defer></script>
-  <script src="alien-pressure.js" defer></script>
+  <script src="alien-attacks.js?v=36" defer></script>
+  <script src="boss-mechanics.js?v=36" defer></script>
+  <script src="alien-pressure.js?v=36" defer></script>
   <script src="boss-pressure-copy.js" defer></script>
-  <script src="boss-pressure.js" defer></script>
-  <script src="boss-finales.js" defer></script>
-  <script src="bosses.js?v=high-refresh-2" defer></script>
-  <script src="ultimate.js" defer></script>
-  <script src="player-vfx.js" defer></script>
-  <script src="shield.js?v=high-refresh-2" defer></script>
+  <script src="boss-pressure.js?v=36" defer></script>
+  <script src="boss-finales.js?v=36" defer></script>
+  <script src="bosses.js?v=36" defer></script>
+  <script src="ultimate.js?v=36" defer></script>
+  <script src="player-vfx.js?v=36" defer></script>
+  <script src="shield.js?v=36" defer></script>
   <script src="enemy-art.js" defer></script>
   <script src="enemies.js?v=high-refresh-2" defer></script>
   <script src="elite-enemies.js" defer></script>
   <script src="formations.js?v=high-refresh-2" defer></script>
-  <script src="evolution.js?v=high-refresh-2" defer></script>
+  <script src="evolution.js?v=36" defer></script>
   <script src="momentum.js" defer></script>
   <script src="fire-control.js?v=high-refresh-2" defer></script>
-  <script src="flight-vfx.js?v=high-refresh-2" defer></script>
-  <script src="scene-lighting.js" defer></script>
+  <script src="flight-vfx.js?v=36" defer></script>
+  <script src="scene-lighting.js?v=36" defer></script>
   <script src="combat-effects.js?v=high-refresh-2" defer></script>
-  <script src="boss-vfx-materials.js" defer></script>
-  <script src="boss-pressure-art.js" defer></script>
-  <script src="boss-ultimate-art.js" defer></script>
+  <script src="boss-vfx-materials.js?v=36" defer></script>
+  <script src="boss-pressure-art.js?v=36" defer></script>
+  <script src="boss-ultimate-art.js?v=36" defer></script>
   <script src="evolution-art.js" defer></script>
-  <script src="space-props.js?v=high-refresh-2" defer></script>
-  <script src="battlefield.js?v=high-refresh-2" defer></script>
+  <script src="space-props.js?v=36" defer></script>
+  <script src="battlefield.js?v=36" defer></script>
   <script src="battlefield-events.js?v=high-refresh-2" defer></script>
-  <script src="journey.js" defer></script>
+  <script src="journey.js?v=36" defer></script>
   <script src="journey-encounters.js" defer></script>
-  <script src="journey-art.js" defer></script>
+  <script src="journey-art.js?v=36" defer></script>
   <script src="ace.js?v=high-refresh-2" defer></script>
   <script src="gravity.js?v=high-refresh-2" defer></script>
   <script src="progression.js" defer></script>
-  <script src="evolution-weapons.js?v=high-refresh-2" defer></script>
+  <script src="evolution-weapons.js?v=36" defer></script>
   <script src="evolution-preview.js" defer></script>
   <script src="i18n-static.js" defer></script>
   <script src="guide.js" defer></script>
@@ -97,14 +99,23 @@
   <script src="opening-score.js" defer></script>
   <script src="opening.js" defer></script>
   <script src="hangar-navigation.js" defer></script>
-  <script src="game.js?v=high-refresh-2" defer></script>
+  <script src="game.js?v=36" defer></script>
   <script src="boss-retry.js" defer></script>
   <script src="battle-rewind.js?v=high-refresh-2" defer></script>
   <script src="awards-ui.js?v=hangar-preview-2" defer></script>
-  <script src="sortie-ui.js" defer></script>
-  <script src="tactical-system.js" defer></script>
+  <script src="sortie-ui.js?v=36" defer></script>
+  <script src="tactical-system.js?v=36" defer></script>
   <script src="campaign-victory.js" defer></script>
   <script src="tactical-hangar.js" defer></script>
+  <script>
+    if (new URLSearchParams(location.search).has("showcase")) {
+      document.addEventListener("DOMContentLoaded", () => {
+        const script = document.createElement("script");
+        script.src = "showcase.js?v=36";
+        document.head.append(script);
+      }, { once: true });
+    }
+  </script>
 </head>
 <body>
   <main class="app" id="game-app">
@@ -225,7 +236,6 @@
             <span class="tactical-weapon-label">红 · 伤害</span><strong id="weapon-damage">2.2点/发</strong>
           </span>
         </div>
-        <div id="evolution-readout" class="evolution-readout" aria-label="本局战机进化" hidden></div>
         <div id="momentum-hud" class="momentum-hud tactical-momentum" data-overdrive="false" data-frozen="false" aria-label="连击与暴走状态">
           <div class="combo-heading"><span id="combo-caption">连击 / COMBO</span><span id="combo-best">最高 0</span></div>
           <div class="combo-value"><strong id="combo-count">0</strong><span class="rage-mark" aria-hidden="true">OVERDRIVE</span></div>
@@ -234,6 +244,7 @@
           <button id="stance-button" class="stance-button" type="button" aria-pressed="false" title="轻点 Shift 切换射击姿态，长按加速">扩散模式 · 轻点 Shift</button>
         </div>
         <div class="tactical-loadout">
+          <div id="evolution-readout" class="evolution-readout" aria-label="本局战机进化" hidden></div>
           <div id="ultimate-hud" class="ultimate-hud tactical-skill" data-ready="false" data-phase="idle" aria-label="大招状态">
             <div id="ultimate-meter" class="ultimate-meter tactical-dial" role="progressbar" aria-label="下一次大招能量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <svg class="tactical-dial-graphic" viewBox="0 0 80 80" aria-hidden="true">
@@ -299,6 +310,7 @@
             </div>
             <p id="boss-action" class="boss-action" role="status"></p>
           </div>
+          <div class="boss-phase-beacons" aria-hidden="true"><i></i><i></i><i></i></div>
         </div>
         <p id="boss-warning" class="sr-only" role="status" aria-atomic="true" hidden><span id="boss-warning-name"></span></p>
         <aside id="flight-radio" class="flight-radio" hidden>

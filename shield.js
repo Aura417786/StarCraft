@@ -6,6 +6,8 @@ const shieldRules = { maxCharges: 2, chargeTime: 25, duration: 2, perfectWindow:
 const shield = { charges: 0, energy: 0, remaining: 0, perfectRemaining: 0, perfectUsed: false,
   duration: shieldRules.duration, flash: 0, slowRemaining: 0, effect: null };
 const shieldPanel = document.querySelector("#shield-hud");
+const shieldName = document.querySelector("#shield-hud .shield-name");
+const shieldNames = { red: ["赤焰护盾", "Crimson Shield"], blue: ["苍电弧盾", "Arc Shield"], yellow: ["曜金晶盾", "Auric Aegis"] };
 const shieldCount = document.querySelector("#shield-count");
 const shieldMeter = document.querySelector("#shield-meter");
 const shieldFill = document.querySelector("#shield-fill");
@@ -14,6 +16,7 @@ const shieldSlots = document.querySelectorAll(".shield-slot");
 let shieldDisplayKey = "";
 
 function shieldIsActive() { return shield.remaining > 0; }
+function shieldDisplayName() { return tr(...shieldNames[currentUltimateId()]); }
 function shieldDisabledForSortie() { return typeof sortieRules === "function" && sortieRules().noShield; }
 function gainShieldEnergy(amount) {
   if (shieldDisabledForSortie() || shield.charges >= shieldRules.maxCharges || !Number.isFinite(amount) || amount <= 0) return 0;
@@ -37,6 +40,7 @@ function shieldInterceptsProjectile(shot, swept = true) {
 }
 function consumeEvolutionShieldProjectile(shot, swept = true) {
   if (!shieldInterceptsProjectile(shot, swept)) return false;
+  if (typeof FighterMaterialFx !== "undefined") FighterMaterialFx.shieldContact(shot, swept);
   if (shot.source === "flight-training" && typeof noteFlightTutorialContact === "function") noteFlightTutorialContact(shot, true);
   captureEvolutionProjectile(shot);
   return true;
@@ -114,9 +118,12 @@ function updateShieldDisplay() {
   const ready = shield.perfectRemaining > 1e-9 && !shield.perfectUsed;
   const absorbLimit = evolutionWeaponRules.absorbLimit[evolution.aegis];
   const absorbed = evolutionWeapons.absorbed.length;
-  const key = [gameLanguage, shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed, disabled, evolution.aegis, keyLabel].join("/");
+  const name = shieldDisplayName();
+  const key = [gameLanguage, name, shield.charges, percent.toFixed(1), remaining, perfect, ready, absorbLimit, absorbed, disabled, evolution.aegis, keyLabel].join("/");
   if (key === shieldDisplayKey) return;
   shieldDisplayKey = key;
+  if (shieldName) shieldName.textContent = name;
+  shieldPanel.setAttribute("aria-label", name + tr("状态", " status"));
   shieldCount.textContent = shield.charges + " / " + shieldRules.maxCharges;
   shieldFill.style.width = percent.toFixed(1) + "%";
   if (shieldMeter.classList.contains("tactical-dial")) shieldMeter.style.setProperty("--charge-points", percent.toFixed(1));
@@ -157,8 +164,8 @@ function requestShield() {
   player.hitFlash = 0;
   movementHint.hidden = true;
   updateShieldDisplay();
-  if (!shield.perfectUsed) statusMessage.textContent = tr("赤焰护盾开启，2 秒内无敌；最初 0.25 秒挡住敌弹可完美反击，剩余 " + shield.charges + " 次。",
-    "Crimson Shield active for 2 seconds. Block within the first 0.25 seconds for a Perfect Guard. Charges left: " + shield.charges + ".");
+  if (!shield.perfectUsed) statusMessage.textContent = shieldDisplayName() + tr("开启，2 秒内无敌。最初 0.25 秒挡住敌弹可完美反击，剩余 " + shield.charges + " 次。",
+    " active for 2 seconds. Block within the first 0.25 seconds for a Perfect Guard. Charges left: " + shield.charges + ".");
   return true;
 }
 function updateShield(seconds) {
@@ -195,6 +202,10 @@ function drawShield(alpha = 1) {
   const x = flightRenderX(player, alpha), y = flightRenderY(player, alpha);
   const rx = player.width * 0.60, ry = player.height * 0.65;
   const age = Math.max(0, shield.duration - shield.remaining);
+  if (typeof FighterMaterialFx !== "undefined") {
+    FighterMaterialFx.shield(context, currentUltimateId(), x, y, rx, ry, age);
+    return;
+  }
   const fade = reducedMotion.matches ? 1 : Math.min(1, age / 0.12 + 0.25, shield.remaining / 0.18);
   context.save();
   context.translate(x, y);

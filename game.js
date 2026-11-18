@@ -185,6 +185,7 @@ function syncGameAudio() {
   frame.bossX = boss?.x ?? bossPresentation?.target.x;
   frame.bossY = boss?.y ?? bossPresentation?.target.y;
   frame.scene = state;
+  frame.region = typeof battlefieldSectors === "undefined" ? "orbit" : battlefieldSectors[battlefieldState.sector]?.id ?? "orbit";
   frame.fighter = typeof currentUltimateId === "function" ? currentUltimateId() : "red";
   frame.elite = false;
   for (const enemy of enemies) {
@@ -199,6 +200,17 @@ function updateSoundButton() {
 }
 try { gameAudio.setMuted(window.localStorage.getItem("star-breaker-muted") === "true"); } catch { /* 本地文件也能使用声音，无法记忆设置时忽略。 */ }
 updateSoundButton();
+function unlockHangarAudio(event) {
+  if (!event.isTrusted || state !== "menu" || gameAudio.muted) return;
+  Promise.resolve(gameAudio.unlock()).then(running => {
+    if (!running) return;
+    window.removeEventListener("pointerup", unlockHangarAudio, true);
+    window.removeEventListener("keydown", unlockHangarAudio, true);
+    syncGameAudio();
+  });
+}
+window.addEventListener("pointerup", unlockHangarAudio, true);
+window.addEventListener("keydown", unlockHangarAudio, true);
 function toggleGameSound() {
   gameAudio.unlock();
   gameAudio.setMuted(!gameAudio.muted);
@@ -1446,6 +1458,56 @@ function advanceCombatFrame(seconds, resuming) {
     ? 1 : clamp(combatStepRemainder / combatStepSeconds, 0, 1);
 }
 
+let bossRefractionWorld;
+
+function drawWorldBehindCombat(ctx, showCombat) {
+  drawBattlefield(showCombat, ctx);
+  drawSceneLightingBackdrop(ctx);
+  if (typeof drawCosmicFlightVfx === "function") drawCosmicFlightVfx(ctx, viewport, battlefieldState);
+  if (typeof warmHadalDestination === "function") warmHadalDestination(ctx, state === "battle");
+  drawActiveJourney("front", ctx);
+  drawBossPresentationBackdrop(ctx);
+  if (showCombat) drawBossEncounterFilaments(ctx);
+}
+
+function drawBattleBackground(showCombat) {
+  const scene = showCombat && boss?.pressureState;
+  // Ordinary frames draw straight to the display. During an open-lane attack,
+  // the world is drawn once into a native-resolution, read-only source.
+  const needsWorld = scene?.ultimateKind && !boss.finale && boss.hp > 0 && bossHazards.some(h =>
+    h.kind === "ultimate" && h.noShield && h.age >= (h.tellAt || 0) && h.age < h.warning + h.duration);
+  if (needsWorld && typeof context.getTransform === "function") {
+    if (!bossRefractionWorld) {
+      const surface = document.createElement("canvas");
+      bossRefractionWorld = surface.getContext("2d");
+    }
+    const paint = bossRefractionWorld;
+    if (paint) {
+      const surface = paint.canvas;
+      if (surface.width !== canvas.width) surface.width = canvas.width;
+      if (surface.height !== canvas.height) surface.height = canvas.height;
+      if (!battlefieldCoversCanvas) paint.clearRect(0, 0, surface.width, surface.height);
+      paint.save();
+      paint.setTransform(context.getTransform());
+      drawWorldBehindCombat(paint, showCombat);
+      drawPressureWorldBase(paint, scene);
+      if (scene.stage === "charge") drawUltimateChargeIdentity(paint, boss, scene);
+      paint.restore();
+      context.save();
+      context.resetTransform();
+      context.globalCompositeOperation = "copy";
+      context.drawImage(surface, 0, 0);
+      context.restore();
+      NextgenVfx.supplyWorldSource(context, surface);
+      try { drawBossPressureArt("back", true); }
+      finally { NextgenVfx.supplyWorldSource(null, null); }
+      return;
+    }
+  }
+  drawWorldBehindCombat(context, showCombat);
+  if (showCombat && typeof drawBossPressureArt === "function") drawBossPressureArt("back");
+}
+
 function drawFrame(time) {
   const resuming = previousTime === 0;
   const realSeconds = resuming ? 0 : clamp((time - previousTime) / 1000, 0, maxCombatFrameSeconds);
@@ -1481,14 +1543,7 @@ function drawFrame(time) {
       context.translate(-viewport.width / 2, -viewport.height / 2);
     }
   }
-  drawBattlefield(showCombat);
-  drawSceneLightingBackdrop(context);
-  if (typeof drawCosmicFlightVfx === "function") drawCosmicFlightVfx(context, viewport, battlefieldState);
-  if (typeof warmHadalDestination === "function") warmHadalDestination(context, state === "battle");
-  drawActiveJourney("front");
-  drawBossPresentationBackdrop(context);
-  if (showCombat) drawBossEncounterFilaments(context);
-  if (showCombat && typeof drawBossPressureArt === "function") drawBossPressureArt("back");
+  drawBattleBackground(showCombat);
   if (showCombat) drawCombatPostProcessing(context);
   if (showCombat) drawSceneLightScatter(context);
   context.globalAlpha = 1;

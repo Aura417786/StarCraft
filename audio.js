@@ -66,6 +66,8 @@ const gameAudio = (() => {
   let threat = 0;
   let scene = "battle";
   let fighterType = "red";
+  let region = "orbit";
+  let regionGroup = "";
   let lowLife = false;
   let eliteActive = false;
   let nextgenBossGroup = "";
@@ -90,6 +92,7 @@ const gameAudio = (() => {
   };
   const catalog = typeof starBreakerAudioCatalog !== "undefined" ? starBreakerAudioCatalog : null;
   const nextgen = catalog?.nextgen;
+  const encounters = catalog?.encounters;
   if (nextgen) {
     authoredStems.hangar = ["ng_hangar_harmony", "ng_hangar_detail"];
     authoredStems.adventure.push("ng_flight_alert");
@@ -475,16 +478,21 @@ const gameAudio = (() => {
     return offlineBanks.get(filename);
   }
   async function audioBytes(name, faction, signal) {
-    const authored = nextgen?.clips[name];
+    const encounter = encounters?.clips[name];
+    const authored = encounter ?? nextgen?.clips[name];
     if (authored) {
+      const directory = encounter ? "encounters" : "nextgen";
       if (!offlineAudio) {
-        const response = await fetch(`assets/audio/nextgen/${name}.ogg`, { signal });
+        const response = await fetch(`assets/audio/${directory}/${name}.ogg`, { signal });
         return response.ok ? response.arrayBuffer() : null;
       }
-      await offlineBank(`assets/audio/nextgen/${authored.group}.js`);
+      await offlineBank(`assets/audio/${directory}/${authored.group}.js`);
       const encoded = globalThis.starBreakerNextgenAudio?.[name];
       if (!encoded || disposed || signal?.aborted) return null;
-      return Uint8Array.from(atob(encoded), char => char.charCodeAt(0)).buffer;
+      if (typeof Uint8Array.fromBase64 === "function") return Uint8Array.fromBase64(encoded).buffer;
+      const raw = atob(encoded), bytes = new Uint8Array(raw.length);
+      for (let index = 0; index < raw.length; index++) bytes[index] = raw.charCodeAt(index);
+      return bytes.buffer;
     }
     if (!offlineAudio) {
       const response = await fetch(`assets/audio/${name}.ogg`, { signal });
@@ -556,42 +564,51 @@ const gameAudio = (() => {
     if (type === factions.length - 1) requestVictory();
   }
   function requestPalette(group) {
-    if (!nextgen?.groups[group] || !audio || muted || disposed || nextgenRequests.has(group)) return;
+    const names = encounters?.groups[group] ?? nextgen?.groups[group];
+    if (!names || !audio || muted || disposed || nextgenRequests.has(group)) return;
     const current = audio;
     const request = new AbortController();
     nextgenRequests.set(group, request);
     (async () => {
-      const names = nextgen.groups[group];
       for (let index = 0; index < names.length; index += 3) {
         await Promise.all(names.slice(index, index + 3).map(async name => {
-          const clip = await decodeAudio(current, name, { signal: request.signal });
+          const clip = await decodeAudio(current, name, { signal: request.signal, loop: !!encounters?.clips[name]?.bpm });
           if (clip && !disposed && audio === current && !request.signal.aborted) buffers.set(name, clip);
         }));
         if (request.signal.aborted || disposed) return;
       }
-    })().catch(() => { nextgenRequests.delete(group); });
+      if (encounters?.groups[group] && liveScore) updateScoreSolo();
+    })().catch(() => { if (nextgenRequests.get(group) === request) nextgenRequests.delete(group); });
+  }
+  function releasePalette(group) {
+    if (!group) return;
+    nextgenRequests.get(group)?.abort();
+    nextgenRequests.delete(group);
+    for (const name of encounters?.groups[group] ?? nextgen?.groups[group] ?? []) buffers.delete(name);
   }
   function requestBossPalette(type) {
     const group = nextgen?.bosses[type]?.family;
     if (!group) return;
-    if (group === nextgenBossGroup) { requestPalette(group); return; }
-    if (nextgenBossGroup) {
-      nextgenRequests.get(nextgenBossGroup)?.abort();
-      nextgenRequests.delete(nextgenBossGroup);
-      for (const name of nextgen.groups[nextgenBossGroup]) buffers.delete(name);
+    if (group !== nextgenBossGroup) {
+      releasePalette(nextgenBossGroup);
+      releasePalette("enc_" + nextgenBossGroup);
+      nextgenBossGroup = group;
     }
-    nextgenBossGroup = group;
     requestPalette(group);
+    requestPalette(encounters?.bosses[type]?.group);
   }
   function requestVictory() {
-    if (!audio || muted || !factionScores || victoryLoading) return;
+    if (!audio || muted || !factionScores || victoryLoading || buffers.has("victory")) return;
     const current = audio;
     victoryLoading = true;
-    decodeAudio(current, "victory").then(buffer => {
+    (async () => {
+      let buffer = encounters?.clips.enc_victory ? await decodeAudio(current, "enc_victory") : null;
+      if (!buffer && audio === current && !disposed) buffer = await decodeAudio(current, "victory");
+      victoryLoading = false;
       if (!buffer || disposed || audio !== current) return;
       buffers.set("victory", buffer);
       if (victoryActive) reconcile();
-    });
+    })();
   }
   function loadBank(current) {
     if (bankLoading || !catalog || typeof current.decodeAudioData !== "function") return;
@@ -609,6 +626,7 @@ const gameAudio = (() => {
       if (audio !== current || disposed) return;
       reconcile();
       requestPalette("fighters");
+      requestPalette("enc_fighters");
       if (Number.isInteger(bossType)) requestBossPalette(bossType);
       const remaining = [
         ...catalog.effects.filter(name => name !== "room"),
@@ -628,6 +646,7 @@ const gameAudio = (() => {
   }
   function updateScoreMix() {
     if (!liveScore) return;
+    updateScoreSolo();
     const [base, rhythm, finale, danger] = liveScore.layers;
     const faction = factionScores?.[liveScore.theme];
     if (faction) {
@@ -672,6 +691,52 @@ const gameAudio = (() => {
         smoothGain(finale, lowLife ? .66 : eliteActive ? .47 : .03, .48, start);
       }
     }
+  }
+  // The four-bar solo and the longer arrangement share one playhead. A late
+  // decode enters on the next beat at the matching offset, even mid-phrase.
+  function updateScoreSolo() {
+    if (!encounters || !liveScore) return;
+    const score = liveScore;
+    const encounter = bossActive && score.theme === currentFaction() ? encounters.bosses[bossType] : null;
+    const location = score.theme === "hangar" ? "hangar" : score.theme === "adventure" && !bossActive ? region : null;
+    const sector = encounters.regions[location];
+    const name = encounter?.theme ?? sector?.theme;
+    const desiredGroup = sector?.theme ?? "";
+    if (regionGroup !== desiredGroup) {
+      releasePalette(regionGroup);
+      regionGroup = desiredGroup;
+    }
+    if (regionGroup) requestPalette(regionGroup);
+    if (score.solo && score.solo.name !== name) {
+      retireVoice(score.solo.voice, .52);
+      score.solo = null;
+    }
+    const clip = buffers.get(name);
+    if (!clip) return;
+    const level = encounter ? [.61, .72, .91][bossMusicTier] : location === "hangar" ? .24 : .47;
+    if (score.solo) {
+      if (score.solo.level !== level) {
+        smoothGain(score.solo.voice.gain, level, .52);
+        score.solo.level = level;
+      }
+      return;
+    }
+    if (!limitVoices("music")) return;
+    const now = audio.currentTime;
+    const beat = 60 / encounters.clips[name].bpm;
+    const elapsed = Math.max(0, now - score.start) + score.offset;
+    const start = now < score.start ? score.start : now + beat - elapsed % beat;
+    const offset = (score.offset + start - score.start) % clip.duration;
+    const source = audio.createBufferSource(), gain = audio.createGain();
+    source.buffer = clip;
+    source.loop = true;
+    source.loopEnd = clip.duration;
+    gain.gain.value = 0;
+    source.connect(gain); gain.connect(musicBus);
+    const voice = trackVoice(source, gain, "music", [source, gain], true);
+    score.solo = { name, voice, level };
+    source.start(start, offset);
+    smoothGain(gain, level, .48, start);
   }
   function startScore(theme, startAt) {
     const names = scoreStemNames(theme);
@@ -893,7 +958,10 @@ const gameAudio = (() => {
     // The initial bank may finish while muted. Reconcile on unmute/resume must
     // retry its deferred fighter palette; requestPalette deduplicates in-flight
     // and completed requests. Let the first music decode retain startup priority.
-    if (buffers.has("flight_harmony")) requestPalette("fighters");
+    if (buffers.has("flight_harmony")) {
+      requestPalette("fighters");
+      requestPalette("enc_fighters");
+    }
     if (!factionScores && (warningActive || cinematicActive)) { stopMusic(); return; }
     const theme = cinematicActive && liveScore ? liveScore.theme
       : bossActive ? (factionScores ? currentFaction() : "boss") : scene === "menu" && nextgen ? "hangar" : "adventure";
@@ -1020,6 +1088,7 @@ const gameAudio = (() => {
     const nextPhase = context?.bossPhase ?? null;
     const nextVisible = context.visible !== false;
     const nextScene = context.scene ?? (nextActive ? "battle" : scene);
+    const nextRegion = context.region ?? region;
     const nextFighter = context.fighter ?? fighterType;
     const nextLowLife = Number.isFinite(context.lives) ? context.lives <= 1 : lowLife;
     const nextElite = !!context.elite;
@@ -1034,7 +1103,7 @@ const gameAudio = (() => {
       comboLayer !== nextComboLayer || warningActive !== nextWarning || cinematicActive !== nextCinematic ||
       overdriveMusic !== nextOverdrive || bossType !== nextType || bossPhase !== nextPhase || threat !== nextThreat
       || bossMusicTier !== nextTier || visible !== nextVisible || scene !== nextScene
-      || lowLife !== nextLowLife || eliteActive !== nextElite;
+      || lowLife !== nextLowLife || eliteActive !== nextElite || nextRegion !== region;
     if (scene === "over" && nextScene !== "over") stopVoices("death");
     if (changed && (!nextActive || nextPaused || !nextVisible || (warningActive && !nextWarning))) stopVoices("arrival");
     const wasActive = active;
@@ -1052,6 +1121,7 @@ const gameAudio = (() => {
     bossMusicTier = nextTier;
     visible = nextVisible;
     scene = nextScene;
+    region = nextRegion;
     fighterType = nextFighter;
     lowLife = nextLowLife;
     eliteActive = nextElite;
@@ -1480,14 +1550,24 @@ const gameAudio = (() => {
     const shape = /vortex|ring|bind|web|spawn|fold|swarm|pollen/i.test(kind) ? 2
       : /beam|lash|filament|spear|pounce|blade|seam|streak|claw/i.test(kind) ? 1 : 0;
     const skill = profile.skills.indexOf(kind);
-    const name = `ng_${profile.family}_${phase === "active" ? (skill >= 0 ? skill : shape) : phase}`;
+    const encounter = encounters?.bosses[index];
+    const baseName = `ng_${profile.family}_${phase === "active" ? (skill >= 0 ? skill : shape) : phase}`;
+    let name = baseName;
+    if (phase === "active" && encounter) {
+      if (kind === encounter.ultimate) name = encounter.group + "_ultimate";
+      else if (kind === encounter.signature) name = encounter.group + "_signature";
+      else if (kind === "resonance") name = encounter.group + "_resonance";
+      else if (index === 0 && kind === "seam") name = "enc_water_seam";
+      else if (index === 0 && kind === "beam") name = "enc_water_lash";
+    }
     const position = soundPosition(options.x ?? soundStage.bossX, options.y ?? soundStage.bossY);
     // Telegraphs must remain audible at the far edge; impacts retain distance.
     position.attenuation = Math.max(phase === "tell" ? .78 : .48, position.attenuation);
     const power = Number.isFinite(options.power) ? mixClamp(options.power, .2, 1.5) : 1;
     const levels = { tell: .45, active: .66, impact: .54, tail: .30 };
-    let played = sample(name, { bus: phase === "tell" ? "warning" : "boss", level: levels[phase] * power,
-      rate: phase === "tell" ? 1 : .97 + Math.random() * .06, ...position });
+    const voice = { bus: phase === "tell" ? "warning" : "boss", level: levels[phase] * power,
+      rate: phase === "tell" ? 1 : .97 + Math.random() * .06, ...position };
+    let played = sample(name, voice) || (name !== baseName && sample(baseName, voice));
     if (!played) {
       // A missed decode must not erase an actionable telegraph. The authored
       // palette takes over as soon as it is available; this fallback is brief.
@@ -1506,7 +1586,17 @@ const gameAudio = (() => {
       effectsDuck.gain.setValueAtTime(.64, now + .32);
       effectsDuck.gain.linearRampToValueAtTime(1, now + .85);
     }
-    else if (phase === "active" && power >= .65) duckMusic(.64, .55);
+    else if (phase === "active" && power >= .65) {
+      duckMusic(.64, .55);
+      if (encounter && kind === encounter.ultimate && liveScore?.solo?.name === encounter.theme) {
+        const { gain } = liveScore.solo.voice.gain;
+        const level = liveScore.solo.level;
+        holdGain(gain, now);
+        gain.linearRampToValueAtTime(level * .40, now + .07);
+        gain.setValueAtTime(level * .40, now + .37);
+        gain.linearRampToValueAtTime(level, now + 1.05);
+      }
+    }
     return true;
   }
   function fighterSkill(kind = fighterType, event = "shield", options = {}) {
@@ -1515,13 +1605,31 @@ const gameAudio = (() => {
     const identity = `fighter/${ship}/${event}`;
     const now = audio.currentTime;
     if (now - (lastSkillCue.get(identity) ?? -Infinity) < (event === "wing" ? .12 : .16)) return false;
-    const played = sample(`ng_${ship}_${event}`, { bus: event === "destroy" ? "death" : event === "launch" || event === "charge" ? "ultimate" : "sfx",
-      level: (event === "destroy" ? .65 : .39) * (Number.isFinite(options.power) ? mixClamp(options.power, .2, 1.5) : 1),
-      rate: .98 + Math.random() * .04,
-      ...soundPosition(options.x ?? soundStage.listenerX, options.y ?? soundStage.listenerY, false) });
+    const detail = `enc_${ship}_${event}`;
+    const bus = event === "prime" ? "fighterCharge" : event === "destroy" ? "death" : event === "launch" || event === "charge" ? "ultimate" : "sfx";
+    const name = encounters?.clips[detail] ? detail : `ng_${ship}_${event}`;
+    const level = event === "destroy" ? .65 : event === "mark" ? .25 : event === "pulse" ? .33 : .39;
+    const strength = Number.isFinite(options.power) ? mixClamp(options.power, .2, 1.5) : 1;
+    const position = soundPosition(options.x ?? soundStage.listenerX, options.y ?? soundStage.listenerY, false);
+    let played = sample(name, { bus, level: level * strength, rate: .98 + Math.random() * .04, ...position });
+    if (!played && name === detail) {
+      // The very first button press can precede decoding on a cold device.
+      // Keep the heavy cannon's temporary windup on its cancellable bus.
+      const fallback = fighterStartTones[event];
+      if (fallback) {
+        const [frequency, endFrequency, duration, type] = fallback;
+        note({ bus, frequency, endFrequency, duration, type, crescendo: event === "prime",
+          cutoff: Math.max(frequency, endFrequency) * 4, volume: .095 * strength, ...position });
+        played = true;
+      }
+    }
     if (played) lastSkillCue.set(identity, now);
     return played;
   }
+  const fighterStartTones = {
+    prime: [88, 326, .72, "sawtooth"], mark: [1110, 1510, .11, "sine"],
+    field: [138, 214, .51, "triangle"], pulse: [214, 106, .26, "sine"],
+  };
   function destroy() {
     if (disposed) return;
     disposed = true;
@@ -1550,8 +1658,10 @@ const gameAudio = (() => {
       return { voices: voices.size + fadingVoices.size, decodedBytes: [...buffers.values()]
         .reduce((bytes, buffer) => bytes + (buffer.length || 0) * (buffer.numberOfChannels || 1) * 4, 0),
         bossPalette: nextgenBossGroup, musicTheme: liveScore?.theme ?? musicTheme,
+        musicSolo: liveScore?.solo?.name ?? null, region,
         musicLayers: liveScore?.layers.length ?? 0, lowLife, elite: eliteActive };
     },
     sync, shoot, hit, hurt, overdrive, perfectShield, explode, warning, bossAttack, bossSkill, fighterSkill, bossEnrage, fieldCue, radioCue,
-    bossRoar, prepareBossRoar, bossPresentationCue, victorySequence, preloadBossScore, chargeUltimate, fireUltimate, stopUltimate, destroy };
+    bossRoar, prepareBossRoar, bossPresentationCue, victorySequence, preloadBossScore, chargeUltimate, fireUltimate, stopUltimate,
+    stopFighterCharge() { stopVoices("fighterCharge", .035); }, destroy };
 })();

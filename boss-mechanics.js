@@ -334,6 +334,7 @@ function interceptAlienRound(bullet) {
         if (bullet.piercesShield) (bullet.hitMechanicNodes ??= new Set()).add(node);
         node.health = Math.max(0, node.health - (bullet.piercesShield || bullet.visual === "lance" ? 2 : 1));
         if (!node.health) {
+          BossResonance.sever(boss,node.x,node.y,node.radius);
           combatBurst(node.x, node.y, .46, hazard.color);
           gameAudio.bossAttack("burst", node.x, node.y);
           // Cutting the attack apparatus creates an actual, short payoff.
@@ -359,24 +360,10 @@ function mechanicDiamond(ctx, x, y, r, fill = true) {
 }
 
 function drawMechanicZone(ctx, x, y, width, height, color, active, quiet) {
-  const fill = ctx.createLinearGradient(0, y, 0, y + height);
-  fill.addColorStop(0, color + (active ? "62" : "28"));
-  fill.addColorStop(.48, color + (active ? "30" : "08"));
-  fill.addColorStop(1, color + (active ? "74" : "25"));
-  ctx.fillStyle = fill;
-  ctx.fillRect(x, y, width, height);
-  ctx.strokeStyle = color;
-  ctx.setLineDash(active ? [] : [7, 6]);
-  ctx.strokeRect(x, y, width, height);
-  if (active || !quiet) {
-    ctx.save();
-    ctx.globalAlpha *= active ? .28 : .18;
-    ctx.beginPath(); ctx.rect(x, y, width, height); ctx.clip();
-    const step = Math.max(24, width / 26);
-    for (let i = -height; i < width; i += step) drawMechanicLine(ctx, x + i, y, x + i + height, y + height);
-    ctx.restore();
-  }
-  ctx.setLineDash([]);
+  drawBossFieldWash(ctx,x,y,width,height,color,active ? .96 : .59,quiet ? 0 : battleTime);
+  ctx.save(); ctx.globalAlpha *= active ? .62 : .78;
+  bossRangeMarks(ctx,x,y,width,height,color,height>width);
+  ctx.restore();
 }
 
 function drawMagmaCover(ctx, hazard, active, quiet) {

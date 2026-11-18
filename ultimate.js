@@ -259,6 +259,9 @@ function hitUltimateBoss(target, shot, cap, contact, point) {
     ultimateImpact: impact }, target);
 }
 function markCrimsonContact(shot, target) {
+  if (Number.isInteger(shot.waveIndex) && typeof FighterMaterialFx !== "undefined") {
+    FighterMaterialFx.waveContact(target, shot.waveIndex);
+  }
   if (!shot.contacts) return;
   if (shot.contacts.length >= 10) shot.contacts.shift();
   const contact = { x: clamp(target.x - target.width * .3, shot.startX, viewport.width),

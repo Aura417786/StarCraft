@@ -55,6 +55,22 @@ const bossActionTechniques = [
   ["recoil", "sweep", "coil"], ["coil", "sweep", "lunge"],
 ];
 
+// Release impulses travel through the soft tissue before the ribs and shell.
+// Columns: decay seconds, angular frequency, forward impulse, twist, breath.
+const bossDischargeProfiles = [
+  [.42, 11, -.075, -.075, .16], // tidal siphon collapses, then takes a second breath
+  [.23, 19, -.11, .13, .06],    // jaw snaps and the rigid crown rings
+  [.47, 8, .098, -.12, .13],    // heavy furnace kicks back against the escaping mass
+  [.34, 15, .05, .24, .08],     // loaded silk twists the abdomen
+  [.28, 14, -.074, -.18, .08],  // pincers pull the thorax forward
+  [.48, 8, -.043, .29, .045],   // broad ray banks out of the beam
+  [.32, 21, -.068, -.19, .11],  // current runs down the spine
+  [.56, 7, .057, .085, .19],    // spore sacs exhaust more slowly
+  [.49, 10, -.078, -.17, -.10], // throat pinches around the singularity
+  [.26, 24, .043, .14, .072],   // an irregular short neural discharge
+  [.46, 13, .086, -.23, .135],  // shock passes between the body's lobes
+];
+
 function bossActionPose(target, quiet = false) {
   const type = target.type % bossActionProfiles.length;
   const [lead, retreat, lift, scaleX, scaleY, pitch, yaw, bank, unfold, core] = bossActionProfiles[type];
@@ -63,10 +79,13 @@ function bossActionPose(target, quiet = false) {
   let remaining = warming ? target.telegraphDuration - phaseTime : Infinity;
   // Secondary cues use their own real warning clocks so an aftershock can
   // visibly tense the body while the original attack is still in flight.
-  if (target === boss && target.phase === "attack") {
-    for (const hazard of bossHazards) {
+  let dischargeAge = Infinity;
+  if (target === boss && (target.phase === "attack" || target.finale)) {
+    for (const hazard of target.finale?.hazards ?? bossHazards) {
+      if (hazard.age < (hazard.tellAt ?? 0) || !(hazard.warning > 0)) continue;
       const wait = hazard.warning - hazard.age;
-      if (wait >= 0 && hazard.attackLabel === target.attackLabel) remaining = Math.min(remaining, wait);
+      if (wait >= 0 && (target.finale || hazard.attackLabel === target.attackLabel)) remaining = Math.min(remaining, wait);
+      if (wait < 0) dischargeAge = Math.min(dischargeAge, -wait);
     }
   }
   const start = clamp(1 - remaining / lead, 0, 1);
@@ -89,18 +108,28 @@ function bossActionPose(target, quiet = false) {
   const weight = (ready - release * .39) * motion * (1 - slack);
   const lowCharge = warming ? clamp(1 - remaining / Math.max(.01, target.telegraphDuration), 0, 1) * .19 : 0;
   const countered = typeof bossCounterActive === "function" && bossCounterActive(target) ? 1 : 0;
+  const [decay, frequency, thrust, twist, breath] = bossDischargeProfiles[type];
+  let kick = 0, echo = 0, tissuePulse = 0, shellPulse = 0;
+  if (dischargeAge < 1.35 && !quiet) {
+    const time = dischargeAge;
+    kick = -Math.expm1(-time * 27) * Math.exp(-time / decay) * (1 - slack);
+    echo = kick * Math.sin(time * frequency);
+    tissuePulse = kick * (.58 + .42 * Math.sin(time * frequency + .7));
+    const lag = Math.max(0, time - .085);
+    shellPulse = -Math.expm1(-lag * 19) * Math.exp(-lag / decay) * (1 - slack);
+  }
   return {
-    readiness: ready, release, loss, slack,
+    readiness: ready, release, loss, slack, tissuePulse, shellPulse,
     charge: clamp((lowCharge + ready * .81 + release * .84) * rhythmic * (1 - slack), 0, 1),
     spread: Math.max(countered * .48, unfold * (ready + release * .36)) * (1 - slack),
     core: Math.max(countered * 1.2, core * (lowCharge + ready * .88 + release * .55)) * (1 - slack),
-    x: weight * (retreat + lunge - vent) + slack * .05,
-    y: weight * (lift + sweep * .20) + slack * .10 * motion,
-    pitch: weight * pitch - slack * .21 * motion + tremor,
+    x: weight * (retreat + lunge - vent) + slack * .05 + kick * thrust,
+    y: weight * (lift + sweep * .20) + slack * .10 * motion + echo * twist * .14,
+    pitch: weight * pitch - slack * .21 * motion + tremor + echo * breath,
     yaw: weight * (yaw + sweep * side),
-    bank: weight * (bank + sweep) - slack * side * .13 * motion + tremor,
-    scaleX: 1 + weight * (scaleX - coil) - slack * .09 * motion,
-    scaleY: 1 + weight * (scaleY + coil) - slack * .16 * motion,
+    bank: weight * (bank + sweep) - slack * side * .13 * motion + tremor + kick * twist * side,
+    scaleX: 1 + weight * (scaleX - coil) - slack * .09 * motion + echo * breath * .45,
+    scaleY: 1 + weight * (scaleY + coil) - slack * .16 * motion - kick * breath,
   };
 }
 
@@ -261,7 +290,7 @@ async function loadStarBreakerModel(entry) {
       if (node.isMesh && node.morphTargetDictionary) {
         if (!node.material.normalMap && typeof applyAlienPbrDetail === "function") applyAlienPbrDetail(node.material);
         node.frustumCulled = false;
-        animatedMeshes.push({ node, attack: node.morphTargetDictionary.Attack,
+        animatedMeshes.push({ node, softTissue: /_(membrane|signal)$/.test(node.name), attack: node.morphTargetDictionary.Attack,
           unfurl: node.morphTargetDictionary.Unfurl, emissive: node.material.emissiveIntensity });
       }
     });
@@ -570,8 +599,9 @@ function drawStarBreakerModel(ctx, type, x, y, width, height, pose, model = prel
     Math.sin(time * .91) * .031 * idleMotion + recoil * .06 + (pose.turn ?? 0) + (action?.bank ?? 0));
   model.turn.position.set((recoil * .06 + (action?.x ?? 0)) * model.size.x, -(action?.y ?? 0) * model.size.y, 0);
   model.turn.scale.set(action?.scaleX ?? 1, action?.scaleY ?? 1, 1);
-  for (const { node, attack, unfurl, emissive } of model.animatedMeshes) {
-    if (attack !== undefined) node.morphTargetInfluences[attack] = charge;
+  for (const { node, softTissue, attack, unfurl, emissive } of model.animatedMeshes) {
+    const pulse = (softTissue ? action?.tissuePulse : action?.shellPulse) ?? 0;
+    if (attack !== undefined) node.morphTargetInfluences[attack] = Math.min(1, charge + (1 - charge) * pulse * .72);
     if (unfurl !== undefined) node.morphTargetInfluences[unfurl] = clamp(ruptured + (action?.spread ?? 0), 0, 1);
     if (node.material.emissive && emissive > 0) {
       node.material.emissiveIntensity = emissive * (.67 + Math.min(1.18, action?.core ?? charge) * .92 + ruptured * .38
