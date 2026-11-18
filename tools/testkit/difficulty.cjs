@@ -49,6 +49,10 @@ async function main() {
               - (boss.enraged && boss.alienAttack !== "pressure" ? .16 : 0))
             / (1 + (Math.max(1, boss.scaling.hpMul) - 1) * .26));
           const interval = boss.attackInterval;
+          const hazards = bossHazards.map(h => ({
+            kind: h.kind, warning: h.warning, duration: h.duration,
+            travels: !!(movingAlienHazards.has(h.kind) || (h.kind === "filament" && h.swingY) || (h.kind === "vortex" && h.grow)),
+          }));
           bossProjectiles.length = 0;
           addBossProjectile(boss.x, boss.y, -500, 0);
           const projectileSpeed = Math.hypot(bossProjectiles[0].vx, bossProjectiles[0].vy);
@@ -68,7 +72,7 @@ async function main() {
           const finaleHp = boss.baseHealth;
           const final = boss.finale;
           for (let tick = 0; tick < 1200 && !(final.attackInterval > 0); tick++) updateBossFinale(boss, 1 / 120);
-          cases.push({ fighter, type, upgraded, difficulty, power, k, hp, locked, tell, active, recovery, originalHardRecovery, interval,
+          cases.push({ fighter, type, upgraded, difficulty, power, k, hp, locked, tell, active, recovery, originalHardRecovery, interval, hazards,
             projectileSpeed, lattice, finaleHp, finaleInterval: final.attackInterval, rules: { ...sortieRules() } });
         }
       }
@@ -82,7 +86,12 @@ async function main() {
         assert.equal(sample.k, hard.k);
         assert.equal(sample.locked, true);
         assert.equal(sample.tell, hard.tell);
-        assert.equal(sample.active, hard.active, "Difficulty must not retime an active attack");
+        assert.deepEqual(sample.hazards.map(h => [h.kind, h.warning]), hard.hazards.map(h => [h.kind, h.warning]));
+        for (const [index, hazard] of sample.hazards.entries()) {
+          if (hazard.travels) assert.ok(hazard.duration >= hard.hazards[index].duration, "Slower travel needs a full crossing");
+          else assert.equal(hazard.duration, hard.hazards[index].duration, "Stationary active windows must remain authored");
+          assert.ok(sample.tell + sample.active >= hazard.warning + hazard.duration, "The final contact must fit before recovery");
+        }
         assert.equal(sample.rules.damage, 1);
         assert.equal(sample.rules.bossHealth, 1);
       }
@@ -90,8 +99,10 @@ async function main() {
         assert.ok(easy[field] > normal[field] && normal[field] > hard[field], JSON.stringify({ field, easy, normal, hard }));
       assert.ok(easy.projectileSpeed < normal.projectileSpeed && normal.projectileSpeed < hard.projectileSpeed);
       assert.ok(Math.abs(hard.recovery - hard.originalHardRecovery) < 1e-10, "Hard recovery must match the original v29 formula");
-      assert.ok(Math.abs(easy.interval - hard.interval / .62) < 1e-8, "Easy should slow complete attack cycles to 62% frequency");
-      assert.ok(Math.abs(normal.interval - hard.interval / .80) < 1e-8, "Normal should slow complete attack cycles to 80% frequency");
+      for (const [tier, tempo] of [[easy, .62], [normal, .80], [hard, 1]]) {
+        const authoredCycle = tier.tell + tier.active + hard.recovery;
+        assert.ok(Math.abs(tier.interval - authoredCycle / tempo) < 1e-8, "Cadence scales the complete local travel cycle");
+      }
       // v35 pressure comes from coordinated hazards. Difficulty still controls
       // full cycles/recovery above; it must not resurrect an ambient orb grid.
       for (const sample of [easy, normal, hard]) assert.equal(sample.lattice, null);

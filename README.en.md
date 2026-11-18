@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v36.2 · Counterattack.** Breaking a shell gives the boss a chance to unleash its signature attack. Slip between the closing claws, pick the marked reflection, or counter when the electric ring discharges. All three fighters deal less ultimate damage to bosses. Encounter health locks to the loadout you bring in. Replay the prologue from the hangar to watch the captain suit up and launch in your selected fighter. Hold either Shift key to watch at 2× speed and release it to resume normal playback.
+
 **v36.1 · Apex Mimicry.** Choose the third evolution to cast your last defeated boss's ultimate with **F**. Carry Hadal Confluence into the next fight or unleash the Stargrave Sovereign's Lightless Collapse. Your imprint changes on each boss kill. All three fighters share their restored swept-wing, twin-engine silhouettes across the hangar, prologue and battle.
 
 

@@ -327,7 +327,17 @@ const ElementalFluidVfx = (() => {
     const dx = x2 - x1, dy = y2 - y1, length = Math.hypot(dx,dy);
     if (!(length > .1 && width > .4)) return;
     ctx.save(); ctx.translate(x1,y1); ctx.rotate(Math.atan2(dy,dx));
-    ctx.beginPath(); ctx.rect(0,-width/2,length,width); ctx.clip();
+    // Side streamers grow out of a travelling discharge, dimmer than the
+    // damaging leader. Successive branches invert across the electric field.
+    const phase = quiet ? .33 : frac(time*2.4+x1*.002+y1*.001);
+    const drift = (quiet ? .86 : .65+.35*Math.sin(Math.PI*phase));
+    const reach = Math.min(length*.62,viewport.height*.54);
+    ctx.globalAlpha=strength*.76*drift;
+    BossSpellMatter.draw(ctx,"streamer",length*(.12+.45*phase),0,reach,width*(4.2+3.1*drift),
+      0,false,!quiet && Math.floor(time*2.4)%2===1);
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(length*.3,-width*.59,length*.64,-width*.45);
+    ctx.lineTo(length,0);ctx.quadraticCurveTo(length*.48,width*.76,0,0);ctx.clip();
     const discharge = ctx.createLinearGradient(0,-width/2,0,width/2);
     discharge.addColorStop(0,"#124bed00"); discharge.addColorStop(.23,"#2e52e87a");
     discharge.addColorStop(.48,"#5c88f7bd"); discharge.addColorStop(1,"#6b65ff00");
@@ -357,19 +367,36 @@ const ElementalFluidVfx = (() => {
 
   function sporeCloud(ctx, x, y, radius, inner, time, strength, quiet, origin) {
     if (!(radius > 1)) return;
-    ctx.save(); diskClip(ctx, x, y, radius, inner);
-    const field = ctx.createRadialGradient(x,y,0,x,y,radius);
-    field.addColorStop(0, "#1c370e7b"); field.addColorStop(.75, "#355c17b4");
-    field.addColorStop(1, "#7e9f3214"); ctx.fillStyle = field; ctx.globalAlpha = strength;
-    ctx.fillRect(x-radius,y-radius,2*radius,2*radius);
+    ctx.save();
+    // Put each tuft inside its pressure radius. An opaque circular clip
+    // would slice large billows into identical disks as the spores expand.
+    if (inner > 0) {
+      ctx.beginPath();
+      ctx.arc(x,y,radius*1.09,0,TAU);
+      ctx.arc(x,y,inner,0,TAU);
+      ctx.clip("evenodd");
+    }
     const clock = quiet ? .4 : time;
+    // The ragged membrane opens into asymmetric lobes. When the mature ring
+    // forms, its hollow centre stays clear; the remaining torn sacs orbit it.
+    const inflate = .5+.5*Math.sin(clock*2.3+x*.017);
+    const lobes = inner > 0 ? 4 : 1;
+    for (let lobe=0;lobe<lobes;lobe++) {
+      const a=lobe*TAU/lobes+.28*Math.sin(clock*.8)+x*.008;
+      const r=inner>0 ? (radius+inner)*.5 : 0;
+      const span=inner>0 ? Math.max(2,radius-inner)*1.65 : radius*1.83;
+      ctx.globalAlpha=strength*(inner>0 ? .78 : .91);
+      BossSpellMatter.draw(ctx,"pod",x+r*Math.cos(a),y+r*Math.sin(a),
+        span*(1+.04*inflate),span*(.91+.10*inflate),inner>0 ? a+.79 : .61*Math.sin(x*.119+y*.047)+.17*Math.sin(clock*.8+x),
+        Math.sin(x*.1+y*.7)<0);
+    }
     const size = quiet ? 4 : 7;
     for (let i = 0; i < size; i++) {
       const a = i * TAU / size + clock * (.40 - .07 * i);
-      const orbit = inner > 0 ? (radius + inner) / 2 : radius * (.20 + hash(i + 9) * .38);
-      const w = radius * (.80 + hash(i + 77) * .42);
+      const orbit = inner > 0 ? (radius+inner)*.5 : radius*(.18+hash(i+9)*.42);
+      const w = inner>0 ? (radius-inner)*.80 : radius*(.44+hash(i+77)*.40);
       const px = x + Math.cos(a) * orbit, py = y + Math.sin(a) * orbit;
-      ctx.globalAlpha = strength * (.32 + .22 * (1 + Math.sin(clock * 3.5 + i * 1.67)));
+      ctx.globalAlpha = strength * (.15 + .13 * (1 + Math.sin(clock * 3.5 + i * 1.67)));
       ctx.save(); ctx.translate(px,py); ctx.rotate(a * .57 + hash(i));
       materialPlate(ctx,"spore",i % 3,-w*.5,-w*.5,w,w); ctx.restore();
     }

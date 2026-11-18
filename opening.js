@@ -3,18 +3,66 @@
 window.campaignOpening = (() => {
   if (typeof window.HTMLDialogElement?.prototype.showModal !== "function") return null;
   const qa = new URLSearchParams(window.location.search).get("qa") === "1";
-  const images = {};
-  let dialog, stage, ctx, subtitle, speaker, line, pauseButton, finishButton, timeDisplay, progress;
+  let dialog, stage, ctx, subtitle, speaker, line, pauseButton, finishButton, timeDisplay, progress, speedHint;
+  const capturedShifts = new Set();
   let session = null;
   const isEnglish = () => document.documentElement.lang === "en";
 
-  function loadImages() {
-    for (const [name, src] of Object.entries(openingImages)) {
-      if (images[name]) continue;
+  function loadImages(fighter) {
+    const images = {};
+    const sources = { ...openingImages, ["hull" + fighter]: fighterAtlasCatalog[fighter].hangar };
+    for (const [name, src] of Object.entries(sources)) {
       const image = new Image();
       image.decoding = "async";
       image.src = src;
       images[name] = image;
+    }
+    return images;
+  }
+
+  function releaseFilm(film) {
+    film.onloadeddata = film.onseeked = null;
+    film.pause();
+    film.removeAttribute("src");
+    film.load();
+  }
+
+  function updateFilms() {
+    const current = session;
+    for (const cut of openingPerformanceCuts) {
+      const active = current.seconds >= cut.start && current.seconds < cut.end;
+      const wanted = active || (current.seconds < cut.start && current.seconds >= cut.start - 8);
+      let film = current.films.get(cut.file);
+      if (!film && wanted) {
+        film = document.createElement("video");
+        film.preload = "auto"; film.muted = true; film.playsInline = true;
+        film.src = "assets/intro/performances/" + cut.file + ".mp4";
+        current.films.set(cut.file, film);
+        const repaintWhenHeld = () => {
+          if (session === current && current.paused && current.activeFilm === film) render();
+        };
+        film.onloadeddata = film.onseeked = repaintWhenHeld;
+        film.load();
+      }
+      if (!film) continue;
+      if (!wanted) {
+        releaseFilm(film);
+        current.films.delete(cut.file);
+        continue;
+      }
+      if (!active) { if (!film.paused) film.pause(); continue; }
+      if (film.error) continue;
+      current.activeFilm = film;
+      if (film.playbackRate !== current.rate) film.playbackRate = current.rate;
+      const time = current.seconds - cut.start;
+      if (film.readyState >= 1 && !film.seeking && Math.abs(film.currentTime - time) > (current.paused ? .035 : .15)) {
+        film.currentTime = Math.min(time, Math.max(0, film.duration - .025));
+      }
+      if (current.paused || document.hidden) {
+        if (!film.paused) film.pause();
+      } else if (film.paused && film.readyState >= 2) {
+        film.play().catch(() => {});
+      }
     }
   }
 
@@ -40,6 +88,7 @@ window.campaignOpening = (() => {
       <footer class="opening-controls">
         <progress class="opening-progress" value="0" max="${openingDuration}"></progress>
         <div class="opening-actions">
+          <span class="opening-speed"></span>
           <button type="button" class="opening-pause"></button>
           <button type="button" class="opening-finish"></button>
         </div>
@@ -53,6 +102,7 @@ window.campaignOpening = (() => {
     pauseButton = dialog.querySelector(".opening-pause");
     finishButton = dialog.querySelector(".opening-finish");
     timeDisplay = dialog.querySelector(".opening-time");
+    speedHint = dialog.querySelector(".opening-speed");
     progress = dialog.querySelector(".opening-progress");
     pauseButton.addEventListener("click", togglePause);
     finishButton.addEventListener("click", requestExit);
@@ -60,7 +110,49 @@ window.campaignOpening = (() => {
     dialog.addEventListener("close", () => { if (!dialog.open) requestExit(); });
     app.append(dialog);
     document.addEventListener("visibilitychange", syncVisibility);
+    window.addEventListener("blur", clearOpeningShifts);
+    window.addEventListener("keydown", openingShiftEvent, true);
+    window.addEventListener("keyup", openingShiftEvent, true);
     return true;
+  }
+
+  function updateRateHint() {
+    speedHint.textContent = session.rate === 2
+      ? (session.language ? "2× playback" : "2× 播放中")
+      : (session.language ? "Hold Shift · 2×" : "按住 Shift · 2×");
+  }
+
+  function updateRate() {
+    const next = session.shifts.size ? 2 : 1;
+    if (session.rate === next) return;
+    session.rate = next;
+    if (session.activeFilm) session.activeFilm.playbackRate = next;
+    session.score?.setRate(next);
+    updateRateHint();
+  }
+
+  function clearOpeningShifts() {
+    if (!session) return;
+    session.shifts.clear();
+    updateRate();
+  }
+
+  function openingShiftEvent(event) {
+    if (event.code !== "ShiftLeft" && event.code !== "ShiftRight") return;
+    const down = event.type === "keydown";
+    if (!session && (!capturedShifts.has(event.code) || (down && !event.repeat))) {
+      capturedShifts.delete(event.code);
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!down) capturedShifts.delete(event.code);
+    if (!session || (down && event.repeat)) return;
+    if (down) {
+      capturedShifts.add(event.code);
+      session.shifts.add(event.code);
+    } else session.shifts.delete(event.code);
+    updateRate();
   }
 
   function formatTime(t) {
@@ -91,6 +183,7 @@ window.campaignOpening = (() => {
     if (!session) return;
     const en = isEnglish();
     session.language = en;
+    updateRateHint();
     dialog.querySelector("#opening-dialog-title").textContent = en ? "Prologue · Dark Forest" : "序章 · 黑暗森林";
     pauseButton.textContent = session.paused ? (en ? "Resume" : "继续") : (en ? "Pause" : "暂停");
     finishButton.textContent = session.launch ? (en ? "Skip prologue" : "跳过序章") : (en ? "Back to hangar" : "返回机库");
@@ -105,6 +198,7 @@ window.campaignOpening = (() => {
     dialog.toggleAttribute("data-paused", session.paused);
     if (session.paused) session.score?.suspend();
     else session.score?.resume();
+    if (session.paused) session.activeFilm?.pause();
     refreshLanguage();
   }
 
@@ -117,6 +211,8 @@ window.campaignOpening = (() => {
     const ratio = Math.min(1.5, devicePixelRatio || 1, 2000 / Math.max(1, box.width), 1160 / Math.max(1, box.height));
     const w = Math.max(1, Math.round(box.width * ratio)), h = Math.max(1, Math.round(box.height * ratio));
     if (stage.width !== w || stage.height !== h) { stage.width = w; stage.height = h; }
+    session.activeFilm = null;
+    updateFilms();
     drawOpeningArt(ctx, session, w, h);
     syncDialogue();
   }
@@ -128,7 +224,8 @@ window.campaignOpening = (() => {
     const suspended = session.paused || document.hidden;
     if (!suspended) {
       // Allow the first image to decode without stealing time from the story.
-      if (images.earth.naturalWidth || timestamp - session.began > 1600) session.seconds = Math.min(openingDuration, session.seconds + seconds);
+      if (session.images.earth.naturalWidth || timestamp - session.began > 1600)
+        session.seconds = Math.min(openingDuration, session.seconds + seconds * session.rate);
       session.score?.tick(session.seconds);
     }
     if (!suspended || stage.clientWidth !== session.clientWidth || stage.clientHeight !== session.clientHeight) {
@@ -146,6 +243,9 @@ window.campaignOpening = (() => {
     session = null;
     cancelAnimationFrame(ending.raf);
     ending.score?.dispose();
+    ending.flightStage?.dispose();
+    for (const film of ending.films.values()) releaseFilm(film);
+    ending.films.clear();
     const blend = ending.launch && reason === "completed";
     if (blend) {
       const frame = document.createElement("canvas");
@@ -158,6 +258,7 @@ window.campaignOpening = (() => {
         { duration: ending.quiet ? 260 : 480, easing: "cubic-bezier(.28,.48,.54,1)", fill: "forwards" });
       transition.finished.then(() => frame.remove(), () => frame.remove());
     }
+    stage.width = 1; stage.height = 1;
     if (dialog.open) dialog.close();
     dialog.removeAttribute("data-paused");
     ending.onFinish(reason);
@@ -167,7 +268,7 @@ window.campaignOpening = (() => {
   function syncVisibility() {
     if (!session) return;
     session.previous = 0;
-    if (document.hidden) session.score?.suspend();
+    if (document.hidden) { clearOpeningShifts(); session.score?.suspend(); session.activeFilm?.pause(); }
     else if (!session.paused) session.score?.resume();
   }
 
@@ -176,12 +277,12 @@ window.campaignOpening = (() => {
     refreshLanguage,
     play({ fighter, launch, quiet, muted, onFinish, layout }) {
       if (session || !mount()) return false;
-      loadImages();
+      const selected = Object.hasOwn(openingPalette, fighter) ? fighter : "red";
       const calm = quiet || matchMedia("(prefers-reduced-motion: reduce)").matches
         || dialog.parentElement.hasAttribute("data-reduce-motion");
       session = {
-        fighter: Object.hasOwn(openingPalette, fighter) ? fighter : "red", launch, quiet: calm,
-        onFinish, layout, images, seconds: 0, previous: 0, began: performance.now(), focus: document.activeElement,
+        fighter: selected, launch, quiet: calm, films: new Map(), rate: 1, shifts: new Set(),
+        onFinish, layout, images: loadImages(selected), seconds: 0, previous: 0, began: performance.now(), focus: document.activeElement,
         score: createOpeningScore(muted),
       };
       dialog.toggleAttribute("data-quiet", calm);
@@ -205,8 +306,11 @@ window.campaignOpening = (() => {
     };
     api.inspectForQa = () => session && ({
       seconds: session.seconds, duration: openingDuration, quiet: session.quiet,
-      paused: Boolean(session.paused), fighter: session.fighter,
+      paused: Boolean(session.paused), fighter: session.fighter, rate: session.rate,
       cut: openingCuts.findLast(cut => cut.start <= session.seconds)?.art,
+      film: openingPerformanceCuts.find(cut => cut.start <= session.seconds && cut.end > session.seconds)?.file ?? null,
+      decodedFilm: session.activeFilm?.readyState >= 2 && !session.activeFilm.seeking,
+      dimensionalHull: Boolean(session.flightStage?.render),
       loadedPlates: Object.keys(session.images).filter(key => session.images[key].naturalWidth),
     });
   }

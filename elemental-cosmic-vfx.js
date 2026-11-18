@@ -59,6 +59,16 @@ const ElementalCosmicVfx = (() => {
   function prism(ctx, x, y, radius, angle, time, energy) {
     if (radius < 1 || energy <= 0) return;
     ctx.save();
+    ctx.globalAlpha *= energy;
+    const roll = .67+.33*Math.abs(Math.cos(angle*.85));
+    const drawn = BossSpellMatter.draw(ctx,"prism",x,y,radius*2.45*roll,radius*2.57,
+      .18*Math.sin(angle)-.17);
+    if (drawn) {
+      const caustic=.5+.5*Math.cos(angle*3.1+time);
+      glint(ctx,x+radius*.17,y-radius*.14,radius*(.31+.39*caustic),"#c1ecff",energy*(.38+.53*caustic));
+      ctx.restore();
+      return;
+    }
     ctx.translate(x, y);
     ctx.rotate(angle);
     ctx.scale(radius, radius);
@@ -196,14 +206,28 @@ const ElementalCosmicVfx = (() => {
         const split = (i % 5 - 2) * half * .27;
         const start = q * length;
         const size = length * (.065 + .06 * fraction(i * .721));
-        polygon(ctx, [[start, split], [start + size * .76, split - half * .21],
-          [start + size, split + half * .05], [start + size * .19, split + half * .17]],
-        optics[i % 5], strength * Math.sin(pi * q) * .8);
+        // Micro-caustics stretch and refocus along the ray near the next facet.
+        const envelope = Math.sin(pi*q);
+        ctx.strokeStyle=optics[i%5]; ctx.globalAlpha=strength*envelope*.83;
+        ctx.lineWidth=Math.max(.64,half*.12*(1-q)); ctx.beginPath();
+        ctx.moveTo(start,split*envelope);
+        ctx.quadraticCurveTo(start+size*.46,split*envelope-half*.41,start+size,split*envelope*.66);
+        ctx.stroke();
       }
     });
   }
 
   function nerveRay(ctx, line, time, strength, quiet, phase = 0) {
+    const dx = line.x2-line.x1, dy = line.y2-line.y1;
+    const distance = Math.hypot(dx,dy);
+    if (distance > 0 && line.width > 0) {
+      const flow = quiet ? .55 : (time*.51 + phase*.31) % 1;
+      ctx.save();
+      ctx.globalAlpha *= strength * (.52+.30*Math.sin(Math.PI*flow));
+      BossSpellMatter.draw(ctx,"synapse",line.x1+dx*flow,line.y1+dy*flow,
+        Math.min(distance*.34,line.width*10),line.width*3.6,Math.atan2(dy,dx));
+      ctx.restore();
+    }
     withRay(ctx, line, (length, half) => {
       const myelin = ctx.createLinearGradient(0, -half, 0, half);
       myelin.addColorStop(0, "#6e285800");
@@ -289,6 +313,9 @@ const ElementalCosmicVfx = (() => {
     const { x, y, radius } = node;
     ctx.save();
     const pulse = Math.sin(time * 7.2) * .13 + .87;
+    ctx.globalAlpha = opacity * (live ? .98 : .67);
+    const hasJunction=BossSpellMatter.draw(ctx,"synapse",x,y,
+      radius*(3.83+.43*pulse),radius*(2.3+.41*(1-pulse)),.31*Math.sin(time*.92+x));
     const shell = ctx.createRadialGradient(x - radius * .26, y - radius * .30, 0, x, y, radius);
     shell.addColorStop(0, live ? "#ffbddb" : "#71506a");
     shell.addColorStop(.29, live ? "#c3548b" : "#47223e");
@@ -297,7 +324,7 @@ const ElementalCosmicVfx = (() => {
     shell.addColorStop(1, "#a632735e");
     ctx.globalAlpha = opacity;
     ctx.fillStyle = shell;
-    ctx.beginPath(); ctx.arc(x, y, radius, 0, tau); ctx.fill();
+    if (!hasJunction) {ctx.beginPath(); ctx.arc(x, y, radius, 0, tau); ctx.fill();}
     glint(ctx, x, y, radius * 1.38, "#e972ab", opacity * .42 * pulse);
     for (let i = 0; i < (quiet ? 4 : 7); i++) {
       const a = i * 2.39996 + Math.sin(time * 3 + i) * .19;
@@ -449,6 +476,15 @@ const ElementalCosmicVfx = (() => {
           for(const line of geometry.segments) tearRay(ctx,line,time,alpha,quiet);
         }
         const diameter = active ? base*(1-.43*ease(p)) : base*(.34+.66*charging);
+        // Both inflows terminate behind the opaque event horizon. Gas rolls
+        // out of the orbital plane, never adding highlights to the black core.
+        const flow=quiet ? .65 : .5+.5*Math.sin(time*2.2);
+        ctx.save();ctx.globalAlpha=alpha*(active ? .75 : .45)*charging;
+        BossSpellMatter.draw(ctx,"accretion",ring.x-diameter*.34,ring.y+diameter*.025,
+          diameter*.73,diameter*(.12+.036*flow),-.18-.07*flow);
+        BossSpellMatter.draw(ctx,"accretion",ring.x+diameter*.37,ring.y-diameter*.04,
+          diameter*.78,diameter*(.16-.037*flow),-.18+.06*flow,true,true);
+        ctx.restore();
         NextgenVfx.drawHorizon(ctx,ring.x,ring.y,diameter,time,
           active ? alpha : .07+.76*charging,quiet);
         if (active) {

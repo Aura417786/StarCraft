@@ -72,10 +72,10 @@ async function checkNavigation(page) {
   await focusIs(page, "#hangar-loadout");
   assert.equal(await page.locator("#hangar-loadout-summary").textContent(), "苍电 · 简单");
 
-  await checkRecords(page);
+  const records = await checkRecords(page);
   await page.locator("#fullscreen-button").click();
   await page.waitForFunction(() => document.fullscreenElement?.id === "game-app");
-  await checkRecords(page, true);
+  records.push(...await checkRecords(page, true));
   await page.locator("#fullscreen-button").click();
   await page.waitForFunction(() => !document.fullscreenElement);
 
@@ -99,9 +99,11 @@ async function checkNavigation(page) {
   assert.equal(await page.locator("#sortie-console-title").textContent(), "挑战");
   await page.locator("#sortie-console-close").click();
   await pageIs(page, "home");
+  return records;
 }
 
 async function checkRecords(page, fullscreen = false) {
+  const results = [];
   await page.locator("#hangar-records").click();
   await pageIs(page, "records");
   await page.screenshot({ path: path.join(output, fullscreen ? "records-fullscreen.png" : "records.png") });
@@ -109,18 +111,22 @@ async function checkRecords(page, fullscreen = false) {
     const entry = `[data-sortie-console="${section}"]`;
     await page.locator(entry).click();
     await page.locator("#sortie-console:modal").waitFor();
-    assert.equal(await page.locator("#sortie-console-title").textContent(), title);
-    assert.ok(await page.locator("#sortie-console-body > *").count(), title);
+    const heading = await page.locator("#sortie-console-title").textContent();
+    const children = await page.locator("#sortie-console-body > *").count();
+    assert.equal(heading, title);
+    assert.ok(children, title);
+    if (!fullscreen) await page.screenshot({ path: path.join(output, `records-${section}.png`) });
     if (fullscreen) await page.locator("#sortie-console-close").click();
     else await page.keyboard.press("Escape");
     await page.locator("#sortie-console").waitFor({ state: "hidden" });
     await pageIs(page, "records");
     await focusIs(page, entry);
+    results.push({ section, heading, children, fullscreen, focusRestored: true });
   }
   await page.locator("#hangar-back-records").click();
   await pageIs(page, "home");
   await focusIs(page, "#hangar-records");
-
+  return results;
 }
 
 async function checkSettings(page) {
@@ -198,11 +204,11 @@ async function main() {
       await page.screenshot({ path: path.join(output, `home-${width}-${lang}.png`) });
     }
     await page.setViewportSize({ width: 1280, height: 720 });
-    await checkNavigation(page);
+    const records = await checkNavigation(page);
     const settings = await checkSettings(page);
     const launch = await checkLaunchPaths(page);
     assert.deepEqual(errors, []);
-    fs.writeFileSync(path.join(output, "menu-navigation.json"), JSON.stringify({ layouts, settings, launch, errors }, null, 2));
+    fs.writeFileSync(path.join(output, "menu-navigation.json"), JSON.stringify({ layouts, records, settings, launch, errors }, null, 2));
     console.log("Grouped hangar menu navigation passed");
   } finally {
     await browser.close();

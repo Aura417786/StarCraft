@@ -164,22 +164,22 @@ async function main() {
     assert.ok(fixtures.catapult.triggered && fixtures.catapult.railMotion > 0 && fixtures.catapult.protected && fixtures.catapult.pilotControl);
     assert.ok(Object.values(fixtures.isolation).every(Boolean));
 
-    // Exercise all sectors here. The release matrix also keeps the old 314159
-    // seed, which can defeat this pilot before it reaches the late terrain.
-    const natural = await page.evaluate(() => runBalanceFixture({
-      label: "terrain-and-elites-natural", mode: "campaign", fighter: "red", build: "ember", seed: 4225,
-      bossType: null, fixture: "natural", seconds: 1300, policy: "pilot", difficulty: "hard",
-    }));
-    fs.writeFileSync(path.join(evidence, "natural-fixture.json"), JSON.stringify({ fixtures, natural, errors }, null, 2));
-    // Terrain coverage is the contract of this suite, not a guaranteed win by
-    // an old fixed pilot against redesigned bosses. Preserve the full result,
-    // and allow balance investigations to require that stronger assertion.
+    const { natural, sectorFlight } = await page.evaluate(() => {
+      const flight = { mode: "campaign", fighter: "red", build: "ember", seed: 4225,
+        bossType: null, seconds: 1300, policy: "pilot", difficulty: "hard" };
+      return {
+        natural: runBalanceFixture({ ...flight, label: "terrain-and-elites-natural", fixture: "natural" }),
+        sectorFlight: runBalanceFixture({ ...flight, label: "uninterrupted-sector-flight", fixture: "sector-coverage", seconds: 800 }),
+      };
+    });
+    fs.writeFileSync(path.join(evidence, "natural-fixture.json"), JSON.stringify({ fixtures, natural, sectorFlight, errors }, null, 2));
     if (process.argv.includes("--require-policy-win"))
       assert.ok(natural.won, "The fixed pilot must win when explicitly requested");
-    assert.ok(natural.simulated_seconds > 300, "The pilot must exercise sustained sector progression");
-    assert.ok(Object.values(natural.elite_spawns).every(count => count >= 3), JSON.stringify(natural.elite_spawns));
+    assert.ok(natural.reached_stage >= 1, "The unmodified campaign pilot must reach a Boss");
+    assert.ok(sectorFlight.simulated_seconds >= 799, "The isolated campaign flight must span the full sector route");
+    assert.ok(Object.values(sectorFlight.elite_spawns).every(count => count >= 3), JSON.stringify(sectorFlight.elite_spawns));
     assert.ok(["wreck", "asteroid", "gravity-tide", "allied-catapult"]
-      .every(feature => natural.field_features.includes(feature)), JSON.stringify(natural.field_features));
+      .every(feature => sectorFlight.field_features.includes(feature)), JSON.stringify(sectorFlight.field_features));
     assert.deepEqual(errors, []);
     await page.close();
 
@@ -253,7 +253,7 @@ async function main() {
     await live.page.waitForFunction(() => battlefieldEvents.fragments.some(part => part.rock && part.damage > 0));
     await screenshot("field-asteroid-shards");
     assert.deepEqual(live.errors, []);
-    const report = { fixtures, natural, snapshots, errors, liveErrors: live.errors, liveFrameIntervals, liveKeyboardRockBreak: true };
+    const report = { fixtures, natural, sectorFlight, snapshots, errors, liveErrors: live.errors, liveFrameIntervals, liveKeyboardRockBreak: true };
     fs.writeFileSync(path.join(evidence, "field.json"), JSON.stringify(report, null, 2) + "\n");
     console.log(JSON.stringify({ fixtures, eliteSpawns: natural.elite_spawns, snapshots }, null, 2));
   } finally {

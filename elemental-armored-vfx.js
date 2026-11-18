@@ -75,30 +75,25 @@ const ElementalArmoredVfx = (() => {
     }
     ctx.save();
     ctx.translate(x1, y1);
-    ctx.rotate(Math.atan2(y2 - y1, x2 - x1));
-    const halo = ctx.createLinearGradient(0, -width * .53, 0, width * .53);
-    halo.addColorStop(0, "#7c483200");
-    halo.addColorStop(.27, "#a05e4832");
-    halo.addColorStop(.49, "#e0a86d8c");
-    halo.addColorStop(.52, "#ffe0b08c");
-    halo.addColorStop(.72, "#93644536");
-    halo.addColorStop(1, "#7c483200");
-    ctx.fillStyle = halo;
-    ctx.fillRect(0, -width * .53, l, width * 1.06);
-    const pieces = quiet || visualQuality.id === "low" ? 4 : 8;
-    for (let i = 0; i < pieces; i++) {
-      const t = quiet ? (i + .5) / pieces : fractional((i + .18) / pieces + progress * 1.06 + seed * .11);
-      const size = span(width * (2.8 + random(i + seed) * 2.7), 14, l * .34);
-      const spread = width * .19 * (random(i * 3 + seed) - .5);
-      stamp(ctx, 0, i, l * t, spread, size, size * .37, i % 2 ? -.06 : .065, i % 2);
-      if (!quiet && i % 2 === 0) {
-        ctx.strokeStyle = "#ffd9a4a8";
-        ctx.lineWidth = 1.15;
-        ctx.beginPath(); ctx.moveTo(l * t - size * .63, spread);
-        ctx.quadraticCurveTo(l * t - size * .42, spread - width * .21, l * t - size * .26, spread - width * .08);
-        ctx.stroke();
-      }
+    ctx.rotate(Math.atan2(y2-y1, x2-x1));
+    // The intact rib throws a narrow marrow trail. Its polished tooth turns
+    // into the travel direction while tiny splinters keep the ray readable.
+    const motion = quiet ? .38 : progress;
+    const wake = ctx.createLinearGradient(0, 0, l, 0);
+    wake.addColorStop(0, "#fff0cbab"); wake.addColorStop(.43,"#c69a698c"); wake.addColorStop(1,"#cbad7700");
+    ctx.strokeStyle = wake; ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(1, width * .25);
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(l*.34,width*.10,l,0); ctx.stroke();
+    for (let i=0;i<7;i++) {
+      const t=fractional(motion*(.86+i*.025)+i/7+seed*.074);
+      const size=Math.min(l*.16,width*(2.8+random(i+seed)*2.6));
+      stamp(ctx,0,i,l*t,(random(i+seed*3)-.5)*width*.45,size,size*.33,
+        .1*Math.sin(i*2.2+motion*11),i%2);
     }
+    const travel=fractional(.16+seed*.093+motion*1.21);
+    const size=Math.min(l*.24,width*(7.3+random(seed)*2.5));
+    BossSpellMatter.draw(ctx,"rib",l*travel,-width*.32,size,size*.49,
+      -.45+.21*Math.sin(seed*1.5+motion*8),false,seed%2===1);
     ctx.restore();
   }
 
@@ -150,7 +145,10 @@ const ElementalArmoredVfx = (() => {
     ctx.translate(node.x, node.y);
     ctx.globalAlpha *= active ? 1 : .57;
     const breath = quiet ? 1 : 1 + Math.sin(phase * TAU * 2 + index * 1.1) * .078;
-    stamp(ctx, 1, index, 0, 0, r * 4.09 * breath, r * 2.17 * breath, -.36 + index * .17);
+    // Strands stay pinned at the node while the living cocoon rolls in tension.
+    const swing = quiet ? 0 : .20*Math.sin(phase*8+index*2);
+    if (!BossSpellMatter.draw(ctx,"spindle",0,0,r*3.62/breath,r*4.15*breath,swing-.16))
+      stamp(ctx,1,index,0,0,r*4.09*breath,r*2.17*breath,-.36+index*.17);
     const glow = ctx.createRadialGradient(-r * .19, -r * .21, 0, -r * .19, -r * .21, r * .90);
     glow.addColorStop(0, "#ffe6ffd4");
     glow.addColorStop(.27, "#d682f37b");
@@ -169,26 +167,33 @@ const ElementalArmoredVfx = (() => {
     ctx.restore();
   }
 
-  function chitinPath(ctx, segment, active, progress, quiet, seed) {
-    if (!active) {
-      tell(ctx, segment, palettes.chitin.edge);
-      return;
+  function chitinPath(ctx,segment,active,progress,quiet,seed) {
+    if(!active) { tell(ctx,segment,palettes.chitin.edge);return; }
+    const {x1,y1,x2,y2,width}=segment, dx=x2-x1,dy=y2-y1;
+    const length=Math.hypot(dx,dy);
+    if(length<1) return;
+    const wave=quiet ? .8 : progress*11;
+    const pulse=fractional(progress*1.65+seed*.23);
+    ctx.save();ctx.translate(x1,y1);ctx.rotate(Math.atan2(dy,dx));
+    const skin=ctx.createLinearGradient(0,-width,0,width);
+    skin.addColorStop(0,"#161d12");skin.addColorStop(.36,"#29412f");skin.addColorStop(.48,"#c1d69e");
+    skin.addColorStop(.59,"#516443");skin.addColorStop(.82,"#283427");skin.addColorStop(1,"#706339");
+    ctx.fillStyle=skin;ctx.beginPath();
+    function ridge(t) {return Math.sin(t*17-wave)*width*.33*Math.sin(Math.PI*t);}
+    function girth(t) {
+      const bulb=Math.exp(-((t-pulse)**2)*105);
+      return Math.sin(Math.PI*t)**.58*width*(.18+.7*bulb+.12*Math.sin(t*22+seed));
     }
-    const dx = segment.x2 - segment.x1, dy = segment.y2 - segment.y1;
-    const length = Math.hypot(dx, dy);
-    if (length < 1) return;
-    const angle = Math.atan2(dy, dx), width = segment.width;
-    ctx.save();
-    ctx.lineCap = "round";
-    ray(ctx, segment.x1, segment.y1, segment.x2, segment.y2, "#263a32b5", width * .79);
-    const count = Math.min(22, Math.max(3, Math.round(length / (width * 2.7))));
-    for (let i = 0; i < count; i++) {
-      const t = (i + .55) / count;
-      const twist = quiet ? 0 : Math.sin(t * 15 - progress * TAU * 1.6 + seed) * .13;
-      stamp(ctx, 2, i, segment.x1 + dx * t, segment.y1 + dy * t, length / count * 1.92,
-        width * 1.94, angle + twist, i % 2 === 1);
+    for(let i=0;i<=32;i++) {
+      const t=i/32, y=ridge(t)-girth(t);
+      if(i===0)ctx.moveTo(0,y);else ctx.lineTo(t*length,y);
     }
-    ray(ctx, segment.x1, segment.y1, segment.x2, segment.y2, "#bded9fbb", Math.max(1, width * .105));
+    for(let i=32;i>=0;i--) {const t=i/32;ctx.lineTo(t*length,ridge(t)+girth(t));}
+    ctx.closePath();ctx.fill();
+    ctx.lineWidth=Math.max(.75,width*.08);ctx.strokeStyle="#d1deb3a8";ctx.beginPath();
+    for(let i=0;i<=25;i++){const t=i/25,y=ridge(t)-girth(t)*.55;if(i===0)ctx.moveTo(0,y);else ctx.lineTo(length*t,y);}
+    ctx.stroke();
+    BossSpellMatter.draw(ctx,"claw",pulse*length,ridge(pulse),Math.min(length*.21,width*10),width*2.6,-.04);
     ctx.restore();
   }
 
@@ -201,6 +206,24 @@ const ElementalArmoredVfx = (() => {
     ctx.save();
     ctx.globalAlpha *= alpha;
     ctx.translate(x, y);
+    if (kind === "bone") {
+      // The crown fractures across its circumference. Its emerging fragments
+      // extend beyond the damage front, leaving the dark space between visible.
+      const turns = 9, spin = quiet ? 0 : progress * .36;
+      const shade = ctx.createRadialGradient(0, 0, inner, 0, 0, radius);
+      shade.addColorStop(0, "#b8763900");shade.addColorStop(.43, "#ebc39562");
+      shade.addColorStop(.72, "#ffedc99c");shade.addColorStop(1, "#a2602c00");
+      ctx.strokeStyle = shade;ctx.lineWidth = width;
+      for (let i = 0; i < turns; i++) {
+        const angle = i*TAU/turns + spin, extent = TAU/turns*(.55+.28*random(13+i));
+        ctx.beginPath();ctx.arc(0,0,center,angle,angle+extent);ctx.stroke();
+        const at = angle+extent*.67, span=Math.min(center*.5,width*(2.3+random(i+77)));
+        BossSpellMatter.draw(ctx,"rib",Math.cos(at)*center,Math.sin(at)*center,
+          span,width*(1.05+random(i+9)*.55),at+Math.PI*.47,i%3===0);
+      }
+      ctx.restore();
+      return;
+    }
     ctx.beginPath(); ctx.arc(0, 0, radius, 0, TAU);
     if (inner) ctx.arc(0, 0, inner, 0, TAU, true);
     ctx.clip();
@@ -267,12 +290,40 @@ const ElementalArmoredVfx = (() => {
     ctx.restore();
   }
 
-  function jawBand(ctx, rect, side, progress, quiet) {
+  function jawBand(ctx, rect, side, progress, quiet, caster = null) {
     const depth = rect.height;
     const width = rect.width;
     if (!(width > 1 && depth > 1)) return;
     const lip = side < 0 ? rect.y + depth : rect.y;
     const bend = (quiet ? 0 : Math.sin(progress * Math.PI) * .10);
+    const mass = Math.min(Math.max(depth*.94, width*.18), width*(.38+bend*.23));
+    // The hinge sits on the boss side. Crushing rotates the entire shell,
+    // and both tooth rows face into the same physical escape corridor.
+    const bite=quiet ? .88 : .5-.5*Math.cos(Math.min(1,progress*2.4)*Math.PI);
+    const bodyY=lip+side*mass*(.54+.06*(1-bite));
+    if(caster) {
+      const hingeX=rect.x+width*.93,rootX=caster.x-caster.width*.26;
+      const rootY=caster.y+side*caster.height*.15,reach=rootX-hingeX;
+      ctx.save();
+      const tendon=ctx.createLinearGradient(hingeX,bodyY,rootX,rootY);
+      tendon.addColorStop(0,"#57482e");tendon.addColorStop(.23,"#405135e3");
+      tendon.addColorStop(.79,"#878459b3");tendon.addColorStop(1,"#31433652");
+      ctx.fillStyle=tendon;ctx.beginPath();ctx.moveTo(hingeX,bodyY-mass*.15);
+      ctx.bezierCurveTo(hingeX+reach*.29,bodyY-mass*.14,rootX-reach*.28,rootY-mass*.09,rootX,rootY);
+      ctx.bezierCurveTo(rootX-reach*.31,rootY+mass*.07,hingeX+reach*.31,bodyY+mass*.19,hingeX,bodyY+mass*.15);
+      ctx.closePath();ctx.fill();
+      ctx.globalAlpha*=.61;ctx.lineWidth=Math.max(1,mass*.016);ctx.strokeStyle="#b9ce8d";
+      for(let j=0;j<3;j++){const d=(j-1)*mass*.06;ctx.beginPath();
+        ctx.moveTo(hingeX,bodyY+d);ctx.bezierCurveTo(hingeX+reach*.31,bodyY+d*1.7,
+          rootX-reach*.18,rootY+d,rootX,rootY);ctx.stroke();}
+      ctx.restore();
+    }
+    if (BossSpellMatter.draw(ctx,"claw",rect.x+width*.50,bodyY,width,mass,
+      side*.045*(1-bite),true,side>0)) {
+      dust(ctx,"chitin",rect.x+width*.12,lip+side*mass*.38,mass*.34,
+        progress*2.5,quiet,12,side>0 ? 32 : 61);
+      return;
+    }
     ctx.save();
     ctx.beginPath(); ctx.rect(rect.x, rect.y, width, depth); ctx.clip();
     ctx.globalAlpha *= .93;
@@ -427,7 +478,7 @@ const ElementalArmoredVfx = (() => {
     } else if (type === "silkCage") {
       for (const [i, path] of geometry.segments.entries()) thread(ctx,
         { ...path, width: path.width * 1.63 }, active, phase, quiet, i);
-      for (const [i, node] of geometry.nodes.entries()) silkNode(ctx, node, phase, active, quiet, i);
+
     } else {
       for (const rect of geometry.rects) {
         const side = rect.y < hazard.gapY ? -1 : 1;
@@ -437,7 +488,7 @@ const ElementalArmoredVfx = (() => {
           const lip = hazard.noShield ? (side < 0 ? Math.min(lane, inner) : Math.max(lane, inner)) : inner;
           const y = side < 0 ? rect.y : lip;
           const bottom = side < 0 ? lip : rect.y + rect.height;
-          jawBand(ctx, { ...rect, y, height: bottom - y }, side, phase, quiet);
+          jawBand(ctx, { ...rect, y, height: bottom - y }, side, phase, quiet, target);
         } else {
           const y = side < 0 ? rect.y + rect.height : rect.y;
           tell(ctx, { x1: rect.x, y1: y, x2: rect.x + rect.width, y2: y }, palettes.chitin.core);
@@ -460,8 +511,9 @@ const ElementalArmoredVfx = (() => {
       for (let i = 0; i < 8; i++) {
         const a = (i + .17) * TAU / 8 + (quiet ? .21 : time * .29);
         const spread = r * (.76 + random(i + 31) * .22);
-        stamp(ctx, 0, i, x + Math.cos(a) * spread, y + Math.sin(a) * spread * .81,
-          radius * .70, radius * .21, a + .83, i % 2);
+        const px=x+Math.cos(a)*spread, py=y+Math.sin(a)*spread*.81;
+        if (!BossSpellMatter.draw(ctx,"rib",px,py,radius*.90,radius*.47,a+.49,i%2!==0))
+          stamp(ctx,0,i,px,py,radius*.70,radius*.21,a+.83,i%2);
       }
       dust(ctx, "bone", x, y, radius, load, quiet, 14, 86);
     } else if (type === "silkCage") {
@@ -480,8 +532,9 @@ const ElementalArmoredVfx = (() => {
     } else {
       for (const side of [-1, 1]) {
         const lever = side * (1.01 - load * .43);
-        stamp(ctx, 2, side < 0 ? 0 : 1, x - radius * .35, y + radius * lever,
-          radius * 1.75, radius * .78, side * (.35 - load * .16), side < 0);
+        if (!BossSpellMatter.draw(ctx,"claw",x-radius*.35,y+radius*lever,
+          radius*1.88,radius*.88,side*(.45-load*.32),true,side>0))
+          stamp(ctx,2,side<0?0:1,x-radius*.35,y+radius*lever,radius*1.75,radius*.78,0,side<0);
       }
       dust(ctx, "chitin", x, y, radius * .79, load, quiet, 15, 143);
     }
@@ -511,5 +564,17 @@ const ElementalArmoredVfx = (() => {
     return true;
   }
 
-  return Object.freeze({ mechanic, signature, ultimate, charge, aftershock });
+  function ultimateNodes(ctx,hazard,geometry,quiet) {
+    if (hazard.ultimateKind !== "silkCage" || !ready()) return false;
+    for (const [i,node] of geometry.nodes.entries()) {
+      silkNode(ctx,node,geometry.progress,hazard.age>=hazard.warning,quiet,i);
+      if(node.health>0 && node.health<node.maxHealth) {
+        ctx.save(); ctx.strokeStyle="#eed0ff";ctx.lineWidth=1.6;ctx.beginPath();
+        ctx.arc(node.x,node.y,node.radius*1.22,-Math.PI*.5,-Math.PI*.5+TAU*node.health/node.maxHealth);
+        ctx.stroke();ctx.restore();
+      }
+    }
+    return true;
+  }
+  return Object.freeze({ mechanic, signature, ultimate, ultimateNodes, charge, aftershock });
 })();

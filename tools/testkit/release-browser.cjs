@@ -58,7 +58,7 @@ async function main() {
     const seeded = await page.evaluate(() => {
       // Stage a complete battle log to test settlement, without waiting on the combat matrix.
       const bossRecords = bossTypes.map((_, type) => ({ type, seconds: 41, hitCount: 0,
-        builds: type === 4 ? ["build-falcon", "build-escort"] : [] }));
+        builds: type === 4 ? ["build-falcon", "build-escort"] : type === 5 ? ["build-mimic"] : [] }));
       for (const row of bossRecords) sortieProfile.awardBoss(row.type, "abyss");
       return sortieProfile.finish({ mode: "campaign", won: true, difficulty: "abyss", score: 98000,
         seconds: 842, kills: 190, hits: 0, fighter: "red", bossRecords });
@@ -67,7 +67,10 @@ async function main() {
     assert.ok(seeded.newAwards.includes("build-escort"));
     await openPanel(page, "awards");
     assert.equal(await page.locator(".award-badge").count(), await page.evaluate(() => StarBreakerAwards.ids.length));
-    assert.equal(await page.locator(".award-badge").count(), 44);
+    assert.ok(seeded.newAwards.includes("build-mimic"));
+    const mimicBadge = page.locator(".award-badge").filter({ has: page.getByText("万相猎手", { exact: true }) });
+    assert.equal(await mimicBadge.getAttribute("data-earned"), "true");
+    assert.equal(await page.locator(".award-badge").count(), 45);
     assert.equal(await page.locator(".award-boss[data-earned='true']").count(), 11);
     await page.locator("#award-skin").selectOption("frost");
     await page.locator("#award-theme").selectOption("archive");

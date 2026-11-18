@@ -12,10 +12,10 @@ const BossResonance = (() => {
     ["双钳换极","Polarity Vice","从螯口的上下两端脱身","Escape past the upper or lower jaw tips"],
     ["折镜三棱","Parallax Prism","走棱镜缺口","Take the open prism edge"],
     ["脊雷逐节","Vertebral Relay","从雷脊暗段穿过","Cross behind the pulse"],
-    ["菌毯再生","Fruiting Bodies","从孢囊之间切出菌毯","Cut between the fruiting bodies before they swell"],
+    ["菌毯再生","Fruiting Bodies","从孢囊之间切出菌毯","Slip between swelling sacs"],
     ["坍缩缺弧","Broken Horizon","穿过吸积环的缺口","Leave through the break in the accretion rim"],
-    ["逆行突触","Retrograde Signal","沿熄灭的分支移出神经网","Follow a spent branch out of the nerve tree"],
-    ["群芯离合","Divided Heart","穿过间隙再避核心","Slip between organs, then evade the core"],
+    ["逆行突触","Retrograde Signal","走暗支路","Follow a spent branch"],
+    ["群芯离合","Divided Heart","穿过间隙再避核心","Slip past organs and core"],
   ];
   const materials = ["water","bone","magma","silk","chitin","glass","plasma","spore","void","nerve","fusion"];
   const directions = [1,-1,1,-1,-1,1,1,-1,1,-1,1];
@@ -203,6 +203,12 @@ const BossResonance = (() => {
   }
 
   function organ(ctx,type,x,y,size,angle,alpha) {
+    if(type>0 && size>0 && typeof BossLivingMaterials!=="undefined"){
+      ctx.save();ctx.globalAlpha*=alpha;
+      const shown=BossLivingMaterials.organ(ctx,materials[type],x,y,size,size,angle);
+      ctx.restore();
+      if(shown)return;
+    }
     if(!(size>0) || !image?.complete || !image.naturalWidth)return;
     const cell=image.naturalWidth/4;
     ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.globalAlpha*=alpha;
@@ -417,6 +423,10 @@ const BossResonance = (() => {
     if(length<.1)return;
     const half=width*.5, kind=materials[type], palette=signatureMaterials[kind];
     ctx.save();ctx.translate(ax,ay);ctx.rotate(Math.atan2(dy,dx));
+    if(type>0 && length>=Math.max(14,width*2.8) && typeof BossLivingMaterials!=="undefined" &&
+       BossLivingMaterials.ray(ctx,kind,0,0,length,0,half,time,true,1,quiet)) {
+      ctx.restore();return;
+    }
     if(type===1) {
       // Curved, tapered ivory with cortical striations and a dark marrow socket.
       BossCreatureVfx.bone(ctx,0,0,length,width,0,index%4,index%2===0);

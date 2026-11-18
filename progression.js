@@ -7,7 +7,7 @@ const campaignWeaponFloors = [
   [15, 8, 3], [17, 9, 3], [19, 10, 3], [21, 10, 3], [23, 11, 3],
 ];
 // Body HP only. The separate finale HP/defences remain specific to each encounter.
-const bossBalanceBodies = [690, 1070, 1550, 2130, 2320, 2760, 3790, 4340, 4650, 5650, 6450];
+const bossBalanceBodies = [710, 1460, 2170, 2890, 3480, 3950, 5530, 6210, 6800, 8150, 9650];
 
 function progressionRank(level, max) {
   return Math.min(max, Math.max(1, Math.floor(Number(level) || 1)));
@@ -54,7 +54,11 @@ function bossPowerIndex(type, power = sortieCombatPower()) {
 function bossScaling(type) {
   const power = sortieCombatPower();
   const k = bossPowerIndex(type, power);
-  return Object.freeze({ power, k, hpMul: k ** .85, tempoMul: k ** .35, speedMul: k ** .22 });
+  // A fully outfitted fighter can exceed an early campaign floor by over 30x.
+  // Give the shell a bounded reserve without accelerating projectiles beyond their tells.
+  const excess = Math.max(1, power / (3.2 * baselinePowerForBoss(type)));
+  const reserve = 1 + Math.min(.48, .22 * Math.log(excess));
+  return Object.freeze({ power, k, hpMul: k ** .85 * reserve, tempoMul: k ** .35, speedMul: k ** .22 });
 }
 function bossBalanceHealth(type, { scaling = bossScaling(type), difficultyScale = 1 } = {}) {
   const index = Math.max(0, Math.min(bossBalanceBodies.length - 1, type | 0));

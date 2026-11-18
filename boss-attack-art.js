@@ -524,6 +524,8 @@ function drawRayOrganic(ctx, kind, material, length, left, right, age, quiet) {
 }
 
 function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase, age }, quiet) {
+  if (typeof BossLivingMaterials !== "undefined" && left === right &&
+      BossLivingMaterials.ray(ctx,kind,x1,y1,x2,y2,left,age,active,phase,quiet)) return;
   const dx = x2 - x1, dy = y2 - y1;
   const length = Math.max(1, Math.hypot(dx, dy));
   const material = signatureMaterials[kind] || signatureMaterials.plasma;
@@ -824,6 +826,19 @@ function drawAlienSignatureHazard(ctx, hazard, quiet) {
   const progress = signatureProgress(hazard);
   const elemental = typeof bossElementalVfx === "function" && !boss?.finale ? bossElementalVfx(boss?.type) : null;
   ctx.save();
+  const species = boss?.type;
+  if (species > 0 && typeof BossLivingMaterials !== "undefined" &&
+      (hazard.kind === "beam" || hazard.kind === "seam" || hazard.kind === "filament" && !hazard.flare && !hazard.swingY)) {
+    const vertical = hazard.kind === "seam";
+    const line = hazard.kind === "filament" ? alienFilamentPose(hazard,progress) : {
+      x1:vertical?hazard.x:hazard.right, y1:vertical?0:hazard.y,
+      x2:vertical?hazard.x:0, y2:vertical?viewport.height:hazard.y
+    };
+    if (BossLivingMaterials.ray(ctx,hazard.material || BossLivingMaterials.keys[species],line.x1,line.y1,line.x2,line.y2,
+        hazard.thickness*.5,hazard.age,active,active?progress:clamp(hazard.age/hazard.warning,0,1),quiet)) {
+      ctx.restore();return true;
+    }
+  }
   if (elemental?.signature?.(ctx, hazard, { active, progress, quiet })) { ctx.restore(); return true; }
   if (hazard.kind === "tide") drawSignatureTide(ctx, hazard, material, active, progress, quiet);
   else if (hazard.kind === "vortex") drawSignatureVortex(ctx, hazard, material, active, progress, quiet);

@@ -21,7 +21,7 @@ function distribution(frameTimes) {
 async function measure(page, type) {
   await page.locator("#start-button").click();
   await page.evaluate(type => {
-    showScreen("battle",{seed:77135,difficulty:"veteran"});
+    showScreen("battle",{seed:77135,difficulty:"hard"});
     setVisualQuality("high",false);
     enemyCooldown=powerupCooldown=nextBossTime=Infinity;
     formationState.nextTime=battlefieldEvents.nextObject=battlefieldEvents.nextTransport=aceEncounter.nextTime=Infinity;
@@ -58,7 +58,10 @@ async function measure(page, type) {
     await page.waitForFunction(()=>window.releaseSample.done,null,{timeout:25000});
     const s=await page.evaluate(()=>window.releaseSample);
     assert.ok(s.raf.length>=5 && s.submit.length>=5,"Insufficient active frames");
-    runs.push({boss:type+1,charges,attack:s.kind,damageSeconds:s.damageSeconds,rafMs:distribution(s.raf),submitMs:distribution(s.submit)});
+    runs.push({boss:type+1,charges,attack:s.kind,damageSeconds:s.damageSeconds,
+      rafMs:distribution(s.raf),submitMs:distribution(s.submit),
+      observedRafHz:+(1000*s.raf.length/s.raf.reduce((sum,dt)=>sum+dt,0)).toFixed(2),
+      rawRafMs:s.raf.map(dt=>+dt.toFixed(3)),rawSubmitMs:s.submit.map(dt=>+dt.toFixed(3))});
   }
   return runs;
 }
@@ -70,10 +73,13 @@ async function measure(page, type) {
   const browser=await chromium.launch({executablePath:process.env.CHROME_PATH,headless:true,
     args:["--use-angle=d3d11","--disable-renderer-backgrounding","--disable-background-timer-throttling"]});
   const ids=subset?subset.split(",").map(Number):Array.from({length:11},(_,i)=>i+1);
-  const report={method:"Stocked shield then empty shield, staged live boss after model load; high quality, 1440x900, no video or audio encoder. Counts are active-window browser frame intervals.",seed:77135,cpu:os.cpus()[0].model,browser:browser.version(),runs:[]};
+  const report={method:"Stocked shield then empty shield, staged live boss after model load; high quality, 1440x900, no video or audio encoder. rAF intervals are browser scheduling cadence, not hardware present. submitMs covers main-thread update and drawing command submission; it does not measure GPU execution.",seed:77135,cpu:os.cpus()[0].model,browser:browser.version(),runs:[]};
   report.runtimeSha256={};
-  for (const name of ["game.js","nextgen-elemental-vfx.js","elemental-fluid-vfx.js","boss-ultimate-art.js","assets/vfx/nextgen/void-inclined-horizon.webp"]) {
-    report.runtimeSha256[name]=crypto.createHash("sha256").update(fs.readFileSync(path.join(root,name))).digest("hex");
+  for (const name of ["game.js","boss-final-form-art.js","boss-living-materials.js","assets/vfx/nextgen/living-organs.webp","assets/vfx/nextgen/spell-matter.webp","elemental-armored-vfx.js","elemental-cosmic-vfx.js","elemental-confluence-vfx.js","nextgen-elemental-vfx.js","elemental-fluid-vfx.js","boss-ultimate-art.js","assets/vfx/nextgen/void-inclined-horizon.webp"]) {
+    // A/B comparisons may target a release predating one of these art files.
+    const assetPath=path.join(root,name);
+    report.runtimeSha256[name]=fs.existsSync(assetPath)
+      ? crypto.createHash("sha256").update(fs.readFileSync(assetPath)).digest("hex") : null;
   }
   try {
     const device=await browser.newBrowserCDPSession();

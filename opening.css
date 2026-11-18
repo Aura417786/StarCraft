@@ -71,6 +71,7 @@
 .opening-progress::-webkit-progress-value { background: #aad4e4; }
 .opening-progress::-moz-progress-bar { background: #aad4e4; }
 .opening-actions { display: flex; justify-content: flex-end; gap: .55rem; margin-top: .7rem; }
+.opening-speed { align-self: center; margin-right: auto; font-size: .78rem; font-weight: 550; color: #c4d7db; }
 .opening-actions button {
   min-height: 44px;
   padding: .4rem .83rem;

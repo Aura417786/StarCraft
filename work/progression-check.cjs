@@ -286,7 +286,8 @@ check("Boss loadout and health lock through pickups and apply once to the finale
   execute('spawnBoss(5);');
   const next = snapshot('[boss.baseHealth,boss.scaling]');
   assert.equal(next[1].k, 3.2);
-  assert.equal(next[0], Math.round(execute('bossBalanceBodies[5]') * 3.2 ** .85));
+  assert.ok(next[1].hpMul > 3.2 ** .85 && next[1].hpMul <= 3.2 ** .85 * 1.48);
+  assert.equal(next[0], Math.round(execute('bossBalanceBodies[5]') * next[1].hpMul));
 });
 
 check("Equipment preserves the short-action cadence floor and speeds projectiles without cutting warning or recovery", () => {

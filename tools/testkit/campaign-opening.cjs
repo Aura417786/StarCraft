@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 const { createPage } = require("./balance.cjs");
+const { checkRateKeys } = require("./opening-speed.cjs");
 const { openHangarPage, closeHangarPage } = require("./hangar-test-controls.cjs");
 
 const root = path.resolve(process.argv[2]);
@@ -34,6 +35,18 @@ async function testOpening(browser, fighter) {
     assert.deepEqual(await page.evaluate(() => ({ state, battleTime, active: campaignOpening.active })), {
       state: "menu", battleTime: 0, active: true,
     });
+    let fastPlayback;
+    if (fighter === "blue") {
+      await page.waitForFunction(() => campaignOpening.inspectForQa().seconds > .35);
+      fastPlayback = await checkRateKeys(page);
+      await page.keyboard.down("ShiftLeft");
+      await page.evaluate(() => campaignOpening.seekForQa(6.5));
+      await page.waitForFunction(() => !document.querySelector(".opening-subtitle").hidden &&
+        document.querySelector(".opening-line").textContent.startsWith("In a dark forest"));
+      fastPlayback.secondSubtitleAt = await page.evaluate(() => campaignOpening.inspectForQa().seconds);
+      assert.ok(fastPlayback.secondSubtitleAt >= 7.1 && fastPlayback.secondSubtitleAt < 7.6);
+      await page.keyboard.up("ShiftLeft");
+    }
 
     await page.evaluate(() => campaignOpening.seekForQa(10000));
     await page.waitForFunction(() => state === "battle" && ultimate.shot?.presentationOnly);
@@ -96,7 +109,7 @@ async function testOpening(browser, fighter) {
     await page.waitForFunction(() => state === "battle");
     assert.equal(await intro.isVisible(), false);
     assert.deepEqual(errors, []);
-    return { launch, controlsDuringHandoff: true, noTargetDamage: true, replayReturnsToMenu: true, replayIsOptional: true };
+    return { launch, fastPlayback, controlsDuringHandoff: true, noTargetDamage: true, replayReturnsToMenu: true, replayIsOptional: true };
   } finally { await page.close(); }
 }
 
@@ -111,8 +124,12 @@ async function testFirstSkip(browser) {
     assert.equal(await intro.getAttribute("data-paused"), "");
     await pause.click();
     assert.equal(await intro.getAttribute("data-paused"), null);
+    await page.keyboard.down("ShiftRight");
     await intro.locator(".opening-finish").click();
     await page.waitForFunction(() => state === "battle");
+    await page.keyboard.down("ShiftRight");
+    assert.equal(await page.evaluate(() => flightKeyHeld("stance")), false);
+    await page.keyboard.up("ShiftRight");
     assert.deepEqual(await page.evaluate(() => ({
       active: campaignOpening.active, seen: localStorage.getItem("star-breaker-opening-seen"),
       flightStage: flightTutorial?.stage, phase: ultimate.phase,
@@ -128,7 +145,8 @@ async function testFirstSkip(browser) {
 
 async function main() {
   fs.mkdirSync(out, { recursive: true });
-  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true,
+    args: process.argv.includes("--software") ? ["--disable-gpu", "--disable-webgl"] : [] });
   try {
     const result = { fighters: {} };
     for (const fighter of ["red", "blue", "yellow"]) {

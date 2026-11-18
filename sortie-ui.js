@@ -69,6 +69,9 @@ function sortieMetric(label, value) {
   div.append(sortieElement("span", label), sortieElement("strong", String(value)));
   return div;
 }
+function sortieDeathCount(result) {
+  return (result.retryCount ?? 0) + Number(!!result.died);
+}
 function sortieMetrics(items) {
   const row = sortieElement("div", "", "sortie-metrics");
   row.append(...items.map(([label, value]) => sortieMetric(label, value)));
@@ -433,7 +436,7 @@ function refreshSortieResult() {
     : result.week ? tr("每周首领连战", "Weekly Boss Rush") : sortieWord(result.mode);
   const stat = result.newScore || result.newTime ? (result.assisted ? tr("刷新辅助纪录", "New assisted record") : tr("刷新纪录", "New record"))
     : result.bestScore ? tr(`历史最佳 ${result.bestScore}`, `Personal best ${result.bestScore}`) : "";
-  const status = [headline, stat, result.mode === "rush" ? tr(`本局阵亡 ${Number(result.died)} 次`, `Defeats this run: ${Number(result.died)}`) : ""].filter(Boolean).join(" · ");
+  const status = [headline, stat, result.mode === "rush" ? tr(`本局阵亡 ${sortieDeathCount(result)} 次`, `Defeats this run: ${sortieDeathCount(result)}`) : ""].filter(Boolean).join(" · ");
   const defeated = result.bossRecords.map(record => bossTypeName(record.type)).join(tr("、", ", "));
   const unlocks = result.unlocks.map(type => bossTypeName(type)).join(tr("、", ", "));
   sortieResultSummary.replaceChildren(sortieElement("strong", status));

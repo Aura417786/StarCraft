@@ -337,6 +337,20 @@ function interceptAlienRound(bullet) {
           BossResonance.sever(boss,node.x,node.y,node.radius);
           combatBurst(node.x, node.y, .46, hazard.color);
           gameAudio.bossAttack("burst", node.x, node.y);
+          // These finishers draw power from their opener. A pilot who removes
+          // the last live relay, electrode or spore sac before discharge earns
+          // a safe third beat. The confluence feeds its lance from one limb.
+          const sourceCut = hazard.kind === "fusionLimbs" ? node === hazard.nodes[1]
+            : (hazard.kind === "tailConduit" || hazard.kind === "neuralRelay" || hazard.kind === "sporeNests")
+              && hazard.nodes.every(part => part.health <= 0);
+          if (sourceCut && hazard.comboId !== undefined && hazard.comboStage < 2) {
+            for (let i=bossHazards.length-1; i>=0; i--) {
+              const last=bossHazards[i];
+              if (last.comboId === hazard.comboId && last.comboStage === 2 && last.age < last.warning) {
+                bossHazards.splice(i,1);
+              }
+            }
+          }
           // Cutting the attack apparatus creates an actual, short payoff.
           // At most one opening per move, even with simultaneous area fire.
           if (hazard.kind === "fusionLimbs" || hazard.nodes.every(part => part.health <= 0)) rewardAlienCounter();

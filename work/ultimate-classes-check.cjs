@@ -108,7 +108,7 @@ test("Corona Barrage sweeps all heights and both sides of the ship in three time
 });
 
 test("a whole cast cannot one-shot a Boss even with heavily upgraded weapons", () => {
-  for (const [id, expected] of [["red", 0.18], ["blue", 0.15], ["yellow", 0.081]]) {
+  for (const [id, expected] of [["red", 0.082], ["blue", 0.0675], ["yellow", 0.036]]) {
     const { run } = arena();
     run(`fighter = "${id}";
       const target = place("boss", 1030, 360, .01, true);

@@ -23,6 +23,12 @@ function balanceStart(fixture) {
   });
   canvas.focus({ preventScroll: true });
   if (!isBattleActive()) throw new Error("Fixture could not focus combat");
+  if (fixture.fixture === "sector-coverage") {
+    // Independently exercise the campaign's real sector and elite directors.
+    // The unmodified natural sortie is recorded separately as balance evidence.
+    nextBossTime = Infinity;
+    bossHitGrace = Infinity;
+  }
   if (fixture.bossType === null) return;
   const type = fixture.bossType;
   // Compare firepower across the entire fight, including for a pilot who
@@ -160,7 +166,7 @@ function runBalanceFixture(fixture) {
       }
       telemetry.maxFriendly = Math.max(telemetry.maxFriendly, bullets.length);
       telemetry.maxHostile = Math.max(telemetry.maxHostile, bossProjectiles.length + enemyProjectiles.length);
-      if (fixture.fixture === "natural" && frame % 6 === 0) {
+      if ((fixture.fixture === "natural" || fixture.fixture === "sector-coverage") && frame % 6 === 0) {
         if (gravityTide.phase === "active") telemetry.fieldFeatures.add("gravity-tide");
         if (journeyState.scene?.catapult > 0 || journeyState.catapult > 0) telemetry.fieldFeatures.add("allied-catapult");
         for (const object of battlefieldEvents.objects) telemetry.fieldFeatures.add(object.journeyCover ?? object.kind);

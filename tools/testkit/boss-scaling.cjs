@@ -36,8 +36,10 @@ function compareLoadouts(runs) {
     const relativeGap = low.won && full.won ? (full.ttk_seconds - low.ttk_seconds) / low.ttk_seconds : null;
     const firstWarning = [low, medium, full].map(run => run.timing.body[0]?.warningSeconds);
     return { boss: type + 1, relativeGap,
-      lowTtk35to50: low.ttk_seconds >= 35 && low.ttk_seconds <= 50,
-      fullTtk32to45: full.ttk_seconds >= 32 && full.ttk_seconds <= 45,
+      // The harder release includes the signature wind-up and its actual
+      // discharge even when a strong build interrupts the first shell.
+      lowTtk35to65: low.ttk_seconds >= 35 && low.ttk_seconds <= 65,
+      fullTtk32to55: full.ttk_seconds >= 32 && full.ttk_seconds <= 55,
       lowFullTtkGapUnder25Percent: relativeGap !== null && Math.abs(relativeGap) < .25,
       fullAtMost20PercentFaster: relativeGap !== null && relativeGap >= -.20,
       firstWarningUnchangedByGear: firstWarning.every(seconds => Number.isFinite(seconds) && seconds === firstWarning[0]),

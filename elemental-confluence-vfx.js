@@ -87,7 +87,17 @@ const ElementalConfluenceVfx = (() => {
     veil.addColorStop(1, "#592e8b00");
     ctx.fillStyle = veil;
     ctx.globalAlpha = alpha;
-    ctx.fillRect(0, -half, length, half * 2);
+    ctx.beginPath();ctx.moveTo(0,0);
+    ctx.bezierCurveTo(length*.15,-half*.52,length*.45,-half*.74,length*.8,-half*.19);
+    ctx.lineTo(length,0);
+    ctx.bezierCurveTo(length*.67,half*.46,length*.26,half*1.07,0,0);
+    ctx.fill();
+    // Gold erupts out of the original violet siphon. The core narrows as
+    // it travels to the selected endpoint, with a twisting wake behind it.
+    const thrust = quiet ? .72 : .5+.5*Math.sin(time*9);
+    const nose = length*(.23+.64*(quiet ? .55 : (time*.67)%1));
+    const span = Math.min(length*.55,viewport.height*.51);
+    BossSpellMatter.draw(ctx,"lance",nose,0,span,half*(6+1.8*thrust),0,true);
     for (let strand = 0; strand < 4; strand++) {
       ctx.beginPath();
       for (let i = 0; i <= 24; i++) {
@@ -117,9 +127,22 @@ const ElementalConfluenceVfx = (() => {
     if (rect.width <= 0 || rect.height <= 0) return;
     ctx.save();
     ctx.translate(rect.x, rect.y);
+    // Curl the two torn edges back into the spine at each end of the rift.
+    // The gap is defined by gameplay outside this local silhouette.
+    const curl = quiet ? 0 : time*3.6;
     ctx.beginPath();
-    ctx.rect(0, 0, rect.width, rect.height);
-    ctx.clip();
+    for (let side=-1;side<=1;side+=2) {
+      for (let i=0;i<=26;i++) {
+        const t=side<0 ? i/26 : 1-i/26;
+        const envelope=Math.sin(Math.PI*t)**.57;
+        const center=.5+.09*Math.sin(t*11+curl)*envelope;
+        const width=(.33+.09*Math.cos(t*23-curl)+.04*Math.sin(t*48+side))*envelope;
+        const px=rect.width*(center+side*width);
+        if (side===-1 && i===0) ctx.moveTo(px,rect.height*t);
+        else ctx.lineTo(px,rect.height*t);
+      }
+    }
+    ctx.closePath();ctx.clip();
     const wash = ctx.createLinearGradient(0, 0, rect.width, 0);
     wash.addColorStop(0, "#3e226200");
     wash.addColorStop(.19, "#542178b4");

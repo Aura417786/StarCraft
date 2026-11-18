@@ -2,14 +2,14 @@
 
 // 三种大招共享储能。只有普通武器实际造成的伤害为大招充能。
 const ultimateRules = { maxCharges: 5, energyPerCharge: 100, enemyEnergy: 12, bossEnergy: 180,
-  chargeTime: 0.85, bossDamageCap: 0.18 };
+  chargeTime: 0.85, bossDamageCap: 0.082 };
 const ultimateProfiles = {
   red: { name: "赤焰贯星炮", enName: "Crimson Beam", fire: "贯穿发射", enFire: "Piercing beam firing" },
   blue: { name: "离子猎群", enName: "Ion Swarm", fire: "追踪离子已出舱", enFire: "Homing ions launched" },
   yellow: { name: "日冕弹幕", enName: "Corona Barrage", fire: "全屏弹幕推进中", enFire: "Screen-wide barrage active" },
 };
-const ionSwarmRules = { count: 5, interval: 0.095, damageShare: 0.28, bossHitCap: 0.03, maxFlight: 1.4 };
-const coronaRules = { count: 3, interval: 0.22, damageShare: 0.37, bossHitCap: 0.027 };
+const ionSwarmRules = { count: 5, interval: 0.095, damageShare: 0.28, bossHitCap: 0.0135, maxFlight: 1.4 };
+const coronaRules = { count: 3, interval: 0.22, damageShare: 0.37, bossHitCap: 0.012 };
 const ultimate = { charges: 0, energy: 0, phase: "idle", elapsed: 0, kind: null, shot: null, audioActive: false };
 // 连携只缩短下一次成功消费的蓄力；时长在按下空格时锁定，不追溯改变正在蓄力的炮。
 const cannonLink = { remaining: 0, chargeDuration: ultimateRules.chargeTime, chargingLinked: false };
@@ -99,7 +99,7 @@ function restoreUltimateEnergy(amount) {
 }
 function ultimateDamageLog() {
   const kind = currentUltimateId();
-  const classSeconds = kind === "red" ? 7.1 : kind === "blue" ? 5.5 : 6.0;
+  const classSeconds = kind === "red" ? 5.1 : kind === "blue" ? 4.05 : 4.35;
   const equivalentSeconds = classSeconds * (1 + .20 * clamp(battleTime / 660, 0, 1));
   const focusPower = 1 + .16 * (weapon.lanes - 1);
   const armorFloor = kind === "red" ? 1.005 : .72;

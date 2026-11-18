@@ -29,31 +29,60 @@ function createOpeningScore(muted) {
     noise[i] = bass;
   }
   let previousBeat = -1, previousScene = -1, previousTime = 0;
+  let rate = 1;
+  const voices = new Set();
+
+  // Envelopes and pitch glides use score seconds. A held note can cross a
+  // Shift transition, so re-anchor its remaining envelope at the audio clock.
+  function playVoice(source, gain, duration, volume, attack, glide) {
+    let offset = 0, anchor = context.currentTime;
+    function schedule(previousRate) {
+      const now = context.currentTime;
+      offset = Math.min(duration, offset + (now - anchor) * previousRate);
+      anchor = now;
+      const remaining = (duration - offset) / rate;
+      if (!remaining) return;
+      const attackPart = Math.min(1, offset / attack);
+      const decayPart = Math.max(0, (offset - attack) / (duration - attack));
+      const amplitude = .0001 * (volume / .0001) ** (attackPart - decayPart);
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(amplitude, now);
+      if (offset < attack) gain.gain.exponentialRampToValueAtTime(volume, now + (attack-offset)/rate);
+      gain.gain.exponentialRampToValueAtTime(.0001, now+remaining);
+      if (glide) {
+        source.frequency.cancelScheduledValues(now);
+        source.frequency.setValueAtTime(glide[0]*(glide[1]/glide[0])**(offset/duration),now);
+        source.frequency.exponentialRampToValueAtTime(glide[1],now+remaining);
+      } else source.playbackRate.setValueAtTime(rate,now);
+      source.stop(now + remaining + .03/rate);
+    }
+    source.onended = () => voices.delete(schedule);
+    voices.add(schedule);
+    source.start(anchor);
+    schedule(rate);
+  }
 
   function tone(frequency, duration, volume, to = frequency, shape = "sine") {
-    const source = context.createOscillator(), gain = context.createGain(), t = context.currentTime;
+    const source = context.createOscillator(), gain = context.createGain();
     source.type = shape;
-    source.frequency.setValueAtTime(frequency, t);
-    source.frequency.exponentialRampToValueAtTime(to, t + duration);
-    gain.gain.setValueAtTime(.0001, t);
-    gain.gain.exponentialRampToValueAtTime(volume, t + Math.min(.05, duration * .1));
-    gain.gain.exponentialRampToValueAtTime(.0001, t + duration);
     source.connect(gain); gain.connect(room);
-    source.start(t); source.stop(t + duration + .03);
+    playVoice(source,gain,duration,volume,Math.min(.05,duration*.1),[frequency,to]);
   }
 
   function texture(duration, volume, frequency) {
     const source = context.createBufferSource(), filter = context.createBiquadFilter(), gain = context.createGain();
-    const t = context.currentTime;
     source.buffer = sample;
     filter.type = "bandpass"; filter.frequency.value = frequency; filter.Q.value = .69;
-    gain.gain.setValueAtTime(.0001, t);
-    gain.gain.exponentialRampToValueAtTime(volume, t + .025);
-    gain.gain.exponentialRampToValueAtTime(.0001, t + duration);
-    source.connect(filter); filter.connect(gain); gain.connect(room); source.start(); source.stop(t + duration + .03);
+    source.connect(filter); filter.connect(gain); gain.connect(room);
+    playVoice(source,gain,duration,volume,.025);
   }
 
   return {
+    setRate(next) {
+      const previous = rate;
+      rate = next;
+      for (const reschedule of voices) reschedule(previous);
+    },
     resume() { context.resume().catch(() => {}); },
     suspend() { context.suspend().catch(() => {}); },
     tick(t) {
@@ -63,8 +92,8 @@ function createOpeningScore(muted) {
         const chords = [[41.2, 55, 65.41], [43.65, 58.27, 65.41], [38.89, 58.27, 77.78],
           [41.2, 61.74, 82.41], [36.71, 55, 73.42], [41.2, 61.74, 82.41]];
         ambiences.forEach(({ oscillator, level }, i) => {
-          oscillator.frequency.setTargetAtTime(chords[scene][i], context.currentTime, .39);
-          level.gain.setTargetAtTime(i === 0 ? .14 : .033, context.currentTime, .72);
+          oscillator.frequency.setTargetAtTime(chords[scene][i], context.currentTime, .39 / rate);
+          level.gain.setTargetAtTime(i === 0 ? .14 : .033, context.currentTime, .72 / rate);
         });
         previousScene = scene;
         previousBeat = -1;

@@ -303,13 +303,14 @@ function renderCampaignReport(result) {
   const metrics = sortieMetrics([
     [tr("战役得分", "Campaign score"), result.score],
     [tr("通关时间", "Clear time"), sortieTime(result.seconds)],
-    [tr("本局阵亡", "Deaths this run"), Number(result.died)],
+    [tr("本局阵亡", "Deaths this run"), sortieDeathCount(result)],
     [tr("最高连击", "Best combo"), result.combo],
     [tr("无伤首领", "No-hit bosses"), `${clean}/11`],
     [result.assisted ? tr("辅助最佳", "Assisted best") : tr("历史最高分", "Campaign best"), best],
   ]);
   const records = [
     sortieWord(result.difficulty),
+    result.retried ? tr("使用首领回溯 · 不计正式纪录", "Boss checkpoint used · unranked") : "",
     result.assisted ? tr("辅助出击", "Assisted sortie") : "",
     result.newScore ? tr("刷新最高分", "New score record") : "",
     result.newTime ? tr("刷新最快通关", "New clear time") : ""

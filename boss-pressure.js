@@ -66,7 +66,7 @@ const bossPressureCombos = [
       t => {mirrorShieldTell(t);edgeFilament(t,"glass",0,{y:t.gapY,anchorX:t.lockX,tilt:-t.side*.33,duration:1.1,thickness:.4});}],
   ],
   [
-    ["尾雷贯流", "Conduit Surge", "射断电极或让雷段先过，跟住电潮缺口，再避开电环", "Cut the electrode or let the pulse pass, track the tide gap, then clear the ring",
+    ["尾雷贯流", "Conduit Surge", "射断供能电极可阻止末段，跟住电潮缺口", "Sever the electrode to stop the finisher, then follow the current gap",
       t => tailConduitTell(t),
       t => {tideTell(t,{material:"plasma",gapY:t.gapY,thick:.42,shift:t.side*.06});if(t.enraged)tailConduitTell(t,.65,true);},
       t => ringTell(t,{material:"plasma",at:0,x:t.lockX,y:t.gapY,duration:1.45,radius:1.2})],
@@ -76,7 +76,7 @@ const bossPressureCombos = [
       t => edgeFilament(t,"plasma",0,{y:t.gapY,anchorX:t.lockX,flip:true,tilt:t.side*.36,duration:1.1,thickness:.34})],
   ],
   [
-    ["孢巢换气", "Germination Front", "打碎孢囊，离开新生菌毯，迎向后方孢浪缺口", "Break the sacs, escape the new bloom, then enter the rear pollen gap",
+    ["孢巢换气", "Germination Front", "清掉孢囊可断末段，菌毯长出时转向", "Destroy the sacs to cut the finisher, then leave the new bloom",
       t => sporeNestsTell(t,0,t.enraged),
       t => vortexTell(t,{material:"spore",x:t.lockX,y:t.lockY,duration:1.8,strength:0,core:.72,grow:true}),
       t => tideTell(t,{material:"spore",gapY:t.gapY,direction:1,thick:.62,bend:.18})],
@@ -96,7 +96,7 @@ const bossPressureCombos = [
       t => edgeFilament(t,"void",0,{y:t.gapY,anchorX:t.lockX,flip:true,tilt:-t.side*.6,duration:1.15,thickness:.37})],
   ],
   [
-    ["神经回授", "Synaptic Feedback", "按序拆节点，先横移再停稳躲扫描，离开爆发环", "Sever nodes in order, strafe then hold through the scan, and clear the pulse ring",
+    ["神经回授", "Synaptic Feedback", "按亮起次序拆掉中继可阻断末段，横移避开扫描", "Cut the lit relays in order to stop the finisher, strafe off the scan",
       t => neuralRelayTell(t,0,t.enraged),
       t => queueAlienHazard(t,"seam",t.telegraphDuration,{x:t.lockX,thickness:player.width*.32,duration:.85}),
       t => ringTell(t,{material:"nerve",at:0,x:t.lockX,y:t.gapY,duration:1.3,radius:1.15})],
@@ -106,7 +106,7 @@ const bossPressureCombos = [
       t => beamTell(t,0,t.gapY,1.15,.48)],
   ],
   [
-    ["群渊三相", "Confluence Triad", "先拆牵引肢和尖刺肢，沿潮汐缺口移动，再横移避开断层", "Sever siphon and lance limbs, move through the tide gap, then strafe off the fault",
+    ["群渊三相", "Confluence Triad", "射断长枪肢可阻止末段，沿潮汐缺口移动", "Sever the lance limb to stop the finisher, then follow the tide gap",
       t => fusionLimbsTell(t,0,t.enraged),
       t => tideTell(t,{material:"fusion",gapY:t.gapY,direction:1,thick:.54,bend:.26}),
       t => queueAlienHazard(t,"seam",t.telegraphDuration,{x:t.lockX,thickness:player.width*.42,duration:1.2})],
@@ -115,6 +115,23 @@ const bossPressureCombos = [
       t => fusionLimbsTell({...t,lockY:t.gapY},0,t.enraged),
       t => {bandTell(t,0,1.25);queueAlienHazard(t,"seam",t.telegraphDuration+.55,{x:t.lockX,thickness:player.width*.26,duration:.7});}],
   ],
+];
+
+// Seconds from the opening impact to its interception and finisher. The final
+// form gets its own rhythm: for example the eel discharges in quick succession,
+// while the furnace leaves time to get out of the basalt's shelter.
+const encounterRhythms = [
+  { intercept: 1.18, finish: 2.92, finaleIntercept: 1.00, finaleFinish: 2.38 }, // returning swell
+  { intercept: .93, finish: 2.54, finaleIntercept: .89, finaleFinish: 2.11 }, // rib rake, then pounce
+  { intercept: 1.34, finish: 3.05, finaleIntercept: 1.14, finaleFinish: 2.54 }, // crust, then backdraft
+  { intercept: 1.08, finish: 2.63, finaleIntercept: .96, finaleFinish: 2.26 }, // web tension and shear
+  { intercept: .92, finish: 2.48, finaleIntercept: .90, finaleFinish: 2.03 }, // jaws land as a pair
+  { intercept: 1.15, finish: 2.66, finaleIntercept: 1.06, finaleFinish: 2.23 }, // facets rotate before reflection
+  { intercept: .87, finish: 2.37, finaleIntercept: .81, finaleFinish: 2.04 }, // traveling electrode pulse
+  { intercept: 1.27, finish: 2.81, finaleIntercept: 1.09, finaleFinish: 2.32 }, // spore incubation
+  { intercept: 1.19, finish: 2.72, finaleIntercept: 1.02, finaleFinish: 2.22 }, // well first, then shear
+  { intercept: 1.00, finish: 2.57, finaleIntercept: .92, finaleFinish: 2.17 }, // staggered synaptic relays
+  { intercept: .98, finish: 2.53, finaleIntercept: .91, finaleFinish: 2.07 }, // siphon into lance
 ];
 
 function buildBossPressureCombo(target) {
@@ -140,7 +157,9 @@ function buildBossPressureCombo(target) {
     hint.split("，")[0] + "。第三拍 · " + reply[2],
     enHint.split(",")[0] + ". Third beat · " + reply[3]] : [cn,en,hint,enHint];
   target.attackMotion=["coil","lunge","recoil","sweep","lunge","sweep","sweep","recoil","coil","recoil","coil"][target.type];
-  const offsets = target.type===9 ? [0,1.08,3.65] : target.enraged ? [0,1.24,3.32] : [0,1.42,3.65];
+  const rhythm = encounterRhythms[target.type];
+  const tempo = Math.max(1, Math.min(1.14, target.scaling?.tempoMul ?? 1)) * (target.enraged ? 1.08 : 1);
+  const offsets = [0, rhythm.intercept / tempo, rhythm.finish / tempo];
   const stageEnds=[];
   for(let stage=0;stage<3;stage++) {
     const start=bossHazards.length;
@@ -323,7 +342,8 @@ function logBossPressure(target, event, details = {}) {
 function prepareBossPressureSeal(target) {
   const contacts=target.pressureAttackCount??0;
   const threshold = target.pressureSequence ? (contacts%2 ? 5 : 6) : 6;
-  if (contacts < threshold) return false;
+  if (!target.signaturePending && contacts < threshold) return false;
+  target.signaturePending = false;
   target.pressureAttackCount = 0;
   target.pressureSequence = (target.pressureSequence ?? 0) + 1;
   const disabled = typeof shieldDisabledForSortie === "function" && shieldDisabledForSortie();

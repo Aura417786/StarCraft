@@ -12,10 +12,12 @@ async function main() {
   const root = path.resolve(process.argv[2]);
   const out = path.resolve(process.argv[3]);
   const minutes = Number(process.argv[4] ?? 30);
+  const software = process.argv.includes("--swiftshader");
   assert.ok(minutes >= 1 && Number.isFinite(minutes));
   fs.mkdirSync(out, { recursive: true });
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true,
-    args: ["--disable-background-timer-throttling", "--disable-renderer-backgrounding"] });
+    args: ["--disable-background-timer-throttling", "--disable-renderer-backgrounding",
+      ...(software ? ["--use-angle=swiftshader","--enable-unsafe-swiftshader"] : [])] });
   try {
     const { page, errors } = await createPage(browser, root, false);
     await page.addScriptTag({ path: path.join(__dirname, "balance-policy.js") });
@@ -61,6 +63,11 @@ async function main() {
       };
       requestAnimationFrame(sample);
     });
+    await page.waitForFunction(() => soakProbe.totalActive >= 1 && soakProbe.sampleCount >= 12, null, { timeout: 30000 });
+    const browserSession = await browser.newBrowserCDPSession();
+    const {gpu} = await browserSession.send("SystemInfo.getInfo");
+    const renderer = gpu.auxAttributes.glRenderer || gpu.devices[0]?.deviceString || "";
+    if(software) assert.match(renderer,/swiftshader/i);
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Performance.enable");
     const start = performance.now();
@@ -69,25 +76,28 @@ async function main() {
       const elapsed = (performance.now() - start) / 1000;
       const due = timeline.length === 0 || elapsed >= timeline.length * 60 || elapsed >= minutes * 60;
       if (due) {
-        if (timeline.length % 5 === 0 || elapsed >= minutes * 60) await cdp.send("HeapProfiler.collectGarbage");
+        const forcedGc = timeline.length % 5 === 0 || elapsed >= minutes * 60;
+        if (forcedGc) await cdp.send("HeapProfiler.collectGarbage");
         const { metrics } = await cdp.send("Performance.getMetrics");
         const selected = Object.fromEntries(metrics.filter(metric => ["JSHeapUsedSize", "JSHeapTotalSize", "Nodes",
           "Documents", "JSEventListeners", "LayoutCount"].includes(metric.name)).map(metric => [metric.name, metric.value]));
         const game = await page.evaluate(() => {
           const { controls, ...probe } = window.soakProbe;
           return { ...probe, battleTime, active: isBattleActive(), state, lives: player.lives, quality: visualQuality.id,
-            models: starBreakerModelCache.size, sectorMaps: starBreakerModelStage?.sectorMaps.size ?? 0,
+            models: starBreakerModelCache.size, modelLimit: starBreakerModelLimit,
+            sectorMaps: starBreakerModelStage?.sectorMaps.size ?? 0,
             particles: combatEffects.particles.length, spareParticles: spareCombatParticles.length,
             bullets: bullets.length, hostile: bossProjectiles.length + enemyProjectiles.length,
             hadal: hadalWaterDevice?.composited ?? null };
         });
-        timeline.push({ elapsed: Math.round(elapsed * 100) / 100, ...selected, ...game });
+        timeline.push({ elapsed: Math.round(elapsed * 100) / 100, forcedGc, ...selected, ...game });
         fs.writeFileSync(path.join(out, "soak.json"), JSON.stringify({ requestedMinutes: minutes, browser: browser.version(),
+          renderer, rendererSelection: software ? "explicit SwiftShader" : "browser default",
           fixture: "Real-time headless Chrome RAF, natural campaign then Rush with spare lives and live control policy. Forced GC every 5 min.",
           errors, timeline }, null, 2));
         console.log(`${Math.round(elapsed)}s · ${game.totalActive.toFixed(1)} combat s · Bosses seen ${game.seen.join(',')} · ${Math.round(selected.JSHeapUsedSize / 1048576)} MiB JS`);
         assert.deepEqual(errors, []);
-        assert.ok(game.models <= 3 && game.particles + game.spareParticles === 180 && selected.Documents >= 1);
+        assert.ok(game.models <= game.modelLimit && game.particles + game.spareParticles === 180 && selected.Documents >= 1);
       }
       if (elapsed >= minutes * 60) break;
       await new Promise(resolve => setTimeout(resolve, Math.min(5000, (minutes * 60 - elapsed) * 1000)));

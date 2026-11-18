@@ -208,7 +208,7 @@ let checks = 0;
 let failedChecks = 0;
 function check(name, test) {
   try { test(); checks++; process.stdout.write('PASS ' + name + '\n'); }
-  catch (error) { failedChecks++; process.stderr.write('FAIL ' + name + ': ' + error.message + '\n'); }
+  catch (error) { failedChecks++; process.stderr.write('FAIL ' + name + ': ' + error.stack + '\n'); }
 }
 
 check('all eight movement keys, release, and prevented page scrolling', () => {
@@ -1118,6 +1118,42 @@ check('resize preserves normalized combat progression and restart restores openi
   leaveBattle(); begin(); assert.equal(scene().battleTime,0);
   execute('spawnEnemy("scout");'); near(scene().enemies[0].healthLog,0);
 });
+check('the egg crest hits outside its visible gap and crossing inside grants the venting damage window', () => {
+  readyBoss(0,'beginBossFinale(boss);resetBossPresentation();');
+  const result=execute(`(()=>{
+    const f=boss.finale;f.age=f.transform+.2;f.next=Infinity;
+    finaleTide(boss,finaleBounds(),1);
+    const wave=f.hazards[0],shot={damage:1};
+    const braced=bossFinaleDamageMultiplier(boss,shot);
+    wave.age=wave.warning+wave.duration*.55;wave.previousAge=wave.age-1/60;
+    player.y=player.previousY=wave.gap.center;
+    player.x=player.previousX=finaleTideX(wave,player.y,wave.age);
+    const safe=!bossFinaleHitsPlayer(boss);
+    updateBossFinale(boss,1/600);
+    const exposed=bossFinaleDamageMultiplier(boss,shot);
+    player.y=player.previousY=wave.gap.center-wave.gap.half-player.height*.2;
+    player.x=player.previousX=finaleTideX(wave,player.y,wave.age);
+    return {braced,exposed,safe,hits:bossFinaleHitsPlayer(boss)};
+  })()`);
+  assert.ok(result.safe && result.hits);
+  near(result.braced,.69);near(result.exposed,1.36);
+});
+check('threading the pincer opens the pictured claw core for exactly its damage window', () => {
+  readyBoss(4,'beginBossFinale(boss);resetBossPresentation();');
+  const result=execute(`(()=>{
+    const f=boss.finale;f.age=f.transform+.2;f.next=Infinity;
+    finaleClaws(boss,finaleBounds(),1);
+    const jaw=f.hazards[0]; f.ventOpenAt=f.age+8;f.openUntil=f.age+9;
+    const read=()=>[bossFinaleCoreOpen(f),bossFinaleDamageMultiplier(boss,{})];
+    const before=read();
+    player.y=player.previousY=jaw.gap.center;
+    jaw.age=jaw.warning-.005;
+    updateBossFinale(boss,.01);
+    const during=read();f.age=f.threadedUntil+.01;
+    return JSON.stringify([before,during,read()]);
+  })()`);
+  assert.deepEqual(JSON.parse(result),[[false,.34],[true,1.5],[false,.34]]);
+});
 check('the Broodmother establishes an undertow, intercepts its exit with a tide and punishes the locked column', () => {
   readyBoss(0,'prepareAlienAttack(boss);');
   const result=execute(`(() => {
@@ -1458,18 +1494,18 @@ check('cannon preserves orbs and only damages enemies inside the visible battlef
   assert.equal(orbScene().powerups.length,1); assert.equal(weaponState().lanes,1);
   assert.equal(scene().enemies[0].hp,10);
 });
-check('cannon against a boss caps one hit at eighteen percent even after an enormous weapon upgrade', () => {
+check('cannon against a boss caps one hit at 8.2 percent even after an enormous weapon upgrade', () => {
   readyBoss(2,'player.y=boss.y;weapon.damage=60;weapon.interval=1/12;'); primeUltimate(); castUltimate();
-  execute('updateUltimate(.45);'); near(bossState().boss.hp,.82,1e-10); near(ult().energy,0);
-  execute('updateUltimate(.1);resolveUltimateHits();'); near(bossState().boss.hp,.82,1e-10);
+  execute('updateUltimate(.45);'); near(bossState().boss.hp,.918,1e-10); near(ult().energy,0);
+  execute('updateUltimate(.1);resolveUltimateHits();'); near(bossState().boss.hp,.918,1e-10);
 });
-check('a weak cannon respects its own damage below the boss cap instead of always dealing eighteen percent', () => {
+check('a weak cannon respects its own damage below the boss cap', () => {
   readyBoss(2,'player.y=boss.y;boss.healthLog+=Math.log(100);'); primeUltimate(); castUltimate();
   execute('updateUltimate(.5);'); const hp=bossState().boss.hp;
   assert.ok(hp>.99&&hp<1); near(ult().energy,0);
 });
 check('a cannon can finish the wounded third boss once, award its milestone heal and never feed back energy', () => {
-  readyBoss(2,'beginBossFinale(boss);boss.finale.age=boss.finale.transform+bossRules.finaleMinimum;boss.finale.openUntil=boss.finale.age+1;player.y=boss.y;boss.hp=.06;player.lives=2;'); primeUltimate(); castUltimate(); execute('updateUltimate(.5);');
+  readyBoss(2,'beginBossFinale(boss);boss.finale.age=boss.finale.transform+bossRules.finaleMinimum;boss.finale.openUntil=boss.finale.age+1;player.y=boss.y;boss.hp=.02;player.lives=2;'); primeUltimate(); castUltimate(); execute('updateUltimate(.5);');
   assert.equal(bossState().boss,null); assert.equal(scene().score,2000); assert.equal(health().lives,3);
   execute('updateUltimate(.1);resolveUltimateHits();'); assert.equal(scene().score,2000); near(ult().energy,0);
 });
@@ -2694,7 +2730,7 @@ check('linked cannon damage remains unchanged and respects fusion resistance wit
   assert.equal(ult().phase,'charging');execute('updateUltimate(.001);');assert.equal(ult().phase,'firing');
   near(ult().shot.damageLog,originalDamage);assert.equal(execute('ultimate.shot.linked'),true);
   execute('updateUltimate(.5);resolveUltimateHits();resolveUltimateHits();');
-  near(bossState().boss.hp,1-.18*.78);near(ult().energy,0);assert.equal(ult().charges,1);
+  near(bossState().boss.hp,1-.082*.78);near(ult().energy,0);assert.equal(ult().charges,1);
 });
 check('linked cannons spend only one charge and fresh consecutive presses revert to normal charge time without buffered repeats', () => {
   earnCannonLink('ultimate.charges=3;'); key('Space');key('Space','keydown',{repeat:true});

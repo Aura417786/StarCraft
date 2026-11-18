@@ -63,3 +63,13 @@ const openingImages = {
   ...Object.fromEntries(Array.from({ length: 11 }, (_, i) =>
     [`alien${i}`, `assets/aliens/boss-${String(i + 1).padStart(2, "0")}.webp`])),
 };
+
+// A film is local to its shot and remains locked to the master clock on pause,
+// backgrounding and QA scrubs. Distant chapters are fetched on approach.
+const openingPerformanceCuts = [
+  {start:35.2, end:47, file:"briefing"},
+  {start:59, end:71, file:"resolve"},
+  {start:108, end:121, file:"witnesses"},
+  {start:121, end:127, file:"helmet-lift"},
+  {start:127, end:134.3, file:"seal-check"},
+];

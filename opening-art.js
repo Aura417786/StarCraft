@@ -19,9 +19,10 @@ const openingBossFormation = [
 const openingFighterFormation = ["scout", "armored", "gunner"];
 
 function openingPlate(ctx, image, w, h, scale = 1, panX = 0, panY = 0, pivotX = .5, pivotY = .5) {
-  if (!image?.naturalWidth) return false;
-  const base = Math.max(w / image.naturalWidth, h / image.naturalHeight);
-  const width = image.naturalWidth * base * scale, height = image.naturalHeight * base * scale;
+  const iw = image?.naturalWidth || image?.videoWidth, ih = image?.naturalHeight || image?.videoHeight;
+  if (!(iw && ih)) return false;
+  const base = Math.max(w / iw, h / ih);
+  const width = iw * base * scale, height = ih * base * scale;
   const x = openingClamp((w - width) * pivotX + panX * w, w - width, 0);
   const y = openingClamp((h - height) * pivotY + panY * h, h - height, 0);
   ctx.drawImage(image, x, y, width, height);
@@ -116,7 +117,15 @@ function openingSprite(ctx, image, x, y, w, h, angle = 0, alpha = 1) {
   ctx.restore();
 }
 
-function openingShip(ctx, frame, x, y, w, h, bank, throttle) {
+function openingShip(ctx, frame, x, y, w, h, bank, throttle, yaw = 0, roll = .08) {
+  if (frame.flightStage === undefined) {
+    try { frame.flightStage = typeof makeOpeningFlightStage === "function" ? makeOpeningFlightStage() : null; }
+    catch { frame.flightStage = null; }
+  }
+  if (frame.flightStage) {
+    try { if (frame.flightStage.render(ctx,frame,x,y,w*1.14,yaw,roll,bank,throttle)) return; }
+    catch { frame.flightStage.dispose(); frame.flightStage = null; }
+  }
   const color = openingPalette[frame.fighter];
   const wake = w * (.38 + .60 * throttle);
   const tail = x - w * .36;
@@ -136,7 +145,7 @@ function openingShip(ctx, frame, x, y, w, h, bank, throttle) {
     openingGlow(ctx, tail, jetY, h * .20, "#6bc5f18a", .4 + throttle * .6);
   }
   const drawn = typeof drawFighterVariant === "function" &&
-    drawFighterVariant(ctx, { x, y, width: w, height: h, visualBank: 0 }, frame.fighter, null, true, frame.seconds);
+    drawFighterVariant(ctx, { x, y, width: w * (.38+.62*Math.abs(Math.cos(yaw))), height: h, visualBank: Math.sin(roll) }, frame.fighter, null, true, frame.seconds);
   if (!drawn) openingSprite(ctx, frame.images[frame.fighter], x, y, w, h);
   openingGlow(ctx, x + w * .30, y - h * .12, h * .27, color + "35", .45);
   ctx.restore();
@@ -149,7 +158,8 @@ function openingGate(ctx, frame, w, h, elapsed) {
   const size = Math.min(w, h * 1.777) * openingMix(.36, .105, progress);
   const x = w * openingMix(.46, .78, progress);
   const y = h * openingMix(.70, .50, progress);
-  openingShip(ctx, frame, x, y, size, size * .67, -.18 * (1 - progress), .4 + progress * .6);
+  openingShip(ctx, frame, x, y, size, size * .67, -.15 * (1 - progress), .4 + progress * .6,
+              -.18-1.10*openingEase(.15,.88,progress),-.42+.33*progress);
   const portal = w * .777;
   openingGlow(ctx, portal, h * .51, Math.max(w, h) * (.17 + progress * .50), "#effbffe0", progress * .92);
   const exposure = openingEase(.58, 1, progress) * (frame.quiet ? .73 : .95);
@@ -204,28 +214,34 @@ function openingFleet(ctx, frame, w, h) {
     ctx.fillStyle = "#03060c66"; ctx.fillRect(0, 0, w, h);
   } else openingPlate(ctx, frame.images.orbit, w, h, 1.05);
   openingStars(ctx, w, h, t, frame.quiet ? .001 : .012, frame.quiet ? 0 : 2.4);
-  const parade = Math.sin(elapsed * .5) * (frame.quiet ? 0 : .006);
   for (let i = 0; i < openingBossFormation.length; i++) {
     const [px, py, depth] = openingBossFormation[i];
-    const x = w * (px + .09 * (1 - openingEase(0, 2, elapsed)));
-    const y = h * (py + parade * (i % 2 ? -1 : 1));
-    const width = size * depth * openingMix(.92, 1.03, pullback);
+    const beat=elapsed*(.41+.053*(i%5))+i*1.72;
+    const settle=openingEase(-.38+i*.062,2.75+i*.14,elapsed);
+    const drift=frame.quiet?.28:1;
+    const x = w*(px+(.21+.06*(i%3))*(1-settle)+drift*.018*Math.cos(beat));
+    const y = h*(py+(i%2?-.16:.14)*(1-settle)+drift*.022*Math.sin(beat));
+    const width = size * depth * (.66 + settle*.33+.09*Math.cos(beat));
     openingGlow(ctx, x, y, width * .72, i % 2 ? "#b274a640" : "#77b6dd4f", separation);
-    openingSprite(ctx, frame.images[`alien${i}`], x, y, width, width * .66, Math.sin(elapsed * .7 + i) * .05, separation * .90);
+    openingCreatureInFlight(ctx,frame.images[`alien${i}`],x,y,width,width*.66,t,i,separation*.94);
   }
   for (let row = 0; row < 4; row++) for (let index = 0; index < 7; index++) {
-    const x = w * (.615 + index * .052 + row * .025 + parade);
-    const y = h * (.29 + row * .14 + (index - 3) ** 2 * .0038 + parade);
-    const width = size * (.043 - index * .0026);
+    const dive=(elapsed*.165+index*.129+row*.21)%1;
+    const depth=.3+.7*dive*dive;
+    const x = w*(1.17-dive*(.37+row*.09)+.027*Math.sin(elapsed*.71+row));
+    const y = h*(.20+row*.15+Math.sin(dive*3.7+index*.05)*(.05+.014*row));
+    const width = size*(.012+.039*depth);
     const img = frame.images[openingFighterFormation[(index + row) % 3]];
-    openingSprite(ctx, img, x, y, width, width * .65, 0, separation * (.80 - index * .065));
+    const opacity=separation*openingEase(0,.10,dive)*(1-openingEase(.87,1,dive))*(.43+.43*depth);
+    openingSprite(ctx,img,x,y,width,width*.65,-.18*Math.cos(dive*3.7),opacity);
   }
   const nearW = size * .485, nearH = nearW * .67;
   const x = openingMix(w * .243, w * aspect.x, pullback);
   const y = openingMix(h * .63, h * aspect.y, pullback);
   const width = openingMix(nearW, w * aspect.width, pullback);
   const height = openingMix(nearH, h * aspect.height, pullback);
-  openingShip(ctx, frame, x, y, width, height, -.13 * (1 - pullback), .72);
+  openingShip(ctx, frame, x, y, width, height, -.13*(1-pullback),.72,
+              -.30*(1-pullback),-.76*(1-pullback));
   openingFire(ctx, frame, x + width * .465, y, w, h, fire);
   const flare = (1 - openingEase(0, .46, elapsed)) * (frame.quiet ? .32 : .69);
   if (flare > 0) {
@@ -287,8 +303,10 @@ function drawOpeningArt(ctx, frame, w, h) {
   const isSpace = ["earth", "earthSignal", "survey", "contact", "brief"].includes(cut.art);
   const plate = isSpace ? images.earth
     : cut.art === "canopy" ? images.helmet : images[cut.art] ?? images.hangar;
-  openingPlate(ctx, plate, w, filmH, zoom, panX, panY, cut.pivot);
+  const film = frame.activeFilm?.readyState>=2 && !frame.activeFilm.seeking ? frame.activeFilm : null;
+  openingPlate(ctx, film ?? plate, w, filmH, zoom, panX, panY, cut.pivot);
   if (isSpace) openingStars(ctx, w, filmH, seconds, quiet ? .0002 : .0018);
+  if(cut.art==="earth" || cut.art==="earthSignal") drawOpeningRelay(ctx,w,filmH,seconds,cut.art==="earthSignal",quiet);
   if (cut.art === "earthSignal") {
     const phase = (elapsed % 6.3) / 6.3;
     ctx.save(); ctx.globalAlpha = (1 - phase) * .65; ctx.strokeStyle = "#7bdff4"; ctx.lineWidth = 1.5;
@@ -299,15 +317,24 @@ function drawOpeningArt(ctx, frame, w, h) {
     ctx.fillStyle = "#07112558"; ctx.fillRect(0, 0, w, filmH);
     for (let i = 0; i < 4; i++) {
       const s = w * (.13 + i * .020);
-      openingSprite(ctx, images[`alien${i}`], w * (.43 + i * .15 - progress * .075), filmH * (.46 + (i % 2) * .135), s, s * .65, -.07 + progress * .12, .69);
+      openingCreatureInFlight(ctx,images[`alien${i}`],w*(.58+i*.16-progress*(.19+.03*i)),
+                              filmH*(.42+(i%2)*.135+.035*Math.sin(elapsed*.53+i)),s,s*.65,seconds,i,.84);
     }
     openingLabel(ctx, language ? "FORWARD ARRAY · NO RESPONSE" : "前沿阵列 · 无应答", "SIGNAL LOST", w * .10, filmH * .24, Math.max(12, filmH * .029));
   }
   if (cut.art === "hangar" || cut.art === "systems") {
     const size = Math.min(w, filmH * 1.76) * (cut.art === "hangar" ? .46 : .61);
-    const x = w * (.56 + .02 * progress), y = filmH * (cut.art === "hangar" ? .58 : .54);
-    openingGlow(ctx, x, y + size * .13, size * .43, "#65a5bf44", .86);
-    openingShip(ctx, frame, x, y, size, size * .67, -.13, cut.art === "systems" ? .54 : .16);
+    const wide = cut.art === "hangar";
+    const swing=quiet ? .35 : 1;
+    const x=w*(wide?.47+.13*progress:.58+.033*progress);
+    const y=filmH*(wide?.57-.045*progress:.53)+filmH*.007*Math.sin(elapsed*.91)*swing;
+    ctx.save();ctx.translate(x,filmH*.735);ctx.scale(1,.105);
+    openingGlow(ctx,0,0,size*.51,"#030910d0");ctx.restore();
+    openingDockRig(ctx,w,filmH,wide?elapsed:12+elapsed,frame.fighter,quiet);
+    const yaw=wide?-.87+1.32*progress:.45-.83*progress;
+    const roll=wide?-.58+.33*Math.sin(progress*2.60):-.42-.44*Math.sin(progress*Math.PI);
+    openingShip(ctx,frame,x,y,size,size*.67,-.13+.12*progress,(wide?.13:.48)+.09*progress,
+                yaw*swing,roll);
     if (cut.art === "systems") {
       const s = Math.max(12, Math.min(19, filmH * .031));
       openingLabel(ctx, language ? "SORTIE SYSTEMS" : "出击自检", elapsed < 6 ? "PROPULSION · READY" : "PRIMARY SYSTEM · CHARGED", w * .12, filmH * .26, s);

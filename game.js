@@ -1456,7 +1456,8 @@ function advanceCombatFrame(seconds, resuming) {
     ? 1 : clamp(combatStepRemainder / combatStepSeconds, 0, 1);
 }
 
-let bossRefractionWorld;
+const bossRefractionWorlds = [null, null];
+let bossRefractionSlot = 0;
 
 function drawWorldBehindCombat(ctx, showCombat) {
   drawBattlefield(showCombat, ctx);
@@ -1475,11 +1476,17 @@ function drawBattleBackground(showCombat) {
   const needsWorld = scene?.ultimateKind && !boss.finale && boss.hp > 0 && bossHazards.some(h =>
     h.kind === "ultimate" && h.noShield && h.age >= (h.tellAt || 0) && h.age < h.warning + h.duration);
   if (needsWorld && typeof context.getTransform === "function") {
-    if (!bossRefractionWorld) {
+    // The wave and molten banks keep reading their backdrop while the next
+    // frame starts. Reusing that exact bitmap immediately can force a GPU
+    // snapshot or a wait. Alternate two native-resolution backdrops instead.
+    const layered = visualQuality.id === "high" &&
+      (scene.ultimateKind === "tideWalls" || scene.ultimateKind === "magmaRift");
+    const slot = layered ? (bossRefractionSlot ^= 1) : 0;
+    if (!bossRefractionWorlds[slot]) {
       const surface = document.createElement("canvas");
-      bossRefractionWorld = surface.getContext("2d");
+      bossRefractionWorlds[slot] = surface.getContext("2d");
     }
-    const paint = bossRefractionWorld;
+    const paint = bossRefractionWorlds[slot];
     if (paint) {
       const surface = paint.canvas;
       if (surface.width !== canvas.width) surface.width = canvas.width;

@@ -84,7 +84,7 @@ test("three-stage actions retain at least 1.3s tells and actionable identity hin
     const warnings = [];
     for (let type = 0; type < bossTypes.length; type++) {
       for (const pressure of [false, true]) {
-        for (const pattern of pressure ? [0] : [0, 1, 2]) {
+        for (const pattern of pressure ? [0, 1] : [0, 1, 2]) {
           const target = positionBoss(type, pressure, pattern, pressure);
           const first = target.telegraphDuration;
           const [name, enName, hint, enHint] = target.attackLabel;
@@ -99,7 +99,7 @@ test("three-stage actions retain at least 1.3s tells and actionable identity hin
     }
     return { warnings, finales: bossFinaleStages.map(stage => stage.hint) };
   })()`);
-  assert.equal(result.warnings.length, 44);
+  assert.equal(result.warnings.length, 55);
   for (const { first, repeat, hint, enHint, wide, quick } of result.warnings) {
     assert.ok(Math.abs(first - repeat - (quick ? 0 : .4)) < 1e-8);
     assert.ok(repeat >= (quick ? 1.3 : wide ? 1.6 : 1.4) && first <= 2.2);

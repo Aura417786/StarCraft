@@ -197,6 +197,11 @@ const complexAlienPatterns = new Set([
 const widePressureMaterials = new Set(["water", "silk", "void", "fusion"]);
 const movingAlienHazards = new Set(["tide", "ring", "ribCage", "pincerLock", "tailConduit"]);
 
+function bossTravelSpeedScale(target) {
+  const difficulty = typeof sortieRules === "function" ? sortieRules().projectileSpeed : 1;
+  return (target?.scaling?.speedMul ?? 1) * difficulty;
+}
+
 function alienWarningLead(target, key, pressure) {
   const wide = pressure ? widePressureMaterials.has(pressure.material) : wideAlienPatterns.has(key);
   const base = target.quickAttack ? 1.3 : wide ? 1.68 : pressure || complexAlienPatterns.has(key) ? 1.54 : 1.4;
@@ -218,7 +223,7 @@ function queueAlienHazard(target, kind, requestedWarning, options) {
   const travels = movingAlienHazards.has(kind) || kind === "filament" && options.swingY
     || kind === "vortex" && options.grow;
   const authoredDuration = options.duration;
-  const duration = travels ? authoredDuration / (target.scaling?.speedMul ?? 1) : authoredDuration;
+  const duration = travels ? authoredDuration / bossTravelSpeedScale(target) : authoredDuration;
   addBossHazard(kind, { ...options, warning, duration });
   const attackStart = followup ? target.phaseTime : -target.telegraphDuration;
   const hazardEnd = attackStart + warning + duration + .12;
@@ -358,8 +363,7 @@ function addBossHazard(kind, options) {
 
 function addBossProjectile(x, y, vx, vy, options) {
   if (bossProjectiles.length >= bossRules.maxProjectiles) return;
-  const difficulty = typeof sortieRules === "function" ? sortieRules().projectileSpeed : 1;
-  const speed = difficulty * (boss?.scaling?.speedMul ?? 1);
+  const speed = bossTravelSpeedScale(boss);
   const shot = acquireHostileRound(x, y, vx * speed, vy * speed, 7);
   shot.color = boss ? boss.color : "#ffb66f";
   shot.attackLabel = boss?.attackLabel;

@@ -50,6 +50,10 @@ function bossRuptureDuration(target) {
 function beginAlienRupture(target) {
   target.enraged = true;
   target.enragedAt = target.age;
+  // A fast build can interrupt two successive chains before either reaches
+  // recovery. Queue the signature for the first decision after the shell breaks.
+  const seal = target.pressureState;
+  target.signaturePending = !target.pressureSequence || !!(seal && seal.age < seal.pulseAt);
   target.pressureState = null;
   target.pressureArmor = false;
   target.phase = "rupture";

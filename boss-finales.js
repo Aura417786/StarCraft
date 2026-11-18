@@ -2,11 +2,11 @@
 
 // Identity, second health pool, recovery cadence and the counter visible in the HUD.
 const bossFinaleStages = [
-  { mode: "egg", hp: .72, interval: 4.40, name: ["深渊胚卵", "Abyssal Egg"], hint: ["进入泄压缺口避开浪峰", "Hold in the relief gap"] },
+  { mode: "egg", hp: .72, interval: 4.40, name: ["深渊胚卵", "Abyssal Egg"], hint: ["让浪峰从缺口掠过，趁泄压反击", "Ride the gap, then strike the venting egg"] },
   { mode: "bones", hp: .48, interval: 3.40, name: ["髓骨祭骸", "Marrow Reliquary"], hint: ["击破上下两根发光骨柱", "Break both glowing bone anchors"] },
   { mode: "furnace", hp: .53, interval: 3.55, name: ["无壳炉心", "Uncased Furnace"], hint: ["躲开喷发再攻击炉心", "Dodge the vents, then strike"] },
   { mode: "web", hp: .46, interval: 3.60, name: ["断弦织心", "Unstrung Heart"], hint: ["飞过亮点解开保护壳", "Cross the glowing knot to expose the heart"] },
-  { mode: "claws", hp: .52, interval: 3.70, name: ["双螯断锁", "Double Lock"], hint: ["飞入双螯之间的缺口", "Fly into the gap between the claws"] },
+  { mode: "claws", hp: .52, interval: 3.70, name: ["双螯断锁", "Double Lock"], hint: ["在合螯瞬间穿缝，反击螯心", "Thread the closing claws to expose the core"] },
   { mode: "mirror", hp: .44, interval: 3.45, name: ["镜棺回照", "Mirror Sepulcher"], hint: ["瞄准菱形标出的真像", "Aim at the diamond-marked reflection"] },
   { mode: "coil", hp: .57, interval: 3.52, name: ["沉雷断尾", "Severed Thunder"], hint: ["避开扩张电环再反击", "Clear the expanding ring, then strike"] },
   { mode: "spores", hp: .52, interval: 3.74, name: ["临终孢巢", "Last Spore Nest"], hint: ["先击破孢囊阻止爆炸", "Break the sacs to stop their blasts"] },
@@ -86,7 +86,7 @@ function finaleHazard(target, type, values) {
   const bonus = typeof sortieWarningBonus === "function" ? sortieWarningBonus() : 0;
   const warning = Math.max(broad ? 1.64 : 1.4, (values.warning ?? 1.03) + .4) + (first ? .4 : 0) + bonus;
   const travels = type === "tide" || type === "ring" || type === "pincer";
-  const duration = (values.duration ?? .36) / (travels ? target.scaling?.speedMul ?? 1 : 1);
+  const duration = (values.duration ?? .36) / (travels ? bossTravelSpeedScale(target) : 1);
   const hazard = { type, age: 0, color: target.color, ...values, warning, duration };
   if (f.hazards.length < 12) f.hazards.push(hazard);
   return hazard;
@@ -112,8 +112,9 @@ function finaleCoreGeometry(target) {
 function finaleTide(target, bounds, side) {
   const gap = finaleGap(bounds, side, 31);
   const width = Math.min(90, Math.max(32, player.width * .46));
-  finaleHazard(target, "tide", { x: target.x, gap, width, warning: 1.22,
+  const crest=finaleHazard(target, "tide", { x: target.x, gap, width, warning: 1.22,
     duration: target.hp < .38 ? 1.42 : 1.62, purge: true, color: "#7eeaff" });
+  target.finale.braceUntil=target.finale.age+crest.warning+crest.duration;
 }
 
 function finaleBones(target, bounds, side) {
@@ -182,6 +183,7 @@ function finaleCoil(target, bounds, side) {
     warning: 1.0, duration: .92, color: "#77d7ff" });
   target.finale.ventOpenAt = target.finale.age + hazard.warning;
   target.finale.openUntil = target.finale.ventOpenAt + 1.7;
+  return hazard;
 }
 
 function finaleSpores(target, bounds, side) {
@@ -204,6 +206,7 @@ function finaleVoid(target, bounds) {
     duration: .40, color: "#f49372" });
   target.finale.ventOpenAt = target.finale.age + hazard.warning + hazard.duration;
   target.finale.openUntil = target.finale.ventOpenAt + 1.05;
+  return hazard;
 }
 
 function finaleSynapse(target, bounds, side) {
@@ -263,7 +266,7 @@ function buildBossFinaleCombo(target,bounds,side) {
   const f=target.finale,begin=f.hazards.length;
   const x=player.x,y=player.y,material=alienPressurePlans[target.type].material;
   const gap=finaleGap(bounds,side),radius=Math.max(20,Math.min(62,bounds.height*.13));
-  bossFinalePlans[f.mode](target,bounds,side);
+  const opener=bossFinalePlans[f.mode](target,bounds,side);
   for(const h of f.hazards.slice(begin)) {
     h.comboStage=0;h.comboRole="setup";h.material??=material;
     if(["wire","blast","seam"].includes(h.type))h.duration=Math.max(.72,h.duration);
@@ -275,7 +278,9 @@ function buildBossFinaleCombo(target,bounds,side) {
     const h = fractured
       ? finaleHazard(target,"resonance",{...BossResonance.cast(target,true),node:values.node})
       : finaleHazard(target,type,{...values,material});
-    h.warning += number===1?1.2:2.85;
+    const rhythm=encounterRhythms[target.type];
+    const tempo=Math.max(1,Math.min(1.14,target.scaling?.tempoMul??1))*(target.hp<.4?1.06:1);
+    h.warning += (number===1?rhythm.finaleIntercept:rhythm.finaleFinish)/tempo;
     h.duration=Math.max(.8,h.duration);
     h.comboStage=number;h.comboRole=number===1?"intercept":"punish";
     h.tellAt=Math.max(0,h.warning-1.5);
@@ -286,31 +291,41 @@ function buildBossFinaleCombo(target,bounds,side) {
     stage(1,"blast",{x,y:gap.center,radius:radius*.8,duration:1});
     wire(2,target.x,target.y,bounds.left,y,player.height*.36);
   } else if(f.mode==="bones") {
-    stage(1,"seam",{x,width:Math.max(14,player.width*.3)});
-    stage(2,"blast",{x,y:gap.center,radius:radius*1.1});
+    const intact=f.nodes.filter(node=>node.hp>0);
+    stage(1,"seam",{x,width:Math.max(14,player.width*.3),node:intact[0]?.index});
+    stage(2,"blast",{x,y:gap.center,radius:radius*1.1,node:intact.at(-1)?.index});
   } else if(f.mode==="furnace") {
-    stage(1,"blast",{x,y:gap.center,radius,duration:1.1});
+    const crust=clamp(gap.center+side*gap.half*.75,bounds.top,bounds.bottom);
+    stage(1,"blast",{x,y:crust,radius,duration:1.1});
     stage(2,"vent",{gap:{center:y,half:gap.half*1.15},duration:.85});
   } else if(f.mode==="web") {
-    stage(1,"blast",{x,y,radius:radius*.9});
-    wire(2,target.x,bounds.top,bounds.left,f.gate?.y??gap.center,player.height*.34);
+    const knot=f.gate;
+    stage(1,"blast",{x:knot?.x??x,y,radius:radius*.9});
+    const shear=wire(2,target.x,bounds.top,bounds.left,knot?.y??gap.center,player.height*.34);
+    if(knot)shear.knot=knot;
   } else if(f.mode==="claws") {
     stage(1,"seam",{x,width:Math.max(18,player.width*.36),duration:.95});
     wire(2,bounds.right,gap.center,bounds.left,gap.center,player.height*.4);
   } else if(f.mode==="mirror") {
     stage(1,"blast",{x,y,radius:radius*.85});
-    const node=f.nodes[f.activeNode],g=finaleNodeGeometry(target,node);
-    wire(2,g.x,g.y,bounds.left,gap.center,17);
+    const marked=finaleNodeGeometry(target,f.nodes[f.activeNode]);
+    const falseImage=finaleNodeGeometry(target,f.nodes[1-f.activeNode]);
+    wire(2,marked.x,marked.y,bounds.left,clamp(2*falseImage.y-marked.y,bounds.top,bounds.bottom),17);
   } else if(f.mode==="coil") {
-    wire(1,bounds.right,bounds.top,bounds.left,gap.center,16);
-    stage(2,"ring",{x,y:gap.center,radius:Math.max(60,bounds.height*.35),width:11,duration:1.25});
+    const electrode=opener;
+    const rimY=clamp(electrode.y+side*electrode.radius*.75,bounds.top,bounds.bottom);
+    wire(1,target.x,target.y,electrode.x,rimY,16);
+    stage(2,"ring",{x:electrode.x,y:rimY,radius:Math.max(60,bounds.height*.35),width:11,duration:1.25});
   } else if(f.mode==="spores") {
     stage(1,"tide",{x:target.x,gap,width:Math.max(25,player.width*.4),duration:1.5});
     const node=f.nodes.find(n=>n.hp>0);
     stage(2,"blast",{x,y:gap.center,radius:radius*.85,node:node?.index,duration:1});
   } else if(f.mode==="void") {
     wire(1,bounds.right,bounds.top,bounds.left,gap.center,17);
-    stage(2,"seam",{x,width:Math.max(18,player.width*.35),duration:1.15});
+    const well=opener;
+    const escapeSide=x<(bounds.left+bounds.right)*.5?1:-1;
+    const lip=clamp(x+escapeSide*well.radius*.85,bounds.left,bounds.right);
+    stage(2,"seam",{x:lip,width:Math.max(18,player.width*.35),duration:1.15});
   } else if(f.mode==="synapse") {
     stage(1,"seam",{x,width:Math.max(15,player.width*.28)});
     const h=stage(2,"blast",{x,y:gap.center,radius:radius*.8,node:f.activeNode>=0?f.activeNode:undefined});
@@ -355,6 +370,13 @@ function updateBossFinale(target, seconds) {
     const crossed = hazard.age < hazard.warning && hazard.age + seconds >= hazard.warning;
     hazard.previousAge = hazard.age;
     hazard.age += seconds;
+    if (f.mode==="egg" && hazard.type==="tide" && !hazard.ridden && hazard.age>=hazard.warning
+      && hazard.age<hazard.warning+hazard.duration
+      && Math.abs(player.y-hazard.gap.center)<hazard.gap.half-player.height*.16
+      && Math.abs(player.x-finaleTideX(hazard,player.y,hazard.age))<hazard.width*.52) {
+      hazard.ridden=true;
+      f.undertowUntil=f.age+1.1;
+    }
     if (hazard.type === "well" && hazard.age < hazard.warning) {
       const dx = hazard.x - player.x, dy = hazard.y - player.y, distance = Math.hypot(dx, dy);
       if (distance > 1 && distance < hazard.radius * 1.64) {
@@ -367,13 +389,16 @@ function updateBossFinale(target, seconds) {
       hazard.tellSoundPlayed=true;playAlienHazardCue(hazard,"tell",target);
     }
     if (crossed) {
+      if (hazard.type==="pincer" && Math.abs(player.y-hazard.gap.center) < hazard.gap.half-player.height*.16) {
+        f.threadedUntil=f.age+hazard.duration+.70;
+      }
       if (hazard.purge) clearBossFinaleAttacks();
       playAlienHazardCue(hazard,"active",target);
       if (hazard.purge || hazard.type === "well") addCombatShake(hazard.purge ? 6.7 : 4.5);
     }
   }
   f.hazards = f.hazards.filter(hazard => {
-    const alive=hazard.age < hazard.warning + hazard.duration
+    const alive=!hazard.knot?.cut && hazard.age < hazard.warning + hazard.duration
       && (hazard.node === undefined || f.nodes[hazard.node]?.hp > 0);
     if(!alive)playAlienHazardCue(hazard,"tail",target);
     return alive;
@@ -397,6 +422,7 @@ function resizeBossFinale(target) {
   const f = target.finale;
   f.hazards.length = 0;
   f.gate = null;
+  f.braceUntil = f.threadedUntil = f.undertowUntil = 0;
   if (f.age >= f.transform) {
     f.startX = target.x;
     f.startY = target.y;
@@ -467,15 +493,24 @@ function projectileBossFinaleHit(bullet, target) {
   return { time: nearest };
 }
 
+function bossFinaleCoreOpen(f) {
+  return f.age >= (f.ventOpenAt ?? 0) && f.age < f.openUntil
+    || f.mode === "claws" && f.age < (f.threadedUntil ?? 0);
+}
+
 function bossFinaleDamageMultiplier(target, shot) {
   const f = target.finale;
   if (f.age < f.transform) return 0;
   const mode = f.mode;
-  const open = f.age >= (f.ventOpenAt ?? 0) && f.age < f.openUntil;
-  if (mode === "egg") return 1;
-  if (mode === "furnace" || mode === "claws" || mode === "void") return open ? 1.36 : .50;
+  const open = bossFinaleCoreOpen(f);
+  if (mode === "egg") {
+    if (f.age < (f.undertowUntil ?? 0)) return 1.36;
+    return f.age < (f.braceUntil ?? 0) ? .69 : 1;
+  }
+  if (mode === "claws") return open ? 1.5 : .34;
+  if (mode === "furnace" || mode === "void") return open ? 1.36 : .50;
   if (mode === "web") return open ? 1.45 : .39;
-  if (mode === "coil") return open ? 1.14 : .70;
+  if (mode === "coil") return open ? 1.38 : .45;
   if (mode === "fusion") return open ? 1.25 : .64;
   let node = f.nodes[shot.finaleNode];
   if ((!node || node.hp <= 0) && Number.isFinite(shot.y)) {
@@ -486,7 +521,7 @@ function bossFinaleDamageMultiplier(target, shot) {
     });
   }
   if (mode === "mirror") {
-    if (node?.index === f.activeNode) return 1.24;
+    if (node?.index === f.activeNode) return 1.42;
     if (node && f.reflectedBeat !== f.beat && f.hazards.length < 8) {
       f.reflectedBeat = f.beat;
       const g = finaleNodeGeometry(target, node);
@@ -496,7 +531,7 @@ function bossFinaleDamageMultiplier(target, shot) {
     // The broad mirrored hull turns edge-on while the new diamond aligns.
     // The marked facet remains fully vulnerable throughout this counter.
     const turning = f.age < (f.mirrorTurnUntil ?? 0);
-    return node ? .13 : turning ? .05 : .56;
+    return node ? .13 : turning ? .05 : .39;
   }
   if (node && node.hp > 0 && (mode !== "synapse" || node.index === f.activeNode)) {
     const log = shot.damageLog ?? Math.log(shot.damage ?? weapon.damage);
@@ -577,13 +612,16 @@ function drawFinaleWire(ctx, hazard, active, progress, quiet) {
     active, phase: progress, age: hazard.age }, quiet);
 }
 
-function drawFinaleHazard(ctx, hazard, quiet) {
+function drawFinaleHazard(ctx, hazard, quiet, owner = boss) {
   if (hazard.age < (hazard.tellAt??0)) return;
   if (hazard.type === "resonance") { BossResonance.draw(ctx, hazard, quiet); return; }
   const active = hazard.age >= hazard.warning;
   const progress = active ? clamp((hazard.age - hazard.warning) / hazard.duration, 0, 1)
     : clamp(hazard.age / hazard.warning, 0, 1);
   ctx.save();
+  if (typeof BossFinalFormArt !== "undefined" && BossFinalFormArt.hazard(ctx, owner, hazard, active, progress, quiet)) {
+    ctx.restore(); return;
+  }
   ctx.lineWidth = active ? 2.7 : 1.7;
   ctx.strokeStyle = hazard.color;
   ctx.fillStyle = hazard.color + (active ? "55" : "1b");
@@ -733,13 +771,14 @@ function drawFinaleShellBody(ctx, target, w, h, quiet, action) {
   const f = target.finale;
   const mode = f.mode;
   const age = quiet ? 0 : f.age;
-  const lit = f.age >= (f.ventOpenAt ?? 0) && f.age < f.openUntil;
+  const lit = bossFinaleCoreOpen(f);
   const color = lit ? "#b8f4ff" : target.color;
   const rx = w * .43, ry = h * .44;
   if (mode === "egg") {
     drawFinaleEgg(ctx, w, h, age, target.hp, quiet);
     return;
   }
+  if (typeof BossFinalFormArt !== "undefined" && BossFinalFormArt.shell(ctx, target, w, h, quiet)) return;
   if (typeof drawStarBreakerModel === "function"
     && drawStarBreakerModel(ctx, starBreakerFinaleModelIndex(target.type), 0, 0, w, h, {
       time: age, charge: (lit ? .14 : .37 + .23 * Math.sin(age * 2.7)) * (1 - action.slack),
@@ -865,30 +904,22 @@ function drawFinaleShellBody(ctx, target, w, h, quiet, action) {
 
 function drawFinaleNodes(ctx, target, quiet) {
   const f = target.finale;
-  if (f.mode==="mirror" && f.age<(f.mirrorTurnUntil??0)) {
-    const turn=clamp((f.age-f.mirrorTurnAt)/(f.mirrorTurnUntil-f.mirrorTurnAt),0,1);
-    const r=target.width*.42,x=target.x,y=target.y;
-    const spread=(quiet?.33:.19+.68*Math.abs(Math.cos(turn*Math.PI)))*r;
-    ctx.save();ctx.beginPath();ctx.moveTo(x-spread,y);
-    ctx.lineTo(x,y-r*.72);ctx.lineTo(x+spread,y);ctx.lineTo(x,y+r*.72);ctx.closePath();
-    const spec=ctx.createLinearGradient(x-spread,y-r*.2,x+spread,y+r*.2);
-    spec.addColorStop(0,"#9cc9e521");spec.addColorStop(.47,"#a6cfe072");
-    spec.addColorStop(.53,"#e6e7fa90");spec.addColorStop(1,"#8e83bc15");
-    ctx.fillStyle=spec;ctx.fill();ctx.strokeStyle="#b4d5f8a8";ctx.lineWidth=1;ctx.stroke();ctx.restore();
-  }
   for (const node of f.nodes) {
     if (node.hp <= 0) continue;
     const g = finaleNodeGeometry(target, node);
     const marked = f.mode !== "mirror" && f.mode !== "synapse" || node.index === f.activeNode;
     const color = marked ? (f.mode === "bones" ? "#ffe0b7" : "#ffd4ea") : "#58718d";
     finaleVein(ctx, target.x, target.y, g.x, g.y, g.radius * .52, color + "79");
-    finaleVolume(ctx, g.x, g.y, g.radius * .83, g.radius, color, marked ? 1.2 : .8, .28);
+    const painted = typeof BossFinalFormArt !== "undefined" && BossFinalFormArt.node(ctx,target,g,node.index,marked,quiet);
+    if (!painted) finaleVolume(ctx, g.x, g.y, g.radius * .83, g.radius, color, marked ? 1.2 : .8, .28);
     if (f.mode === "mirror" && !marked) continue;
     ctx.lineWidth = 1.4;
     ctx.strokeStyle = color;
     ctx.beginPath();
-    ctx.arc(g.x, g.y, g.radius * 1.10, -Math.PI / 2, Math.PI * 2 * node.hp - Math.PI / 2);
-    ctx.stroke();
+    if (!painted || node.hp < .999) {
+      ctx.arc(g.x, g.y, g.radius * 1.10, -Math.PI / 2, Math.PI * 2 * node.hp - Math.PI / 2);
+      ctx.stroke();
+    }
     if (f.mode === "mirror" || f.mode === "synapse") {
       const x = g.x, y = g.y - g.radius * (quiet ? 1.50 : 1.51 + Math.sin(f.age * 6) * .12);
       ctx.fillStyle = "#fff2df";
@@ -903,7 +934,7 @@ function drawBossFinale(ctx, target, quiet) {
   const f = target.finale;
   const g = finaleCoreGeometry(target);
   for (const hazard of f.hazards) {
-    drawFinaleHazard(ctx, hazard, quiet);
+    drawFinaleHazard(ctx, hazard, quiet, target);
     if (typeof drawFlightDangerPattern === "function") drawFlightDangerPattern(ctx, hazard);
   }
   if (f.gate && !f.gate.cut) {

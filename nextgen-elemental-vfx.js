@@ -598,6 +598,19 @@ const NextgenVfx = (() => {
       for (const [i, circle] of geometry.circles.entries()) {
         cinderVent(ctx, image, circle, age, warning ? charge * .40 : .48 + cool * .49,
           quiet, warning, i * 37 + 13);
+        if (!warning) {
+          // The first vent opens before the third. Molten sheets stretch out
+          // of the fissure, throw dark ballistic crust, then fall back into it.
+          const local = Math.max(0, geometry.progress - .16 - i * .13);
+          const jet = quiet ? .79 : Math.min(1, local * 10) * (.78 + .22 * Math.sin(local * 14 + i));
+          const toward = circle.y < hazard.gapY ? 1 : -1;
+          const radius = circle.radius;
+          ctx.save();
+          ctx.globalAlpha *= jet * (.66 + .34 * cool);
+          BossSpellMatter.draw(ctx,"vent",circle.x,circle.y+toward*radius*.09,
+            radius*(1.56-.18*jet),radius*(.76+1.25*jet),toward*(.08*Math.sin(local*9+i)),false,toward>0);
+          ctx.restore();
+        }
       }
     }
     return true;

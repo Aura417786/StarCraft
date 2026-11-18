@@ -4,6 +4,30 @@
 const bossUltimateArtKinds = ["tideWalls", "boneNova", "magmaRift", "silkCage", "pincer", "mirrorArray", "stormRing", "sporeBloom", "voidCollapse", "neuralGrid", "fusion"];
 const ultimateSurfaceCache = new Map();
 
+// Cropped transparent material plates. Each caster animates its own physical
+// parts. Fallback painters remain available during network/decode latency.
+const BossSpellMatter = (() => {
+  const parts = Object.freeze({ rib: 0, vent: 1, spindle: 2, claw: 3, prism: 4,
+    streamer: 5, pod: 6, accretion: 7, synapse: 8, lance: 9 });
+  const plate = new Image();
+  plate.decoding = "async";
+  plate.src = "assets/vfx/nextgen/spell-matter.webp";
+  const cell = 416;
+  function draw(ctx, name, x, y, width, height, angle = 0, flipX = false, flipY = false) {
+    if (!plate.complete || plate.naturalWidth !== cell * 5 || width <= 0 || height <= 0) return false;
+    const pos = parts[name];
+    ctx.save();
+    ctx.translate(x, y);
+    if (angle) ctx.rotate(angle);
+    if (flipX || flipY) ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+    ctx.drawImage(plate, pos % 5 * cell, Math.floor(pos / 5) * cell, cell, cell,
+      -width * .5, -height * .5, width, height);
+    ctx.restore();
+    return true;
+  }
+  return { draw };
+})();
+
 function drawUltimateFragment(ctx, particle, x, y, alpha, materialName) {
   const mat = signatureMaterials[materialName];
   const size = particle.size;

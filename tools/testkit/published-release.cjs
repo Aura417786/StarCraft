@@ -9,6 +9,10 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 
 const required = [
+  "boss-living-materials.js", "boss-final-form-art.js", "opening-flight-stage.js",
+  "opening.js", "opening-art.js", "elemental-confluence-vfx.js", "campaign-victory.js",
+  "assets/vfx/nextgen/living-organs.webp", "assets/vfx/nextgen/spell-matter.webp",
+  ...["briefing","resolve","witnesses","helmet-lift","seal-check"].map(id => "assets/intro/performances/" + id + ".mp4"),
   "index.html", "boss-mimicry.js", "evolution-preview.js", "ship-renderer.js", "fighter-atlas-data.js",
   "fighter-variants.js", "opening-story.js", "battlefield.js", "journey.js", "journey-art.js", "boss-attack-art.js", "boss-confluence-vfx.js", "boss-pressure-art.js", "boss-ultimate-art.js",
   "elemental-armored-vfx.js", "elemental-cosmic-vfx.js", "nextgen-elemental-vfx.js",
@@ -66,6 +70,21 @@ async function verifyAssets(page, base, manifest, report) {
           row.bytes = data.length;
           row.sha256 = crypto.createHash("sha256").update(data).digest("hex");
           row.ok = row.status === 200 && row.bytes === file.bytes && row.sha256 === file.sha256;
+          const hostedByGame = /^(?:(?:[a-f0-9]{24}|v[0-9-]+-rc-[0-9]+)--)?elaborate-caramel-136cdb\.netlify\.app$/.test(base.hostname);
+          if (!row.ok && row.status === 200 && file.path === "index.html" && hostedByGame) {
+            const tag = Buffer.from('  <meta charset="UTF-8">\n');
+            const hostComment = Buffer.from("<!-- This site is hosted on Netlify. Anyone can build and deploy a site\n" +
+              "     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=1da49bc1-eb62-4d6a-9949-f5001f205e78\n" +
+              "     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->\n");
+            const pos = data.indexOf(tag) + tag.length;
+            if (data.indexOf(tag) >= 0 && data.indexOf(hostComment) === pos && data.lastIndexOf(hostComment) === pos) {
+              const canonical = Buffer.concat([data.subarray(0, pos), data.subarray(pos + hostComment.length)]);
+              row.originBytes = canonical.length;
+              row.originSha256 = crypto.createHash("sha256").update(canonical).digest("hex");
+              row.hostAdded = { type: "HTML comment", bytes: hostComment.length };
+              row.ok = row.originBytes === file.bytes && row.originSha256 === file.sha256;
+            }
+          }
         } finally { await response.dispose(); }
       } catch (error) { row.error = error.message; row.ok = false; }
       return row;

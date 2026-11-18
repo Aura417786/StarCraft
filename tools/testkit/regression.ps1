@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Game = (Join-Path $PSScriptRoot '../..'),
+    [string]$Game,
     [Parameter(Mandatory)][string]$Out,
     [switch]$Browser,
     [switch]$Full,
@@ -8,16 +8,26 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
-$gameRoot = (Resolve-Path -LiteralPath $Game).Path
+$gameRoot = if ($Game) { (Resolve-Path -LiteralPath $Game).Path } else { $repo }
 $resultRoot = [IO.Directory]::CreateDirectory($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Out)).FullName
 $log = Join-Path $resultRoot 'regression.txt'
 $failures = [Collections.Generic.List[string]]::new()
-Set-Content -LiteralPath $log -Value ('Star Breaker regression, ' + [DateTime]::UtcNow.ToString('o')) -Encoding UTF8
+$logEncoding = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $logEncoding
+[IO.File]::WriteAllText($log, ('Star Breaker regression, ' + [DateTime]::UtcNow.ToString('o') + [Environment]::NewLine), $logEncoding)
+
+function Write-CheckLine([string]$Line) {
+    [IO.File]::AppendAllText($log, $Line + [Environment]::NewLine, $logEncoding)
+    Write-Output $Line
+}
 
 function Invoke-Check([string]$Name, [string[]]$Arguments) {
-    & node @Arguments 2>&1 | Tee-Object -FilePath $log -Append
+    # Windows PowerShell wraps native stderr in ErrorRecord objects, even on a successful run.
+    $ErrorActionPreference = 'Continue'
+    Write-CheckLine "[start $Name]"
+    & node @Arguments 2>&1 | ForEach-Object { Write-CheckLine $_.ToString() }
     $code = $LASTEXITCODE
-    "[$Name $code]" | Tee-Object -FilePath $log -Append
+    Write-CheckLine "[$Name $code]"
     if ($code -ne 0) { $failures.Add($Name) }
 }
 
@@ -30,7 +40,7 @@ if (!$SkipUnit) {
     }
 }
 if ($Browser) {
-    foreach ($suite in 'release-browser','rush-browser','boss-mechanics','tactics-feedback','cinematic-check','training','controls-browser','field','boss-retry','evolution-routes','mimic-attacks','difficulty','hit-feedback','campaign-opening','menu-navigation') {
+    foreach ($suite in 'menu-navigation','release-browser','controls-browser','rush-browser','boss-mechanics','tactics-feedback','cinematic-check','training','field','boss-retry','evolution-routes','mimic-attacks','difficulty','hit-feedback','campaign-opening') {
         Invoke-Check $suite @((Join-Path $PSScriptRoot "$suite.cjs"), $gameRoot, (Join-Path $resultRoot $suite))
     }
 }
