@@ -63,6 +63,11 @@ function spawnSupplyTransport() {
     escort.x = escort.previousX = x + width * 0.38;
     escort.y = escort.previousY = escort.baseY = clamp(y + side * width * 0.55, flightBounds.top, flightBounds.bottom);
     escort.speed = target.speed * 1.2; escort.waveAmplitude = Math.min(12, escort.waveAmplitude);
+    if (isAbyssalNightmare()) {
+      markDefenseIntruder(escort);
+      escort.x += side > 0 ? escort.speed * .24 : 0;
+      escort.previousX = escort.x;
+    }
   }
   announceBattlefieldEvent(tr("截获补给运输舰 · 击毁获得三色补给，逃脱无惩罚", "Supply transport · Shoot it down for three pickups. No penalty if it escapes."), 5);
   return target;

@@ -299,15 +299,19 @@ function renderCampaignReport(result) {
   campaignReportGrade.setAttribute("aria-label", tr(`评级 ${grade}`, `Rating ${grade}`));
   const clean = result.bossRecords.filter(record => record.hitCount === 0).length;
   const archive = sortieProfile.data;
-  const best = (result.assisted ? archive.assisted : archive.campaign).bestScore;
-  const metrics = sortieMetrics([
+  const record = result.assisted ? archive.assisted : archive.campaign;
+  const nightmare = result.difficulty === "nightmare";
+  const best = (nightmare ? record.byDifficulty.nightmare : record).bestScore;
+  const entries = [
     [tr("战役得分", "Campaign score"), result.score],
     [tr("通关时间", "Clear time"), sortieTime(result.seconds)],
     [tr("本局阵亡", "Deaths this run"), sortieDeathCount(result)],
     [tr("最高连击", "Best combo"), result.combo],
     [tr("无伤首领", "No-hit bosses"), `${clean}/11`],
     [result.assisted ? tr("辅助最佳", "Assisted best") : tr("历史最高分", "Campaign best"), best],
-  ]);
+  ];
+  if (nightmare) entries.push([tr("防线失守", "Defense breaches"), result.breaches]);
+  const metrics = sortieMetrics(entries);
   const records = [
     sortieWord(result.difficulty),
     result.retried ? tr("使用首领回溯 · 不计正式纪录", "Boss checkpoint used · unranked") : "",

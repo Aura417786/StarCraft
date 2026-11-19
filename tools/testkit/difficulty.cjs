@@ -21,7 +21,8 @@ async function main() {
   const legacy = structuredClone(store.data.campaign.byDifficulty);
   store.rememberRush({ boss: 4, seed: 4225, difficulty: "abyss", fighter: "blue" });
   const loaded = profile.createStore(storage);
-  assert.deepEqual(profile.difficulties, ["easy", "normal", "hard"]);
+  const tiers = ["easy", "normal", "hard", "nightmare"];
+  assert.deepEqual(profile.difficulties, tiers);
   for (const id of profile.legacyDifficulties) assert.deepEqual(loaded.data.campaign.byDifficulty[id], legacy[id]);
   for (const id of profile.difficulties) assert.equal(loaded.data.campaign.byDifficulty[id].attempts, 0);
   loaded.finish({ ...run, difficulty: "hard" });
@@ -160,8 +161,8 @@ async function main() {
       return { values: [...document.querySelector("#sortie-difficulty").options].map(item => item.value),
         rows: [...document.querySelectorAll(".sortie-difficulty-table tbody tr")].map(row => row.textContent) };
     });
-    assert.deepEqual(ui.values, ["easy", "normal", "hard"]);
-    assert.equal(ui.rows.length, 3);
+    assert.deepEqual(ui.values, tiers);
+    assert.equal(ui.rows.length, tiers.length);
     await page.locator("#sortie-difficulty-details:not([open]) > summary").click();
     await page.locator(".sortie-difficulty-table").scrollIntoViewIfNeeded();
     assert.ok((await page.locator(".sortie-difficulty-scroll").boundingBox()).height > 100,

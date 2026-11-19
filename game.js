@@ -968,18 +968,13 @@ function updateEncounter(seconds) {
     enemy.hitFlash = Math.max(0, enemy.hitFlash - seconds);
     if (enemy.kind === "transport") updateSupplyTransport(enemy, seconds);
     else updateEnemyMovement(enemy, seconds);
+    trackDefenseIntruder(enemy, seconds);
     const displayed = enemy.displayHp ?? enemy.hp;
     enemy.displayHp = reducedMotion.matches ? enemy.hp : displayed + (enemy.hp - displayed) * (1 - Math.exp(-seconds * 14));
   }
   if (waves) refreshEliteEscortShields(seconds);
-  if (waves && !bossBlocksWaves() && !formationsBlockWaves() && !battlefieldEventBlocksWaves()
-    && !aceBlocksWaves() && !journeyBlocksWaves()) {
-    enemyCooldown -= seconds;
-    if (enemyCooldown <= 0.00000001) {
-      const reserve = Number(enemies.some(enemy => enemy.kind === "splitter"));
-      if (enemies.length < enemyRules.maxOnScreen - reserve) spawnEnemy(eliteWaveKind() ?? undefined);
-      enemyCooldown += enemyIntervalForTime();
-    }
+  if (waves && !bossBlocksWaves() && !formationsBlockWaves() && !journeyBlocksWaves()) {
+    updateScheduledEnemyWaves(seconds);
   }
 
 }
@@ -1112,19 +1107,25 @@ function enemyTouchesPlayer(enemy) {
   const along = length ? clamp(-(x0 * dx + y0 * dy) / length, 0, 1) : 0;
   return Math.hypot(x0 + dx * along, y0 + dy * along) <= 1;
 }
-function damagePlayer(message, origin = null) {
+function damagePlayer(message, origin = null, { defenseBreach = false } = {}) {
   if (typeof evolutionIsFrozen === "function" && evolutionIsFrozen()) return false;
   if (origin?.source === "flight-training") {
     if (typeof noteFlightTutorialContact === "function") noteFlightTutorialContact(origin, false);
     return false;
   }
   // 小怪碰撞与 Boss 弹幕共享受伤保护，避免同帧连续扣命。
-  if (!isBattleActive() || bossHitGrace > 0 || shieldIsActive()) return false;
+  if (!isBattleActive() || (!defenseBreach && (bossHitGrace > 0 || shieldIsActive()))) return false;
   lastDamageMessage = message;
-  gameAudio.hurt?.();
-  const lost = sortieDamageTaken();
+  if (defenseBreach) gameAudio.warning?.();
+  else gameAudio.hurt?.();
+  const lost = defenseBreach ? 1 : sortieDamageTaken();
   player.lives = Math.max(0, player.lives - lost);
-  if (lost) onEvolutionDamaged(origin);
+  if (defenseBreach) {
+    sortieStats.enemyBreaches++;
+    lifeDisplay.animate?.([{ color: "#ff6c80", textShadow: "0 0 10px #f53857" }, {}],
+      { duration: 560, easing: "ease-out" });
+  }
+  if (lost && !defenseBreach) onEvolutionDamaged(origin);
   player.hitFlash = 0.35;
   pulseCombatLight(player.x, player.y, player.width * 1.7, "#ff6984", "hit");
   bossHitGrace = bossRules.grace;
@@ -1142,6 +1143,12 @@ function updatePlayerDamage(seconds) {
   player.hitFlash = Math.max(0, player.hitFlash - seconds);
   for (let index = enemies.length - 1; index >= 0; index--) {
     const enemy = enemies[index];
+    if (enemy.scoutDetonation) {
+      enemies.splice(index, 1);
+      settleScoutDetonation(enemy);
+      if (state !== "battle") break;
+      continue;
+    }
     if (enemyTouchesPlayer(enemy)) {
       enemies.splice(index, 1);
       createExplosion(enemy, 0);
@@ -1150,8 +1157,10 @@ function updatePlayerDamage(seconds) {
         : tr("撞到敌机", "Crashed into an enemy"), enemy);
       if (state !== "battle") break;
     } else if (enemy.x + enemy.width / 2 < 0) {
-      // 安全飞过玩家的敌机继续向左飞，离屏再清理，不扣血也不计分。
+      // The rear defense line is the left edge. The entire hull must cross it.
       enemies.splice(index, 1);
+      recordDefenseBreach(enemy);
+      if (state !== "battle") break;
     }
   }
 }

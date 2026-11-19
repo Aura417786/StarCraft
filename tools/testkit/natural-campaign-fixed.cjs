@@ -15,9 +15,26 @@ function installPilot({seed,route}){
       if(pressedKeys.has(key)!==wanted)balancePress(key,wanted?"keydown":"keyup");
     }
   };
-  const controls={build:route,shields:0,specials:0,routeSkills:0};
+  const controls={build:route,shields:0,specials:0,routeSkills:0,longLookahead:false};
   const events=[],attempts=Array(11).fill(0);
-  let frames=0,activeBoss=null,seenHits=0;
+  const focusTarget=balanceAimTarget;
+  balanceAimTarget=()=>{
+    if(boss || !isAbyssalNightmare())return focusTarget();
+    const muzzle=muzzlePosition();
+    let target=null,best=Infinity;
+    for(const enemy of enemies){
+      if(enemy.x<=flightBounds.left+player.width || enemy.x>viewport.width+enemy.width*.5)continue;
+      const travel=(enemy.x-flightBounds.left-player.width)/Math.max(55,enemy.speed);
+      const turn=Math.abs(player.y-enemy.y)/player.speed;
+      const backtrack=Math.max(0,muzzle.x-enemy.x+player.width*.6)/(player.speed-Math.min(enemy.speed,player.speed*.60));
+      if(travel<Math.max(turn*.60,backtrack)+.09)continue;
+      const priority=travel*.43+turn+backtrack*.75-(enemy.formationId ? .05 : 0);
+      if(priority>=best)continue;
+      best=priority;target=enemy;
+    }
+    return target??focusTarget();
+  };
+  let frames=0,activeBoss=null,seenHits=0,seenBreaches=0;
   const mark=(event,details={})=>events.push({event,frame:frames,at:balanceRound(battleTime),lives:player.lives,...details});
   window.campaignBatch=()=>{
     for(let n=0;n<3600;n++,frames++){
@@ -27,7 +44,7 @@ function installPilot({seed,route}){
         const retry=document.querySelector("#boss-retry-button");
         if(retry.hidden||!boss||attempts[boss.type]>=10)break;
         mark("retry",{boss:boss.type+1,cause:lastDamageMessage});
-        retry.click();activeBoss=null;seenHits=sortieStats.hitsTaken;
+        retry.click();activeBoss=null;seenHits=sortieStats.hitsTaken;seenBreaches=sortieStats.enemyBreaches;
         Object.assign(controls,{shiftHeld:false,chargeHeld:false,nextHeavy:0});
         canvas.focus();
       }
@@ -40,12 +57,18 @@ function installPilot({seed,route}){
         activeBoss=boss;attempts[boss.type]++;
         mark("enter",{boss:boss.type+1,attempt:attempts[boss.type],power:boss.scaling.power,hp:boss.baseHealth});
       }
+      controls.longLookahead=isAbyssalNightmare() && !!boss;
+      controls.defendRear=isAbyssalNightmare();
       const cadence=activeBoss?2+(attempts[activeBoss.type]-1)%4:3;
       if(frames%cadence===0 && state==="battle")balanceChooseAction(controls,"pilot");
       __balanceClock.tick(1/60);
       if(sortieStats.hitsTaken>seenHits){
         seenHits=sortieStats.hitsTaken;
         mark("hit",{boss:boss?boss.type+1:null,cause:lastDamageMessage});
+      }
+      if(sortieStats.enemyBreaches>seenBreaches){
+        seenBreaches=sortieStats.enemyBreaches;
+        mark("breach",{total:seenBreaches});
       }
       if(activeBoss && !boss && bossDefeated===activeBoss.type+1){
         mark("defeat",{boss:activeBoss.type+1});activeBoss=null;
@@ -54,7 +77,7 @@ function installPilot({seed,route}){
     const deathMetric=[...document.querySelectorAll("#campaign-report-content .sortie-metric")]
       .find(node=>["本局阵亡","Deaths this run"].includes(node.querySelector("span")?.textContent));
     return {frames,seconds:balanceRound(frames/60),battleTime:balanceRound(battleTime),state,lives:player.lives,
-      score,cleared:bossDefeated,mode:sortieStats.mode,difficulty:sortieStats.difficulty,seed:sortieStats.seed,
+      score,kills,breaches:sortieStats.enemyBreaches,cleared:bossDefeated,mode:sortieStats.mode,difficulty:sortieStats.difficulty,seed:sortieStats.seed,
       victory:campaignVictory?.stage,won:sortieStats.result?.won??false,retired:state==="over" && !sortieStats.result?.won,
       cards:document.querySelectorAll(".campaign-boss-card[data-cleared='true']").length,
       displayedDeaths:deathMetric?Number(deathMetric.querySelector("strong").textContent):null,controls,attempts,events};
@@ -63,6 +86,7 @@ function installPilot({seed,route}){
 
 async function main(){
   const [game,outArg,difficulty="hard",fighter="blue",route="frost",seedArg="4225"]=process.argv.slice(2);
+  const practiceLives=process.argv.includes("--practice-reserve") ? 72 : 0;
   const seed=Number(seedArg),out=path.resolve(outArg);
   fs.mkdirSync(out,{recursive:true});
   const browser=await chromium.launch({executablePath:process.env.CHROME_PATH,headless:true});
@@ -78,16 +102,18 @@ async function main(){
       weapon:balanceGunState(),upgrades:{...sortieStats.upgrades},difficulty:sortieStats.difficulty}));
     assert.equal(start.state,"battle");assert.equal(start.lives,3);assert.equal(start.fighter,fighter);
     assert.equal(start.difficulty,difficulty);assert.deepEqual(start.upgrades,{firepower:0,survival:0,mobility:0});
+    // This optional fixture verifies full progression separately from fairness.
+    if(practiceLives)await page.evaluate(lives=>{ player.maxLives=player.lives=lives;updateLifeDisplay(); },practiceLives);
     const timer=Date.now();
     let latest;
     do{
       latest=await page.evaluate(()=>window.campaignBatch());
-      const report={setup:"Fresh browser, normal launch button, campaign waves and drops. Inputs are synthetic keyboard events and existing evolution/retry buttons. Real fixed-step gameplay clock driven at 60 Hz in accelerated wall time. No combat rendering, injected enemies, HP, equipment, invulnerability, scripted clears, or resource grants. Sequence skip uses the epilogue button.",start,errors,
+      const report={setup:`Fresh browser, normal launch button and production campaign sequence. Synthetic keyboard and evolution/retry buttons at 60 Hz fixed-step accelerated time. No combat rendering or scripted kills. ${practiceLives?`One-time pilot life capacity and lives set to ${practiceLives} after launching to test progression.`:"Original lives, HP, equipment and resources."} Sequence skip uses the epilogue button.`,practiceLives,start,errors,
         wallSeconds:(Date.now()-timer)/1000,browser:browser.version(),...latest};
       fs.writeFileSync(path.join(out,"natural-campaign.json"),JSON.stringify(report,null,2)+"\n");
       console.log(latest.seconds+" simulated seconds, "+latest.cleared+"/11, "+latest.lives+" lives, "+latest.state);
       assert.deepEqual(errors,[]);
-    }while(!latest.retired && !latest.won && latest.frames<180000);
+    }while(!latest.retired && !latest.won && latest.frames<(difficulty==="nightmare"?360000:180000));
     if(latest.victory!=="report" && latest.won)latest=await page.evaluate(()=>window.campaignBatch());
     await page.screenshot({path:path.join(out,"result.png")});
     assert.ok(latest.won && latest.victory==="report" && latest.cleared===11 && latest.cards===11,"Campaign did not reach the full victory report");

@@ -13,16 +13,18 @@ async function run() {
   const out = path.resolve(process.argv[3]);
   const ids = (process.argv[4] || "2,3,4,5,6,7,8,9,10,11").split(",").map(Number);
   const clips = process.argv.includes("--video");
+  const nightmare = process.argv.includes("--nightmare");
   fs.mkdirSync(out,{recursive:true});
   const browser=await chromium.launch({executablePath:process.env.CHROME_PATH,headless:true,args:["--use-angle=d3d11"]});
-  const errors=[],report={samples:[],errors,method:"Staged production gameplay; held RAF, high quality, 1280x720. Captured at 24 frames per simulated second. Pilot protected. Silent."};
+  const errors=[],report={samples:[],errors,difficulty:nightmare?"nightmare":"hard",
+    method:"Staged production gameplay; held RAF, high quality, 1280x720. Captured at 24 frames per simulated second. Pilot protected. Silent."};
   try {
     const page=await open(browser,errors);
     await page.locator("#start-button").click();
     for (const id of ids) {
       const name=String(id).padStart(2,"0");
-      await page.evaluate(async type => {
-        showScreen("battle",{seed:4225,difficulty:"hard"}); setVisualQuality("high",false);
+      await page.evaluate(async ({type,difficulty}) => {
+        showScreen("battle",{seed:4225,difficulty}); setVisualQuality("high",false);
         enemyCooldown=powerupCooldown=nextBossTime=Infinity;
         formationState.nextTime=battlefieldEvents.nextObject=battlefieldEvents.nextTransport=aceEncounter.nextTime=Infinity;
         spawnBoss(type);resetBossPresentation();Object.assign(boss,bossArena(type));boss.phase="recover";boss.phaseTime=0;
@@ -35,7 +37,7 @@ async function run() {
           const tex=new Image();tex.src="assets/vfx/nextgen/living-organs.webp";await tex.decode();
         }
         retryTestFrame();prepareAlienAttack(boss,false);
-      },id-1);
+      },{type:id-1,difficulty:report.difficulty});
       await page.waitForFunction(id=>!!starBreakerModelCache.get(id-1)?.model,id,{timeout:45000});
       const row={id,frames:0,shots:[]};
       let enc,done;
@@ -47,9 +49,9 @@ async function run() {
       }
       try {
         for(const phase of ["regular","finale"]) {
-          const times=await page.evaluate(phase=>{
+          const times=await page.evaluate(({phase,nightmare})=>{
             if(phase==="finale"){
-              beginBossFinale(boss);resetBossPresentation();boss.hp=boss.displayHp=.65;
+              beginBossFinale(boss);resetBossPresentation();boss.hp=boss.displayHp=nightmare?.29:.65;
               boss.finale.age=boss.finale.transform;boss.finale.next=boss.finale.age;
               updateBossFinale(boss,.001);
             }
@@ -57,14 +59,14 @@ async function run() {
             const selected=phase==="regular"?list.find(h=>h.kind==="resonance"):list.find(h=>h.comboStage===0)||list[0];
             if(!selected)throw Error("No representative attack in "+phase);
             const begin=Math.max(0,selected.warning-.44-selected.age);
-            const end=phase==="regular"?selected.warning+selected.duration+.13:
+            const end=phase==="regular"&&!nightmare?selected.warning+selected.duration+.13:
               Math.max(...list.map(h=>h.warning+h.duration))+.16;
             for(let t=0;t+1/30<=begin;t+=1/30)retryTestFrame(1/30);
             const followup=phase==="finale"?list.find(h=>h.comboStage===2):null;
             return {start:begin,duration:end-begin,impact:selected.warning+selected.duration*.43-begin,
               followup:followup?followup.warning+followup.duration*.44-begin:null,
               kind:selected.kind||selected.type,stage:phase==="finale"?boss.finale.mode:boss.phase};
-          },phase);
+          },{phase,nightmare});
           const step=clips?1/24:1/12;
           let captured=false,followupCaptured=false;
           for(let i=0; i < Math.ceil(times.duration/step); i++) {

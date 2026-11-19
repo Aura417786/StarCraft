@@ -122,7 +122,7 @@ async function main() {
     const result = { noDamage, caught, shieldRefund, specialHit, completed, elapsedSeconds, noRepeat, replaySkip, keyboardSkip, difficultyRows, ...modes };
     for (const key of ["noDamage", "caught", "specialHit", "completed", "noRepeat", "replaySkip", "keyboardSkip", "assisted"]) assert.equal(result[key], true, key);
     assert.ok(elapsedSeconds < 180);
-    assert.equal(difficultyRows.length, 3);
+    assert.equal(difficultyRows.length, 4);
     assert.deepEqual(result.isolation, [true, true, true]);
     assert.deepEqual(result.flags, { extendedWarning: true, noScreenShake: true, reducedMotion: true });
     assert.equal(result.abyssWarning, 0);

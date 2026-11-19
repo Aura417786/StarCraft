@@ -1,6 +1,8 @@
 # Star Breaker · 星际突围
 
-**v36.3 · Direct Launch.** Choose a fighter and difficulty, then select Start Game to enter the campaign.
+**v37.0-rc.1 · Abyssal Nightmare test build.** Choose Abyssal Nightmare under Sortie Setup, then select Start Game. Easy, Normal, and Hard are also available.
+
+Abyssal Nightmare adds enemy formations and coordinated elites. An eligible fighter costs one life when its entire hull leaves the left side of the field. Boss health locks on entry based on your fighter and current build. The final form enters a frenzy at 30% core health. Read the boss's movements, charge effects, and lit routes to evade attacks. Campaign and Boss Rush records are tracked by difficulty.
 
 
 **v36.2 · Counterattack.** Breaking a shell gives the boss a chance to unleash its signature attack. Slip between the closing claws, pick the marked reflection, or counter when the electric ring discharges. All three fighters deal less ultimate damage to bosses. Encounter health locks to the loadout you bring in.

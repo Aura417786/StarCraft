@@ -44,7 +44,8 @@ function beginBossFinale(target) {
   };
   target.phase = "finale";
   target.phaseTime = 0;
-  target.healthLog += Math.log(profile.hp);
+  if (target.scaling?.nightmare) target.healthLog = Math.log(target.scaling.nightmare.finaleHealth);
+  else target.healthLog += Math.log(profile.hp);
   target.hp = target.displayHp = 1;
   target.damageBudget = undefined;
   target.damageBudgetAt = undefined;
@@ -266,6 +267,16 @@ function buildBossFinaleCombo(target,bounds,side) {
   const f=target.finale,begin=f.hazards.length;
   const x=player.x,y=player.y,material=alienPressurePlans[target.type].material;
   const gap=finaleGap(bounds,side),radius=Math.max(20,Math.min(62,bounds.height*.13));
+  const nightmare = isAbyssalNightmare();
+  const narrow = nightmare && bounds.width < player.width * .70;
+  const rhythm = encounterRhythms[target.type];
+  const tempo = Math.max(1, Math.min(1.14, target.scaling?.tempoMul ?? 1))
+    * (target.hp < .4 ? 1.06 : 1) * (nightmare ? (f.frenzySince === undefined ? 1.17 : 1.29) : 1);
+  // The next charge may begin during a successful dodge's exposure window.
+  // Its new vent schedule cannot erase an existing one.
+  if (nightmare && f.age >= (f.ventOpenAt ?? 0) && f.age < f.openUntil) {
+    f.previousVentUntil = f.openUntil;
+  }
   const opener=bossFinalePlans[f.mode](target,bounds,side);
   for(const h of f.hazards.slice(begin)) {
     h.comboStage=0;h.comboRole="setup";h.material??=material;
@@ -275,11 +286,13 @@ function buildBossFinaleCombo(target,bounds,side) {
     // Under 40% the third beat reads the pilot's last exit instead of repeating
     // the initial lock. Severable final apparatus keeps its original counter.
     const fractured = number === 2 && target.hp < .4 && f.beat % 2 === 1;
+    if (narrow && type === "seam") {
+      type = "blast";
+      values = { ...values, y, radius: player.height * .48 };
+    }
     const h = fractured
       ? finaleHazard(target,"resonance",{...BossResonance.cast(target,true),node:values.node})
       : finaleHazard(target,type,{...values,material});
-    const rhythm=encounterRhythms[target.type];
-    const tempo=Math.max(1,Math.min(1.14,target.scaling?.tempoMul??1))*(target.hp<.4?1.06:1);
     h.warning += (number===1?rhythm.finaleIntercept:rhythm.finaleFinish)/tempo;
     h.duration=Math.max(.8,h.duration);
     h.comboStage=number;h.comboRole=number===1?"intercept":"punish";
@@ -287,15 +300,18 @@ function buildBossFinaleCombo(target,bounds,side) {
     return h;
   };
   const wire=(number,ax,ay,bx,by,width=15)=>stage(number,"wire",{ax,ay,bx,by,width});
+  const flankOfGap = narrow
+    ? clamp(gap.center + side * (gap.half + radius + player.height * .24), bounds.top, bounds.bottom)
+    : gap.center;
   if(f.mode==="egg") {
-    stage(1,"blast",{x,y:gap.center,radius:radius*.8,duration:1});
+    stage(1,"blast",{x,y:flankOfGap,radius:radius*.8,duration:1});
     wire(2,target.x,target.y,bounds.left,y,player.height*.36);
   } else if(f.mode==="bones") {
     const intact=f.nodes.filter(node=>node.hp>0);
     stage(1,"seam",{x,width:Math.max(14,player.width*.3),node:intact[0]?.index});
     stage(2,"blast",{x,y:gap.center,radius:radius*1.1,node:intact.at(-1)?.index});
   } else if(f.mode==="furnace") {
-    const crust=clamp(gap.center+side*gap.half*.75,bounds.top,bounds.bottom);
+    const crust=narrow ? flankOfGap : clamp(gap.center+side*gap.half*.75,bounds.top,bounds.bottom);
     stage(1,"blast",{x,y:crust,radius,duration:1.1});
     stage(2,"vent",{gap:{center:y,half:gap.half*1.15},duration:.85});
   } else if(f.mode==="web") {
@@ -319,7 +335,7 @@ function buildBossFinaleCombo(target,bounds,side) {
   } else if(f.mode==="spores") {
     stage(1,"tide",{x:target.x,gap,width:Math.max(25,player.width*.4),duration:1.5});
     const node=f.nodes.find(n=>n.hp>0);
-    stage(2,"blast",{x,y:gap.center,radius:radius*.85,node:node?.index,duration:1});
+    stage(2,"blast",{x,y:flankOfGap,radius:radius*.85,node:node?.index,duration:1});
   } else if(f.mode==="void") {
     wire(1,bounds.right,bounds.top,bounds.left,gap.center,17);
     const well=opener;
@@ -334,6 +350,30 @@ function buildBossFinaleCombo(target,bounds,side) {
     stage(1,"ring",{x,y,radius:Math.max(70,bounds.height*.3),width:12,duration:1.25});
     stage(2,"vent",{gap,duration:.9});
   }
+  if (nightmare) {
+    const stages = f.hazards.slice(begin);
+    const finisher = Math.min(...stages.filter(h => h.comboStage === 2).map(h => h.warning));
+    const pursuit = nightmarePursuits[target.type];
+    const first = finisher + pursuit.gap * .65;
+    const frenzy = f.frenzySince !== undefined;
+    const insert = (number, at, advanced, lockX, lockY, gapY, direction) => {
+      const values = nightmarePursuit(target, bounds, lockX, lockY, gapY, direction, advanced);
+      const hazard = finaleHazard(target, "resonance", values);
+      hazard.warning = at;
+      hazard.tellAt = at - 1.4;
+      hazard.comboStage = number;
+      hazard.comboRole = number === 5 ? "frenzy" : "pursuit";
+      hazard.trackNightmareExit = number !== 3;
+    };
+    insert(3, first, false, x, y, gap.center, side);
+    const edgeX = clamp(x + (x < bounds.left + bounds.width / 2 ? 1 : -1) * bounds.width * .22,
+      bounds.left, bounds.right);
+    const second = first + (frenzy ? .45 : .66);
+    insert(4, second, true, edgeX, gap.center, y, -side);
+    if (frenzy) {
+      insert(5, second + .54, true, x, y, gap.center + (gap.center - y) * .48, side);
+    }
+  }
   const end=Math.max(...f.hazards.slice(begin).map(h=>h.warning+h.duration));
   // Damage-sensitive forms expose their core after the whole chain. The web
   // crossing reward remains immediate; node breaks retain their own payoff.
@@ -342,21 +382,33 @@ function buildBossFinaleCombo(target,bounds,side) {
   }
   f.comboLog??=[];
   if(f.comboLog.length>=80)f.comboLog.shift();
-  f.comboLog.push({beat:f.beat,lockX:x,lockY:y,stages:3,end,
-    kinds:f.hazards.slice(begin).map(h=>[h.comboStage,h.type])});
+  const chain = f.hazards.slice(begin);
+  f.comboLog.push({beat:f.beat,startedAt:f.age,lockX:x,lockY:y,stages:nightmare ? (f.frenzySince === undefined ? 5 : 6) : 3,end,
+    starts:[...new Set(chain.map(h => h.comboStage))].map(number =>
+      Math.min(...chain.filter(h => h.comboStage === number).map(h => h.warning))),
+    kinds:chain.map(h=>[h.comboStage,h.type])});
 }
 
 function updateBossFinale(target, seconds) {
   const f = target.finale;
   if (!(seconds > 0)) return;
   f.age += seconds;
+  const nightmare = isAbyssalNightmare();
+  if (nightmare && target.hp <= .30 && f.age >= f.transform && f.frenzySince === undefined) {
+    f.frenzySince = f.age;
+    gameAudio.bossEnrage();
+    addCombatShake(5.4);
+    combatBurst(target.x, target.y, .82, target.color);
+  }
   const arena = bossArena(target.type);
   const t = clamp(f.age / f.transform, 0, 1);
   const ease = 1 - Math.pow(1 - t, 3);
   const wide = f.mode === "coil" || f.mode === "mirror";
+  const frenzyAge = f.frenzySince === undefined ? 0 : f.age - f.frenzySince;
+  const recoil = f.frenzySince === undefined ? 0 : -Math.sin(frenzyAge * 18) * Math.max(0, 1 - frenzyAge / .68) * 15;
   const bob = Math.sin(f.age * (wide ? 1.73 : .9)) * Math.min(arena.height * (wide ? .24 : .07), (arena.bottom - arena.top) * .29);
   const easeX = wide ? Math.cos(f.age * 1.07) * arena.width * .065 : 0;
-  target.x = f.startX + (arena.x + easeX - f.startX) * ease;
+  target.x = f.startX + (arena.x + easeX + recoil - f.startX) * ease;
   target.y = f.startY + (clamp(arena.y + bob, arena.top, arena.bottom) - f.startY) * ease;
   if (f.gate && !f.gate.cut && f.age <= f.gate.until
     && Math.hypot(player.x - f.gate.x, player.y - f.gate.y) <= f.gate.radius) {
@@ -386,6 +438,7 @@ function updateBossFinale(target, seconds) {
       }
     }
     if (!hazard.tellSoundPlayed && hazard.age >= (hazard.tellAt??0)) {
+      lockNightmarePursuit(hazard);
       hazard.tellSoundPlayed=true;playAlienHazardCue(hazard,"tell",target);
     }
     if (crossed) {
@@ -413,7 +466,9 @@ function updateBossFinale(target, seconds) {
   const cadence = bossFinaleStages[target.type].interval - (target.hp < .4 ? .24 : 0);
   const protectedInterval = Math.max(cadence / (target.scaling?.tempoMul ?? 1), lastImpact + .8, f.openUntil - f.age + .12);
   const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
-  f.attackInterval = Math.max(protectedInterval / tempo, lastImpact + .8, f.openUntil - f.age + .12);
+  f.attackInterval = nightmare
+    ? lastImpact + (nightmarePursuits[target.type].finaleRest ?? .37)
+    : Math.max(protectedInterval / tempo, lastImpact + .8, f.openUntil - f.age + .12);
   f.next = f.age + f.attackInterval;
   gameAudio.bossAttack("coil", target.x, target.y);
 }
@@ -495,6 +550,7 @@ function projectileBossFinaleHit(bullet, target) {
 
 function bossFinaleCoreOpen(f) {
   return f.age >= (f.ventOpenAt ?? 0) && f.age < f.openUntil
+    || f.age < (f.previousVentUntil ?? 0)
     || f.mode === "claws" && f.age < (f.threadedUntil ?? 0);
 }
 
@@ -945,7 +1001,8 @@ function drawBossFinale(ctx, target, quiet) {
   }
   ctx.save();
   const glow = ctx.createRadialGradient(target.x, target.y, 0, target.x, target.y, Math.max(2, target.width * .65));
-  glow.addColorStop(0, target.color + "2d"); glow.addColorStop(1, target.color + "00");
+  const frenzy = f.frenzySince !== undefined;
+  glow.addColorStop(0, target.color + (frenzy ? "50" : "2d")); glow.addColorStop(1, target.color + "00");
   ctx.fillStyle = glow;
   finaleEllipse(ctx, target.x, target.y, target.width * .65, target.width * .65);
   ctx.fill();
@@ -954,7 +1011,7 @@ function drawBossFinale(ctx, target, quiet) {
     const material = pressureMaterialNames[target.type];
     const unveiled = f.openUntil > f.age;
     drawSignatureOrbit(ctx, { x: target.x, y: target.y, radius: size * 1.21, innerRadius: size * .66 },
-      material, f.age, unveiled ? .55 : .33, .76, visualQuality.id === "high" ? 24 : 12);
+      material, f.age, frenzy ? .66 : unveiled ? .55 : .33, .76, visualQuality.id === "high" ? 24 : 12);
   }
   ctx.translate(target.x, target.y);
   drawFinaleShell(ctx, target, g.width, g.height, quiet);

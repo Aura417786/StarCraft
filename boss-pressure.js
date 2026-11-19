@@ -134,6 +134,48 @@ const encounterRhythms = [
   { intercept: .98, finish: 2.53, finaleIntercept: .91, finaleFinish: 2.07 }, // siphon into lance
 ];
 
+// Local pursuit beats. Offsets bias each species toward a different escape
+// route, while the geometry and the tell use the same material and trajectory.
+const nightmarePursuits = [
+  { flank: -.11, lead: .85, reach: .30, hold: .78, gap: .62 }, // breaking backwash
+  { flank: .17, lead: .28, reach: .29, hold: .62, gap: .53, sealCycle: [8,4] }, // ribs overtake the flank
+  { flank: .03, lead: -.36, reach: .31, hold: .90, gap: .72 }, // a vent breaks behind the crust
+  { flank: -.14, lead: .54, reach: .27, hold: .88, gap: .60, tempo: 1.31 }, // the loom reels back an exit
+  { flank: .20, lead: .06, reach: .29, hold: .73, gap: .52, sealCycle: [8,4] }, // reverse bite from the other jaw
+  { flank: -.19, lead: 1.05, reach: .30, hold: .70, gap: .65 }, // return reflection
+  { flank: .12, lead: .39, reach: .33, hold: .59, gap: .48, sealCycle: [8,4,8,4,4], finaleRest: .88 }, // rapid saltating current
+  { flank: -.07, lead: -.19, reach: .31, hold: .94, gap: .74, sealCycle: [8,4] }, // spores ripen behind the pilot
+  { flank: -.16, lead: .71, reach: .33, hold: .87, gap: .69, finaleRest: .58 }, // pull toward the broken horizon
+  { flank: .14, lead: .61, reach: .29, hold: .70, gap: .55, tempo: 1.30, sealCycle: [8,4] }, // alternate relay fires
+  { flank: .08, lead: .91, reach: .32, hold: .76, gap: .51, tempo: 1.31, sealCycle: [8,4], finaleRest: .47 }, // daughter organs split in pursuit
+];
+const standardNightmareSealCycle = [8, 4, 4];
+
+function nightmarePursuit(target, room, x, y, gapY, side, advanced = false) {
+  const rhythm = nightmarePursuits[target.type];
+  const towardBoss = x < room.left + room.width * .5 ? 1 : -1;
+  const material = alienPressurePlans[target.type].material;
+  const lead = advanced ? 1 - rhythm.lead : rhythm.lead;
+  return {
+    x: clamp(x + towardBoss * room.width * rhythm.flank * (advanced ? -1 : 1), room.left, room.right),
+    y: clamp(y + (gapY - y) * lead, room.top, room.bottom),
+    radius: Math.max(1, Math.min(room.height, Math.max(room.width, player.height * 2.1), player.speed) * rhythm.reach),
+    duration: advanced ? rhythm.hold * .78 : rhythm.hold,
+    color: alienSignatureColors[material], material, species: target.type,
+    facing: advanced ? -towardBoss : towardBoss, side: advanced ? -side : side,
+    mature: advanced || target.enraged || !!target.finale, sound: "surge",
+  };
+}
+
+function lockNightmarePursuit(hazard) {
+  if (!hazard.trackNightmareExit) return;
+  const room = mechanicRoom();
+  const reach = hazard.radius * .55;
+  hazard.x = clamp(hazard.x + clamp((player.x - hazard.x) * .36, -reach, reach), room.left, room.right);
+  hazard.y = clamp(hazard.y + clamp((player.y - hazard.y) * .36, -reach, reach), room.top, room.bottom);
+  hazard.trackNightmareExit = false;
+}
+
 function buildBossPressureCombo(target) {
   const ordinal = target.pressureComboIndex = (target.pressureComboIndex ?? -1) + 1;
   const previous = target.comboLog?.at(-1);
@@ -158,18 +200,32 @@ function buildBossPressureCombo(target) {
     enHint.split(",")[0] + ". Third beat · " + reply[3]] : [cn,en,hint,enHint];
   target.attackMotion=["coil","lunge","recoil","sweep","lunge","sweep","sweep","recoil","coil","recoil","coil"][target.type];
   const rhythm = encounterRhythms[target.type];
-  const tempo = Math.max(1, Math.min(1.14, target.scaling?.tempoMul ?? 1)) * (target.enraged ? 1.08 : 1);
+  const nightmare = isAbyssalNightmare();
+  const pursuit = nightmarePursuits[target.type];
+  const tempo = Math.max(1, Math.min(1.14, target.scaling?.tempoMul ?? 1))
+    * (target.enraged ? 1.08 : 1) * (nightmare ? (pursuit.tempo ?? 1.22) : 1);
   const offsets = [0, rhythm.intercept / tempo, rhythm.finish / tempo];
   const stageEnds=[];
   for(let stage=0;stage<3;stage++) {
     const start=bossHazards.length;
     if (stage === 2 && responseTurn) {
       const values = BossResonance.cast(target);
+      if (nightmare) values.duration *= .88;
       queueAlienHazard(target, "resonance", target.telegraphDuration, values);
     } else stages[stage](target);
     const added=bossHazards.slice(start);
     for(const h of added) {
       h.warning += offsets[stage];
+      if (nightmare && target.type === 1 && stage === 0 && h.kind === "ring" && h.close) {
+        h.minimumRadius = Math.min(h.radius * .72, Math.max(h.radius * .29, player.height * .73));
+      }
+      if (nightmare && room.width < player.width * .70 && h.kind === "seam") {
+        // Portrait keeps space to climb or dive when a full-height tear would
+        // cover the entire horizontal strip even at maximum displacement.
+        h.kind = "zone";
+        h.y = stage === 2 ? target.gapY : target.lockY;
+        h.radius = clamp(h.thickness, player.height * .36, player.height * .62);
+      }
       // Preserve the mechanic's full travel/interaction time. The old .35s
       // truncation made an entire tide cross the screen between reactions.
       if(stage===0 && h.duration>2.8)h.duration=2.8;
@@ -182,11 +238,21 @@ function buildBossPressureCombo(target) {
     }
     stageEnds.push(Math.max(...added.map(h=>h.warning+h.duration)));
   }
+  if (nightmare) {
+    const at = target.telegraphDuration + offsets[2] + pursuit.gap;
+    const values = nightmarePursuit(target, room, target.lockX, target.lockY, target.gapY, target.side);
+    addBossHazard("resonance", {
+      ...values, warning: at, tellAt: at - 1.4, comboId: id,
+      comboStage: 3, comboRole: "pursuit", trackNightmareExit: true,
+    });
+    offsets.push(at - target.telegraphDuration);
+    stageEnds.push(at + values.duration);
+  }
   target.comboAnchor={x:target.lockX,y:target.gapY};
   target.attackEndFloor=Math.max(...stageEnds)+.18-target.telegraphDuration;
   target.attackDuration=target.attackEndFloor;
   const hazards=bossHazards.slice(begin);
-  const record={id,type:target.type,index:variant,at:battleTime,stages:3,
+  const record={id,type:target.type,index:variant,at:battleTime,stages:offsets.length,
     firstKind:hazards.find(h=>h.comboStage===0).kind,
     secondKind:hazards.filter(h=>h.comboStage===1).map(h=>h.kind).join("+"),
     thirdKind:hazards.filter(h=>h.comboStage===2).map(h=>h.kind).join("+"),
@@ -341,7 +407,13 @@ function logBossPressure(target, event, details = {}) {
 
 function prepareBossPressureSeal(target) {
   const contacts=target.pressureAttackCount??0;
-  const threshold = target.pressureSequence ? (contacts%2 ? 5 : 6) : 6;
+  const nightmare = isAbyssalNightmare();
+  const pressureSequence = target.pressureSequence ?? 0;
+  // Alternate a prepared seal with a faster repeat. The interval is measured
+  // by completed beats, including the pursuit, rather than by projectile count.
+  const sealCycle = nightmarePursuits[target.type].sealCycle ?? standardNightmareSealCycle;
+  const threshold = nightmare ? sealCycle[pressureSequence % sealCycle.length]
+    : pressureSequence ? (contacts%2 ? 5 : 6) : 6;
   if (!target.signaturePending && contacts < threshold) return false;
   target.signaturePending = false;
   target.pressureAttackCount = 0;
@@ -349,11 +421,11 @@ function prepareBossPressureSeal(target) {
   const disabled = typeof shieldDisabledForSortie === "function" && shieldDisabledForSortie();
   const warning = 1.4 + (typeof sortieWarningBonus === "function" ? sortieWarningBonus() : 0);
   const color = alienPressurePlans[target.type].material;
-  const activeDuration = 2.3;
+  const activeDuration = nightmare ? 1.82 : 2.3;
   // Separate the environmental attack from the seal by a readable breath.
   // A late graze can no longer make the announced seal harmless through grace.
-  const pulseAt = warning + activeDuration + bossRules.grace + .12;
-  const noShield = disabled || !(shield.charges > 0 || shield.remaining >= pulseAt + .22);
+  const pulseAt = warning + activeDuration + (nightmare ? .32 : bossRules.grace + .12);
+  const noShield = nightmare || disabled || !(shield.charges > 0 || shield.remaining >= pulseAt + .22);
   // Capacity and route are committed when the tell begins; charging/spending
   // a shield later never silently changes an already advertised safe region.
   const supplied = false;

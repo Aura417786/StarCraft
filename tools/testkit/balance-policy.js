@@ -122,6 +122,9 @@ function balanceChooseAction(controls, mode) {
   const right = bossPlayerRight();
   const horizontalAnchor = { red: .24, blue: .15, yellow: .52 }[sortieFighter];
   let aimX = clamp(target?.cross ? target.x : viewport.width * horizontalAnchor, flightBounds.left, right);
+  if (controls.defendRear && !boss && target?.hp > 0) {
+    aimX = clamp(Math.min(aimX, target.x - player.width * 1.85), flightBounds.left, right);
+  }
   const middleY = (flightBounds.top + flightBounds.bottom) / 2;
   let aimY = clamp(target?.y ?? middleY, flightBounds.top, flightBounds.bottom);
   const visibleTide = bossHazards.find(hazard => hazard.kind === "tide" && hazard.material === "water"
@@ -151,7 +154,9 @@ function balanceChooseAction(controls, mode) {
   const speed = player.speed * alienMovementScale() * (ultimate.phase === "charging" ? .65 : 1)
     * (typeof fighterMovementScale === "function" ? fighterMovementScale() : 1);
   const nearby = balanceProjectiles();
-  const horizons = [.017, .033, .052, .084, .125, .17, .23, .31, .41, .55, .68];
+  const horizons = controls.longLookahead
+    ? [.017, .033, .052, .084, .125, .17, .23, .31, .41, .55, .68, .82, .99, 1.16]
+    : [.017, .033, .052, .084, .125, .17, .23, .31, .41, .55, .68];
   const moveX = (vx, time) => clamp(player.x + (vx * speed + current.x) * time, flightBounds.left, right);
   const moveY = (vy, time) => clamp(player.y + (vy * speed + current.y) * time, flightBounds.top, flightBounds.bottom);
   let best = null;
@@ -161,8 +166,8 @@ function balanceChooseAction(controls, mode) {
     const vx = horizontal / length, vy = vertical / length;
     const danger = horizons.reduce((total, time) => total
       + balanceHazardRisk(moveX(vx, time), moveY(vy, time), time, nearby) * (1.2 - time) / 1.5, 0);
-    const aim = Math.abs(aimY - moveY(vy, .15)) * .20
-      + Math.abs(aimX - moveX(vx, .15)) * (target?.cross || well ? .30 : .062);
+    const aim = Math.abs(aimY - moveY(vy, .15)) * (controls.longLookahead ? .13 : .20)
+      + Math.abs(aimX - moveX(vx, .15)) * (target?.cross || well ? .30 : controls.defendRear && !boss ? .14 : .062);
     const cost = danger * (shieldIsActive() ? .20 : 1) + aim + .8 * length;
     trace?.push([horizontal, vertical, Math.round(cost * 100) / 100]);
     if (!best || cost < best.cost) best = { horizontal, vertical, vx, vy, cost };

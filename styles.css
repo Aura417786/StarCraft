@@ -33,6 +33,8 @@ h1 > span { color: var(--red); }
 .hangar-difficulty { max-width: 430px; min-inline-size: 0; margin: 0 0 12px; padding: 0; border: 0; }
 .hangar-difficulty legend { float: left; margin: 0 12px 0 0; padding: 0; color: #dce4f0; font-size: 11px; line-height: 32px; }
 .hangar-difficulty-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.hangar-difficulty-options .hangar-nightmare { grid-column: 1 / -1; }
+.app[data-nightmare="true"] #boss-action { display: none; }
 .hangar-difficulty-options label { position: relative; cursor: pointer; }
 .hangar-difficulty-options input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .hangar-difficulty-options span { display: block; padding: 4px 9px; border: 1px solid #455269; border-radius: 4px; background: #0d1623cf; color: #aebed0; text-align: center; font-size: 13px; line-height: 22px; }

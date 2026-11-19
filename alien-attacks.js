@@ -204,7 +204,8 @@ function bossTravelSpeedScale(target) {
 
 function alienWarningLead(target, key, pressure) {
   const wide = pressure ? widePressureMaterials.has(pressure.material) : wideAlienPatterns.has(key);
-  const base = target.quickAttack ? 1.3 : wide ? 1.68 : pressure || complexAlienPatterns.has(key) ? 1.54 : 1.4;
+  const base = target.quickAttack ? (isAbyssalNightmare() && target.completedComboCycles ? 1.18 : 1.3)
+    : wide ? 1.68 : pressure || complexAlienPatterns.has(key) ? 1.54 : 1.4;
   const seen = target.seenAttacks ??= new Set();
   const teaching = target.quickAttack || seen.has(key) ? 0 : .4;
   seen.add(key);
@@ -302,6 +303,7 @@ function resizeAlienSignatureHazard(hazard, scaleX, scaleY, resizeY) {
     if (Number.isFinite(hazard[key])) hazard[key] *= scaleY;
   }
   if (Number.isFinite(hazard.radius)) hazard.radius *= widthScale;
+  if (Number.isFinite(hazard.minimumRadius)) hazard.minimumRadius *= widthScale;
   if (Number.isFinite(hazard.thickness)) hazard.thickness *= hazard.kind === "tide" ? scaleX : widthScale;
   return true;
 }
@@ -330,7 +332,8 @@ function alienFilamentPose(hazard, progress) {
 
 function alienRingRadius(hazard, progress) {
   const ease = hazard.close ? 1 - progress ** 1.32 : 1 - (1 - progress) ** 1.7;
-  return hazard.radius * (.12 + .88 * ease);
+  if (hazard.minimumRadius === undefined) return hazard.radius * (.12 + .88 * ease);
+  return hazard.minimumRadius + (hazard.radius - hazard.minimumRadius) * ease;
 }
 
 function alienVortexCore(hazard, progress) {
@@ -613,6 +616,7 @@ function updateBossProjectiles(seconds) {
     const crossing = hazard.age < hazard.warning;
     hazard.age += seconds;
     if (!hazard.tellSoundPlayed && hazard.age >= (hazard.tellAt ?? 0)) {
+      lockNightmarePursuit(hazard);
       hazard.tellSoundPlayed=true;playAlienHazardCue(hazard,"tell");
     }
     if (crossing && hazard.age >= hazard.warning) {

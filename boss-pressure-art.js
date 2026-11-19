@@ -515,6 +515,10 @@ function drawPressureSealWarning(ctx, hazard, quiet) {
   } else {
     signatureGuide(ctx, hazard.gapY, hazard.gapSize, active, -1, right, quiet ? 0 : hazard.age);
   }
+  if (typeof isAbyssalNightmare === "function" && isAbyssalNightmare()) {
+    ctx.restore();
+    return;
+  }
 
   const key = typeof controlBindingLabel === "function" ? controlBindingLabel("shield") : "V";
   const title = hazard.fullSeal

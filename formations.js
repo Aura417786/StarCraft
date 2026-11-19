@@ -2,6 +2,8 @@
 
 // 编队占用普通刷怪预算，不叠加一套额外的敌潮。所有时间只由有效战斗推进。
 const formationRules = { firstArrival: 24, interval: 17, warning: 1.35, disruption: 1.5 };
+const standardFormationKinds = ["escort", "command", "pincer"];
+const nightmareFormationKinds = ["crossfire", "escort", "pursuit", "command", "pincer"];
 const formationTactics = {
   escort: {
     opening: ["双翼交叉锁点 · 离开红色交会点", "Escorts crossing · Leave the marked target"],
@@ -18,6 +20,16 @@ const formationTactics = {
     follow: ["领航机标记中线 · 两翼即将夹击", "Spotter locked the center · Both flanks are converging"],
     tint: "#b6a9ff",
   },
+  crossfire: {
+    opening: ["上下夹击 · 先避开两翼交点", "Two-sided ambush · Leave the crossing point"],
+    follow: ["第二道交火 · 敌机已锁定新落点", "Second crossfire · A new target is locked"],
+    tint: "#feb087",
+  },
+  pursuit: {
+    opening: ["斜翼试射 · 躲开前锋锁线", "Pursuit wing · Dodge the lead shot"],
+    follow: ["后卫扇射 · 穿过弹道之间的缺口", "Rear guard fan · Slip between the lanes"],
+    tint: "#ddafff",
+  },
 };
 const formationState = { nextTime: 24, sequence: 0, nextId: 1, warning: null, active: null,
   suppression: 0, notice: "", noticeTime: 0 };
@@ -29,7 +41,7 @@ function resetFormations(resetClock = true) {
   formationState.notice = "";
   formationState.noticeTime = 0;
   if (resetClock) {
-    formationState.nextTime = formationRules.firstArrival;
+    formationState.nextTime = eliteEncounterInterval(formationRules.firstArrival);
     formationState.sequence = 0;
     formationState.nextId = 1;
   } else formationState.nextTime = Math.max(formationState.nextTime, battleTime + 9);
@@ -45,6 +57,9 @@ function resetFormations(resetClock = true) {
 
 function formationsBlockWaves() {
   const group = formationState.active;
+  if (isAbyssalNightmare()) {
+    return !!formationState.warning || formationState.suppression > 0 || !!group?.coordination?.cue;
+  }
   return !!formationState.warning || formationState.suppression > 0
     || !!(group && !group.broken && group.coordination && group.coordination.beat < 2);
 }
@@ -109,6 +124,28 @@ function formationPlan(kind) {
         ...laneYs.map(y => ({ kind: "scout", x: 0, y: y - middle, role: "jammer" })),
       ] };
   }
+  if (kind === "crossfire") {
+    const side = Math.min(span * .34, Math.max(spacing, player.height * .80));
+    return { kind, title: tr("上下交叉编队", "Crossfire Wing"), hint: tr("两翼从上下切入，留意连续交火", "Watch both edges for two separate volleys"),
+      color: "#ffac84", centerY: middle, speed: enemySpeedForTime() * .82,
+      slots: [
+        { kind: "scout", x: unit * .4, y: -side, ingress: -1 },
+        { kind: "armored", x: 0, y: 0, leader: true },
+        { kind: "scout", x: unit * .4, y: side, ingress: 1 },
+        { kind: "gunner", x: unit * 1.06, y: side * .44 },
+      ] };
+  }
+  if (kind === "pursuit") {
+    const side = player.y < middle ? 1 : -1;
+    return { kind, title: tr("斜翼猎杀编队", "Pursuit Wing"), hint: tr("前锋逼你换道，后卫再扇形拦截", "The lead shot sets up a fan from the rear guard"),
+      color: "#ddafff", centerY: middle, speed: enemySpeedForTime() * .88,
+      slots: [
+        { kind: "armored", x: 0, y: -side * spacing * .58, leader: true },
+        { kind: "scout", x: unit * .38, y: side * spacing * .70, ingress: side },
+        { kind: "scout", x: unit * .78, y: side * spacing * 1.62, ingress: side },
+        { kind: "gunner", x: unit * 1.26, y: -side * spacing * 1.34, ingress: -side },
+      ] };
+  }
   // 上下两条航线始终留在中心走廊外。低矮窗口减少编队规模，不挤占出口。
   const halfGap = Math.min(span * 0.32, Math.max(player.height * 0.72, 74));
   const offset = Math.min(span * 0.42, halfGap + unit * 0.23);
@@ -127,15 +164,16 @@ function formationPlan(kind) {
 
 function trySpawnFormation(kind) {
   if (aceBlocksWaves() || gravityTideBusy()) return false;
-  if (!isBattleActive() || bossBlocksWaves() || battleTime < formationRules.firstArrival
+  if (!isBattleActive() || bossBlocksWaves() || battleTime < eliteEncounterInterval(formationRules.firstArrival)
     || formationState.warning || formationState.active) return false;
   if (typeof battlefieldEventBlocksWaves === "function" && battlefieldEventBlocksWaves()) return false;
-  const kinds = ["escort", "command", "pincer"];
+  const kinds = isAbyssalNightmare() ? nightmareFormationKinds : standardFormationKinds;
+  if (kind && !kinds.includes(kind)) return false;
   const plan = formationPlan(kind || kinds[formationState.sequence % kinds.length]);
   if (plan.kind === "command" && flightBounds.bottom - flightBounds.top < player.height * .90) return false;
   // 窄矮窗口放不下上下侧翼和完整机身时，延后包抄，不挤压安全通道。
   if (plan.kind === "pincer" && plan.safeBottom - plan.safeTop < player.height * .60 + 24) return false;
-  if (enemies.length + plan.slots.length > enemyRules.maxOnScreen) return false;
+  if (!formationHasCapacity(plan)) return false;
   formationState.warning = { ...plan, remaining: formationRules.warning };
   formationState.notice = plan.title + " · " + plan.hint;
   formationState.noticeTime = formationRules.warning + 2.4;
@@ -143,16 +181,43 @@ function trySpawnFormation(kind) {
   return true;
 }
 
+function formationHasCapacity(plan) {
+  return enemies.length + plan.slots.length + nightmareSplitReserve() <= enemyWaveCapacity();
+}
+
+function formationIngressY(enemy, nominal, age) {
+  if (!enemy.formationIngress) return nominal;
+  const start = enemy.formationIngress < 0 ? -enemy.height : viewport.height + enemy.height;
+  const progress = clamp(age / 1.55, 0, 1);
+  return start + (nominal - start) * progress * progress * (3 - 2 * progress);
+}
+
+function staggerFormationHullArrivals(group) {
+  const rightEdge = enemy => enemy.formationSlotX + enemy.width * .5;
+  const minimumSpacing = group.speed * .24;
+  let previous = -Infinity;
+  for (const enemy of [...group.members].sort((a, b) => rightEdge(a) - rightEdge(b))) {
+    const initial = rightEdge(enemy);
+    previous = Math.max(initial, previous + minimumSpacing);
+    enemy.formationSlotX += previous - initial;
+    enemy.x = enemy.previousX = group.x + enemy.formationSlotX;
+  }
+}
+
 function launchFormation(plan) {
   if (aceBlocksWaves() || gravityTideBusy()) return false;
-  if (bossBlocksWaves() || enemies.length + plan.slots.length > enemyRules.maxOnScreen) return false;
+  if (bossBlocksWaves() || !formationHasCapacity(plan)) return false;
   if (plan.kind === "command" && flightBounds.bottom - flightBounds.top < player.height * .90) return false;
   if (plan.kind === "pincer" && plan.safeBottom - plan.safeTop < player.height * .60 + 24) return false;
   const group = { ...plan, id: formationState.nextId++, x: viewport.width + 84, age: 0,
     broken: false, disruption: 0, members: [], coordination: null };
+  const nightmare = isAbyssalNightmare();
+  if (nightmare) group.speed = Math.min(group.speed, viewport.width / 3.3);
+  const eliteLead = nightmare && (plan.kind === "escort" || plan.kind === "pursuit")
+    && eliteWaveKind() === "shield-guard";
   for (const slot of plan.slots) {
-    let kind = slot.kind;
-    if (kind === "gunner" && enemies.filter(enemy => enemy.kind === "gunner").length >= enemyCombatRules.maxGunners) kind = "scout";
+    let kind = slot.leader && eliteLead ? "shield-guard" : slot.kind;
+    if (kind === "gunner" && enemies.filter(enemy => enemy.kind === "gunner").length >= enemyGunnerCapacity()) kind = "scout";
     spawnEnemy(kind);
     const enemy = enemies[enemies.length - 1];
     enemy.formationId = group.id;
@@ -160,22 +225,27 @@ function launchFormation(plan) {
     enemy.formationRole = slot.role;
     enemy.formationSlotX = slot.x;
     enemy.formationSlotY = slot.y;
-    enemy.x = group.x + slot.x;
+    if (slot.ingress) enemy.formationIngress = slot.ingress;
+    enemy.x = group.x + enemy.formationSlotX;
     enemy.y = plan.kind === "pincer" ? plan.centerY + slot.y
       : clamp(plan.centerY + slot.y, flightBounds.top + enemy.height * 0.2, flightBounds.bottom - enemy.height * 0.2);
+    enemy.y = formationIngressY(enemy, enemy.y, 0);
     enemy.previousX = enemy.x;
     enemy.previousY = enemy.y;
     enemy.baseY = enemy.y;
     enemy.waveAmplitude = 0;
     enemy.age = 0;
+    markDefenseIntruder(enemy);
     group.members.push(enemy);
   }
+  // Distinct full-hull arrival times keep parallel lanes from crossing the rear edge together.
+  if (nightmare) staggerFormationHullArrivals(group);
   formationState.active = group;
   formationState.sequence++;
   // 四/五架编队替代对应数量的普通刷怪机会；不积累补刷债务。
-  formationState.suppression = group.members.length * enemyIntervalForTime();
+  formationState.suppression = group.members.length * enemyIntervalForTime() * (isAbyssalNightmare() ? .64 : 1);
   enemyCooldown = Math.max(enemyCooldown, enemyIntervalForTime());
-  formationState.nextTime = battleTime + formationRules.interval;
+  formationState.nextTime = battleTime + eliteEncounterInterval(formationRules.interval);
   return true;
 }
 
@@ -201,7 +271,8 @@ function onFormationEnemyDefeated(enemy) {
 
 function formationEmitterVisible(member) {
   const muzzle = enemyGunMuzzle(member);
-  return muzzle.x >= 60 && muzzle.x <= viewport.width - 18;
+  return muzzle.x >= 60 && muzzle.x <= viewport.width - 18
+    && (!isAbyssalNightmare() || (muzzle.y >= member.height * .5 && muzzle.y <= viewport.height - member.height * .5));
 }
 
 function blockadePassage(rails, preferred, targetY, clearance, maxTravel) {
@@ -247,7 +318,21 @@ function makeFormationCue(group, beat, members) {
   const rail = (member, y) => {
     cue.shots.push({ member, x: enemyGunMuzzle(member).x, y, vx: -speed, vy: 0, radius });
   };
-  if (beat) {
+  if (group.kind === "pursuit") {
+    const emitter = beat ? rear : front;
+    const laneSpacing = Math.max(spread, clearance * 2 + 7);
+    aim(emitter, target.x, target.y);
+    if (beat) {
+      for (const side of [-1, 1]) {
+        const y = target.y + side * laneSpacing;
+        if (y >= flightBounds.top && y <= flightBounds.bottom) aim(emitter, target.x, y);
+      }
+    }
+  } else if (group.kind === "crossfire") {
+    const offset = beat ? (target.y < viewport.height * .50 ? spread : -spread) : 0;
+    aim(upper, target.x, clamp(target.y + offset, flightBounds.top, flightBounds.bottom));
+    if (lower !== upper) aim(lower, target.x, clamp(target.y + offset, flightBounds.top, flightBounds.bottom));
+  } else if (beat) {
     if (group.kind === "escort") {
       aim(rear, target.x, target.y);
       aim(rear, target.x, target.y + (target.y > viewport.height / 2 ? spread : -spread));
@@ -298,7 +383,7 @@ function updateFormationTactics(group, members, seconds) {
     let travel = 0;
     let fired = false;
     for (const { member, x, y, vx, vy, radius } of cue.shots) {
-      if (!enemies.includes(member) || enemyProjectiles.length >= enemyCombatRules.maxProjectiles) continue;
+      if (!enemies.includes(member) || enemyProjectiles.length >= enemyProjectileCapacity()) continue;
       const shot = acquireHostileRound(x, y, vx, vy, radius);
       shot.formationAttack = true;
       shot.formationTint = cue.tint;
@@ -395,6 +480,7 @@ function formationControlsEnemy(enemy, seconds) {
   else if (group.kind === "command") enemy.y = clamp(group.centerY + enemy.formationSlotY, enemy.height * .5, viewport.height - enemy.height * .5);
   else enemy.y = clamp(group.centerY + enemy.formationSlotY + bob,
     flightBounds.top + enemy.height * .2, flightBounds.bottom - enemy.height * .2);
+  enemy.y = formationIngressY(enemy, enemy.y, poseAge);
   if (enemy.kind === "gunner" && !Object.hasOwn(formationTactics, group.kind)) {
     // 不从屏幕外开火，不因编队移动缩短原有的锁定预警。
     if (enemy.x > viewport.width - enemy.width * 0.6) return true;

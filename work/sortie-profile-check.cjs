@@ -12,6 +12,41 @@ function memoryStorage(initial) {
 const campaign = { mode: "campaign", difficulty: "veteran", score: 6000, seconds: 100, kills: 13, won: true,
   bossRecords: [{ type: 0, seconds: 40, hitCount: 0 }, { type: 1, seconds: 44, hitCount: 1 }] };
 
+test("Nightmare saves campaign and Rush records in their own tier", () => {
+  const storage = memoryStorage();
+  const store = profile.createStore(storage);
+  const normal = { ...campaign, difficulty: "hard" };
+  const elite = { ...campaign, difficulty: "nightmare", score: 7000, seconds: 300,
+    bossRecords: [{ type: 0, seconds: 75, hitCount: 1 }, { type: 1, seconds: 77, hitCount: 0 }] };
+  store.finish(normal);
+  store.finish(elite);
+  store.finish({ ...normal, mode: "rush" });
+  store.finish({ ...elite, mode: "rush" });
+  const data = profile.createStore(storage).data;
+  assert.equal(data.campaign.bestScore, 6000);
+  assert.equal(data.campaign.byDifficulty.hard.bestScore, 6000);
+  assert.equal(data.campaign.byDifficulty.nightmare.bestScore, 7000);
+  assert.deepEqual(data.campaign.bosses.slice(0, 2),
+    [{ clears: 1, clean: 1, best: 40 }, { clears: 1, clean: 0, best: 44 }]);
+  assert.deepEqual(data.campaign.nightmareBosses.slice(0, 2),
+    [{ clears: 1, clean: 0, best: 75 }, { clears: 1, clean: 1, best: 77 }]);
+  assert.equal(data.rushByDifficulty.hard.bestScore, 6000);
+  assert.equal(data.rushByDifficulty.nightmare.bestScore, 7000);
+  assert.equal(data.rush.bestScore, 6000);
+});
+
+test("legacy boss records and Nightmare assisted records have independent homes", () => {
+  const storage = memoryStorage(JSON.stringify({ version: profile.version,
+    campaign: { bosses: [{ clears: 3, clean: 2, best: 37 }] } }));
+  const store = profile.createStore(storage);
+  assert.deepEqual(store.data.campaign.bosses[0], { clears: 3, clean: 2, best: 37 });
+  assert.deepEqual(store.data.campaign.nightmareBosses[0], { clears: 0, clean: 0, best: 0 });
+  store.finish({ ...campaign, difficulty: "nightmare", assisted: true });
+  const data = profile.createStore(storage).data;
+  assert.deepEqual(data.campaign.nightmareBosses[0], { clears: 0, clean: 0, best: 0 });
+  assert.deepEqual(data.assisted.nightmareBosses[0], { clears: 1, clean: 1, best: 40 });
+});
+
 test("progress, refit cost, and clear records survive a fresh store", () => {
   const storage = memoryStorage();
   const first = profile.createStore(storage);

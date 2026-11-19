@@ -26,6 +26,7 @@ function sandbox(width = 1280, height = 720) {
     const clamp = (n, low, high) => Math.max(low, Math.min(n, high));
     const tr = value => value;
     const isBattleActive = () => true;
+    const isAbyssalNightmare = () => false;
     const aceBlocksWaves = () => activeAce;
     const bossBlocksWaves = () => bossWarning;
     const applyGravityTide = () => {};

@@ -15,6 +15,7 @@ function signatureArena() {
     const player = { x: 310, y: 348, width: 180, height: 120, speed: 300 };
     const battleTime = 0;
     const tr = (zh, en) => en;
+    const isAbyssalNightmare = () => false;
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const evolutionWeapons = { absorbed: [] };
     const gameAudio = { bossAttack() {} };

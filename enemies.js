@@ -8,6 +8,8 @@ const enemyTypes = {
 };
 const enemyCombatRules = { armorArrival: 14, gunnerArrival: 30, maxGunners: 2, minSpawnInterval: .32, spawnRampSeconds: 105,
   fireProtectionTime: 60, warning: .9, recovery: .57, shotsPerGunner: 2, maxProjectiles: 20, projectileLife: 8 };
+const nightmareWaveRules = { firstCap: 18, maxCap: 24, gunnerCap: 3, projectileCap: 26, eliteRate: 1.3,
+  intervalScale: .75, escalation: .015, minimumExposure: 1.2, breachFeedback: 2.2, scoutArrival: 38 };
 const scoutTactics = { arrival: 96, windup: .86, dive: .67, tint: "#ffc084" };
 const gunnerTactics = { relayArrival: 55, leadArrival: 48, relayDelay: .32, leadTint: "#82e5ff", relayTint: "#ffc37c" };
 const enemyFireProtection = {
@@ -25,13 +27,137 @@ const enemyIntroduced = new Set();
 
 function enemyIntervalForTime() {
   const minimum = enemyCombatRules.minSpawnInterval;
-  const tempo = typeof sortieRules === "function" ? sortieRules().attackTempo : 1;
-  return (minimum + (enemyRules.interval - minimum) * Math.exp(-battleTime / enemyCombatRules.spawnRampSeconds)) / tempo;
+  const interval = minimum + (enemyRules.interval - minimum) * Math.exp(-battleTime / enemyCombatRules.spawnRampSeconds);
+  if (isAbyssalNightmare()) return interval * (nightmareWaveRules.intervalScale - nightmareWaveRules.escalation * nightmareWaveTier());
+  return interval / sortieRules().attackTempo;
+}
+
+function nightmareWaveTier() { return Math.min(3, Math.floor(bossDefeated / 3)); }
+function enemyWaveCapacity() {
+  if (!isAbyssalNightmare()) return enemyRules.maxOnScreen;
+  return Math.min(nightmareWaveRules.maxCap, nightmareWaveRules.firstCap + nightmareWaveTier() * 2);
+}
+function enemyGunnerCapacity() { return isAbyssalNightmare() ? nightmareWaveRules.gunnerCap : enemyCombatRules.maxGunners; }
+function enemyProjectileCapacity() { return isAbyssalNightmare() ? nightmareWaveRules.projectileCap : enemyCombatRules.maxProjectiles; }
+function eliteEncounterInterval(interval) { return isAbyssalNightmare() ? interval / nightmareWaveRules.eliteRate : interval; }
+function nightmareSplitReserve() { return Number(isAbyssalNightmare() && enemies.some(enemy => enemy.kind === "splitter")); }
+
+function updateScheduledEnemyWaves(seconds) {
+  const nightmare = isAbyssalNightmare();
+  const supplyEncounter = battlefieldEventBlocksWaves();
+  const aceEncounterActive = aceBlocksWaves();
+  if ((supplyEncounter || aceEncounterActive) && !nightmare) return;
+  // Signature encounters retain their own fire rhythm. A small scout patrol fills the quiet gaps.
+  if (aceEncounter.warning > 0) return;
+  const reinforcements = supplyEncounter || aceEncounterActive;
+  enemyCooldown -= seconds;
+  if (enemyCooldown > 1e-8) return;
+  const reserve = Number(enemies.some(enemy => enemy.kind === "splitter"));
+  const capacity = (reinforcements ? 5 + nightmareWaveTier() : enemyWaveCapacity()) - reserve;
+  const interval = reinforcements ? 2.05 - nightmareWaveTier() * .15 : enemyIntervalForTime();
+  if (enemies.length < capacity) {
+    const elite = reinforcements ? null : eliteWaveKind();
+    spawnEnemy(elite ?? (reinforcements ? "scout" : undefined));
+    if (nightmare) {
+      const lead = enemies.at(-1);
+      markDefenseIntruder(lead);
+      const pairEvery = 5 - Number(nightmareWaveTier() >= 2);
+      if (!reinforcements && enemySpawnCount % pairEvery === 0 && enemies.length + Number(lead.kind === "splitter") < capacity) {
+        spawnEnemy("scout");
+        const wing = enemies.at(-1);
+        markDefenseIntruder(wing);
+        wing.x += wing.speed * interval * .42;
+        wing.previousX = wing.x;
+        const span = flightBounds.bottom - flightBounds.top;
+        wing.y = wing.baseY = flightBounds.top + span * (lead.y < flightBounds.top + span * .5 ? .77 : .23);
+        wing.previousY = wing.y;
+        wing.sacrificialScout = true;
+      }
+    }
+  }
+  enemyCooldown += interval;
+}
+
+function markDefenseIntruder(enemy) {
+  if (!isAbyssalNightmare()) return;
+  enemy.defenseExposure = 0;
+  enemy.speed = Math.min(enemy.speed, viewport.width / 2.8);
+}
+
+function trackDefenseIntruder(enemy, seconds) {
+  if (enemy.defenseExposure === undefined || enemy.defenseExposure >= nightmareWaveRules.minimumExposure) return;
+  const halfWidth = enemy.width * .5;
+  if (enemy.x - halfWidth >= 0 && enemy.x + halfWidth <= viewport.width
+    && enemy.y - enemy.height * .5 >= 0 && enemy.y + enemy.height * .5 <= viewport.height) enemy.defenseExposure += seconds;
+}
+
+function drawImminentDefenseThreat() {
+  if (!isAbyssalNightmare()) return;
+  const lastMuzzleX = flightBounds.left + player.width * .465;
+  let target = null;
+  let urgency = Infinity;
+  for (const enemy of enemies) {
+    if (enemy.hp <= 0 || enemy.defenseExposure === undefined || enemy.x < 0 || enemy.y < 0 || enemy.y > viewport.height) continue;
+    const lastShotX = lastMuzzleX + enemy.width * .34;
+    const seconds = (enemy.x - lastShotX) / Math.max(70, enemy.speed);
+    if (seconds > 1.28 || seconds >= urgency) continue;
+    target = enemy;
+    urgency = seconds;
+  }
+  if (!target) return;
+  const size = Math.max(5, target.height * .09);
+  const x = target.x - target.width * .52, y = target.y - target.height * .54;
+  context.save();
+  context.strokeStyle = urgency > 0 ? "#ffc291" : "#ff907b";
+  context.globalAlpha = .82;
+  context.lineWidth = 1.8;
+  context.beginPath();
+  context.moveTo(x + size, y - size); context.lineTo(x, y); context.lineTo(x + size, y + size);
+  context.moveTo(x + size * 2, y - size); context.lineTo(x + size, y); context.lineTo(x + size * 2, y + size);
+  context.moveTo(7, target.y - 10); context.lineTo(7, target.y + 10);
+  context.stroke();
+  context.restore();
+}
+
+function recordDefenseBreach(enemy) {
+  if (!isAbyssalNightmare() || !isBattleActive() || enemy.hp <= 0 || enemy.defenseBreached
+    || !(enemy.defenseExposure >= nightmareWaveRules.minimumExposure)) return false;
+  const halfWidth = enemy.width * .5;
+  if (enemy.x + halfWidth >= 0 || (enemy.previousX ?? enemy.x) + halfWidth < 0) return false;
+  if (!damagePlayer(tr("敌机突破防线", "Enemy breached the defense line"), enemy, { defenseBreach: true })) return false;
+  enemy.defenseBreached = true;
+  sortieStats.enemyBreachAt = battleTime;
+  sortieStats.enemyBreachY = enemy.y;
+  addEvolutionPulse(7, enemy.y, 54, "#ff8d75", .52);
+  addCombatShake(1.7);
+  return true;
+}
+
+function drawDefenseBreach(quiet) {
+  if (!isAbyssalNightmare() || sortieStats.enemyBreachAt === undefined) return;
+  const age = battleTime - sortieStats.enemyBreachAt;
+  const remaining = nightmareWaveRules.breachFeedback - age;
+  if (age < 0 || remaining <= 0) return;
+  const labelY = clamp(sortieStats.enemyBreachY, 148, Math.max(148, viewport.height - 135));
+  context.save();
+  context.globalAlpha = quiet ? .92 : Math.min(.98, remaining * 2.5);
+  context.strokeStyle = "#ff987d";
+  context.fillStyle = "#ffe2ca";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(10, labelY - 14); context.lineTo(10, labelY + 14);
+  context.moveTo(20, labelY - 6); context.lineTo(14, labelY); context.lineTo(20, labelY + 6);
+  context.stroke();
+  context.font = "700 13px system-ui, sans-serif";
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  context.fillText(tr("敌机突破防线 · 生命 −1", "Defense breached · Life −1"), 28, labelY, Math.max(120, viewport.width * .37));
+  context.restore();
 }
 
 function chooseEnemyKind(roll = typeof combatRandom === "function" ? combatRandom() : Math.random()) {
   const gunnerAvailable = battleTime >= enemyCombatRules.gunnerArrival
-    && enemies.filter(enemy => enemy.kind === "gunner").length < enemyCombatRules.maxGunners;
+    && enemies.filter(enemy => enemy.kind === "gunner").length < enemyGunnerCapacity();
   if (gunnerAvailable && !enemyIntroduced.has("gunner")) return "gunner";
   if (battleTime >= enemyCombatRules.armorArrival && !enemyIntroduced.has("armored")) return "armored";
   if (battleTime < enemyCombatRules.armorArrival) return "scout";
@@ -110,13 +236,15 @@ function gunnerAimTint(kind) {
   return kind === "relay" ? gunnerTactics.relayTint : kind === "lead" ? gunnerTactics.leadTint : null;
 }
 function fireEnemyGun(enemy) {
-  if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) return;
+  const capacity = enemyProjectileCapacity();
+  if (enemyProjectiles.length >= capacity) return;
   const muzzle = enemyGunMuzzle(enemy);
+  if (isAbyssalNightmare() && !enemyCanLockOn(muzzle)) return;
   const heading = Math.atan2(enemy.aimY - muzzle.y, enemy.aimX - muzzle.x);
   const speed = Math.min(625, 335 + battleTime * .42 + (enemy.gunAimKind === "relay" ? 75 : 0))
     * (typeof sortieRules === "function" ? sortieRules().projectileSpeed : 1);
   for (const spread of enemyGunAngles(enemy)) {
-    if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) break;
+    if (enemyProjectiles.length >= capacity) break;
     const shot = acquireHostileRound(muzzle.x, muzzle.y,
       Math.cos(heading + spread) * speed, Math.sin(heading + spread) * speed, 6);
     shot.aimKind = enemy.gunAimKind;
@@ -135,7 +263,8 @@ function scoutInterceptRoute(enemy) {
 function updateScoutIntercept(enemy, seconds) {
   const cue = enemy.scoutIntercept;
   if (!cue) {
-    const eligible = !enemy.scoutIntercepted && !enemy.formationId && battleTime >= scoutTactics.arrival
+    const sacrificial = isAbyssalNightmare() && enemy.sacrificialScout;
+    const eligible = !enemy.scoutIntercepted && !enemy.formationId && battleTime >= (sacrificial ? nightmareWaveRules.scoutArrival : scoutTactics.arrival)
       && enemy.x <= viewport.width * .76 && enemy.x >= player.x + Math.max(235, player.width * 1.5)
       && gunnerTacticsOpen() && !enemies.some(wing => wing.scoutIntercept);
     if (!eligible) return false;
@@ -144,8 +273,10 @@ function updateScoutIntercept(enemy, seconds) {
     const reach = Math.min(span * .24, 112);
     const aimY = clamp(player.y, enemy.y - reach, enemy.y + reach);
     const landingX = Math.max(-enemy.width * .45, enemy.x - enemy.speed * 1.42);
+    const blast = sacrificial && landingX > flightBounds.left + Math.max(48, player.width * .66)
+      ? clamp(player.height * .62, 30, 57) : 0;
     enemy.scoutIntercepted = true;
-    enemy.scoutIntercept = { time: 0, start: null,
+    enemy.scoutIntercept = { time: 0, start: null, blast, windup: scoutTactics.windup + (blast ? .22 : 0),
       endX: landingX / viewport.width, endY: clamp((aimY - flightBounds.top) / span, 0, 1) };
     gameAudio.bossAttack("coil", enemy.x, enemy.y, false);
     return false;
@@ -155,7 +286,8 @@ function updateScoutIntercept(enemy, seconds) {
     return false;
   }
   cue.time += seconds;
-  if (cue.time < scoutTactics.windup) {
+  const windup = cue.windup ?? scoutTactics.windup;
+  if (cue.time < windup) {
     enemy.x -= enemy.speed * .52 * seconds;
     return true;
   }
@@ -165,7 +297,7 @@ function updateScoutIntercept(enemy, seconds) {
     cue.start = { x: enemy.x / viewport.width, y: clamp((enemy.y - flightBounds.top) / Math.max(1, span), 0, 1) };
     gameAudio.bossAttack("volley", enemy.x, enemy.y, false);
   }
-  const progress = clamp((cue.time - scoutTactics.windup) / scoutTactics.dive, 0, 1);
+  const progress = clamp((cue.time - windup) / scoutTactics.dive, 0, 1);
   const ease = progress * progress * (3 - 2 * progress);
   const fromX = cue.start.x * viewport.width, fromY = flightBounds.top + cue.start.y * span;
   enemy.x = fromX + (x - fromX) * ease;
@@ -173,8 +305,19 @@ function updateScoutIntercept(enemy, seconds) {
   if (progress >= 1) {
     enemy.baseY = enemy.y - Math.sin(enemy.age * 2.35) * enemy.waveAmplitude;
     enemy.scoutIntercept = null;
+    if (cue.blast) enemy.scoutDetonation = cue.blast;
   }
   return true;
+}
+
+function settleScoutDetonation(enemy) {
+  const radius = enemy.scoutDetonation;
+  combatBurst(enemy.x, enemy.y, .9, scoutTactics.tint, true);
+  addEvolutionPulse(enemy.x, enemy.y, radius, scoutTactics.tint, .33);
+  gameAudio.fieldCue?.("mine-burst", enemy.x, enemy.y);
+  if (Math.hypot(player.x - enemy.x, player.y - enemy.y) <= radius + player.height * .16) {
+    damagePlayer(tr("被突击机自爆波及 · 远离橙色落点", "Scout detonation · Leave the amber impact zone"), enemy);
+  }
 }
 
 function updateEnemyMovement(enemy, seconds) {
@@ -199,6 +342,12 @@ function updateEnemyMovement(enemy, seconds) {
       if (enemy.gunTime + 1e-9 >= gunnerTactics.relayDelay && enemy.x <= enemy.holdX)
         beginEnemyAim(enemy, gunnerTacticsOpen());
     } else if (enemy.gunPhase === "warning") {
+      if (isAbyssalNightmare() && enemy.gunAimKind === "direct" && enemy.gunTime < enemy.gunWarning * .44) {
+        const span = flightBounds.bottom - flightBounds.top;
+        const drift = (player.y - (player.previousY ?? player.y)) / Math.max(seconds, 1 / 120);
+        const target = clamp(player.y + clamp(drift * .12, -span * .17, span * .17), flightBounds.top, flightBounds.bottom);
+        enemy.aimY += clamp(target - enemy.aimY, -230 * seconds, 230 * seconds);
+      }
       if (enemy.gunTime + 1e-9 >= (enemy.gunWarning ?? enemyCombatRules.warning)) {
         fireEnemyGun(enemy);
         enemy.gunShots++;
@@ -245,20 +394,21 @@ function updateEnemyProjectileDamage() {
 function drawEnemyThreats(bossShotCount = 0, detailStride = 1, quietShots = reducedMotion.matches, alpha = 1) {
   context.save();
   for (const enemy of enemies) {
-    if (enemy.scoutIntercept && !enemy.scoutIntercept.start) {
-      const progress = clamp(enemy.scoutIntercept.time / scoutTactics.windup, 0, 1);
+    const intercept = enemy.scoutIntercept;
+    if (intercept && (!intercept.start || intercept.blast)) {
+      const progress = clamp(intercept.time / (intercept.windup ?? scoutTactics.windup), 0, 1);
       const end = scoutInterceptRoute(enemy);
       context.globalAlpha = .5 + progress * .32;
       context.strokeStyle = scoutTactics.tint;
       context.lineWidth = 2;
       context.setLineDash([10, 6]);
-      context.beginPath();
-      context.moveTo(enemy.x, enemy.y);
-      context.lineTo(end.x, end.y);
-      context.stroke();
+      if (!intercept.start) {
+        context.beginPath(); context.moveTo(enemy.x, enemy.y); context.lineTo(end.x, end.y); context.stroke();
+      }
       context.setLineDash([]);
       context.beginPath();
-      context.arc(end.x, end.y, 13 + progress * 6, 0, Math.PI * 2);
+      context.arc(end.x, end.y, intercept.blast || 13 + progress * 6, 0, Math.PI * 2);
+      if (intercept.blast) { context.fillStyle = "#ff9a3826"; context.fill(); }
       context.stroke();
     }
     if (enemy.kind !== "gunner") continue;
@@ -305,4 +455,6 @@ function drawEnemyThreats(bossShotCount = 0, detailStride = 1, quietShots = redu
       (bossShotCount + index) % detailStride === 0, hostileCount > 96, alpha);
   }
   context.restore();
+  drawImminentDefenseThreat();
+  drawDefenseBreach(quietShots);
 }

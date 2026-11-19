@@ -76,6 +76,10 @@ function beginFlightRadio(kind, type, duration = 3) {
     if (milestone && sortieMode() === "campaign") flightRadioQueue.push({
       line: ["联合救援频道", milestone[0], "Joint rescue channel", milestone[1]], duration: 5.9, pan: -.08 });
   }
+  if (incoming && typeof isAbyssalNightmare === "function" && isAbyssalNightmare()) {
+    playFlightRadioLine(flightRadioQueue.shift(),kind);
+    return;
+  }
   playFlightRadioLine({ line: flightRadioLines[type][Number(!incoming)], duration: Math.max(3.05, duration),
     pan: incoming ? -.28 : .16 }, kind);
 }

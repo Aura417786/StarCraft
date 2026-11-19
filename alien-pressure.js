@@ -72,7 +72,7 @@ function beginAlienRupture(target) {
 
 function beginAlienRecovery(target) {
   if (target.phase === "attack" && target.alienAttack !== "pressureSeal") {
-    const contacts = target.quickAttack ? 3 : 1;
+    const contacts = target.quickAttack ? (target.comboLog?.at(-1)?.stages ?? 3) : 1;
     target.pressureAttackCount = (target.pressureAttackCount ?? 0) + contacts;
     target.attackContacts = (target.attackContacts ?? 0) + contacts;
     if(target.quickAttack)target.completedComboCycles=(target.completedComboCycles??0)+1;
@@ -95,6 +95,9 @@ function alienRecoveryDuration(target, ignoreDifficulty = false) {
   const squeeze = 1 + (density - 1) * .26;
   const floor = target.alienAttack ? .8 : .35;
   const base = Math.max(floor, authored / squeeze);
+  if (!ignoreDifficulty && isAbyssalNightmare() && target.alienAttack) {
+    return target.alienAttack === "pressureSeal" ? .53 : .44;
+  }
   if (tempo === 1) return base;
   const active = Math.max(0, target.telegraphDuration || 0) + Math.max(0, target.attackDuration || 0);
   // Slow whole attack cycles by adding breathing room after the unchanged move.

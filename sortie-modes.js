@@ -10,13 +10,14 @@ const sortieDifficulty = {
   easy: { bossHealth: 1, warning: 0, attackTempo: .62, projectileSpeed: .72, damage: 1 },
   normal: { bossHealth: 1, warning: 0, attackTempo: .80, projectileSpeed: .86, damage: 1 },
   hard: { bossHealth: 1, warning: 0, attackTempo: 1, projectileSpeed: 1, damage: 1 },
-  // Legacy IDs are input aliases, never a hidden fourth difficulty.
+  nightmare: { bossHealth: 1, warning: 0, attackTempo: 1.48, projectileSpeed: 1.15, damage: 1 },
+  // Legacy IDs remain input aliases. Their archived records keep the old keys.
   recruit: { bossHealth: 1, warning: 0, attackTempo: .62, projectileSpeed: .72, damage: 1 },
   veteran: { bossHealth: 1, warning: 0, attackTempo: 1, projectileSpeed: 1, damage: 1 },
   abyss: { bossHealth: 1, warning: 0, attackTempo: 1, projectileSpeed: 1, damage: 1 }
 };
 function liveSortieDifficulty(value) {
-  if (["easy", "normal", "hard"].includes(value)) return value;
+  if (StarBreakerProfile.difficulties.includes(value)) return value;
   return value === "recruit" ? "easy" : "hard";
 }
 try {
@@ -89,6 +90,7 @@ function dailySortie(day = sortieDay()) {
 function sortieRandom() { return sortieStats ? sortieStats.random() : Math.random(); }
 function sortieRules() { return sortieStats?.rules ?? sortieBaseline; }
 function sortieMode() { return sortieStats?.mode ?? "campaign"; }
+function isAbyssalNightmare() { return sortieStats?.difficulty === "nightmare"; }
 function sortieAllowsWaves() { return sortieMode() === "campaign"; }
 function sortieAllowsPickups() { return sortieMode() === "campaign"; }
 function sortieBossDelay() { return sortieMode() === "rush" ? 3.2 : 4.2; }
@@ -139,7 +141,7 @@ function newSortie(options = {}) {
   sortieStats = { mode, difficulty, daily, rules, upgrades, fighter, seed, random: sortieGenerator(seed),
     bossType: daily?.bossType ?? (mode === "practice" ? practiceType : null),
     resumed, rushStart: resumed ? options.rushStart : 0, week, weekly,
-    guardReady: upgrades.survival >= 4, hitDebt: 0, hitsTaken: 0, bossRecords: [], unlocks: [],
+    guardReady: upgrades.survival >= 4, hitDebt: 0, hitsTaken: 0, enemyBreaches: 0, bossRecords: [], unlocks: [],
     assisted: false, assists: sortieAssistFlags(), result: null };
   sortieStats.assisted = sortieStats.assists.extendedWarning;
   return sortieStats;
@@ -245,6 +247,8 @@ function sortieLaunchHint() {
       : controls;
     return tr("每日挑战开始。战机、对手和规则固定。", "Daily Challenge has begun. Your fighter, target, and rules are fixed.") + " " + extra;
   }
+  if (isAbyssalNightmare()) return tr("深渊极限开始。敌机突破后方防线后扣除一条生命。根据蓄力和战场变化判断首领出招。",
+    "Abyssal Nightmare begins. An enemy that escapes behind the defense line costs one life. Read boss wind-ups and changes in the arena.");
   return tr(`${tr(...fighterProfile().label)}出击。上下移动瞄准，空格释放${ultimateName()}，V 开盾。绿球恢复生命，满血时增加生命上限。依次击败十只异形，再挑战群渊合生体。`,
     `${tr(...fighterProfile().label)} launched. Move up or down to aim. Space uses ${ultimateName()}; V shields. Green orbs restore a life or raise capacity at full health. Defeat ten aliens, then face the Abyssal Confluence.`);
 }
@@ -254,7 +258,8 @@ function completeSortie({ won = false, died = false, abandoned = false } = {}) {
   syncSortieEligibility();
   const run = sortieStats;
   const summary = { won, died, abandoned, mode: run.mode, difficulty: run.difficulty, assisted: run.assisted, assists: { ...run.assists },
-    seconds: battleTime, score, kills, combo: momentum.best, hits: run.hitsTaken, bossRecords: run.bossRecords.slice(),
+    seconds: battleTime, score, kills, combo: momentum.best, hits: run.hitsTaken, breaches: run.enemyBreaches,
+    bossRecords: run.bossRecords.slice(),
     unlocks: run.unlocks.slice(), day: run.daily?.day, week: run.week, resumed: run.resumed,
     retried: run.retried === true, retryCount: run.retryCount ?? 0,
     currentBoss: !won && run.mode === "rush" ? Math.min(StarBreakerProfile.bossCount - 1, boss?.type ?? pendingBossType ?? bossDefeated) : null,

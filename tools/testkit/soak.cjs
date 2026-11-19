@@ -13,6 +13,7 @@ async function main() {
   const out = path.resolve(process.argv[3]);
   const minutes = Number(process.argv[4] ?? 30);
   const software = process.argv.includes("--swiftshader");
+  const nightmare = process.argv.includes("--nightmare");
   assert.ok(minutes >= 1 && Number.isFinite(minutes));
   fs.mkdirSync(out, { recursive: true });
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true,
@@ -24,6 +25,11 @@ async function main() {
     await page.addScriptTag({ path: path.join(__dirname, "balance-scenarios.js") });
     assert.equal(await page.evaluate(() => balanceBuildRoute("wings")), "ember",
       "Live control policy must include its evolution-route dependency before the soak begins");
+    if (nightmare) {
+      await page.locator("#hangar-loadout").click();
+      await page.locator('#hangar-difficulty label:has(input[value=nightmare])').click();
+      await page.locator("#hangar-back-loadout").click();
+    }
     await page.locator("#start-button").click();
     const skip = page.locator("#tutorial-skip");
     if (await skip.isVisible()) await skip.click();
@@ -31,7 +37,16 @@ async function main() {
       if (typeof skipFlightTutorial === "function") skipFlightTutorial();
       const fresh = () => ({ build: "wings", shields: 0, specials: 0, nextLance: 0, nextFalcon: 0, nextHeavy: 0 });
       const probe = window.soakProbe = { controls: fresh(), rounds: 1, cleared: 0, furthest: 0, seen: [], sampleCount: 0,
-        worst: 0, slow: 0, totalActive: 0, lastBattle: 0 };
+        worst: 0, slow: 0, totalActive: 0, lastBattle: 0,
+        peak: { enemies: 0, bullets: 0, hostile: 0, hazards: 0, particles: 0 } };
+      const intervals = new Uint32Array(1001);
+      window.soakPercentile = fraction => {
+        let rank = Math.ceil(probe.sampleCount * fraction);
+        for (let bin = 0; bin < intervals.length; bin++) {
+          rank -= intervals[bin];
+          if (rank <= 0) return bin * .5;
+        }
+      };
       // Reserve lives to exercise the late assets and modes; regular enemies,
       // attack decisions, progression, and render clocks keep normal timing.
       const reserveLives = () => { player.lives = Math.max(player.lives, 12); updateLifeDisplay(); };
@@ -40,7 +55,7 @@ async function main() {
         if (campaignVictory?.stage === "sequence") return;
         if (campaignVictory?.stage === "report" || state === "over") {
           probe.rounds++;
-          startBattleWithSound({ mode: probe.rounds % 2 ? "campaign" : "rush", difficulty: "veteran" });
+          startBattleWithSound({ mode: probe.rounds % 2 ? "campaign" : "rush", difficulty: sortieStats.difficulty });
           probe.controls = fresh(); probe.lastBattle = 0;
           reserveLives();
         }
@@ -52,11 +67,18 @@ async function main() {
       }, 80);
       let frame;
       const sample = time => {
-        if (frame != null) {
+        if (frame != null && isBattleActive()) {
           const ms = time - frame;
           probe.sampleCount++;
+          intervals[Math.min(intervals.length - 1, Math.round(ms * 2))]++;
           probe.worst = Math.max(ms, probe.worst);
           if (ms > 33.3) probe.slow++;
+          const peak = probe.peak;
+          peak.enemies = Math.max(peak.enemies, enemies.length);
+          peak.bullets = Math.max(peak.bullets, bullets.length);
+          peak.hostile = Math.max(peak.hostile, bossProjectiles.length + enemyProjectiles.length);
+          peak.particles = Math.max(peak.particles, combatEffects.particles.length);
+          peak.hazards = Math.max(peak.hazards, bossHazards.length + (boss?.finale?.hazards.length ?? 0));
         }
         frame = time;
         requestAnimationFrame(sample);
@@ -84,6 +106,7 @@ async function main() {
         const game = await page.evaluate(() => {
           const { controls, ...probe } = window.soakProbe;
           return { ...probe, battleTime, active: isBattleActive(), state, lives: player.lives, quality: visualQuality.id,
+            difficulty: sortieStats.difficulty, p95FrameMs: window.soakPercentile(.95),
             models: starBreakerModelCache.size, modelLimit: starBreakerModelLimit,
             sectorMaps: starBreakerModelStage?.sectorMaps.size ?? 0,
             particles: combatEffects.particles.length, spareParticles: spareCombatParticles.length,

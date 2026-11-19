@@ -764,6 +764,12 @@ function drawSignatureRing(ctx, hazard, material, active, progress, quiet) {
   ctx.beginPath();
   ctx.arc(x, y, hazard.radius, 0, Math.PI * 2);
   ctx.stroke();
+  if (hazard.minimumRadius !== undefined) {
+    ctx.globalAlpha *= .72;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(1, hazard.minimumRadius - hazard.thickness / 2), 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

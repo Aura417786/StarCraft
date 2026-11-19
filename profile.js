@@ -7,7 +7,7 @@ const StarBreakerProfile = (() => {
   const awards = typeof StarBreakerAwards !== "undefined" ? StarBreakerAwards
     : typeof require === "function" ? require("./achievements.js") : null;
   const bossCount = 11;
-  const difficulties = ["easy", "normal", "hard"];
+  const difficulties = ["easy", "normal", "hard", "nightmare"];
   // Keep v29 records under their original keys; changed rules are not the same leaderboard.
   const legacyDifficulties = ["recruit", "veteran", "abyss"];
   const recordDifficulties = [...difficulties, ...legacyDifficulties];
@@ -49,10 +49,12 @@ const StarBreakerProfile = (() => {
   function sanitizeCampaign(raw) {
     const value = object(raw);
     const bosses = object(value.bosses);
+    const nightmareBosses = object(value.nightmareBosses);
     return {
       ...sanitizeRecord(value),
       totalKills: count(value.totalKills),
       bosses: Array.from({ length: bossCount }, (_, i) => sanitizeBoss(bosses[i] ?? value.bosses?.[i])),
+      nightmareBosses: Array.from({ length: bossCount }, (_, i) => sanitizeBoss(nightmareBosses[i] ?? value.nightmareBosses?.[i])),
       byDifficulty: Object.fromEntries(recordDifficulties.map(id => [id, sanitizeRecord(object(value.byDifficulty)[id])]))
     };
   }
@@ -238,13 +240,15 @@ const StarBreakerProfile = (() => {
           return addRush(current.weekly[run.week] ??= sanitizeRecord(), run, true);
         }
         if (run.assisted) return addRun(current.rushAssisted, run, !run.abandoned);
-        addRush(current.rush, run, formal);
+        if (difficulty === "nightmare") addRun(current.rush, run, false);
+        else addRush(current.rush, run, formal);
         return addRush(current.rushByDifficulty[difficulty], run, formal);
       }
       const campaign = run.assisted ? current.assisted : current.campaign;
       campaign.totalKills += count(run.kills);
-      for (const item of run.bossRecords) addBoss(campaign.bosses[item.type], item);
-      addRun(campaign, run, !run.abandoned);
+      const bossRecords = difficulty === "nightmare" ? campaign.nightmareBosses : campaign.bosses;
+      for (const item of run.bossRecords) addBoss(bossRecords[item.type], item);
+      addRun(campaign, run, !run.abandoned && difficulty !== "nightmare");
       return addRun(campaign.byDifficulty[difficulty], run, !run.abandoned);
     }
 

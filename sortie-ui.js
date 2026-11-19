@@ -15,6 +15,7 @@ const sortieUiWords = {
   challenges: ["挑战", "Challenges"], upgrades: ["改装", "Refits"], archive: ["战役档案", "Campaign Archive"], settings: ["设置", "Settings"],
   campaign: ["战役", "Campaign"], rush: ["首领连战", "Boss Rush"], practice: ["单首领练习", "Boss Practice"], daily: ["每日挑战", "Daily Challenge"],
   easy: ["简单", "Easy"], normal: ["普通", "Normal"], hard: ["困难", "Hard"],
+  nightmare: ["深渊极限", "Abyssal Nightmare"],
   recruit: ["旧版新兵", "Legacy Recruit"], veteran: ["旧版老兵", "Legacy Veteran"], abyss: ["旧版深渊", "Legacy Abyss"],
   firepower: ["火力", "Firepower"], survival: ["生存", "Survival"], mobility: ["机动", "Mobility"],
   "fast-shots": ["首领弹速 +20%", "Boss shots +20% speed"],
@@ -111,7 +112,7 @@ function renderSortieChallenges(profile) {
     sortieButton(tr("开始首领连战", "Launch Boss Rush"), () => launchSortie({ mode: "rush" })));
   rush.append(sortieMetrics([
     [tr("最佳时间", "Best time"), sortieTime(rushRecord.bestTime)],
-    [tr("累计阵亡", "Total defeats"), profile.rush.deaths],
+    [tr("累计阵亡", "Total defeats"), rushRecord.deaths],
     [tr("最高分", "Best score"), rushRecord.bestScore],
     [tr("无伤徽章", "Flawless badge"), rushRecord.clean ? "◆" : "—"],
     [tr("速通徽章", "Speed badge"), rushRecord.fast ? "◆" : "—"]
@@ -228,7 +229,7 @@ function renderSortieArchive(profile) {
   sortieConsoleBody.append(levels);
   const legacy = StarBreakerProfile.legacyDifficulties.filter(id => campaign.byDifficulty[id].attempts > 0);
   if (legacy.length) sortieConsoleBody.append(
-    sortieElement("p", tr("以下旧版纪录保留原规则，不与当前三档难度合并。", "Legacy records retain their original rules and are separate from the current difficulty tiers."), "sortie-explainer"),
+    sortieElement("p", tr("旧版纪录按照原有规则单独保存。", "Legacy records are grouped under their original rules."), "sortie-explainer"),
     sortieMetrics(legacy.map(id => [sortieWord(id), `${campaign.byDifficulty[id].bestScore} · ${sortieTime(campaign.byDifficulty[id].bestTime)}`])));
   const table = sortieElement("table", "", "sortie-archive-table");
   const headings = sortieElement("tr");
@@ -242,21 +243,30 @@ function renderSortieArchive(profile) {
   const head = sortieElement("thead");
   const body = sortieElement("tbody");
   head.append(headings);
-  campaign.bosses.forEach((record, type) => {
-    const row = sortieElement("tr");
-    const bossName = sortieElement("th", `${String(type + 1).padStart(2, "0")} · ${bossTypeName(type)}`);
-    bossName.scope = "row";
-    row.append(bossName, ...[record.clears, record.clean, sortieTime(record.best),
-      unlocked.includes(type) ? tr("已解锁", "Unlocked") : tr("未解锁", "Locked")
-    ].map(value => sortieElement("td", String(value))));
-    body.append(row);
-  });
+  const setBossArchiveTier = tier => {
+    const records = tier === "nightmare" ? campaign.nightmareBosses : campaign.bosses;
+    body.replaceChildren(...records.map((record, type) => {
+      const row = sortieElement("tr");
+      const bossName = sortieElement("th", `${String(type + 1).padStart(2, "0")} · ${bossTypeName(type)}`);
+      bossName.scope = "row";
+      row.append(bossName, ...[record.clears, record.clean, sortieTime(record.best),
+        unlocked.includes(type) ? tr("已解锁", "Unlocked") : tr("未解锁", "Locked")
+      ].map(value => sortieElement("td", String(value))));
+      return row;
+    }));
+  };
+  const initialTier = sortieSettings.difficulty === "nightmare" ? "nightmare" : "classic";
+  const tierPicker = sortieSelect("archive-boss-tier", [
+    ["classic", tr("简单／普通／困难", "Easy / Normal / Hard")],
+    ["nightmare", sortieWord("nightmare")],
+  ], initialTier, setBossArchiveTier);
+  setBossArchiveTier(initialTier);
   table.append(head, body);
   const tableWrap = sortieElement("div", "", "sortie-archive-scroll");
   tableWrap.tabIndex = 0;
   tableWrap.setAttribute("aria-label", tr("战役首领记录", "Campaign boss records"));
   tableWrap.append(table);
-  sortieConsoleBody.append(tableWrap, sortieElement("p",
+  sortieConsoleBody.append(sortieSettingLine(tr("首领记录难度", "Boss record difficulty"), tierPicker), tableWrap, sortieElement("p",
     tr(`无伤按首领出现至终局击破之间是否中招计算。辅助通关 ${assisted.clears} 次，单独记录。`,
       `No-hit records count every unblocked hit from arrival to final defeat. Assisted clears are tracked separately: ${assisted.clears}.`), "sortie-explainer"));
 }
@@ -289,7 +299,7 @@ function sortieCheckbox(id, checked, change) {
 function sortieDifficultyTable() {
   const wrap = sortieElement("div", "", "sortie-difficulty-scroll");
   const table = sortieElement("table", "", "sortie-difficulty-table");
-  const caption = sortieElement("caption", tr("难度数值 · 困难保留原版攻势，简单与普通降低攻击频率和弹速", "Difficulty settings · Hard keeps the original attacks; Easy and Normal reduce frequency and speed"));
+  const caption = sortieElement("caption", tr("深渊极限加快连招并增加敌机。敌机突破后方防线会扣命。", "Abyssal Nightmare adds faster combos and denser waves. An enemy escape costs one life."));
   const heading = sortieElement("tr");
   for (const value of [tr("难度", "Difficulty"), tr("首领生命", "Boss health"), tr("预警", "Warning"),
     tr("攻势节奏", "Attack pace"), tr("敌弹速度", "Shot speed"), tr("受击伤害", "Damage taken")]) {
@@ -306,7 +316,9 @@ function sortieDifficultyTable() {
     const title = sortieElement("th", sortieWord(key));
     title.scope = "row";
     const warning = rule.warning ? tr(`+${rule.warning} 秒`, `+${rule.warning}s`) : "—";
-    row.append(title, ...[tr("按入场战力锁定", "Locked to entry power"), warning, percent(rule.attackTempo), percent(rule.projectileSpeed), percent(rule.damage)]
+    const health = key === "nightmare" ? tr("实际输出 × 目标时长", "Effective DPS × target time")
+      : tr("按入场战力锁定", "Locked to entry power");
+    row.append(title, ...[health, warning, percent(rule.attackTempo), percent(rule.projectileSpeed), percent(rule.damage)]
       .map(value => sortieElement("td", value)));
     body.append(row);
   }
@@ -415,6 +427,7 @@ function renderSortieConsole() {
 }
 
 function refreshSortieHud() {
+  app.dataset.nightmare = String(isAbyssalNightmare());
   if (!sortieModeBadge) return;
   const run = sortieStats;
   if (!run) { sortieModeBadge.textContent = ""; return; }
@@ -442,6 +455,9 @@ function refreshSortieResult() {
   sortieResultSummary.replaceChildren(sortieElement("strong", status));
   const assists = sortieAssistLabels(result.assists);
   if (assists.length) sortieResultSummary.append(sortieElement("p", assists.join(" · ")));
+  if (result.difficulty === "nightmare") {
+    sortieResultSummary.append(sortieElement("p", tr(`防线失守 ${result.breaches} 次`, `Defense breaches: ${result.breaches}`)));
+  }
   const resume = sortieProfile.data.rushResume;
   if (result.mode === "rush" && !result.resumed && !result.retried && !result.won && resume
     && !(typeof bossRetryAvailable !== "undefined" && bossRetryAvailable)) {
@@ -478,9 +494,12 @@ function refreshHangarDifficulty() {
   const picker = document.querySelector("#hangar-difficulty");
   if (!picker) return;
   document.querySelector("#hangar-difficulty-label").textContent = tr("战役难度", "Campaign difficulty");
-  document.querySelector("#hangar-difficulty-note").textContent = tr(
+  document.querySelector("#hangar-difficulty-note").textContent = sortieSettings.difficulty === "nightmare"
+    ? tr("深渊极限 · 密集敌机与高速连招。敌机完全突破后方防线会扣除一条生命。",
+      "Abyssal Nightmare · Dense waves and faster combos. Enemies escaping behind the defense line cost one life each.")
+    : tr(
     "仅调整 Boss 出招频率与弹速；血量由开战时 POWER 决定。",
-    "Only Boss attack frequency and shot speed change. HP follows POWER at battle entry.");
+    "Boss attack pace and shot speed vary by difficulty. HP follows POWER at battle entry.");
   for (const radio of picker.querySelectorAll("input")) {
     radio.checked = radio.value === sortieSettings.difficulty;
     radio.nextElementSibling.textContent = sortieWord(radio.value);

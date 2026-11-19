@@ -18,7 +18,7 @@ function resetAceEncounter() {
   for (let index = enemies.length - 1; index >= 0; index--) {
     if (enemies[index].kind === "ace") enemies.splice(index, 1);
   }
-  Object.assign(aceEncounter, { nextTime: aceRules.firstArrival, warning: 0, target: null,
+  Object.assign(aceEncounter, { nextTime: eliteEncounterInterval(aceRules.firstArrival), warning: 0, target: null,
     warningY: 0, sequence: 0, notice: "", noticeTime: 0 });
 }
 function aceBlocksWaves() {
@@ -55,7 +55,7 @@ function aceMoveTo(enemy, x, y, speed, seconds) {
   return distance <= Math.max(1, speed * seconds);
 }
 function spawnAceEnemy() {
-  if (aceHasEncounterConflict() || enemies.length >= enemyRules.maxOnScreen) return null;
+  if (aceHasEncounterConflict() || enemies.length >= enemyWaveCapacity() - nightmareSplitReserve()) return null;
   const width = player.width * 0.8, height = width * 0.58;
   const enemy = { kind: "ace", width, height, x: viewport.width + width * 0.6,
     y: aceEncounter.warningY, previousX: viewport.width + width * 0.6, previousY: aceEncounter.warningY,
@@ -79,7 +79,7 @@ function finishAceEncounter(enemy, defeated = false, announce = true) {
   if (!enemy || enemy.aceSettled) return false;
   enemy.aceSettled = true;
   if (aceEncounter.target === enemy) aceEncounter.target = null;
-  aceEncounter.warning = 0; aceEncounter.nextTime = battleTime + aceRules.interval;
+  aceEncounter.warning = 0; aceEncounter.nextTime = battleTime + eliteEncounterInterval(aceRules.interval);
   clearAceProjectiles();
   if (announce) announceAce(defeated ? tr("王牌击落 · +800", "Ace down · +800") : tr("敌方王牌脱离战区", "Enemy ace escaped"), 2.5);
   return true;
@@ -107,7 +107,7 @@ function updateAceEncounter(seconds) {
   if (enemy && !enemies.includes(enemy)) finishAceEncounter(enemy, false, false);
   if (aceBossIsNear()) {
     if (aceEncounter.warning > 0) {
-      aceEncounter.warning = 0; aceEncounter.nextTime = battleTime + aceRules.interval;
+      aceEncounter.warning = 0; aceEncounter.nextTime = battleTime + eliteEncounterInterval(aceRules.interval);
     }
     if (aceEncounter.target) beginAceRetreat(aceEncounter.target, true);
     clearAceProjectiles();
@@ -123,7 +123,7 @@ function updateAceEncounter(seconds) {
     return;
   }
   if (battleTime < aceEncounter.nextTime || aceHasEncounterConflict() || journeyBlocksNewEncounters()) return;
-  if (enemies.length >= enemyRules.maxOnScreen || viewport.width < 420 || viewport.height < 320) {
+  if (enemies.length >= enemyWaveCapacity() - nightmareSplitReserve() || viewport.width < 420 || viewport.height < 320) {
     aceEncounter.nextTime = battleTime + 3; return;
   }
   aceEncounter.warning = aceRules.warning;
@@ -220,7 +220,7 @@ function fireAceVolley(enemy) {
   const speed = clamp(viewport.width * (aim.followup ? 0.47 : 0.50), 380, 1060);
   let fired = false;
   for (const offset of aim.offsets) {
-    if (enemyProjectiles.length >= enemyCombatRules.maxProjectiles) break;
+    if (enemyProjectiles.length >= enemyProjectileCapacity()) break;
     const angle = aim.angle + offset;
     const shot = acquireHostileRound(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, 5);
     shot.source = "ace";

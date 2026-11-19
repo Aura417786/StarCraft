@@ -145,7 +145,7 @@ async function main() {
   assert.ok(input && manifestPath && evidenceDir, "Usage: node published-release.cjs BASE_URL MANIFEST_JSON EVIDENCE_DIR");
   const base = gameUrl(input), out = path.resolve(evidenceDir);
   const manifest = JSON.parse(fs.readFileSync(manifestPath,"utf8").replace(/^\uFEFF/,""));
-  assert.ok(Array.isArray(manifest.files) && /^v36(?:$|[-.])/i.test(manifest.version), "Expected a v36 frozen manifest");
+  assert.ok(Array.isArray(manifest.files) && /^v(?:36|37)(?:$|[-.])/i.test(manifest.version), "Expected a supported frozen manifest");
   fs.mkdirSync(out,{recursive:true});
   const report = {baseUrl:base.href, version:manifest.version, commit:manifest.commit, tag:manifest.tag,
     checkedAt:new Date().toISOString(), assets:[], runtimeErrors:[], failedResponses:[], passed:false};

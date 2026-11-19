@@ -21,7 +21,7 @@ function resetEliteEncounters(resetProgress = true) {
   eliteDirector.mines.length = 0;
   for (const enemy of enemies) delete enemy.escortShield;
   if (resetProgress) {
-    eliteDirector.next = eliteRules.first;
+    eliteDirector.next = eliteEncounterInterval(eliteRules.first);
     eliteDirector.order = 0;
     for (const kind of eliteKinds) eliteDirector.spawned[kind] = 0;
   }
@@ -29,10 +29,15 @@ function resetEliteEncounters(resetProgress = true) {
 
 function eliteWaveKind() {
   if (battleTime < eliteDirector.next || !sortieAllowsWaves() || bossBlocksWaves()
-    || gravityTideBusy() || enemies.some(enemy => eliteKinds.includes(enemy.kind))) return null;
+    || gravityTideBusy()) return null;
   const kind = eliteKinds[eliteDirector.order % eliteKinds.length];
+  let active = 0;
+  for (const enemy of enemies) {
+    if (!eliteKinds.includes(enemy.kind)) continue;
+    if (!isAbyssalNightmare() || enemy.kind === kind || ++active >= 2) return null;
+  }
   if (kind === "minelayer" && eliteDirector.mines.length) return null;
-  if (kind === "splitter" && enemies.length > enemyRules.maxOnScreen - 2) return null;
+  if (kind === "splitter" && enemies.length > enemyWaveCapacity() - 2) return null;
   return kind;
 }
 
@@ -41,7 +46,7 @@ function beginEliteEnemy(enemy) {
   if (!eliteKinds.includes(kind)) return;
   eliteDirector.spawned[kind]++;
   eliteDirector.order++;
-  eliteDirector.next = battleTime + eliteRules.interval;
+  eliteDirector.next = battleTime + eliteEncounterInterval(eliteRules.interval);
   if (kind === "minelayer") Object.assign(enemy, { mineClock: 0, minesDropped: 0 });
   const [label, english, prompt, hint] = eliteCopy[kind];
   announceBattlefieldEvent(tr(label + " · " + prompt, english + " · " + hint), 3.5);
