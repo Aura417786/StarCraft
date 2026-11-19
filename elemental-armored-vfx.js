@@ -13,6 +13,10 @@ const ElementalArmoredVfx = (() => {
     silk: { deep: "#4d216f", edge: "#ca8bff", core: "#ffe1fb" },
     chitin: { deep: "#1a3d34", edge: "#a0d17c", core: "#e7ffc1" },
   };
+  const debris = Array.from({ length: 48 }, (_, index) => ({
+    along: random(index * 3 + 171), phase: random(index * 7 + 79), size: random(index + 623),
+    spin: random(index * 4 + 61), lift: random(index * 2 + 137),
+  }));
 
   function ready() { return atlas.complete && atlas.naturalWidth === cellWidth * 3; }
   function fractional(n) { return n - Math.floor(n); }
@@ -65,12 +69,75 @@ const ElementalArmoredVfx = (() => {
     ctx.restore();
   }
 
+  // A continuous particulate wake follows a moving edge. The first layer is
+  // mineral dust, the second angular, lit splinters. No particle owns a clock.
+  function surfaceSpray(ctx, kind, run, reach, phase, quiet, salt = 0, strength = 1) {
+    if (!(run > 0 && reach > 0) || strength < .02) return;
+    const tone = palettes[kind];
+    const count = quiet ? 12 : visualQuality.id === "high" ? 42 : 26;
+    const clock = quiet ? .38 : phase;
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    const opacity = ctx.globalAlpha * strength;
+    const mist = pressureArtMist(tone.edge);
+    for (let i = 0; i < 4; i++) {
+      const particle = debris[(i * 7 + salt) % debris.length];
+      const local = fractional(clock * .43 + particle.phase);
+      const x = run * (.11 + i * .24 + particle.along * .083);
+      const y = reach * (.17 + local * .78);
+      const radius = reach * (.42 + particle.size * .46);
+      ctx.globalAlpha = opacity * .20 * Math.sin(local * Math.PI);
+      ctx.drawImage(mist, x - radius * 1.9, y - radius, radius * 3.8, radius * 2);
+    }
+    for (let layer = 0; layer < 2; layer++) {
+      ctx.beginPath();
+      for (let i = layer; i < count; i += 2) {
+        const particle = debris[(i + salt) % debris.length];
+        const local = fractional(clock * (.51 + particle.lift * .72) + particle.phase);
+        if (local < .05 || local > .95) continue;
+        const x = run * particle.along + (particle.spin - .52) * reach * local * 1.72;
+        const y = reach * (.04 + local * (.24 + particle.lift * .73));
+        const size = (.66 + particle.size ** 2 * (layer ? 6.8 : 2.9))
+          * (1 - local * .61) * (.52 + .48 * Math.sin(local * Math.PI));
+        const angle = particle.spin * TAU + local * (quiet ? 0 : 4.2);
+        const ux = Math.cos(angle) * size, uy = Math.sin(angle) * size;
+        ctx.moveTo(x - ux * 1.85, y - uy * 1.85);
+        ctx.lineTo(x + uy * .43, y - ux * .43);
+        ctx.lineTo(x + ux * 1.49, y + uy * 1.49);
+        if (layer) ctx.lineTo(x - uy * .34, y + ux * .34);
+        ctx.closePath();
+      }
+      ctx.fillStyle = layer ? tone.core : tone.edge;
+      ctx.globalAlpha = opacity * (layer ? .86 : .52);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function needlePath(ctx, segment, active, progress, quiet, seed) {
     const { x1, y1, x2, y2, width } = segment;
     const l = Math.hypot(x2 - x1, y2 - y1);
     if (l < 1) return;
     if (!active) {
-      tell(ctx, segment, palettes.bone.edge);
+      ctx.save();
+      ctx.translate(x1, y1);
+      ctx.rotate(Math.atan2(y2 - y1, x2 - x1));
+      const pathLight = ctx.createLinearGradient(0, 0, l, 0);
+      pathLight.addColorStop(0, palettes.bone.core + "07");
+      pathLight.addColorStop(.16, palettes.bone.edge + "91");
+      pathLight.addColorStop(.79, palettes.bone.core + "a0");
+      pathLight.addColorStop(1, palettes.bone.core + "0d");
+      ctx.lineWidth = Math.max(1, width * .12);
+      ctx.strokeStyle = pathLight;
+      ctx.lineCap = "round";
+      ctx.setLineDash([6, 12, 2, 15]);
+      ctx.lineDashOffset = quiet ? 0 : -progress * 31;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(l, 0);
+      ctx.stroke();
+      surfaceSpray(ctx, "bone", l, Math.max(8, width * .72), progress, quiet, seed + 23, .34);
+      ctx.restore();
       return;
     }
     ctx.save();
@@ -79,21 +146,25 @@ const ElementalArmoredVfx = (() => {
     // The intact rib throws a narrow marrow trail. Its polished tooth turns
     // into the travel direction while tiny splinters keep the ray readable.
     const motion = quiet ? .38 : progress;
+    ctx.save();
+    ctx.scale(1, -1);
+    surfaceSpray(ctx, "bone", l, Math.max(13, width * 1.65), motion * 1.25, quiet, seed + 23, .84);
+    ctx.restore();
     const wake = ctx.createLinearGradient(0, 0, l, 0);
     wake.addColorStop(0, "#fff0cbab"); wake.addColorStop(.43,"#c69a698c"); wake.addColorStop(1,"#cbad7700");
     ctx.strokeStyle = wake; ctx.lineCap = "round";
     ctx.lineWidth = Math.max(1, width * .25);
     ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(l*.34,width*.10,l,0); ctx.stroke();
-    for (let i=0;i<7;i++) {
+    for (let i=0;i<5;i++) {
       const t=fractional(motion*(.86+i*.025)+i/7+seed*.074);
       const size=Math.min(l*.16,width*(2.8+random(i+seed)*2.6));
-      stamp(ctx,0,i,l*t,(random(i+seed*3)-.5)*width*.45,size,size*.33,
-        .1*Math.sin(i*2.2+motion*11),i%2);
+      BossCreatureVfx.bone(ctx,l*t,(random(i+seed*3)-.5)*width*.45,size,size*.33,
+        .1*Math.sin(i*2.2+motion*11),i%4,i%2===0);
     }
     const travel=fractional(.16+seed*.093+motion*1.21);
     const size=Math.min(l*.24,width*(7.3+random(seed)*2.5));
-    BossSpellMatter.draw(ctx,"rib",l*travel,-width*.32,size,size*.49,
-      -.45+.21*Math.sin(seed*1.5+motion*8),false,seed%2===1);
+    BossCreatureVfx.bone(ctx,l*travel,-width*.32,size,size*.49,
+      -.45+.21*Math.sin(seed*1.5+motion*8),seed%4,seed%2===1);
     ctx.restore();
   }
 
@@ -193,7 +264,19 @@ const ElementalArmoredVfx = (() => {
     ctx.lineWidth=Math.max(.75,width*.08);ctx.strokeStyle="#d1deb3a8";ctx.beginPath();
     for(let i=0;i<=25;i++){const t=i/25,y=ridge(t)-girth(t)*.55;if(i===0)ctx.moveTo(0,y);else ctx.lineTo(length*t,y);}
     ctx.stroke();
-    BossSpellMatter.draw(ctx,"claw",pulse*length,ridge(pulse),Math.min(length*.21,width*10),width*2.6,-.04);
+    surfaceSpray(ctx, "chitin", length, width * 1.6, wave * .17, quiet, seed + 23, .76);
+    ctx.beginPath();
+    for (let i = 0; i < 13; i++) {
+      const u = (i + .51) / 13, x = length * u, y = ridge(u);
+      const reach = Math.max(12, width * (1 + debris[i].size * .85));
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x - reach * .36, y - reach * .84, x - reach, y - reach * .42);
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + reach * .32, y + reach * .59, x + reach * .84, y + reach * .25);
+    }
+    ctx.strokeStyle = "#b0e99266";
+    ctx.lineWidth = Math.max(.8, width * .067);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -207,19 +290,47 @@ const ElementalArmoredVfx = (() => {
     ctx.globalAlpha *= alpha;
     ctx.translate(x, y);
     if (kind === "bone") {
-      // The crown fractures across its circumference. Its emerging fragments
-      // extend beyond the damage front, leaving the dark space between visible.
-      const turns = 9, spin = quiet ? 0 : progress * .36;
-      const shade = ctx.createRadialGradient(0, 0, inner, 0, 0, radius);
-      shade.addColorStop(0, "#b8763900");shade.addColorStop(.43, "#ebc39562");
-      shade.addColorStop(.72, "#ffedc99c");shade.addColorStop(1, "#a2602c00");
-      ctx.strokeStyle = shade;ctx.lineWidth = width;
+      const turns = 12, spin = quiet ? 0 : progress * .31;
+      const shade = ctx.createRadialGradient(0, 0, Math.max(0, center - width * 1.7), 0, 0, center + width * 1.9);
+      shade.addColorStop(0, "#b8763900"); shade.addColorStop(.33, "#d49b6331");
+      shade.addColorStop(.49, "#ffedc9b5"); shade.addColorStop(.56, "#b67d4860");
+      shade.addColorStop(1, "#a2602c00");
+      ctx.strokeStyle = shade;
+      ctx.lineWidth = width * 3.6;
+      ctx.lineCap = "round";
+      ctx.beginPath();
       for (let i = 0; i < turns; i++) {
-        const angle = i*TAU/turns + spin, extent = TAU/turns*(.55+.28*random(13+i));
-        ctx.beginPath();ctx.arc(0,0,center,angle,angle+extent);ctx.stroke();
-        const at = angle+extent*.67, span=Math.min(center*.5,width*(2.3+random(i+77)));
-        BossSpellMatter.draw(ctx,"rib",Math.cos(at)*center,Math.sin(at)*center,
-          span,width*(1.05+random(i+9)*.55),at+Math.PI*.47,i%3===0);
+        const angle = i * TAU / turns + spin;
+        const segment = TAU / turns * (.57 + .32 * debris[i].along);
+        ctx.moveTo(Math.cos(angle) * center, Math.sin(angle) * center);
+        ctx.arc(0, 0, center, angle, angle + segment);
+      }
+      ctx.stroke();
+      for (let i = 0; i < turns; i++) {
+        const s = debris[i];
+        const angle = (i + s.along * .51) * TAU / turns + spin;
+        const length = Math.min(center * .51, width * (2.2 + s.size * 2.7));
+        BossCreatureVfx.bone(ctx, Math.cos(angle) * center, Math.sin(angle) * center, length,
+          width * (.91 + s.lift * .74), angle + Math.PI * (.42 + .16 * s.spin), i % 4, i % 3 === 0);
+      }
+      ctx.globalCompositeOperation = "screen";
+      for (let layer = 0; layer < 2; layer++) {
+        ctx.beginPath();
+        for (let i = layer; i < (quiet ? 16 : 48); i += 2) {
+          const s = debris[i];
+          const f = fractional((quiet ? .47 : progress * .93) * (1.2 + s.lift) + s.phase);
+          const angle = s.along * TAU + spin + (s.spin - .45) * f * .34;
+          const offset = width * (i % 3 ? .22 + f * 1.67 : -.28 - f * 1.1);
+          const r = Math.max(2, center + offset), x = Math.cos(angle) * r, y = Math.sin(angle) * r;
+          const size = (.55 + s.size * (layer ? 4 : 1.8)) * (1 - f * .72);
+          ctx.moveTo(x, y - size);
+          ctx.lineTo(x + size * 1.6, y + size * .23);
+          ctx.lineTo(x - size * .61, y + size * .72);
+          ctx.closePath();
+        }
+        ctx.globalAlpha = alpha * (layer ? .79 : .39);
+        ctx.fillStyle = layer ? palettes.bone.core : palettes.bone.edge;
+        ctx.fill();
       }
       ctx.restore();
       return;
@@ -247,22 +358,64 @@ const ElementalArmoredVfx = (() => {
     const count = quiet || visualQuality.id === "low" ? 7 : 11, step = hazard.width / count;
     for (let band = 0; band < bars.length; band++) {
       const y = bars[band], side = band === 0 ? -1 : 1;
-      const line = { x1: left, y1: y, x2: left + hazard.width, y2: y };
-      if (!active) {
-        tell(ctx, line, palettes.bone.core);
-        continue;
-      }
       ctx.save();
-      ctx.beginPath(); ctx.rect(left, side < 0 ? y - step * 1.56 : y - hazard.thickness * .36,
-        hazard.width, step * 1.56 + hazard.thickness * .36); ctx.clip();
-      ray(ctx, line.x1, y, line.x2, y, "#e7b279ba", Math.max(2, hazard.thickness * .24));
+      ctx.translate(left, y);
+      ctx.scale(1, side);
+      const cloud = Math.min(step * 1.22, 82);
+      const time = quiet ? .38 : hazard.age;
+      const depth = ctx.createLinearGradient(0, -hazard.thickness * .42, 0, cloud * 1.37);
+      depth.addColorStop(0, "#a97d4b00");
+      depth.addColorStop(.18, active ? "#eac2854c" : "#eac28529");
+      depth.addColorStop(.47, "#9d74471e");
+      depth.addColorStop(1, "#5a494000");
+      ctx.fillStyle = depth;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
       for (let i = 0; i < count; i++) {
-        const x = left + (i + .49) * step;
-        const length = step * (.97 + random(i + band * 31) * .44);
-        stamp(ctx, 0, i, x, y + side * length * .42, length * 1.49,
-          length * .97, -side * (.94 + random(i + 9) * .29), side > 0);
+        const x = (i + .31) * step;
+        const h = cloud * (.77 + .20 * Math.sin(time * 2 + i));
+        ctx.quadraticCurveTo(x, -hazard.thickness * .24, x + step * .51, h * .15);
       }
-      dust(ctx, "bone", hazard.x, y, hazard.width * .19, progress * 1.6, quiet, 9);
+      ctx.lineTo(hazard.width, 0);
+      ctx.bezierCurveTo(hazard.width * .88, cloud * 1.23, hazard.width * .27, cloud * .89, 0, 0);
+      ctx.closePath();
+      ctx.fill();
+      if (!active) ctx.globalAlpha *= .48;
+      const cortex = ctx.createLinearGradient(0, 0, 0, cloud * 1.65);
+      cortex.addColorStop(0, "#ffeed3");
+      cortex.addColorStop(.24, "#dbc3a3");
+      cortex.addColorStop(.42, "#8a6d53");
+      cortex.addColorStop(.57, "#d0b08e");
+      cortex.addColorStop(.76, "#6c5343");
+      cortex.addColorStop(1, "#4a3f33");
+      ctx.fillStyle = cortex;
+      ctx.beginPath();
+      for (let i = 0; i < count; i++) {
+        const sample = debris[(i + band * 17) % debris.length];
+        const x = (i + .42 + sample.along * .22) * step, y = cloud * (.74 + sample.size * .57);
+        const edge = x - step * (.29 + sample.lift * .65 + .14 * Math.sin(time * 4 + i));
+        const h = Math.max(3.1, step * (.14 + .10 * sample.spin));
+        ctx.moveTo(x - h * .78, y);
+        ctx.bezierCurveTo(x + h * .52, y * .54, x - h * .11, y * .35, edge, 0);
+        ctx.bezierCurveTo(edge + h * 1.14, y * .17, x + h * 1.09, y * .47, x + h * .91, y);
+        ctx.quadraticCurveTo(x + h * .11, y + h * .61, x - h * .78, y);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.strokeStyle = "#ffeece96";
+      ctx.lineWidth = .97;
+      ctx.beginPath();
+      for (let i = 0; i < count; i++) {
+        const s = debris[(i + band * 17) % debris.length];
+        const x = (i + .42 + s.along * .22) * step, y = cloud * (.74 + s.size * .57);
+        const tip = x - step * (.29 + s.lift * .65 + .14 * Math.sin(time * 4 + i));
+        ctx.moveTo(x - step * .06, y * .91);
+        ctx.bezierCurveTo(x + step * .04, y * .54, x - step * .11, y * .33, tip + step * .06, y * .065);
+        ctx.moveTo(x, y * .57);
+        ctx.quadraticCurveTo(x - step * .07, y * .54, x - step * .08, y * .42);
+      }
+      ctx.stroke();
+      surfaceSpray(ctx, "bone", hazard.width, cloud * 1.42, time * 1.48, quiet, band * 21, active ? 1 : .44);
       ctx.restore();
     }
   }
@@ -282,74 +435,158 @@ const ElementalArmoredVfx = (() => {
       const head = y - height * (.47 + drop ** 1.40 * 2.85);
       for (let i = -1; i <= 1; i++) {
         const size = height * (i ? 1.29 : 1.72);
-        stamp(ctx, 0, i + 1, x + i * width * .44, head - Math.abs(i) * height * .19,
-          size, width * (i ? .80 : 1.2), Math.PI / 2 + i * .13, i > 0);
+        BossCreatureVfx.bone(ctx, x + i * width * .44, head - Math.abs(i) * height * .19,
+          size, width * (i ? .39 : .77), Math.PI / 2 + i * .13, i + 1, i > 0);
       }
-      if (canHit) dust(ctx, "bone", x, y, width * 1.30, progress * 1.39, quiet, 17, 13);
+      if (canHit) {
+        ctx.translate(x - width * .95, y);
+        ctx.scale(1, -1);
+        surfaceSpray(ctx, "bone", width * 1.9, height * 1.17, progress * 1.82, quiet, 13,
+          .85 * (1 - Math.max(0, progress - .77) * 2.9));
+      }
     }
     ctx.restore();
   }
 
-  function jawBand(ctx, rect, side, progress, quiet, caster = null) {
+  function jawBand(ctx, rect, side, progress, quiet, caster = null, active = true) {
     const depth = rect.height;
     const width = rect.width;
     if (!(width > 1 && depth > 1)) return;
     const lip = side < 0 ? rect.y + depth : rect.y;
-    const bend = (quiet ? 0 : Math.sin(progress * Math.PI) * .10);
-    const mass = Math.min(Math.max(depth*.94, width*.18), width*(.38+bend*.23));
-    // The hinge sits on the boss side. Crushing rotates the entire shell,
-    // and both tooth rows face into the same physical escape corridor.
-    const bite=quiet ? .88 : .5-.5*Math.cos(Math.min(1,progress*2.4)*Math.PI);
-    const bodyY=lip+side*mass*(.54+.06*(1-bite));
-    if(caster) {
-      const hingeX=rect.x+width*.93,rootX=caster.x-caster.width*.26;
-      const rootY=caster.y+side*caster.height*.15,reach=rootX-hingeX;
+    const mass = Math.min(depth * .93, width * .29, 170);
+    const bend = quiet ? .65 : progress;
+    const wound = side < 0 ? 13 : 27;
+    const count = span(Math.floor(width / 69), 6, 17);
+    const stride = width / count;
+    const ridge = u => mass * (.19 + .20 * Math.sin(u * Math.PI) + .13 * u
+      + .075 * Math.sin(u * 10.3 + wound + bend));
+    ctx.save();
+    ctx.translate(rect.x, lip);
+    ctx.scale(1, side);
+    const opacity = ctx.globalAlpha;
+    if (active && caster) {
+      const rootX = caster.x - caster.width * .31 - rect.x;
+      const rootY = (caster.y - lip) * side + caster.height * .14;
+      const hinge = ridge(.84);
+      const connector = ctx.createLinearGradient(width * .71, hinge, rootX, rootY);
+      connector.addColorStop(0, "#a6ba7ad3");
+      connector.addColorStop(.31, "#718a5c8e");
+      connector.addColorStop(.67, "#435a503f");
+      connector.addColorStop(1, "#34463800");
+      ctx.strokeStyle = connector;
+      ctx.lineCap = "round";
+      const run = rootX - width * .73;
+      for (let i = 0; i < 5; i++) {
+        const layer = (i - 2) * mass * .092;
+        ctx.lineWidth = Math.max(.7, mass * (.019 + (i % 3) * .019));
+        ctx.beginPath();
+        ctx.moveTo(width * .73 + i * mass * .035, hinge + layer);
+        ctx.bezierCurveTo(width * .84 + run * .24, hinge + layer * 2.8 - mass * .31,
+          rootX - run * .27, rootY + layer * 2.1, rootX, rootY + layer * .34);
+        ctx.stroke();
+      }
+    }
+
+    const shell = ctx.createLinearGradient(0, 0, 0, mass);
+    shell.addColorStop(0, "#c9dea99e");
+    shell.addColorStop(.14, "#849e64");
+    shell.addColorStop(.24, "#405645");
+    shell.addColorStop(.35, "#1b2a25");
+    shell.addColorStop(.53, "#3d543b");
+    shell.addColorStop(.67, "#172b2a");
+    shell.addColorStop(.95, "#47745700");
+    ctx.globalAlpha = opacity * (active ? .57 : .24 + .15 * progress);
+    ctx.fillStyle = shell;
+    ctx.beginPath();
+    ctx.moveTo(0, ridge(0) * .44);
+    ctx.bezierCurveTo(width * .05, -mass * .01, width * .10, mass * .016, width * .14, ridge(.14) * .29);
+    for (let i = 0; i < count; i++) {
+      const sample = debris[(i + wound) % debris.length];
+      const a = .14 + .73 * i / count;
+      const x = a * width;
+      const edge = ridge(a) * (.26 + sample.size * .21);
+      ctx.bezierCurveTo(x - stride * .13, edge * .56, x + stride * .055, mass * .018,
+        x + stride * (.19 + sample.spin * .19), mass * (.020 + sample.phase * .072));
+      ctx.quadraticCurveTo(x + stride * .32, edge, x + stride * .70, edge * (.89 + sample.lift * .22));
+    }
+    ctx.bezierCurveTo(width * .95, ridge(.99) * .36, width * 1.015, mass * .50, width, mass * .54);
+    ctx.bezierCurveTo(width * .86, mass * .98, width * .69, mass * .82, width * .54, mass * .75);
+    ctx.bezierCurveTo(width * .34, mass * .93, width * .10, mass * .38, 0, ridge(0) * .44);
+    ctx.closePath();
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    if (ready()) {
+      // Only the grain from the original shell atlas is sampled here. The
+      // edge and the overlapping surfaces are built and shaded in world space.
+      ctx.globalCompositeOperation = "soft-light";
+      ctx.globalAlpha *= .73;
+      const tiles = quiet ? 4 : 8;
+      for (let i = 0; i < tiles; i++) {
+        const sample = debris[(i * 7 + wound) % debris.length];
+        const u = i / tiles, tileWidth = width / tiles;
+        ctx.drawImage(atlas, cellWidth * (2.32 + .12 * sample.spin), cellHeight * (.29 + .11 * sample.size),
+          cellWidth * .29, cellHeight * .21, u * width - tileWidth * .18, ridge(u) * .11,
+          tileWidth * 1.3, mass * .86);
+      }
+      ctx.globalAlpha = opacity * (active ? .57 : .24 + .15 * progress);
+      ctx.globalCompositeOperation = "source-over";
+    }
+    const light = ctx.createLinearGradient(0, 0, width, 0);
+    light.addColorStop(0, "#cdeeb65c");
+    light.addColorStop(.30, "#cfe2aece");
+    light.addColorStop(.64, "#7fba8c81");
+    light.addColorStop(.91, "#5c7d4459");
+    light.addColorStop(1, "#435b4600");
+    for (let layer = 0; layer < 3; layer++) {
+      ctx.beginPath();
+      for (let i = 0; i < count + 1; i++) {
+        const sample = debris[(i + wound + layer * 11) % debris.length], u = (i + .63) / (count + 1);
+        const x = u * width, h = ridge(u);
+        const f = .72 + sample.lift * .79;
+        ctx.moveTo(x, h * (.37 + .21 * layer));
+        ctx.bezierCurveTo(x + stride * (.067 - layer * .14), h * .87,
+          x - stride * .44, h * f, x - stride * .24, h * (1.62 + sample.size * .26));
+        ctx.moveTo(x - stride * .19, h * f);
+        ctx.lineTo(x + stride * .13, h * (1.48 + sample.spin * .48));
+      }
+      ctx.strokeStyle = layer === 0 ? light : layer === 1 ? "#0b231cb6" : "#b7d38a58";
+      ctx.lineWidth = Math.max(.75, mass * (layer === 1 ? .037 : layer === 2 ? .008 : .012));
+      ctx.stroke();
+    }
+    ctx.restore();
+    // These overlapping curved pieces retain their native silhouette while
+    // pivoting individually. The contact edge is the shaded shell behind them.
+    const elbows = quiet ? 3 : Math.max(2, Math.min(5, Math.floor(width / Math.max(90, mass * 1.73))));
+    for (let i = 0; i < elbows; i++) {
+      const s = debris[(i * 5 + wound) % debris.length];
+      const u = (i + .40 + .38 * s.lift) / elbows;
+      const weight = .42 + .48 * Math.sin(Math.PI * u) + .14 * s.size;
+      const x = u * width, y = ridge(u) * (.94 + .27 * s.along);
+      const angle = (s.spin - .63) * .42 + .16 * Math.sin(bend * 5.6 + i * 1.8);
+      const limbWidth = Math.min(width / elbows * 2.07, mass * (3.12 + .95 * s.phase)) * weight;
+      const limbHeight = mass * (.91 + s.size * .34) * weight;
+      ctx.globalAlpha = opacity * (active ? .94 : .31 + .18 * progress);
+      BossSpellMatter.draw(ctx, "claw", x, y, limbWidth, limbHeight, angle, true, i % 3 === 0);
+    }
+    ctx.globalAlpha = opacity * (active ? 1 : .48);
+    if (active) {
+      const glow = pressureArtGlow("#a8e88f");
+      ctx.globalCompositeOperation = "screen";
+      for (let i = 0; i < 4; i++) {
+        const u = (i + .57) * .22, r = mass * (.34 + .16 * debris[i].size);
+        ctx.globalAlpha = opacity * (.54 - .18 * Math.cos(8 * bend + i * 1.8));
+        ctx.drawImage(glow, width * u - r, ridge(u) * .42 - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = opacity;
+    }
+    surfaceSpray(ctx, "chitin", width, mass * .98, bend * 1.57, quiet, wound, active ? .96 : .46);
+    if (active && !quiet) {
       ctx.save();
-      const tendon=ctx.createLinearGradient(hingeX,bodyY,rootX,rootY);
-      tendon.addColorStop(0,"#57482e");tendon.addColorStop(.23,"#405135e3");
-      tendon.addColorStop(.79,"#878459b3");tendon.addColorStop(1,"#31433652");
-      ctx.fillStyle=tendon;ctx.beginPath();ctx.moveTo(hingeX,bodyY-mass*.15);
-      ctx.bezierCurveTo(hingeX+reach*.29,bodyY-mass*.14,rootX-reach*.28,rootY-mass*.09,rootX,rootY);
-      ctx.bezierCurveTo(rootX-reach*.31,rootY+mass*.07,hingeX+reach*.31,bodyY+mass*.19,hingeX,bodyY+mass*.15);
-      ctx.closePath();ctx.fill();
-      ctx.globalAlpha*=.61;ctx.lineWidth=Math.max(1,mass*.016);ctx.strokeStyle="#b9ce8d";
-      for(let j=0;j<3;j++){const d=(j-1)*mass*.06;ctx.beginPath();
-        ctx.moveTo(hingeX,bodyY+d);ctx.bezierCurveTo(hingeX+reach*.31,bodyY+d*1.7,
-          rootX-reach*.18,rootY+d,rootX,rootY);ctx.stroke();}
+      ctx.scale(1, -1);
+      surfaceSpray(ctx, "chitin", width, mass * .44, bend * 2.31, quiet, wound + 9, .59);
       ctx.restore();
     }
-    if (BossSpellMatter.draw(ctx,"claw",rect.x+width*.50,bodyY,width,mass,
-      side*.045*(1-bite),true,side>0)) {
-      dust(ctx,"chitin",rect.x+width*.12,lip+side*mass*.38,mass*.34,
-        progress*2.5,quiet,12,side>0 ? 32 : 61);
-      return;
-    }
-    ctx.save();
-    ctx.beginPath(); ctx.rect(rect.x, rect.y, width, depth); ctx.clip();
-    ctx.globalAlpha *= .93;
-    // The cropped contour faces the safe opening. Plates overlap outwards,
-    // while the inner toothline stops exactly at the mechanical lip.
-    ctx.translate(rect.x, lip);
-    if (side < 0) ctx.scale(1, -1);
-    const count = span(Math.floor(width / 67), 3, 13);
-    const step = width / count;
-    const ridge = Math.min(depth * .65, step * 1.66);
-    for (let i = 0; i < count; i++) {
-      const t = i / (count - 1);
-      const profile = .73 + .31 * Math.sin((1 - t) * Math.PI * .81) + random(i + 39) * .21;
-      const height = Math.max(depth * .15, ridge * profile);
-      const cap = i === 0 || i === count - 1 ? .68 : 1;
-      stamp(ctx, 2, i, step * (i + .52), height * .77, step * 2.08 * cap, height * 1.56,
-        -.12 - .24 * Math.sin(t * Math.PI) + bend, false);
-      stamp(ctx, 2, i + 1, step * (i + .64), height * (.35 + .19 * random(i)), step * 1.56 * cap,
-        height * .89, -.88 - .21 * random(i + 8), true);
-    }
-    const tintedEdge = ctx.createLinearGradient(0, 0, width, 0);
-    tintedEdge.addColorStop(0, "#eaffb100");
-    tintedEdge.addColorStop(.1, "#d5f5abbd");
-    tintedEdge.addColorStop(.66, "#93c97ea0");
-    tintedEdge.addColorStop(1, "#58845506");
-    ray(ctx, 0, 1, width, 1, tintedEdge, Math.max(1.2, step * .031));
     ctx.restore();
   }
 
@@ -359,13 +596,10 @@ const ElementalArmoredVfx = (() => {
     for (const side of [-1, 1]) {
       const lip = hazard.y + gap * side;
       const left = hazard.x - half;
-      if (active) {
-        const top = Math.min(lip, side < 0 ? 0 : viewport.height);
-        const height = side < 0 ? lip : viewport.height - lip;
-        jawBand(ctx, { x: left, y: top, width: half * 2, height }, side, progress, quiet);
-      } else {
-        tell(ctx, { x1: left, y1: lip, x2: left + half * 2, y2: lip }, palettes.chitin.core);
-      }
+      const top = side < 0 ? 0 : lip;
+      const height = side < 0 ? lip : viewport.height - lip;
+      jawBand(ctx, { x: left, y: top, width: half * 2, height }, side,
+        active ? progress : span(hazard.age / hazard.warning, 0, 1), quiet, boss, active);
     }
   }
 
@@ -379,11 +613,13 @@ const ElementalArmoredVfx = (() => {
   }
 
   function mechanic(ctx, hazard, { active, progress, quiet }) {
-    if (!ready()) return false;
     switch (hazard.kind) {
       case "ribCage": cageRibs(ctx, hazard, active, progress, quiet); return true;
       case "bonefall": fallingBone(ctx, hazard, active, progress, quiet); return true;
-      case "loom": loom(ctx, hazard, active, progress, quiet); return true;
+      case "loom":
+        if (!ready()) return false;
+        loom(ctx, hazard, active, progress, quiet);
+        return true;
       case "pincerLock": pincerLock(ctx, hazard, active, progress, quiet); return true;
       default: return false;
     }
@@ -435,7 +671,7 @@ const ElementalArmoredVfx = (() => {
 
   function signature(ctx, hazard, { active, progress, quiet }) {
     const kind = hazard.material || (hazard.kind === "seam" ? "chitin" : hazard.kind === "bind" ? "silk" : "");
-    if (!ready() || !palettes[kind]) return false;
+    if (!palettes[kind] || kind === "silk" && !ready()) return false;
     if (hazard.kind === "filament") {
       if (!active && hazard.swingY) return false;
       const segment = { ...alienFilamentPose(hazard, progress), width: hazard.thickness };
@@ -463,9 +699,9 @@ const ElementalArmoredVfx = (() => {
   }
 
   function ultimate(ctx, hazard, geometry, target, { active, quiet, alpha }) {
-    if (!ready()) return false;
     const type = hazard.ultimateKind;
     if (type !== "boneNova" && type !== "silkCage" && type !== "pincer") return false;
+    if (type === "silkCage" && !ready()) return false;
     const phase = geometry.progress;
     ctx.save(); ctx.globalAlpha *= alpha;
     if (type === "boneNova") {
@@ -490,8 +726,7 @@ const ElementalArmoredVfx = (() => {
           const bottom = side < 0 ? lip : rect.y + rect.height;
           jawBand(ctx, { ...rect, y, height: bottom - y }, side, phase, quiet, target);
         } else {
-          const y = side < 0 ? rect.y + rect.height : rect.y;
-          tell(ctx, { x1: rect.x, y1: y, x2: rect.x + rect.width, y2: y }, palettes.chitin.core);
+          jawBand(ctx, rect, side, span(hazard.age / hazard.warning, 0, 1), quiet, target, false);
         }
       }
       for (const [i, path] of geometry.segments.entries()) chitinPath(ctx, path, active, phase, quiet, i);
@@ -576,5 +811,5 @@ const ElementalArmoredVfx = (() => {
     }
     return true;
   }
-  return Object.freeze({ mechanic, signature, ultimate, ultimateNodes, charge, aftershock });
+  return Object.freeze({ mechanic, signature, ultimate, ultimateNodes, charge, aftershock, jawBand, needlePath });
 })();

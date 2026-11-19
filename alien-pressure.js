@@ -123,9 +123,8 @@ function drawPressureColumn(ctx, hazard, quiet) {
   const fade = Math.min(1, (1 - progress) * 4.5);
   ctx.save();
   ctx.translate(hazard.x, 0);
-  ctx.beginPath();ctx.rect(-half,0,half*2,height);ctx.clip();
   ctx.save();ctx.rotate(Math.PI/2);
-  NextgenVfx.drawWaterJet(ctx,height,half,half,quiet?0:hazard.age,.91*fade);
+  NextgenVfx.drawWaterJet(ctx,height,half,half,hazard.age,.91*fade,{quiet,through:true});
   ctx.restore();
   // A sequence of oblique compression collars travels down the fluid. Their
   // fine capillary rings carry a different speed from the large spray pockets.

@@ -303,9 +303,9 @@ async function loadStarBreakerModel(entry) {
     const prepare = () => {
       try {
         if (entry.evicted || !canUseStarBreakerModels()) return;
-        const journey = sceneryJourney();
-        preloadBossEnvironment(stage, journey.current);
-        preloadBossEnvironment(stage, journey.next);
+        const journey = sceneryView();
+        preloadBossEnvironment(stage, sceneryEnvironmentSector(journey.current));
+        preloadBossEnvironment(stage, sceneryEnvironmentSector(journey.next));
         warmStarBreakerModel(entry, stage);
       } finally {
         entry.warming = false;
@@ -466,7 +466,8 @@ function sampleBossWorldLight(type, x, y) {
 
 function lightBossModel(stage, model, type, pose, x, y, width, incident) {
   const { scene, ambience, key, rim, bounce, emitter, spill } = stage;
-  const { current, next, blend } = sceneryJourney();
+  const view = sceneryView(), blend = view.blend;
+  const current = sceneryEnvironmentSector(view.current), next = sceneryEnvironmentSector(view.next);
   const near = blend < .5 ? current : next;
   preloadBossEnvironment(stage, near);
   const map = stage.sectorMaps.get(near);
@@ -560,8 +561,7 @@ function drawBossContactShadow(ctx, x, y, width, height, incident, quiet) {
   if (incident) {
     dx = incident.keyDx; dy = -incident.keyDy;
   } else {
-    const { current, next, blend } = sceneryJourney();
-    [dx, dy] = bossSectorLights[blend < .5 ? current : next].aim;
+    [dx, dy] = bossSectorLights[sceneryEnvironmentSector(sceneryActiveSector())].aim;
   }
   ctx.translate(x - dx * width * .083, y + height * (.22 + dy * .085));
   ctx.rotate(dx * -.13);

@@ -227,9 +227,10 @@
 #start-screen .hangar-difficulty-options input:checked + span {
   border-color: var(--hangar-gold);
   color: #ffebc7;
-  box-shadow: none;
-  background: transparent;
+  box-shadow: inset 0 -1px var(--hangar-gold);
+  background: linear-gradient(0deg, #e9ca931d, transparent);
 }
+#start-screen .hangar-difficulty-options label:hover span { color: var(--hangar-paper); }
 #start-screen .hangar-loadout-panel > .hangar-start { min-height: 42px; }
 
 /* Sortie consoles retain native dialog focus and scroll behavior. */
@@ -541,6 +542,9 @@
   #start-screen .hangar-art img { width: min(80vw, 45vh); max-height: 100%; }
   #start-screen :is(.hangar-row, .fighter-option > span) { min-height: 44px; }
   #start-screen .fighter-option > span { padding-inline-end: 90px; }
+  #start-screen :is(.hangar-difficulty-options span, .hangar-configure) {
+    color: #fff3e1; font-weight: 620; text-shadow: 0 1px 3px #020305, 0 0 7px #020305;
+  }
   .game-over-screen { padding-inline: 20px; }
 }
 

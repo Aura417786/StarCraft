@@ -1,6 +1,7 @@
 "use strict";
 
 const progressionRules = Object.freeze({ maxDamage: 60, maxRate: 12, maxLanes: 5, maxDamageLevel: 24, maxRateLevel: 11 });
+const auricLaneRules = Object.freeze({ max: 8, fusionMultiplier: 1.25, spreadGrowth: .42, focusGrowth: .16 });
 const damageBreakpoints = [[1, 2.2], [3, 6], [6, 12], [10, 20], [15, 30], [24, 60]];
 const campaignWeaponFloors = [
   [3, 2, 1], [5, 3, 1], [7, 4, 1], [9, 5, 2], [11, 6, 2], [13, 7, 2],
@@ -24,17 +25,31 @@ const nightmareBossStageHealth = [1, 1.015, 1.03, 1.055];
 // switching targets. Estimate that loss before setting the entrance budget.
 const nightmareSeekerContact = [.96, .90, .77, .88, .82, .79, .84, .77, .70, .66, .71];
 
+function progressionLaneLimit(fighter = fighterProfile()) {
+  return fighter.id === "yellow" ? auricLaneRules.max : progressionRules.maxLanes;
+}
+
+function auricLaneWeight(lanes, focused) {
+  return 1 + (focused ? auricLaneRules.focusGrowth : auricLaneRules.spreadGrowth) * (lanes - 1);
+}
+
+function auricFusionDamageLog(focused) {
+  if (!(weapon.laneEvolutions > 0)) return 0;
+  const eightLaneWeight = auricLaneWeight(auricLaneRules.max, focused);
+  return Math.min(640, Math.log(eightLaneWeight) + weapon.laneEvolutions * Math.log(auricLaneRules.fusionMultiplier));
+}
+
 function nightmareBossHealth(type) {
   const [targetSeconds, bossFactor, bodyShare] = nightmareBossHealthProfiles[type];
   const stageFactor = nightmareBossStageHealth[type < 3 ? 0 : type < 6 ? 1 : type < 10 ? 2 : 3];
   const fighter = fighterProfile();
   const rate = Math.min(progressionRules.maxRate, 1 / weapon.interval);
-  const lanes = Math.max(1, Math.min(progressionRules.maxLanes, weapon.lanes));
+  const lanes = Math.max(1, Math.min(progressionLaneLimit(fighter), weapon.lanes));
   const base = weapon.damage * rate;
   // Estimate the appropriate boss-fight stance rather than the stance that
   // happened to be selected at spawn. Spread pellets don't all hit one core.
-  const focus = base * (1 + .16 * (lanes - 1));
-  const spread = base * (1 + (fighter.id === "yellow" ? .42 : .22) * (lanes - 1));
+  const focus = base * (fighter.id === "yellow" ? auricLaneWeight(lanes, true) : 1 + .16 * (lanes - 1));
+  const spread = base * (fighter.id === "yellow" ? auricLaneWeight(lanes, false) : 1 + .22 * (lanes - 1));
   let main, support;
   if (fighter.id === "blue") {
     const seeker = 1 + .065 * .70 * Math.min(1, Math.max(0, (weapon.damageLevel - 2) / 5));
@@ -43,7 +58,9 @@ function nightmareBossHealth(type) {
     // return most of those packets to the marked target.
     support = main * (1.18 / fighterCombatRules.ionStacks) * .80;
   } else if (fighter.id === "yellow") {
-    main = focus * .72 + spread * .08;
+    main = weapon.laneEvolutions > 0
+      ? base * (Math.exp(auricFusionDamageLog(true)) * .72 + Math.exp(auricFusionDamageLog(false)) * .08)
+      : focus * .72 + spread * .08;
     // Close spread activates three field pulses; reaching the boss while
     // keeping enough time on target makes only some recharges productive.
     support = Math.min(220, focus * .21) * 3 * fighterCombatRules.auricRegen * .58;
@@ -122,14 +139,18 @@ function combatPowerForLoadout(damage, rate, lanes) {
   return damage * rate * (1 + .35 * (lanes - 1));
 }
 function sortieCombatPower() {
-  const rate = progressionRateForLevel(weapon.speedLevel, fighterProfile().rate);
-  return combatPowerForLoadout(weapon.damage, rate, weapon.lanes)
+  const fighter = fighterProfile();
+  const rate = progressionRateForLevel(weapon.speedLevel, fighter.rate);
+  const power = fighter.id === "yellow" && weapon.laneEvolutions > 0
+    ? weapon.damage * rate * Math.exp(auricFusionDamageLog(false))
+    : combatPowerForLoadout(weapon.damage, rate, weapon.lanes);
+  return power
     * (typeof evolutionPowerMultiplier === "function" ? evolutionPowerMultiplier() : 1);
 }
 function baselinePowerForBoss(type) {
   const fighter = fighterProfile();
   const preset = progressionPresetForBoss(type);
-  const lanes = Math.min(progressionRules.maxLanes, fighter.lanes + preset.laneLevel - 1);
+  const lanes = Math.min(progressionLaneLimit(fighter), fighter.lanes + preset.laneLevel - 1);
   return combatPowerForLoadout(progressionDamageForLevel(preset.damageLevel, fighter.damage),
     progressionRateForLevel(preset.rateLevel, fighter.rate), lanes);
 }
@@ -171,8 +192,10 @@ function raiseWeaponFloor(preset) {
   const fighter = fighterProfile();
   progressionGrowDamage(Math.max(0, preset.damageLevel - (weapon.damageLevel ?? 1)));
   progressionGrowRate(Math.max(0, preset.rateLevel - weapon.speedLevel));
-  weapon.tier = Math.min(6, Math.max(weapon.tier, preset.laneLevel));
-  weapon.lanes = Math.min(progressionRules.maxLanes, Math.max(weapon.lanes, fighter.lanes + preset.laneLevel - 1));
+  if (!(fighter.id === "yellow" && weapon.laneEvolutions > 0)) {
+    weapon.tier = Math.min(6, Math.max(weapon.tier, preset.laneLevel));
+    weapon.lanes = Math.min(progressionLaneLimit(fighter), Math.max(weapon.lanes, fighter.lanes + preset.laneLevel - 1));
+  }
   reconcileShotCadence();
   updateWeaponDisplay();
 }

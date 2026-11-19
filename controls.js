@@ -483,7 +483,8 @@ function drawFlightDangerPattern(ctx, hazard) {
   } else if (kind === "seam") {
     strip(hazard.x, 0, hazard.x, viewport.height);
   } else if (Number.isFinite(hazard.ax) && Number.isFinite(hazard.bx)) {
-    strip(hazard.ax, hazard.ay, hazard.bx, hazard.by);
+    const pose = hazard.screenSpan && typeof finaleWirePose === "function" ? finaleWirePose(hazard) : hazard;
+    strip(pose.ax, pose.ay, pose.bx, pose.by);
   } else if (kind === "riftFold" && typeof riftSeams === "function") {
     for (const seam of riftSeams(hazard)) strip(...seam);
   } else if (kind === "ribCage" && typeof cageBars === "function") {

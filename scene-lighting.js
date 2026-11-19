@@ -64,10 +64,14 @@ function addSceneLightSource(x, y, radius, color, strength, endX = x, material =
   source.endX = endX; source.material = material;
 }
 
+function sceneLightProfile(index) {
+  return battlefieldSectors[index]?.light ?? sceneLightSectors[index] ?? sceneLightSectors[0];
+}
+
 function prepareSceneLighting(world) {
   if (typeof NextgenVfx !== "undefined") NextgenVfx.beginFrame();
-  const { current, next, blend } = sceneryJourney();
-  const from = sceneLightSectors[current] ?? sceneLightSectors[0], to = sceneLightSectors[next] ?? from;
+  const { current, next, blend } = sceneryView();
+  const from = sceneLightProfile(current), to = sceneLightProfile(next);
   const frame = sceneLightFrame;
   frame.width = world.width; frame.height = world.height;
   frame.sector = current; frame.next = next; frame.blend = blend;
@@ -174,7 +178,7 @@ function sceneLightField(index) {
   const tile = sceneLightTile(288, 162);
   if (!tile) return null;
   const { canvas, ctx } = tile;
-  const w = canvas.width, h = canvas.height, profile = sceneLightSectors[index];
+  const w = canvas.width, h = canvas.height, profile = sceneLightProfile(index);
   const x = profile.x * w, y = profile.y * h;
   const key = sceneLightColor(profile.key), fill = sceneLightColor(profile.fill);
   const shadow = ctx.createLinearGradient(x, y, w * .08, h * .79);

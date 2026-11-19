@@ -1,6 +1,8 @@
 # Star Breaker · 星际突围
 
-**v37.0-rc.1 · Abyssal Nightmare test build.** Choose Abyssal Nightmare under Sortie Setup, then select Start Game. Easy, Normal, and Hard are also available.
+**v37.1 · New boss routes and arenas.** Choose campaign difficulty on the main hangar screen and pick your fighter in Sortie Setup. All eleven bosses have their own arenas and movement challenges. Read the ghost trail, refractions, spores, and gravitational currents before committing to a counterattack.
+
+Hold Shift to boost with a flame matched to your fighter. Auric can build up to eight lanes. The next lane upgrade fuses them into one shot with 25% more total volley damage and a new color. Additional lanes share that firepower until the next fusion.
 
 Abyssal Nightmare adds enemy formations and coordinated elites. An eligible fighter costs one life when its entire hull leaves the left side of the field. Boss health locks on entry based on your fighter and current build. The final form enters a frenzy at 30% core health. Read the boss's movements, charge effects, and lit routes to evade attacks. Campaign and Boss Rush records are tracked by difficulty.
 
@@ -57,7 +59,7 @@ Blender-authored water, magma and singularity animation joins geometry-aligned s
 
 Pick a fighter, cross five sectors, and survive eleven alien boss finales. Star Breaker is a single-player, side-scrolling shooter for desktop browsers. **v24** compresses all 22 boss and finale models and loads battle scenery and faction music as the campaign progresses. Break a weak point, recognize the gold counter window, and commit your fire. Crimson rewards a fully charged shot, Azure chains marks, and Auric uses close-range suppression fields.
 
-[Public browser demo](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Previous trailer](media/trailer.mp4) · [中文说明](README.md)
+[Public browser demo](https://elaborate-caramel-136cdb.netlify.app/) · [Play on itch.io](https://aura417786.itch.io/star-breaker) · [Previous trailer](media/trailer.mp4) · [中文说明](README.md)
 
 Public demos may run different versions. Open the game over HTTP to enable its WebGL boss models.
 

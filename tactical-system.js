@@ -219,12 +219,13 @@ const TacticalSystem = (() => {
       pauseTelemetry.textContent = clock + (boss ? ` · ${boss.name}` : "");
       pauseRoute.hidden = pauseView !== "menu";
       if (!pauseRoute.hidden) {
-        const activeSector = battlefieldSectors[battlefieldState.sector];
+        const activeSector = battlefieldSectors[sceneryActiveSector()];
         if (activeSector) pauseScreen.style.setProperty("--pause-region", `url("${activeSector.asset}")`);
         pauseRoute.setAttribute("aria-label", tr("当前星域", "Current sector"));
         Array.from(pauseRoute.children).forEach((item, index) => {
-          const sector = battlefieldSectors[index];
+          const sector = index === battlefieldState.sector ? activeSector : sceneryRoute[index];
           item.textContent = tr(sector.name, sector.enName);
+          item.style.setProperty("--sector-color", sector.color);
           if (index === battlefieldState.sector) item.setAttribute("aria-current", "location");
           else item.removeAttribute("aria-current");
         });
@@ -275,7 +276,7 @@ const TacticalSystem = (() => {
     pauseScreen.querySelector(".pause-heading").append(pauseTelemetry);
     pauseRoute = sortieElement("ol", "", "pause-sector-route");
     pauseRoute.hidden = true;
-    for (const sector of battlefieldSectors) {
+    for (const sector of sceneryRoute) {
       const item = document.createElement("li");
       item.style.setProperty("--sector-color", sector.color);
       pauseRoute.append(item);

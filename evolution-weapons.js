@@ -467,11 +467,12 @@ function spawnFighterRound(bullet, volley, primary) {
     bullet.length *= .76;
   } else if (volley.startsWith("auric-")) {
     bullet.auric = volley;
-    bullet.color = "#ffb957"; bullet.core = "#fff4c9";
+    if (weapon.laneEvolutions > 0) bullet.auricFusion = true;
+    else { bullet.color = "#ffb957"; bullet.core = "#fff4c9"; }
     bullet.halfHeight *= 1.12;
   }
   bullet.launchX = bullet.x;
-  bullet.damage = Math.min(850, bullet.damage);
+  if (!bullet.auricFusion) bullet.damage = Math.min(850, bullet.damage);
   bullet.damageLog = Math.log(bullet.damage);
   if (primary) applyGuardPiercingRound(bullet);
   return bullet;
@@ -517,7 +518,8 @@ function fighterProjectileDamage(shot, target) {
   }
   if (!shot.auric) return shot;
   const close = isAuricCloseShot(shot, target);
-  const damage = Math.min(850, shot.damage * (close ? 1.19 : .86));
+  const baseDamage = shot.damage * (close ? 1.19 : .86);
+  const damage = shot.auricFusion ? baseDamage : Math.min(850, baseDamage);
   return { ...shot, damage, damageLog: Math.log(damage) };
 }
 function steerFighterRound(bullet, seconds) {

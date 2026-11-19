@@ -50,8 +50,11 @@ async function verifyAssets(page, base, manifest, report) {
     assert.ok(rows.has(name), "Release manifest omits " + name);
     selected.set(name, rows.get(name));
   }
+  if (rows.has("boss-mobility.js")) selected.set("boss-mobility.js", rows.get("boss-mobility.js"));
   for (const row of manifest.files) {
-    if (row.path.startsWith("assets/fighters/classic/") || row.path.startsWith("assets/vfx/nextgen/") || row.path.startsWith("assets/audio/encounters/") || row.path.startsWith("assets/vfx/materials/")) selected.set(row.path, row);
+    if (row.path.startsWith("assets/fighters/classic/") || row.path.startsWith("assets/vfx/nextgen/")
+        || row.path.startsWith("assets/audio/encounters/") || row.path.startsWith("assets/vfx/materials/")
+        || row.path.startsWith("assets/scenery/arenas/")) selected.set(row.path, row);
   }
   const files = Array.from(selected.values()).sort((a, b) => a.path.localeCompare(b.path));
   for (let start = 0; start < files.length; start += 4) {
@@ -121,6 +124,11 @@ async function visitor(page, base, out, report) {
     assert.ok(referenced.has(new URL(entry,base).href), "Homepage omits release resource "+entry);
   }
   await page.screenshot({path:path.join(out,"visitor-hangar.png")});
+  const homeDifficulty = page.locator('#hangar-home #hangar-difficulty label:has(input[value="nightmare"])');
+  if (report.version === "v37.1") {
+    assert.ok(await homeDifficulty.isVisible(), "Campaign difficulty is missing from the main menu");
+    await homeDifficulty.click();
+  }
   await page.locator("#start-button").click();
   await page.locator("#start-screen").waitFor({state:"hidden"});
   assert.equal(await page.locator("#campaign-opening").count(),0);
@@ -130,8 +138,10 @@ async function visitor(page, base, out, report) {
   await page.waitForFunction(() => typeof battleTime === "number" && battleTime > .10);
   await page.keyboard.down("ArrowDown");
   try { await page.waitForTimeout(250); } finally { await page.keyboard.up("ArrowDown"); }
-  report.battle = await page.evaluate(() => ({state, seconds:battleTime, fighter:sortieFighter, lives:player.lives}));
+  report.battle = await page.evaluate(() => ({state, seconds:battleTime, fighter:sortieFighter,
+    difficulty:sortieStats.difficulty, lives:player.lives}));
   assert.equal(report.battle.state,"battle");
+  if (report.version === "v37.1") assert.equal(report.battle.difficulty, "nightmare");
   await page.screenshot({path:path.join(out,"visitor-battle.png")});
   await page.locator("#pause-button").click();
   await page.locator("#pause-resume").waitFor({state:"visible"});

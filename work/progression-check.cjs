@@ -217,10 +217,17 @@ check("extreme pickups at late-game times stay inside the weapon budget and read
     isolated(`showScreen("battle",{fighter:"${ship}",seed:8871});battleTime=2400;
       for(let i=0;i<120;i++)for(const type of ["red","blue","yellow"])applyPowerup(type);
       momentum.remaining=10;firingStyle.mode="focus";shotCooldown=0;updateShooting(.05);`);
-    const stats = snapshot('({damage:weapon.damage,rate:1/effectiveShotInterval(),lanes:weapon.lanes, tier:weapon.tier, shots:bullets.map(s=>s.damage),text:damageDisplay.textContent})');
-    assert.ok(stats.damage <= 60 && stats.rate <= 12 + 1e-9 && stats.lanes <= 5 && stats.tier <= 6);
-    assert.ok(stats.shots.length >= 1 && stats.shots.every(value => Number.isFinite(value) && value > 0 && value < 1000));
-    assert.doesNotMatch(stats.text, /\d{4,}|10\^/);
+    const stats = snapshot('({damage:weapon.damage,rate:1/effectiveShotInterval(),lanes:weapon.lanes, tier:weapon.tier, fusions:weapon.laneEvolutions, shots:bullets.map(s=>s.damage),text:damageDisplay.textContent})');
+    assert.ok(stats.damage <= 60 && stats.rate <= 12 + 1e-9 && stats.lanes <= (ship === "yellow" ? 8 : 5) && stats.tier <= 6);
+    assert.ok(stats.shots.length >= 1 && stats.shots.every(value => Number.isFinite(value) && value > 0));
+    if (ship === "yellow") {
+      assert.equal(stats.fusions,15);
+      assert.ok(stats.shots[0] > 850 && stats.shots[0] < 5000);
+    } else {
+      assert.equal(stats.fusions,0);
+      assert.ok(stats.shots.every(value => value < 1000));
+    }
+    assert.ok(stats.text.length < 28);
   }
 });
 

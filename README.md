@@ -1,6 +1,8 @@
 # 星际突围 · Star Breaker
 
-**v37.0-rc.1 · 深渊极限独立测试版。** 在「出击配置」中选择「深渊极限」，再点击「开始游戏」。简单、普通和困难仍可选择。
+**v37.1 · 异形连招与战场更新。** 在机库主页直接选择战役难度。「出击配置」用于选择战机。11 只 Boss 各有自己的战场和走位机制。观察追影、折射、孢种和引力的变化，再抓住连招间的反击窗口。
+
+长按 Shift 加速时，赤焰、苍电和曜金的尾焰随各自配色。曜金可把弹道累积到八条。再拾取弹道升级会聚成一条，齐射总伤害提升 25%，弹色随之变化。之后增加弹道会把这份火力分摊到新弹道，下一次聚变再提升 25%。
 
 深渊极限增加敌机编队和精英协同。符合条件的敌机完全飞出屏幕左侧才扣一条命。Boss 出场时根据战机和当前配装锁定生命值，终局核心降到 30% 时会进入狂暴。观察 Boss 的动作、蓄力和战场亮起的路线来躲避连招。战役和首领连战按难度记录成绩。
 
@@ -59,9 +61,9 @@
 
 **首领连携与元素绝招。** 穿过海啸后还要挣脱漩涡，躲进石脊背面后要警惕回火，镜阵、丝网、孢巢和神经节点各有应对方法。看准封场倒计时和预警时锁定的应对方式，再抓住护壳破裂的输出窗口。普通敌机的实体弹仍可完美格挡并返还本次护盾，环境范围攻击不触发这一奖励。
 
-[![星际突围实机封面](media/promo-cover.jpg)](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/)
+[![星际突围实机封面](media/promo-cover.jpg)](https://elaborate-caramel-136cdb.netlify.app/)
 
-[公开试玩](https://star-breaker-aura-261107.huafeihua560.chatgpt.site/) · [itch.io 免费试玩](https://aura417786.itch.io/star-breaker) · [旧版 30 秒演示](media/trailer.mp4) · [English quick start](README.en.md)
+[公开试玩](https://elaborate-caramel-136cdb.netlify.app/) · [itch.io 免费试玩](https://aura417786.itch.io/star-breaker) · [旧版 30 秒演示](media/trailer.mp4) · [English quick start](README.en.md)
 
 公开入口可能运行不同版本。完整试玩建议通过 HTTP 打开游戏，以启用 WebGL Boss 模型。
 

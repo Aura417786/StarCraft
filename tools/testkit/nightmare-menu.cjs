@@ -5,7 +5,6 @@ const fs=require("node:fs");
 const path=require("node:path");
 const {chromium}=require("playwright");
 const {createPage}=require("./balance.cjs");
-const {openHangarPage,closeHangarPage}=require("./hangar-test-controls.cjs");
 
 async function main() {
   const game=path.resolve(process.argv[2]), out=path.resolve(process.argv[3]);
@@ -16,7 +15,7 @@ async function main() {
     for (const language of ["zh-CN","en"]) {
       const {page,errors}=await createPage(browser,game,false,{pageOptions:{viewport:{width:1280,height:720}}});
       await page.evaluate(lang=>setGameLanguage(lang),language);
-      await openHangarPage(page,"loadout");
+      assert.ok(await page.locator("#hangar-home #hangar-difficulty").isVisible());
       const choices=await page.locator("#hangar-difficulty input").evaluateAll(inputs=>inputs.map(input=>input.value));
       assert.deepEqual(choices,["easy","normal","hard","nightmare"]);
       const nightmare=page.locator('#hangar-difficulty label:has(input[value=nightmare])');
@@ -25,7 +24,6 @@ async function main() {
       await nightmare.click();
       assert.match(await page.locator("#hangar-difficulty-note").textContent(),language==="en"?/one life/:/一条生命/);
       await page.screenshot({path:path.join(out,language+"-sortie.png")});
-      await closeHangarPage(page,"loadout");
       await page.locator("#start-button").click();
       await page.waitForFunction(()=>state==="battle");
       const selected=await page.evaluate(()=>({difficulty:sortieStats.difficulty,enabled:isAbyssalNightmare(),

@@ -494,12 +494,13 @@ function refreshHangarDifficulty() {
   const picker = document.querySelector("#hangar-difficulty");
   if (!picker) return;
   document.querySelector("#hangar-difficulty-label").textContent = tr("战役难度", "Campaign difficulty");
-  document.querySelector("#hangar-difficulty-note").textContent = sortieSettings.difficulty === "nightmare"
-    ? tr("深渊极限 · 密集敌机与高速连招。敌机完全突破后方防线会扣除一条生命。",
-      "Abyssal Nightmare · Dense waves and faster combos. Enemies escaping behind the defense line cost one life each.")
-    : tr(
-    "仅调整 Boss 出招频率与弹速；血量由开战时 POWER 决定。",
-    "Boss attack pace and shot speed vary by difficulty. HP follows POWER at battle entry.");
+  const notes = {
+    easy: ["路线更宽、攻势较疏，适合熟悉各位首领的招式。", "Wider escape routes and fewer attacks give you time to learn each boss."],
+    normal: ["熟悉进攻路线，趁每轮攻势之间反击。", "Learn the attack routes and strike between sequences."],
+    hard: ["首领连招会封锁路线，抓住空档转向和反击。", "Boss combos close routes. Time your turns and counters."],
+    nightmare: ["连续封路与密集敌潮。每架失守敌机都会扣除一条生命。", "Tighter routes and denser waves. Every escaping fighter costs one life."],
+  };
+  document.querySelector("#hangar-difficulty-note").textContent = tr(...notes[sortieSettings.difficulty]);
   for (const radio of picker.querySelectorAll("input")) {
     radio.checked = radio.value === sortieSettings.difficulty;
     radio.nextElementSibling.textContent = sortieWord(radio.value);

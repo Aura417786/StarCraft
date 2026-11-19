@@ -171,7 +171,7 @@ function finaleMirror(target, bounds) {
     const ray = finaleHazard(target, "wire", { ax: index ? target.x : bounds.left - 24,
       ay: clamp(y + height * sign, bounds.top - 18, bounds.bottom + 18),
       bx: index ? bounds.left - 30 : bounds.right + 32, by: clamp(y - height * sign, bounds.top, bounds.bottom),
-      width: 16, warning: 1.08 + index * .32, color: "#c5bdff", material: "prism" });
+      width: 16, warning: 1.08 + index * .32, color: "#c5bdff", material: "prism", screenSpan: true });
     target.finale.mirrorTurnUntil=target.finale.age+ray.warning+Math.max(.72,ray.duration);
   }
 }
@@ -268,10 +268,13 @@ function buildBossFinaleCombo(target,bounds,side) {
   const x=player.x,y=player.y,material=alienPressurePlans[target.type].material;
   const gap=finaleGap(bounds,side),radius=Math.max(20,Math.min(62,bounds.height*.13));
   const nightmare = isAbyssalNightmare();
+  const custom = typeof BossMobility !== "undefined" && BossMobility.enabled();
   const narrow = nightmare && bounds.width < player.width * .70;
   const rhythm = encounterRhythms[target.type];
+  const tempoIncrease = nightmare ? (f.frenzySince === undefined ? 1.17 : 1.29) + (custom ? .14 : 0)
+    : custom && sortieStats.difficulty === "hard" && f.beat > 1 ? 1.1 : 1;
   const tempo = Math.max(1, Math.min(1.14, target.scaling?.tempoMul ?? 1))
-    * (target.hp < .4 ? 1.06 : 1) * (nightmare ? (f.frenzySince === undefined ? 1.17 : 1.29) : 1);
+    * (target.hp < .4 ? 1.06 : 1) * tempoIncrease;
   // The next charge may begin during a successful dodge's exposure window.
   // Its new vent schedule cannot erase an existing one.
   if (nightmare && f.age >= (f.ventOpenAt ?? 0) && f.age < f.openUntil) {
@@ -290,10 +293,26 @@ function buildBossFinaleCombo(target,bounds,side) {
       type = "blast";
       values = { ...values, y, radius: player.height * .48 };
     }
-    const h = fractured
-      ? finaleHazard(target,"resonance",{...BossResonance.cast(target,true),node:values.node})
-      : finaleHazard(target,type,{...values,material});
+    if (narrow && f.mode === "fusion" && type === "vent") {
+      // Portrait removes the normal sideways escape. Give the pilot a
+      // reachable altitude through the receding ring before this vent seals.
+      values = { ...values, gap: { ...values.gap, half: Math.max(values.gap.half, bounds.height * .145) } };
+    }
+    // Each species alternates its classic geometry with a move that forces
+    // a different response. The egg's edge-to-edge release remains a finisher.
+    const customStage = target.type % 2 || f.mode === "claws" ? 2 : 1;
+    const mobile = custom && !nightmare && number === customStage && f.beat % 3 !== 0;
+    const h = mobile
+      ? finaleHazard(target, "mobility", { ...BossMobility.options({ type: target.type, lockX: x, lockY: y }, bounds,
+        { side, volley: true }), node: values.node })
+      : fractured ? finaleHazard(target,"resonance",{...BossResonance.cast(target,true),node:values.node})
+        : finaleHazard(target,type,{...values,material});
     h.warning += (number===1?rhythm.finaleIntercept:rhythm.finaleFinish)/tempo;
+    const previous = f.hazards.slice(begin).filter(contact => contact.comboStage === number - 1);
+    h.warning = Math.max(h.warning, Math.min(...previous.map(contact => contact.warning)) + .22);
+    if (narrow && f.mode === "fusion" && type === "vent" && h.type === "vent") {
+      h.warning = Math.max(h.warning, ...previous.map(contact => contact.warning + contact.duration + .36));
+    }
     h.duration=Math.max(.8,h.duration);
     h.comboStage=number;h.comboRole=number===1?"intercept":"punish";
     h.tellAt=Math.max(0,h.warning-1.5);
@@ -305,7 +324,8 @@ function buildBossFinaleCombo(target,bounds,side) {
     : gap.center;
   if(f.mode==="egg") {
     stage(1,"blast",{x,y:flankOfGap,radius:radius*.8,duration:1});
-    wire(2,target.x,target.y,bounds.left,y,player.height*.36);
+    const jet = wire(2,target.x,target.y,bounds.left,y,player.height*.36);
+    jet.screenSpan = jet.type === "wire";
   } else if(f.mode==="bones") {
     const intact=f.nodes.filter(node=>node.hp>0);
     stage(1,"seam",{x,width:Math.max(14,player.width*.3),node:intact[0]?.index});
@@ -357,13 +377,16 @@ function buildBossFinaleCombo(target,bounds,side) {
     const first = finisher + pursuit.gap * .65;
     const frenzy = f.frenzySince !== undefined;
     const insert = (number, at, advanced, lockX, lockY, gapY, direction) => {
-      const values = nightmarePursuit(target, bounds, lockX, lockY, gapY, direction, advanced);
-      const hazard = finaleHazard(target, "resonance", values);
+      const mobile = custom && number === 4;
+      const values = mobile
+        ? BossMobility.options({ type: target.type, lockX, lockY }, bounds, { side: direction, volley: true, strong: frenzy })
+        : nightmarePursuit(target, bounds, lockX, lockY, gapY, direction, advanced);
+      const hazard = finaleHazard(target, mobile ? "mobility" : "resonance", values);
       hazard.warning = at;
       hazard.tellAt = at - 1.4;
       hazard.comboStage = number;
       hazard.comboRole = number === 5 ? "frenzy" : "pursuit";
-      hazard.trackNightmareExit = number !== 3;
+      hazard.trackNightmareExit = !mobile && number !== 3;
     };
     insert(3, first, false, x, y, gap.center, side);
     const edgeX = clamp(x + (x < bounds.left + bounds.width / 2 ? 1 : -1) * bounds.width * .22,
@@ -422,6 +445,7 @@ function updateBossFinale(target, seconds) {
     const crossed = hazard.age < hazard.warning && hazard.age + seconds >= hazard.warning;
     hazard.previousAge = hazard.age;
     hazard.age += seconds;
+    if (hazard.type === "mobility") BossMobility.advance(hazard);
     if (f.mode==="egg" && hazard.type==="tide" && !hazard.ridden && hazard.age>=hazard.warning
       && hazard.age<hazard.warning+hazard.duration
       && Math.abs(player.y-hazard.gap.center)<hazard.gap.half-player.height*.16
@@ -492,6 +516,34 @@ function finaleSegmentDistance(x, y, ax, ay, bx, by) {
   return Math.hypot(x - ax - dx * t, y - ay - dy * t);
 }
 
+// Some arena-scale strikes travel down the entire locked axis. Clamp the
+// infinite axis to the actual view plus a small overscan for the luminous halo.
+function finaleWirePose(hazard) {
+  const { ax, ay, bx, by } = hazard;
+  if (!hazard.screenSpan) return hazard;
+  const width = viewport.width;
+  const height = viewport.height;
+  const previous = hazard.wirePose;
+  if (previous?.sourceX === ax && previous.sourceY === ay &&
+      previous.targetX === bx && previous.targetY === by &&
+      previous.roomWidth === width && previous.roomHeight === height) return previous;
+  const dx = bx - ax, dy = by - ay;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return hazard;
+  const pad = Math.max(28, hazard.width * 2);
+  const tx1 = Math.abs(dx) > 1e-6 ? (-pad - ax) / dx : -Infinity;
+  const tx2 = Math.abs(dx) > 1e-6 ? (width + pad - ax) / dx : Infinity;
+  const ty1 = Math.abs(dy) > 1e-6 ? (-pad - ay) / dy : -Infinity;
+  const ty2 = Math.abs(dy) > 1e-6 ? (height + pad - ay) / dy : Infinity;
+  const start = Math.max(Math.min(tx1, tx2), Math.min(ty1, ty2));
+  const end = Math.min(Math.max(tx1, tx2), Math.max(ty1, ty2));
+  if (start > end) return hazard;
+  hazard.wirePose = { sourceX: ax, sourceY: ay, targetX: bx, targetY: by,
+    roomWidth: width, roomHeight: height,
+    ax: ax + dx * start, ay: ay + dy * start,
+    bx: ax + dx * end, by: ay + dy * end };
+  return hazard.wirePose;
+}
+
 function finaleTideX(hazard, y, time) {
   const p = clamp((time - hazard.warning) / hazard.duration, 0, 1);
   const arc = Math.cos((y / viewport.height - .5) * Math.PI) * Math.min(60, viewport.width * .06);
@@ -505,6 +557,7 @@ function bossFinaleContact(target) {
   const radius = player.height * .16;
   return target.finale.hazards.find(hazard => {
     if (hazard.hitPlayer || hazard.age < hazard.warning || hazard.age >= hazard.warning+hazard.duration) return false;
+    if (hazard.type === "mobility") return BossMobility.hits(hazard, player);
     if (hazard.type === "resonance") return BossResonance.hits(hazard, player);
     if (hazard.type === "tide") {
       if (Math.abs(player.y - hazard.gap.center) <= Math.max(0, hazard.gap.half - radius)) return false;
@@ -525,7 +578,8 @@ function bossFinaleContact(target) {
       const edge = hazard.radius * (hazard.age - hazard.warning) / hazard.duration;
       return Math.abs(Math.hypot(player.x - hazard.x, player.y - hazard.y) - edge) < hazard.width + radius;
     }
-    return finaleSegmentDistance(player.x, player.y, hazard.ax, hazard.ay, hazard.bx, hazard.by) < hazard.width / 2 + radius;
+    const { ax, ay, bx, by } = finaleWirePose(hazard);
+    return finaleSegmentDistance(player.x, player.y, ax, ay, bx, by) < hazard.width / 2 + radius;
   });
 }
 
@@ -663,13 +717,15 @@ function drawFinaleVent(ctx, hazard, active, progress, quiet) {
 
 function drawFinaleWire(ctx, hazard, active, progress, quiet) {
   const half = hazard.width / 2;
-  drawMaterialRay(ctx, { x1: hazard.ax, y1: hazard.ay, x2: hazard.bx, y2: hazard.by,
+  const { ax, ay, bx, by } = finaleWirePose(hazard);
+  drawMaterialRay(ctx, { x1: ax, y1: ay, x2: bx, y2: by,
     left: half, right: half, kind: hazard.material === "prism" ? "glass" : hazard.material,
-    active, phase: progress, age: hazard.age }, quiet);
+    active, phase: progress, age: hazard.age, through: hazard.screenSpan }, quiet);
 }
 
 function drawFinaleHazard(ctx, hazard, quiet, owner = boss) {
   if (hazard.age < (hazard.tellAt??0)) return;
+  if (hazard.type === "mobility") { BossMobility.draw(ctx, hazard, quiet); return; }
   if (hazard.type === "resonance") { BossResonance.draw(ctx, hazard, quiet); return; }
   const active = hazard.age >= hazard.warning;
   const progress = active ? clamp((hazard.age - hazard.warning) / hazard.duration, 0, 1)

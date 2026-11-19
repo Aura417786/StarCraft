@@ -29,8 +29,8 @@ async function testSortie(browser, fighter, difficulty, firstTraining, legacyPro
     assert.equal(await page.locator("#replay-intro-button").count(),0);
     await openHangarPage(page,"loadout");
     await page.locator(`#fighter-picker label[data-fighter="${fighter}"]`).click();
-    await page.locator(`#hangar-difficulty label:has(input[value="${difficulty}"])`).click();
     await closeHangarPage(page,"loadout");
+    await page.locator(`#hangar-difficulty label:has(input[value="${difficulty}"])`).click();
     await page.locator("#start-button").click();
     await page.waitForFunction(()=>state==="battle",null,{timeout:5000});
     const launch=await page.evaluate(()=>({

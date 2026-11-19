@@ -94,8 +94,8 @@ async function main(){
     const {page,errors}=await createPage(browser,path.resolve(game),true);
     await page.locator("#hangar-loadout").click();
     await page.locator('#fighter-picker label[data-fighter="'+fighter+'"]').click();
-    await page.locator('#hangar-difficulty label:has(input[value="'+difficulty+'"])').click();
     await page.locator("#hangar-back-loadout").click();
+    await page.locator('#hangar-difficulty label:has(input[value="'+difficulty+'"])').click();
     await page.evaluate(installPilot,{seed,route});
     await page.locator("#start-button").click();
     const start=await page.evaluate(()=>({state,lives:player.lives,hp:player.maxLives,fighter:sortieFighter,

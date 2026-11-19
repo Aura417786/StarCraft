@@ -45,7 +45,7 @@ function journeyBossFreeFor(seconds) {
 }
 
 function journeyEarliest(location, id) {
-  return location.leg >= battlefieldSectors.length ? 3 : journeyScenes[id].earliest;
+  return location.leg >= sceneryRoute.length ? 3 : journeyScenes[id].earliest;
 }
 
 function journeyGravityCanWarn() {

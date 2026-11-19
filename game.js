@@ -81,8 +81,7 @@ function fighterProfile() { return fighterProfiles[sortieFighter]; }
 
 // interval 是发射间隔（秒），speed 是子弹每秒前进的距离。
 const weapon = { interval: 1 / fighterProfiles.red.rate, speed: 720, length: 26,
-  damage: fighterProfiles.red.damage, damageLevel: 1, speedLevel: 1, lanes: fighterProfiles.red.lanes, tier: 1 };
-const maxWeaponLanes = 5;
+  damage: fighterProfiles.red.damage, damageLevel: 1, speedLevel: 1, lanes: fighterProfiles.red.lanes, tier: 1, laneEvolutions: 0 };
 const weaponPalettes = [
   { name: "黄色", english: "Yellow", color: "#ffe16a", core: "#fff8d4" },
   { name: "绿色", english: "Green", color: "#6df59b", core: "#e3ffea" },
@@ -353,7 +352,7 @@ function updateFighterSelection() {
   document.querySelector("#fighter-label").textContent = tr(...fighter.label);
   document.querySelector("#fighter-code").textContent = fighter.code;
   document.querySelector("#fighter-rate").textContent = tr(`${fighter.rate} 次/秒`, `${fighter.rate}/s`);
-  document.querySelector("#fighter-lanes").textContent = String(fighter.lanes);
+  document.querySelector("#fighter-lanes").textContent = `${fighter.lanes} → ${progressionLaneLimit(fighter)}`;
   document.querySelector("#fighter-damage").textContent = String(fighter.damage);
   document.querySelector("#fighter-ultimate").textContent = ultimateName(fighter.id);
   document.querySelector("#fighter-ultimate-detail").textContent = fighterWeaponCopy(fighter.id) + " · " + tr(...fighter.special);
@@ -717,8 +716,9 @@ function resetWeapons(preserveUpgrades = true) {
     const preset = typeof sortieStartingUpgrades === "function" ? sortieStartingUpgrades() : {};
     weapon.speedLevel = progressionRank(preset.rateLevel, progressionRules.maxRateLevel);
     weapon.damageLevel = progressionRank(preset.damageLevel, progressionRules.maxDamageLevel);
-    weapon.lanes = Math.min(maxWeaponLanes, fighter.lanes + Math.max(0, (preset.laneLevel ?? 1) - 1));
+    weapon.lanes = Math.min(progressionLaneLimit(fighter), fighter.lanes + Math.max(0, (preset.laneLevel ?? 1) - 1));
     weapon.tier = Math.min(6, preset.laneLevel ?? 1);
+    weapon.laneEvolutions = 0;
     weapon.damage = progressionDamageForLevel(weapon.damageLevel, fighter.damage);
     weapon.interval = 1 / progressionRateForLevel(weapon.speedLevel, fighter.rate);
   }
@@ -727,15 +727,30 @@ function resetWeapons(preserveUpgrades = true) {
 }
 function updateWeaponDisplay() {
   const rate = progressionFormatLog(-Math.log(effectiveShotInterval()));
-  const lanes = weapon.lanes + "/" + maxWeaponLanes;
+  const lanes = weapon.lanes + "/" + progressionLaneLimit();
   speedDisplay.textContent = tr(weapon.speedLevel + "级 · " + rate + "次/秒", "Lv " + weapon.speedLevel + " · " + rate + "/s") + (isOverdriveActive() ? tr(" · 暴走", " · Overdrive") : "");
-  lanesDisplay.textContent = tr(weapon.tier + "阶 · " + lanes + "条", "T" + weapon.tier + " · " + lanes);
+  lanesDisplay.textContent = weapon.laneEvolutions > 0
+    ? tr(`聚变 ${weapon.laneEvolutions} · ${lanes}条`, `Fusion ${weapon.laneEvolutions} · ${lanes}`)
+    : tr(weapon.tier + "阶 · " + lanes + "条", "T" + weapon.tier + " · " + lanes);
   damageDisplay.textContent = tr(`Lv ${weapon.damageLevel} · ${formattedProjectileDamage()} 点`,
     `Lv ${weapon.damageLevel} · ${formattedProjectileDamage()} dmg`);
 }
-function weaponPalette() { return weaponPalettes[(weapon.tier - 1) % weaponPalettes.length]; }
-function projectileDamage() { return Math.exp(Math.min(690, weaponDamageLog())); }
-function formattedProjectileDamage() { return progressionFormatLog(weaponDamageLog()); }
+function weaponPalette() {
+  const colorStep = sortieFighter === "yellow" ? weapon.laneEvolutions ?? 0 : weapon.tier - 1;
+  return weaponPalettes[colorStep % weaponPalettes.length];
+}
+function projectileDamage() {
+  return Math.exp(Math.min(690, weaponDamageLog() + auricFusionDamageLog(firingStyle.mode === "focus")));
+}
+function formattedProjectileDamage() {
+  if (sortieFighter !== "yellow") return progressionFormatLog(weaponDamageLog());
+  const focused = firingStyle.mode === "focus";
+  const volleyWeight = weapon.laneEvolutions > 0 ? 1 : auricLaneWeight(weapon.lanes, focused);
+  const perRound = projectileDamage() * volleyWeight / (focused ? 1 : weapon.lanes);
+  if (perRound < 1000) return String(Number(perRound.toFixed(2)));
+  const language = document.documentElement?.lang || undefined;
+  return new Intl.NumberFormat(language, { notation: "compact", maximumFractionDigits: 1 }).format(perRound);
+}
 function shotLanes() { return firingLanes(); }
 function powerupGainForTime(type = "red") {
   return type === "red" && battleTime >= 360 ? 2 : 1;
@@ -752,14 +767,19 @@ function applyPowerup(type) {
     return true;
   }
   const gain = powerupGainForTime(type);
-  const previousTier = weapon.tier, previousLanes = weapon.lanes;
+  const previousTier = weapon.tier, previousLanes = weapon.lanes, previousFusions = weapon.laneEvolutions;
   let capped = false;
   if (type === "blue") {
     const growth = progressionGrowRate(gain);
     capped = growth.after === growth.before;
     reconcileShotCadence();
   } else if (type === "yellow") {
-    if (weapon.lanes < maxWeaponLanes) weapon.lanes++;
+    if (weapon.lanes < progressionLaneLimit()) weapon.lanes++;
+    else if (sortieFighter === "yellow") {
+      weapon.lanes = 1;
+      weapon.laneEvolutions++;
+      weapon.tier = Math.min(weaponPalettes.length, weapon.laneEvolutions + 1);
+    }
     else if (weapon.tier < weaponPalettes.length) weapon.tier++;
     else capped = true;
   } else if (type === "red") {
@@ -771,6 +791,8 @@ function applyPowerup(type) {
   if (capped) {
     gainUltimateEnergy(.15, "enemy");
     powerupNotice.textContent = tr("已达上限 · 转为少量大招能量", "Upgrade capped · Converted to a little ultimate energy");
+  } else if (weapon.laneEvolutions > previousFusions) {
+    powerupNotice.textContent = tr(`八道聚变 · ${palette.name} · 齐射伤害 ×1.25`, `Eight-lane fusion · ${palette.english} · Volley damage ×1.25`);
   } else if (type === "yellow" && weapon.tier > previousTier) {
     powerupNotice.textContent = tr(`弹道校准 · ${palette.name} · ${lanesDisplay.textContent}`,
       `Lane calibration · ${palette.english} · ${lanesDisplay.textContent}`);

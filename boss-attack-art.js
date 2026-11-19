@@ -523,7 +523,7 @@ function drawRayOrganic(ctx, kind, material, length, left, right, age, quiet) {
   ctx.stroke();
 }
 
-function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase, age }, quiet) {
+function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase, age, through }, quiet) {
   if (typeof BossLivingMaterials !== "undefined" && left === right &&
       BossLivingMaterials.ray(ctx,kind,x1,y1,x2,y2,left,age,active,phase,quiet)) return;
   const dx = x2 - x1, dy = y2 - y1;
@@ -540,18 +540,20 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
   ctx.translate(x1, y1);
   ctx.rotate(Math.atan2(dy, dx));
   const width = Math.max(left, right, 1);
-  if (typeof NextgenVfx !== "undefined" && ["water", "magma", "void"].includes(kind)) {
+  if (typeof NextgenVfx !== "undefined" && kind === "water") {
+    const opacity = active ? .91 : .29 + phase * .25;
+    NextgenVfx.drawWaterJet(ctx, length, left, right, age, opacity, { quiet, through });
+    ctx.restore();
+    return;
+  }
+  if (typeof NextgenVfx !== "undefined" && (kind === "magma" || kind === "void")) {
     const opacity = active ? .91 : .24 + phase * .25;
-    ctx.beginPath();ctx.moveTo(0,-left);ctx.lineTo(length,-right);ctx.lineTo(length,right);ctx.lineTo(0,left);ctx.closePath();ctx.clip();
-    if (kind === "water") NextgenVfx.drawWaterJet(ctx, length, left, right, age, opacity);
-    else if (kind === "magma") NextgenVfx.drawMagmaFissure(ctx, {x1:0,y1:0,x2:length,y2:0,width:width*2}, material, age, opacity);
+    if (kind === "magma") NextgenVfx.drawMagmaFissure(ctx, {x1:0,y1:0,x2:length,y2:0,width:width*2}, material, age, opacity);
     else NextgenVfx.drawRift(ctx, {x1:0,y1:0,x2:length,y2:0,width:width*2}, material, age, opacity);
-    ctx.strokeStyle=material.rim;ctx.globalAlpha=active?.64:.80;ctx.lineWidth=1;
-    ctx.setLineDash(active?[]:[7,6]);ctx.beginPath();ctx.moveTo(0,-left);ctx.lineTo(length,-right);ctx.moveTo(0,left);ctx.lineTo(length,right);ctx.stroke();ctx.setLineDash([]);
     ctx.restore();return;
   }
   const depth = ctx.createLinearGradient(0, width * litSide, 0, -width * litSide);
-  depth.addColorStop(0, material.rim);
+  depth.addColorStop(0, material.rim + "12");
   if (shaded) {
     // One surface catches the light. The opposite face keeps the material
     // colour and depth even when several attacks overlap.
@@ -559,26 +561,30 @@ function drawMaterialRay(ctx, { x1, y1, x2, y2, left, right, kind, active, phase
     depth.addColorStop(.38, material.dark);
     depth.addColorStop(.55, kind === "void" ? "#020108" : material.mid);
     depth.addColorStop(.85, material.dark);
-    depth.addColorStop(1, material.mid);
+    depth.addColorStop(1, material.mid + "12");
   } else {
     depth.addColorStop(.24, material.dark);
     depth.addColorStop(.5, kind === "void" ? "#020108" : material.mid);
     depth.addColorStop(.76, material.dark);
-    depth.addColorStop(1, material.rim);
+    depth.addColorStop(1, material.rim + "12");
   }
   ctx.globalAlpha = active ? .82 : .24 + phase * .27;
   ctx.fillStyle = depth;
   ctx.beginPath();
-  ctx.moveTo(0, -left);
-  ctx.lineTo(length, -right);
-  ctx.lineTo(length, right);
-  ctx.lineTo(0, left);
+  const steps = quiet ? 10 : 22;
+  const time = quiet ? 0 : age;
+  for (let i = 0; i <= steps * 2 + 1; i++) {
+    const side = i <= steps ? -1 : 1;
+    const f = (side < 0 ? i : steps * 2 + 1 - i) / steps;
+    const x = f * length;
+    const widthAt = (left + (right - left) * f)
+      * Math.min(1, Math.sin(Math.PI * f) * 5)
+      * (.92 + .078 * Math.sin(x * .042 + side - time * 7));
+    if (!i) ctx.moveTo(x, side * widthAt);
+    else ctx.lineTo(x, side * widthAt);
+  }
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = material.rim;
-  ctx.lineWidth = active ? 1.5 : 1.1;
-  ctx.globalAlpha = active ? .83 : .53 + phase * .28;
-  ctx.stroke();
 
   ctx.save();
   ctx.clip();
@@ -833,6 +839,10 @@ function drawAlienSignatureHazard(ctx, hazard, quiet) {
   const elemental = typeof bossElementalVfx === "function" && !boss?.finale ? bossElementalVfx(boss?.type) : null;
   ctx.save();
   const species = boss?.type;
+  if ((species === 1 || species === 4) && elemental?.signature?.(ctx, hazard, { active, progress, quiet })) {
+    ctx.restore();
+    return true;
+  }
   if (species > 0 && typeof BossLivingMaterials !== "undefined" &&
       (hazard.kind === "beam" || hazard.kind === "seam" || hazard.kind === "filament" && !hazard.flare && !hazard.swingY)) {
     const vertical = hazard.kind === "seam";
@@ -845,7 +855,10 @@ function drawAlienSignatureHazard(ctx, hazard, quiet) {
       ctx.restore();return true;
     }
   }
-  if (elemental?.signature?.(ctx, hazard, { active, progress, quiet })) { ctx.restore(); return true; }
+  if (species !== 1 && species !== 4 && elemental?.signature?.(ctx, hazard, { active, progress, quiet })) {
+    ctx.restore();
+    return true;
+  }
   if (hazard.kind === "tide") drawSignatureTide(ctx, hazard, material, active, progress, quiet);
   else if (hazard.kind === "vortex") drawSignatureVortex(ctx, hazard, material, active, progress, quiet);
   else if (hazard.kind === "filament") drawSignatureFilament(ctx, hazard, active, progress, quiet);

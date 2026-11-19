@@ -343,7 +343,12 @@ function alienVortexCore(hazard, progress) {
 function alienCurrentVector() {
   let vx = 0;
   let vy = 0;
+  const mobility = { x: 0, y: 0 };
   for (const hazard of bossHazards) {
+    if (hazard.kind === "mobility") {
+      BossMobility.vector(hazard, player, mobility);
+      continue;
+    }
     const arenaForce = hazard.kind === "ultimate" ? bossUltimateVector(hazard, player) : alienMechanicVector(hazard, player);
     if (arenaForce) { vx += arenaForce.x; vy += arenaForce.y; }
     if (hazard.kind !== "vortex" || !hazard.strength || hazard.age < hazard.warning) continue;
@@ -356,6 +361,12 @@ function alienCurrentVector() {
     vx += (dx * inward - dy * lateral) / distance;
     vy += (dy * inward + dx * lateral) / distance;
   }
+  if (boss?.finale) {
+    for (const hazard of boss.finale.hazards) {
+      if (hazard.type === "mobility") BossMobility.vector(hazard, player, mobility);
+    }
+  }
+  vx += mobility.x; vy += mobility.y;
   const limit = Math.min(1, 175 / Math.max(1, Math.hypot(vx, vy)));
   return { x: vx * limit, y: vy * limit };
 }
@@ -615,6 +626,7 @@ function updateBossProjectiles(seconds) {
     const hazard = bossHazards[i];
     const crossing = hazard.age < hazard.warning;
     hazard.age += seconds;
+    if (hazard.kind === "mobility") BossMobility.advance(hazard);
     if (!hazard.tellSoundPlayed && hazard.age >= (hazard.tellAt ?? 0)) {
       lockNightmarePursuit(hazard);
       hazard.tellSoundPlayed=true;playAlienHazardCue(hazard,"tell");
@@ -649,6 +661,7 @@ function alienHazardHitsPlayer(hazard) {
   if (hazard.age < hazard.warning || hazard.age >= hazard.warning + hazard.duration) return false;
   if (hazard.kind === "pressureSeal") return pressureSealHitsPlayer(hazard);
   if (hazard.kind === "ultimate") return bossUltimateHitsPlayer(hazard);
+  if (hazard.kind === "mobility") return BossMobility.hits(hazard, player);
   if (hazard.kind === "resonance") return BossResonance.hits(hazard, player);
   if (alienMechanicKinds.has(hazard.kind)) return alienMechanicHits(hazard, player);
   const radius = player.height * .16;
@@ -686,6 +699,7 @@ function alienHazardHitsPlayer(hazard) {
 
 function drawAlienHazard(ctx, hazard, quiet) {
   if (hazard.age < (hazard.tellAt ?? 0)) return;
+  if (hazard.kind === "mobility") { BossMobility.draw(ctx, hazard, quiet); return; }
   if (hazard.kind === "resonance") { BossResonance.draw(ctx, hazard, quiet); return; }
   if (hazard.kind === "ultimate") {
     if(typeof drawBossUltimateHazard === "function") drawBossUltimateHazard(ctx,hazard,quiet);

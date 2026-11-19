@@ -52,9 +52,10 @@ const shipReflectionLights = {
 };
 
 function shipReflectionLight() {
-  const { current, next, blend } = sceneryJourney();
-  const from = shipReflectionLights[battlefieldSectors[current].id];
-  const to = shipReflectionLights[battlefieldSectors[next].id];
+  const { current, next, blend } = sceneryView();
+  const currentSector = battlefieldSectors[current], nextSector = battlefieldSectors[next];
+  const from = currentSector.reflect ?? shipReflectionLights[currentSector.id];
+  const to = nextSector.reflect ?? shipReflectionLights[nextSector.id];
   const mix = (a, b) => a + (b - a) * blend;
   const channels = from.channels.map((value, index) => mix(value, to.channels[index]));
   const side = mix(from.side, to.side);

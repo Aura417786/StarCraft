@@ -499,6 +499,7 @@ function drawBossUltimateArt(ctx, target, scene, layer, chargeDrawn = false) {
   if (!chargeDrawn && scene.stage === "charge") drawUltimateChargeIdentity(ctx, target, scene);
   for (const hazard of bossHazards) {
     if (hazard.kind !== "ultimate" || hazard.age < (hazard.tellAt || 0) || hazard.age >= hazard.warning + hazard.duration) continue;
+    if (hazard.age < hazard.warning && (hazard.ultimateKind === "boneNova" || hazard.ultimateKind === "pincer")) continue;
     drawBossUltimateGeometry(ctx, hazard, bossUltimateGeometry(hazard), target);
   }
   if (scene.ultimateKind === "magmaRift") drawCinderCoolingAsh(ctx, scene);
@@ -639,31 +640,36 @@ function drawBossUltimateHazard(ctx, hazard, quiet) {
   if (!active) {
     ctx.save();
     ultimateClipDanger(ctx, hazard);
-    ctx.strokeStyle = "#e7d8c2";
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = .68;
-    ctx.setLineDash([7, 6]);
-    for (const rect of geometry.rects) {
-      const { x, y, width, height } = rect;
-      ctx.save();
-      const charge = clamp(hazard.age / Math.max(.01,hazard.warning),0,1);
-      drawBossFieldWash(ctx,x,y,width,height,mat.rim,.48+.32*charge,quiet?0:hazard.age);
-      ctx.globalAlpha=.52+.22*charge;
-      bossRangeMarks(ctx,x,y,width,height,mat.rim,height>width);
-      ctx.restore();
-    }
-    for (const circle of geometry.circles) {
-      ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2); ctx.stroke();
-      if (circle.innerRadius > 0) {
-        ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.innerRadius, 0, Math.PI * 2); ctx.stroke();
+    const armoredTelegraph = (hazard.ultimateKind === "boneNova" || hazard.ultimateKind === "pincer")
+      && bossElementalVfx(boss.type)?.ultimate?.(ctx, hazard, geometry, boss,
+        { active: false, quiet, alpha: .62 + .20 * clamp(hazard.age / hazard.warning, 0, 1) });
+    if (!armoredTelegraph) {
+      ctx.strokeStyle = "#e7d8c2";
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = .68;
+      ctx.setLineDash([7, 6]);
+      for (const rect of geometry.rects) {
+        const { x, y, width, height } = rect;
+        ctx.save();
+        const charge = clamp(hazard.age / Math.max(.01,hazard.warning),0,1);
+        drawBossFieldWash(ctx,x,y,width,height,mat.rim,.48+.32*charge,quiet?0:hazard.age);
+        ctx.globalAlpha=.52+.22*charge;
+        bossRangeMarks(ctx,x,y,width,height,mat.rim,height>width);
+        ctx.restore();
       }
-    }
-    for (const line of geometry.segments) {
-      const dx=line.x2-line.x1, dy=line.y2-line.y1, length=Math.hypot(dx,dy);
-      ctx.save();ctx.translate(line.x1,line.y1);ctx.rotate(Math.atan2(dy,dx));
-      drawBossFieldWash(ctx,0,-line.width*.5,length,line.width,mat.rim,.79);
-      bossRangeMarks(ctx,0,-line.width*.5,length,line.width,mat.rim);
-      ctx.restore();
+      for (const circle of geometry.circles) {
+        ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2); ctx.stroke();
+        if (circle.innerRadius > 0) {
+          ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.innerRadius, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+      for (const line of geometry.segments) {
+        const dx=line.x2-line.x1, dy=line.y2-line.y1, length=Math.hypot(dx,dy);
+        ctx.save();ctx.translate(line.x1,line.y1);ctx.rotate(Math.atan2(dy,dx));
+        drawBossFieldWash(ctx,0,-line.width*.5,length,line.width,mat.rim,.79);
+        bossRangeMarks(ctx,0,-line.width*.5,length,line.width,mat.rim);
+        ctx.restore();
+      }
     }
     ctx.restore();
   }

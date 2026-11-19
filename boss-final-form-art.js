@@ -6,7 +6,7 @@ const BossFinalFormArt = (() => {
 
   // Keep the inner lip at the simulation's safe boundary. The creature grows
   // into the danger side; its skin, vapour and chips dissolve far from the lip.
-  function banks(ctx, kind, gap, spread, t, active, p, quiet) {
+  function banks(ctx, kind, gap, spread, t, active, p, quiet, target) {
     const size = viewport.width, alpha = active ? .94 : .40 + .33 * p;
     const skin = signatureMaterials[kind];
     for (const side of [-1, 1]) {
@@ -14,6 +14,11 @@ const BossFinalFormArt = (() => {
       const space = side < 0 ? lip : viewport.height-lip;
       if (space <= 0) continue;
       const depth = Math.min(space + 10, Math.max(53,viewport.height*.22));
+      if (kind === "chitin") {
+        ElementalArmoredVfx.jawBand(ctx, { x: 0, y: side < 0 ? lip - depth : lip,
+          width: size, height: depth }, side, p, quiet, target, active);
+        continue;
+      }
       ctx.save(); ctx.translate(0,lip); ctx.scale(1,side); ctx.globalAlpha *= alpha;
       // Finger-like tongues and mist meet the same gap at different angles.
       // Use a low, irregular lip even when the safe lane spans the screen.
@@ -25,20 +30,7 @@ const BossFinalFormArt = (() => {
       ctx.fillStyle=membrane;ctx.beginPath();
       for(let i=0;i<=n;i++){const u=i/n;if(i)ctx.lineTo(u*size,ridge(u));else ctx.moveTo(0,ridge(u));}
       ctx.lineTo(size,depth);ctx.lineTo(0,depth);ctx.closePath();ctx.fill();
-      if (kind==="chitin") {
-        // Two differently articulated segments join at the elbow. The leading
-        // tooth rocks towards the safe lip as the hinge closes.
-        const hinge=size*(side>0?.91:.78), tilt=.09+.075*Math.sin(t*3+side);
-        ctx.save();ctx.translate(hinge,depth*.59);ctx.rotate(tilt);
-        organ(ctx,kind,-size*.23,-depth*.12,size*.68,depth*2.02,Math.PI);
-        ctx.restore();
-        ray(ctx,kind,hinge,depth*.59,size*.035,depth*.24,Math.max(4,depth*.17),t,active,p,quiet);
-        for(let j=0;j<11;j++){
-          const u=(j+.23+.19*Math.sin(j*4.7+side))/11;
-          const y=ridge(u)+depth*(.15+.13*Math.sin(5*u+t));
-          shine(ctx,size*u,y,depth*(.15+.06*Math.cos(j*2)),skin.rim,.25);
-        }
-      } else if(kind==="magma") {
+      if(kind==="magma") {
         // One continuous fault, with separate pressure vents rising through it.
         const offset=side>0?.13:.31;
         NextgenVfx.drawMagmaFissure(ctx,{x1:-depth*.35,y1:depth*.45,x2:size+depth*.28,y2:depth*.34,width:depth*.83},skin,t,.93);
@@ -142,13 +134,20 @@ const BossFinalFormArt = (() => {
     const kind=keys[target.type],t=quiet?.37:h.age;
     if(h.type==="wire" || h.type==="seam"){
       const seam=h.type==="seam";
-      return ray(ctx,kind,seam?h.x:h.ax,seam?0:h.ay,seam?h.x:h.bx,seam?viewport.height:h.by,h.width*.5,t,active,p,quiet);
+      const pose = seam ? null : finaleWirePose(h);
+      if (kind === "bone") {
+        ElementalArmoredVfx.needlePath(ctx, { x1: seam ? h.x : pose.ax, y1: seam ? 0 : pose.ay,
+          x2: seam ? h.x : pose.bx, y2: seam ? viewport.height : pose.by, width: h.width },
+          active, p, quiet, h.node ?? 0);
+        return true;
+      }
+      return ray(ctx,kind,seam?h.x:pose.ax,seam?0:pose.ay,seam?h.x:pose.bx,seam?viewport.height:pose.by,h.width*.5,t,active,p,quiet);
     }
     if(h.type==="blast"||h.type==="well"){burst(ctx,kind,h.x,h.y,h.radius,t,active,p,quiet);return true;}
     if(h.type==="ring"){rim(ctx,kind,h.x,h.y,h.radius*(active?p:1),h.width,t,active,p,quiet);return true;}
     if(h.type==="vent"||h.type==="pincer"){
       const spread=h.type==="pincer"&&active?viewport.height*.43*(1-p):0;
-      banks(ctx,kind,h.gap,spread,t,active,p,quiet);return true;
+      banks(ctx,kind,h.gap,spread,t,active,p,quiet,target);return true;
     }
     if(h.type==="tide"){
       const x=y=>finaleTideX(h,y,active?h.age:h.warning),width=h.width*.42;

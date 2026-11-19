@@ -250,6 +250,9 @@ function drawFlightProjectileBody(ctx, bullet, half, length, glow, crowded) {
   }
 }
 
+const flightNitrousMaterial = { length: .52, radius: .070, split: .24, seed: 217, heat: [225, 253, 255],
+  color: [132, 119, 255], shade: [48, 74, 184], sparks: "#a7b2ff" };
+const flightNitrousPalettes = { red: "nitrous-red", blue: "nitrous", yellow: "nitrous-yellow" };
 const flightExhaustProfiles = {
   red: { length: .52, radius: .10, split: .20, seed: 15, heat: [255, 242, 202],
     color: [255, 106, 45], shade: [159, 27, 33], sparks: flightWakeColors.red },
@@ -257,8 +260,11 @@ const flightExhaustProfiles = {
     color: [65, 193, 255], shade: [55, 59, 167], sparks: flightWakeColors.blue },
   yellow: { length: .47, radius: .105, split: .24, seed: 151, heat: [255, 247, 205],
     color: [255, 194, 62], shade: [149, 64, 28], sparks: flightWakeColors.yellow },
-  nitrous: { length: .52, radius: .070, split: .24, seed: 217, heat: [225, 253, 255],
-    color: [132, 119, 255], shade: [48, 74, 184], sparks: "#a7b2ff" },
+  nitrous: flightNitrousMaterial,
+  "nitrous-red": { ...flightNitrousMaterial, heat: [255, 219, 204], color: [255, 74, 47],
+    shade: [146, 13, 37], sparks: "#ff7960" },
+  "nitrous-yellow": { ...flightNitrousMaterial, heat: [255, 250, 210], color: [255, 215, 64],
+    shade: [169, 87, 7], sparks: "#ffda71" },
 };
 const flightExhaustCell = { width: 160, height: 56, count: 5 };
 const flightExhaustAtlases = new Map();
@@ -384,6 +390,7 @@ function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false)
     ? fighterWakeOrigin(ship, kind) : { x: ship.x - ship.width * .40, y: ship.y };
   const palette = Object.hasOwn(flightExhaustProfiles, kind) ? kind : "red";
   const profile = flightExhaustProfiles[palette];
+  const boostPalette = flightNitrousPalettes[palette] ?? flightNitrousPalettes.red;
   const still = flightVfxStill(), tier = flightVfxTier();
   const cast = actualShip ? flightCastThrust(kind) : 0;
   let rage = overdrive ? 1 : 0, boost = nitrous ? 1 : 0, thrust = cast;
@@ -424,7 +431,7 @@ function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false)
       ctx.rotate(Math.atan2(dy, dx));
       const span = Math.hypot(dx,dy) * 1.20;
       drawFlightExhaustMaterial(ctx, palette, span, throat, phase, opacity * (1 - boost), still, tier);
-      drawFlightExhaustMaterial(ctx, "nitrous", span, throat, phase, opacity * boost, still, tier);
+      drawFlightExhaustMaterial(ctx, boostPalette, span, throat, phase, opacity * boost, still, tier);
       ctx.restore();
     }
   }
@@ -433,7 +440,7 @@ function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false)
   ctx.scale(-1, 1);
   ctx.globalCompositeOperation = "source-over";
   drawFlightExhaustMaterial(ctx, palette, length, radius, phase, opacity * (1 - boost), still, tier);
-  drawFlightExhaustMaterial(ctx, "nitrous", length, radius, phase, opacity * boost, still, tier);
+  drawFlightExhaustMaterial(ctx, boostPalette, length, radius, phase, opacity * boost, still, tier);
   if (palette === "red" && tier && !still && boost < .97) {
     // A stacked supersonic cell train collapses into the broad turbulent plume.
     ctx.save();ctx.strokeStyle = "#ffce88";ctx.lineWidth = .8;
@@ -445,7 +452,7 @@ function drawFlightEngineWake(ctx, ship, kind, time, overdrive, nitrous = false)
     }
     ctx.restore();
   }
-  if (!still && tier) drawFlightExhaustSparks(ctx, boost > .5 ? flightExhaustProfiles.nitrous : profile,
+  if (!still && tier) drawFlightExhaustSparks(ctx, boost > .5 ? flightExhaustProfiles[boostPalette] : profile,
     length, radius, clock, energy, tier, opacity, boost);
   ctx.restore();
 }

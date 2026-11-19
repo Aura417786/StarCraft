@@ -26,9 +26,7 @@ async function main() {
     assert.equal(await page.evaluate(() => balanceBuildRoute("wings")), "ember",
       "Live control policy must include its evolution-route dependency before the soak begins");
     if (nightmare) {
-      await page.locator("#hangar-loadout").click();
       await page.locator('#hangar-difficulty label:has(input[value=nightmare])').click();
-      await page.locator("#hangar-back-loadout").click();
     }
     await page.locator("#start-button").click();
     const skip = page.locator("#tutorial-skip");

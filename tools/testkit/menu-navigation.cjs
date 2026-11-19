@@ -9,11 +9,11 @@ const { createPage } = require("./balance.cjs");
 const game = path.resolve(process.argv[2]);
 const output = path.resolve(process.argv[3]);
 const primaryEntries = [
-  "#start-button", "#hangar-loadout", '[data-sortie-console="challenges"]',
+  "#start-button", "#hangar-loadout", "#hangar-difficulty", '[data-sortie-console="challenges"]',
   "#hangar-records", "#hangar-manual", '[data-sortie-console="settings"]',
 ];
 const nestedEntries = [
-  "#fighter-picker", "#hangar-difficulty", "#guide-button",
+  "#fighter-picker", "#guide-button",
   '[data-sortie-console="upgrades"]', '[data-sortie-console="archive"]', '[data-sortie-console="awards"]',
 ];
 
@@ -65,11 +65,11 @@ async function checkNavigation(page) {
   assert.equal(await page.locator("#start-button").isVisible(), false);
   assert.equal(await page.locator("#hangar-manual-panel").isVisible(), false);
   await page.locator('#fighter-picker label[data-fighter="blue"]').click();
-  await page.locator('#hangar-difficulty label:has(input[value="easy"])').click();
   await page.screenshot({ path: path.join(output, "loadout.png") });
   await page.keyboard.press("Escape");
   await pageIs(page, "home");
   await focusIs(page, "#hangar-loadout");
+  await page.locator('#hangar-difficulty label:has(input[value="easy"])').click();
   assert.equal(await page.locator("#hangar-loadout-summary").textContent(), "苍电 · 简单");
 
   const records = await checkRecords(page);

@@ -180,11 +180,17 @@ function buildBossPressureCombo(target) {
   const ordinal = target.pressureComboIndex = (target.pressureComboIndex ?? -1) + 1;
   const previous = target.comboLog?.at(-1);
   const room = mechanicRoom();
+  const custom = typeof BossMobility !== "undefined" && BossMobility.enabled();
+  const nightmare = isAbyssalNightmare();
+  const mode = custom ? sortieStats.difficulty : null;
   const aggressive = player.x > room.left + room.width * .72;
   // Crossing into close range provokes the trapping opener. A long retreat
   // instead draws the pressure front. Neither decision changes an existing tell.
   const retreating = previous && previous.lockX-player.x>room.width*.18;
   const rushIn = previous && aggressive && !target.lastPressureAdvance;
+  const repeatAnchor = mode === "hard" && previous
+    && Math.abs(previous.lockX - target.lockX) < Math.max(player.width * .30, room.width * .105)
+    && Math.abs(previous.lockY - target.lockY) < Math.max(player.height * .67, room.height * .086);
   const variant = rushIn ? 1 : retreating ? 0 : ordinal % 2;
   target.lastPressureAdvance = aggressive;
   const responseTurn = target.enraged
@@ -194,21 +200,26 @@ function buildBossPressureCombo(target) {
   const material = alienPressurePlans[target.type].material;
   const id = target.type + ":" + ordinal;
   const begin = bossHazards.length;
-  const reply = BossResonance.names[target.type];
-  target.attackLabel = responseTurn ? [cn + " · " + reply[0], en + " / " + reply[1],
+  const usesCustomCounter = custom && (repeatAnchor || responseTurn && (!nightmare || ordinal % 2 === 0));
+  const reply = usesCustomCounter ? BossMobility.labels[target.type] : BossResonance.names[target.type];
+  target.attackLabel = responseTurn || usesCustomCounter ? [cn + " · " + reply[0], en + " / " + reply[1],
     hint.split("，")[0] + "。第三拍 · " + reply[2],
     enHint.split(",")[0] + ". Third beat · " + reply[3]] : [cn,en,hint,enHint];
   target.attackMotion=["coil","lunge","recoil","sweep","lunge","sweep","sweep","recoil","coil","recoil","coil"][target.type];
   const rhythm = encounterRhythms[target.type];
-  const nightmare = isAbyssalNightmare();
   const pursuit = nightmarePursuits[target.type];
+  const pursuitTempo = nightmare ? (pursuit.tempo ?? 1.22) + (custom ? .18 : 0)
+    : mode === "hard" && ordinal > 0 ? (repeatAnchor ? 1.27 : 1.14) : 1;
   const tempo = Math.max(1, Math.min(1.14, target.scaling?.tempoMul ?? 1))
-    * (target.enraged ? 1.08 : 1) * (nightmare ? (pursuit.tempo ?? 1.22) : 1);
+    * (target.enraged ? 1.08 : 1) * pursuitTempo;
   const offsets = [0, rhythm.intercept / tempo, rhythm.finish / tempo];
   const stageEnds=[];
   for(let stage=0;stage<3;stage++) {
     const start=bossHazards.length;
-    if (stage === 2 && responseTurn) {
+    if (stage === 2 && usesCustomCounter) {
+      const values = BossMobility.options(target, room, { strong: target.enraged || repeatAnchor });
+      queueAlienHazard(target, "mobility", target.telegraphDuration, values);
+    } else if (stage === 2 && responseTurn) {
       const values = BossResonance.cast(target);
       if (nightmare) values.duration *= .88;
       queueAlienHazard(target, "resonance", target.telegraphDuration, values);
@@ -239,11 +250,14 @@ function buildBossPressureCombo(target) {
     stageEnds.push(Math.max(...added.map(h=>h.warning+h.duration)));
   }
   if (nightmare) {
-    const at = target.telegraphDuration + offsets[2] + pursuit.gap;
-    const values = nightmarePursuit(target, room, target.lockX, target.lockY, target.gapY, target.side);
-    addBossHazard("resonance", {
+    const at = target.telegraphDuration + offsets[2] + pursuit.gap * (custom ? .84 : 1);
+    const newPursuit = custom && !usesCustomCounter;
+    const values = newPursuit ? BossMobility.options(target, room, { strong: true })
+      : nightmarePursuit(target, room, target.lockX, target.lockY, target.gapY, target.side);
+    addBossHazard(newPursuit ? "mobility" : "resonance", {
       ...values, warning: at, tellAt: at - 1.4, comboId: id,
-      comboStage: 3, comboRole: "pursuit", trackNightmareExit: true,
+      comboStage: 3, comboRole: "pursuit", trackNightmareExit: !newPursuit,
+      color: alienSignatureColors[material],
     });
     offsets.push(at - target.telegraphDuration);
     stageEnds.push(at + values.duration);
@@ -256,6 +270,7 @@ function buildBossPressureCombo(target) {
     firstKind:hazards.find(h=>h.comboStage===0).kind,
     secondKind:hazards.filter(h=>h.comboStage===1).map(h=>h.kind).join("+"),
     thirdKind:hazards.filter(h=>h.comboStage===2).map(h=>h.kind).join("+"),
+    fourthKind:hazards.find(h=>h.comboStage===3)?.kind,
     lockX:target.lockX,lockY:target.lockY,gapY:target.gapY,anchor:{...target.comboAnchor},
     stageStarts:offsets.map(at=>at+target.telegraphDuration),stageEnds,
     activeDuration:target.attackDuration};

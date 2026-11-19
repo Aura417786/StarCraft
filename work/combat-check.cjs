@@ -718,7 +718,7 @@ check('muzzle flashes share the exact symmetry axis of each emitted volley', () 
   }
 });
 
-check('yellow gives at most five lanes, then calibrates colors in the original order', () => {
+check('lane pickups still cap the Crimson fighter at five lanes', () => {
   isolatedBattle();
   for(let i=0;i<4;i++) execute('applyPowerup("yellow");');
   assert.equal(weaponState().lanes,5);
@@ -728,6 +728,44 @@ check('yellow gives at most five lanes, then calibrates colors in the original o
   }
   assert.equal(weaponState().tier,6);
   assert.equal(weaponState().lanes,5);
+});
+check('Auric widens to eight lanes, then fuses the preceding volley into one stronger, recolored shot', () => {
+  const auricVolley = mode => {
+    execute(`firingStyle.mode="${mode}";resetWeapons();updateShooting(0);`);
+    return emitted();
+  };
+  const totalDamage = rounds => rounds.reduce((sum, round) => sum + round.damage, 0);
+  isolatedBattle('showScreen("battle",{fighter:"yellow",seed:4225});');
+  assert.equal(auricVolley("spread").length,3);
+  for (let lane=4;lane<=8;lane++) {
+    execute('applyPowerup("yellow");');
+    assert.equal(auricVolley("spread").length,lane);
+  }
+  const original = auricVolley("spread");
+  const originalFocus = auricVolley("focus");
+  execute('applyPowerup("yellow");');
+  const merged = auricVolley("spread");
+  assert.equal(merged.length,1);
+  near(merged[0].damage,1.25*totalDamage(original));
+  near(auricVolley("focus")[0].damage,1.25*originalFocus[0].damage);
+  assert.notEqual(merged[0].color,original[0].color);
+  execute('raiseWeaponFloor(progressionPresetForBoss(0));');
+  assert.equal(auricVolley("spread").length,1);
+  const afterFloor = auricVolley("spread")[0].damage;
+  for (let lane=2;lane<=8;lane++) {
+    execute('applyPowerup("yellow");');
+    const volley = auricVolley("spread");
+    assert.equal(volley.length,lane);
+    near(totalDamage(volley),afterFloor);
+  }
+  execute('applyPowerup("yellow");');
+  const next = auricVolley("spread");
+  assert.equal(next.length,1);
+  near(next[0].damage,1.25*afterFloor);
+  assert.notEqual(next[0].color,merged[0].color);
+  execute('showScreen("battle",{fighter:"red",seed:4225});');
+  assert.equal(auricVolley("spread").length,1);
+  near(auricVolley("spread")[0].damage,2.2);
 });
 check('rendering mixed old and new bullets uses the color and core stored on each bullet', () => {
   isolatedBattle('battleTime=0;weapon.lanes=4;resetWeapons();updateShooting(0);applyPowerup("yellow");updateShooting(.2);');

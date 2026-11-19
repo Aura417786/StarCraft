@@ -9,6 +9,10 @@ const NextgenVfx = (() => {
   const stats = { facets: 0, samples: 0, atlasDraws: 0, horizonPasses: 0, effects: 0, tier: "high", peakFacets: 0 };
   const atlases = new Map();
   const scheduledMaterials = new Set();
+  const jetCoordinates = new Float32Array(65);
+  const jetWidths = new Float32Array(65);
+  const jetOffsets = new Float32Array(65);
+  const jetTapers = new Float32Array(65);
   let sampleCanvas, sampleContext, basaltTile, magmaTile, waterNormalTile, waterFoamTile, sporeMistTile;
   const clamp01 = v => Math.max(0, Math.min(1, v));
   const fract = v => v - Math.floor(v);
@@ -1217,26 +1221,94 @@ const NextgenVfx = (() => {
     ctx.restore(); return true;
   }
 
-  function drawWaterJet(ctx, length, left, right, age, alpha) {
-    const time = motionTime(age), half = Math.max(left, right), bands = stats.tier === "low" ? 7 : 13;
-    ctx.save();ctx.beginPath();ctx.moveTo(0,-left);ctx.lineTo(length,-right);ctx.lineTo(length,right);ctx.lineTo(0,left);ctx.closePath();ctx.clip();
-    const depth=ctx.createLinearGradient(0,-half,0,half);
-    depth.addColorStop(0,"#326f82");depth.addColorStop(.15,"#092b44");depth.addColorStop(.38,"#157b94");depth.addColorStop(.51,"#bcebec");depth.addColorStop(.64,"#2d91a3");depth.addColorStop(1,"#05223b");
-    ctx.fillStyle=depth;ctx.globalAlpha=alpha;ctx.fillRect(0,-half,length,half*2);
-    for(let i=0;i<bands;i++){
-      const fraction=(i+.5)/bands*2-1;
-      ctx.beginPath();
-      for(let j=0;j<=24;j++){
-        const t=j/24,x=t*length,w=left+(right-left)*t;
-        const y=fraction*w+Math.sin(t*24-time*3+i)*w*.04;
-        if(!j)ctx.moveTo(x,y);else ctx.lineTo(x,y);
-      }
-      ctx.strokeStyle=i%3?"#a2e4e9":"#07283d";ctx.globalAlpha=alpha*(i%3?.19:.55);ctx.lineWidth=i%3?.7:half*.14;ctx.stroke();
+  function drawWaterJet(ctx, length, left, right, age, alpha, { quiet = false, through = false } = {}) {
+    if (!(length > 0 && alpha > 0)) return;
+    const time = quiet ? 0 : motionTime(age);
+    const half = Math.max(1.5, left, right);
+    const points = quiet ? 24 : Math.min(64, Math.max(24, Math.ceil(length / 24)));
+    const cap = Math.min(length * .32, half * 2.8);
+    const taper = x => through ? 1 : ease(Math.min(x, length - x) / Math.max(1, cap));
+    const ripple = x => half * (.105 * Math.sin(x * .022 - time * 6.6)
+        + .040 * Math.sin(x * .087 - time * 13.3));
+    for (let i = 0; i <= points; i++) {
+      const f = i / points, x = f * length;
+      jetCoordinates[i] = x;
+      jetWidths[i] = left + (right - left) * f;
+      jetOffsets[i] = ripple(x);
+      jetTapers[i] = taper(x);
     }
-    ctx.fillStyle="#e7ffff";
-    for(let i=0;i<tier().strands;i++){
-      const t=fract(seed(i)+time*.37),w=left+(right-left)*t,x=t*length,y=(seed(i+27)-.5)*w*1.6;
-      ctx.globalAlpha=alpha*(.25+seed(i+67)*.35);ctx.beginPath();ctx.ellipse(x,y,2+seed(i+4)*7,.5+seed(i+9),0,0,TAU);ctx.fill();
+    ctx.save();
+    const opacity = ctx.globalAlpha * alpha;
+    const light = ctx.createLinearGradient(0, -half * 1.95, 0, half * 1.95);
+    light.addColorStop(0, "#388bcf00");
+    light.addColorStop(.21, "#3daabe0c");
+    light.addColorStop(.39, "#287ca578");
+    light.addColorStop(.49, "#7de1d8b9");
+    light.addColorStop(.61, "#2b8ba579");
+    light.addColorStop(.82, "#45bbd619");
+    light.addColorStop(1, "#388bcf00");
+    // Cross-axis light disappears into the scene. Wavelets break its contour
+    // instead of using a solid slab or outlining the collision rectangle.
+    ctx.fillStyle = light;
+    ctx.globalAlpha = opacity;
+    ctx.beginPath();
+    for (let i = 0; i <= points * 2 + 1; i++) {
+      const sign = i <= points ? -1 : 1;
+      const index = sign < 0 ? i : points * 2 + 1 - i;
+      const x = jetCoordinates[index];
+      const breadth = jetWidths[index] * jetTapers[index];
+      const y = jetOffsets[index] * jetTapers[index] + sign * breadth *
+        (1.76 + .18 * Math.sin(x * .040 - time * 9 + sign) + .12 * Math.sin(x * .113 - time * 18));
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.lineCap = "round";
+    ctx.globalCompositeOperation = "screen";
+    const tracks = quiet ? 5 : stats.tier === "low" ? 6 : 11;
+    for (let track = 0; track < tracks; track++) {
+      const fraction = (track + .5) / tracks * 2 - 1;
+      const center = Math.abs(fraction);
+      ctx.beginPath();
+      for (let j = 0; j <= points; j++) {
+        const x = jetCoordinates[j];
+        const chop = Math.sin(x * (.043 + track * .007) - time * (7.5 + track * .86) + track) *
+          (.09 + center * .11);
+        const y = (jetOffsets[j] + (fraction + chop) * jetWidths[j]) * jetTapers[j];
+        if (j === 0 || (center > .48 && Math.sin(x * .105 - time * 8 + track) < -.46)) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      if (center < .14) {
+        ctx.strokeStyle = "#43b9dba0";
+        ctx.lineWidth = Math.max(2.3, half * .40);
+        ctx.globalAlpha = opacity * .61;
+        ctx.stroke();
+      }
+      ctx.strokeStyle = center < .14 ? "#e8ffed" : track % 3 ? "#a4f7f1" : "#59d8f4";
+      ctx.lineWidth = Math.max(.7, half * (center < .14 ? .15 : .071));
+      ctx.globalAlpha = opacity * (.89 - center * .56);
+      ctx.stroke();
+    }
+
+    // Two batched paths leave a mixture of bright foam chips and low-opacity
+    // spray. Their seeds and lifetime are numeric, with no particle allocation.
+    const count = quiet ? 14 : tier().strands * 2;
+    for (let layer = 0; layer < 2; layer++) {
+      ctx.beginPath();
+      for (let i = layer; i < count; i += 2) {
+        const f = fract(seed(i + 46) + time * (.21 + seed(i) * .29)), x = f * length;
+        const width = left + (right - left) * f;
+        const offset = (seed(i + 27) * 2 - 1) * (layer ? 1.7 : .91);
+        const y = (ripple(x) + offset * width) * taper(x);
+        const size = .62 + seed(i + 9) * .92, stretch = 2 + seed(i + 19) * (layer ? 10 : 6);
+        const angle = offset * .14;
+        ctx.moveTo(x + size * stretch * Math.cos(angle), y + size * stretch * Math.sin(angle));
+        ctx.ellipse(x, y, size * stretch, size, angle, 0, TAU);
+      }
+      ctx.fillStyle = layer ? "#74cbdb" : "#e0fff4";
+      ctx.globalAlpha = opacity * (layer ? .31 : .77);
+      ctx.fill();
     }
     ctx.restore();
   }

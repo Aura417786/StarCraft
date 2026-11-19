@@ -33,11 +33,14 @@ stanceButton.addEventListener("click", () => {
 });
 function firingLanes() {
   const count = weapon.lanes;
-  if (firingStyle.mode === "focus") return [{ offset: 0, angle: 0, weight: 1 + .16 * (count - 1) }];
-  const spacing = Math.min(player.height * 0.18, player.height * 0.9 / Math.max(1, count - 1));
   const yellow = typeof fighterProfile === "function" && fighterProfile().id === "yellow";
+  const focus = firingStyle.mode === "focus";
+  const fused = yellow && weapon.laneEvolutions > 0;
+  const volley = fused ? 1 : yellow ? auricLaneWeight(count, focus) : 1 + (focus ? .16 : .22) * (count - 1);
+  if (focus) return [{ offset: 0, angle: 0, weight: volley }];
+  const spacing = Math.min(player.height * 0.18, player.height * 0.9 / Math.max(1, count - 1));
   const fan = yellow ? .32 : .24;
-  const weight = (1 + (yellow ? .42 : .22) * (count - 1)) / count;
+  const weight = volley / count;
   return Array.from({ length: count }, (_, index) => ({
     offset: (index - (count - 1) / 2) * spacing,
     angle: count === 1 ? 0 : (index / (count - 1) - 0.5) * fan,
@@ -210,8 +213,8 @@ for (let index = 0; index < 128; index++) sparePlayerProjectiles.push(makeProjec
 for (let index = 0; index < 260; index++) spareHostileProjectiles.push(makeProjectileSlot(spareHostileProjectiles, false));
 
 function acquirePlayerRound(x, y, angle, vx, vy, halfHeight, length, color, core) {
-  const spare = sparePlayerProjectiles.pop();
-  const shot = spare?.shot ?? {};
+  const slot = sparePlayerProjectiles.pop() ?? makeProjectileSlot(sparePlayerProjectiles, true);
+  const shot = slot.shot;
   shot.x = shot.previousX = x;
   shot.y = shot.previousY = y;
   shot.angle = angle;
@@ -221,7 +224,7 @@ function acquirePlayerRound(x, y, angle, vx, vy, halfHeight, length, color, core
   shot.length = length;
   shot.color = color;
   shot.core = core;
-  shot.hitTargets = spare?.hits ?? new Set();
+  shot.hitTargets = slot.hits;
   return shot;
 }
 
