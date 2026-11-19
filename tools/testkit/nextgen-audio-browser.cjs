@@ -107,7 +107,7 @@ function wav(name, value) {
     return stats;
   }
   try {
-    await page.goto(pathToFileURL(path.join(root, "index.html")).href + "?intro=0");
+    await page.goto(pathToFileURL(path.join(root, "index.html")).href);
     assert.equal(requests.length, 0, "no new bank fetched before sound unlock");
     await page.evaluate(async () => {
       gameAudio.sync(false, false, false, { scene: "menu", visible: true, lives: 3 });

@@ -8,7 +8,7 @@
   background:
     linear-gradient(90deg, #060b12 0%, #080e17f5 21%, #0b141de0 35%, #0a151b52 59%, #0a171e03 86%),
     linear-gradient(0deg, #040a10ed, #09141932 38%, #14212800 67%, #0810179c),
-    url("assets/intro/hangar.webp") 65% 56% / cover no-repeat,
+    url("assets/scenery/hangar.webp") 65% 56% / cover no-repeat,
     radial-gradient(ellipse at 88% 43%, #4d7177, #17262c 39%, #0b141c 66%, #060b12 88%);
 }
 
@@ -497,7 +497,7 @@ html[lang="en"] #start-screen h1 > span {
   .battlefield:has(> #start-screen:not([hidden]))::before {
     background:
       linear-gradient(0deg, #08111afc 25%, #0a151edb 54%, #0b151d16 81%, #101e279c),
-      url("assets/intro/hangar.webp") 70% top / auto 62% no-repeat,
+      url("assets/scenery/hangar.webp") 70% top / auto 62% no-repeat,
       #0b151e;
   }
   .battlefield:has(> #start-screen:not([hidden])) > .masthead { height: 54px; padding: 7px 12px; }

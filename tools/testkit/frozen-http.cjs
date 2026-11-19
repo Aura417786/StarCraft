@@ -30,7 +30,6 @@ const mime = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; chars
     page.on('pageerror',e=>errors.push(e.stack||e.message));
     await page.addInitScript(()=>{
       localStorage.setItem('star-breaker-flight-training','1');
-      localStorage.setItem('star-breaker-opening-seen','1');
     });
     await page.goto(url,{waitUntil:'load'});
     const guide=page.locator('.flight-guide-actions button').first();

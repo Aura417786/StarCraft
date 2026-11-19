@@ -13,7 +13,7 @@ const primaryEntries = [
   "#hangar-records", "#hangar-manual", '[data-sortie-console="settings"]',
 ];
 const nestedEntries = [
-  "#fighter-picker", "#hangar-difficulty", "#guide-button", "#replay-intro-button",
+  "#fighter-picker", "#hangar-difficulty", "#guide-button",
   '[data-sortie-console="upgrades"]', '[data-sortie-console="archive"]', '[data-sortie-console="awards"]',
 ];
 
@@ -86,11 +86,8 @@ async function checkNavigation(page) {
   await page.keyboard.press("Escape");
   await page.locator("#flight-guide").waitFor({ state: "hidden" });
   await focusIs(page, "#guide-button");
-  await page.locator("#replay-intro-button").click();
-  await page.locator("#campaign-opening").waitFor();
-  await page.keyboard.press("Escape");
-  await page.locator("#campaign-opening").waitFor({ state: "hidden" });
-  await focusIs(page, "#replay-intro-button");
+  assert.equal(await page.locator("#replay-intro-button").count(),0);
+  assert.equal(await page.locator("#campaign-opening").count(),0);
   await page.locator("#hangar-back-manual").click();
   await pageIs(page, "home");
   await focusIs(page, "#hangar-manual");

@@ -107,7 +107,7 @@ function ultimateDamageLog() {
     enemyHealthLogForTime() + Math.log(enemyTypes.armored.health * armorFloor));
 }
 function ultimateSuppressesFire() {
-  return ultimate.phase === "charging" || (ultimate.phase === "firing" && !ultimate.shot?.presentationOnly);
+  return ultimate.phase === "charging" || (ultimate.phase === "firing");
 }
 function requestUltimate() {
   if (!isBattleActive() || ultimate.phase !== "idle" || ultimate.charges <= 0) return false;
@@ -162,7 +162,7 @@ function resetUltimate() {
   cannonLink.remaining = 0;
   cancelUltimate();
 }
-function fireUltimate({ presentationOnly = false } = {}) {
+function fireUltimate() {
   const muzzle = muzzlePosition();
   const speed = Math.max(1600, viewport.width * 1.65);
   ultimate.phase = "firing";
@@ -194,7 +194,6 @@ function fireUltimate({ presentationOnly = false } = {}) {
       radius: Math.min(40, player.height * 0.28 + 8), length: clamp(viewport.width * 0.56, 360, 900),
       speed, damageLog, source: "ultimate", linked, hitTargets: new WeakSet(), contacts: [] };
   }
-  if (presentationOnly) ultimate.shot.presentationOnly = true;
   gameAudio.stopUltimate();
   gameAudio.fireUltimate(ultimate.kind);
   const launchColor = ultimate.kind === "blue" ? "#84d3ff" : ultimate.kind === "yellow" ? "#ffdf7c" : "#ff6858";
@@ -366,17 +365,15 @@ function updateIonSwarm(shot, before, after) {
     missile.active = true;
     missile.previousX = missile.x;
     missile.previousY = missile.y;
-    if (!shot.presentationOnly) {
-      if (missile.target && (!ionTargetVisible(missile.target, missile)
-        || (!enemies.includes(missile.target) && !bossCanTakeDamage(missile.target)))) missile.target = null;
-      missile.target ??= selectIonTarget(missile, shot.aimY);
-      const target = missile.target;
-      if (target) {
-        const point = ionAimPoint(target, missile);
-        const aim = Math.atan2(point.y - missile.y, Math.max(32, point.x - missile.x));
-        const turn = clamp(aim - missile.angle, -seconds * 7, seconds * 7);
-        missile.angle = clamp(missile.angle + turn, -1.17, 1.17);
-      }
+    if (missile.target && (!ionTargetVisible(missile.target, missile)
+      || (!enemies.includes(missile.target) && !bossCanTakeDamage(missile.target)))) missile.target = null;
+    missile.target ??= selectIonTarget(missile, shot.aimY);
+    const target = missile.target;
+    if (target) {
+      const point = ionAimPoint(target, missile);
+      const aim = Math.atan2(point.y - missile.y, Math.max(32, point.x - missile.x));
+      const turn = clamp(aim - missile.angle, -seconds * 7, seconds * 7);
+      missile.angle = clamp(missile.angle + turn, -1.17, 1.17);
     }
     const speed = Math.max(1110, viewport.width * 1.27);
     missile.x += Math.cos(missile.angle) * speed * seconds;
@@ -386,7 +383,7 @@ function updateIonSwarm(shot, before, after) {
       missile.trail.push({ x: missile.x, y: missile.y });
       if (missile.trail.length > 8) missile.trail.shift();
     }
-    if (!shot.presentationOnly) resolveIonHit(missile, shot.bursts, after);
+    resolveIonHit(missile, shot.bursts, after);
     if (!isBattleActive() || ultimate.shot !== shot) return false;
     if (missile.x >= viewport.width + 20 || after >= missile.delay + ionSwarmRules.maxFlight) missile.done = true;
   }
@@ -398,7 +395,7 @@ function updateCoronaBarrage(shot, before, after) {
     if (seconds <= 0 || wave.x - wave.length >= viewport.width) continue;
     wave.previousX = wave.x;
     wave.x = Math.min(viewport.width + wave.length, wave.x + wave.speed * seconds);
-    if (!shot.presentationOnly) resolveUltimateHits(wave, coronaRules.bossHitCap);
+    resolveUltimateHits(wave, coronaRules.bossHitCap);
     if (!isBattleActive() || ultimate.shot !== shot) return false;
   }
   return shot.waves.every(wave => wave.x - wave.length >= viewport.width);
@@ -440,7 +437,7 @@ function updateUltimate(seconds) {
     shot.previousX = shot.x;
     shot.x += shot.speed * used;
     ultimate.elapsed += used;
-    if (used > 0 && !shot.presentationOnly) resolveUltimateHits();
+    if (used > 0) resolveUltimateHits();
     if (ultimate.shot !== shot || used + 1e-9 < untilExit) return;
     finishUltimate();
   }

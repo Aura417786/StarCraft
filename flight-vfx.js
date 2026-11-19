@@ -352,7 +352,7 @@ function flightCastThrust(kind) {
     const progress = clamp(ultimate.elapsed / Math.max(.001, cannonLink.chargeDuration), 0, 1);
     return .30 + progress * .71;
   }
-  if (ultimate.phase === "firing" && !ultimate.shot?.presentationOnly) {
+  if (ultimate.phase === "firing") {
     return .84 + .57 * Math.exp(-ultimate.elapsed * 7.8);
   }
   return 0;

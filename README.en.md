@@ -1,8 +1,11 @@
 # Star Breaker · 星际突围
 
-**v36.2 · Counterattack.** Breaking a shell gives the boss a chance to unleash its signature attack. Slip between the closing claws, pick the marked reflection, or counter when the electric ring discharges. All three fighters deal less ultimate damage to bosses. Encounter health locks to the loadout you bring in. Replay the prologue from the hangar to watch the captain suit up and launch in your selected fighter. Hold either Shift key to watch at 2× speed and release it to resume normal playback.
+**v36.3 · Direct Launch.** Choose a fighter and difficulty, then select Start Game to enter the campaign.
 
-**v36.1 · Apex Mimicry.** Choose the third evolution to cast your last defeated boss's ultimate with **F**. Carry Hadal Confluence into the next fight or unleash the Stargrave Sovereign's Lightless Collapse. Your imprint changes on each boss kill. All three fighters share their restored swept-wing, twin-engine silhouettes across the hangar, prologue and battle.
+
+**v36.2 · Counterattack.** Breaking a shell gives the boss a chance to unleash its signature attack. Slip between the closing claws, pick the marked reflection, or counter when the electric ring discharges. All three fighters deal less ultimate damage to bosses. Encounter health locks to the loadout you bring in.
+
+**v36.1 · Apex Mimicry.** Choose the third evolution to cast your last defeated boss's ultimate with **F**. Carry Hadal Confluence into the next fight or unleash the Stargrave Sovereign's Lightless Collapse. Your imprint changes on each boss kill. All three fighters share their restored swept-wing, twin-engine silhouettes across and battle.
 
 
 **v36 · Rift Echoes.** Watch Crimson's coils build pressure, follow Azure's discharge from mark to mark, or catch a strike on Auric's segmented shield. Each of the eleven bosses answers a broken shell with a different organ attack and musical motif. Read the tell and attack during its recovery.
@@ -35,9 +38,8 @@ During Lightless Collapse, violet streams fold into a dark core that eclipses th
 
 Blender-authored water, magma and singularity animation joins geometry-aligned surfaces and refraction. Crimson's piercing cannon, Azure's tracking arcs and Auric's coverage field have separate effects and sound palettes. Elemental boss voices and music layers respond to elites, low life and encounter phase. [Design and verification](docs/nextgen-v35-plan.md)
 
-**v34 Hangar main menu.** Start Game launches with the displayed fighter and difficulty. Sortie Setup lets you change both. Records & Refits holds refits, the campaign archive, and badges. The Flight Manual holds the guide and prologue replay. Use Settings for sound, graphics, language, and fullscreen.
+**v34 Hangar main menu.** Start Game launches with the displayed fighter and difficulty. Sortie Setup lets you change both. Records & Refits holds refits, the campaign archive, and badges. The Flight Manual holds the guide. Use Settings for sound, graphics, language, and fullscreen.
 
-**v33 Deep-space hangar and Dark Forest prologue.** The first campaign launch plays a 2:26 cinematic with bilingual subtitles. When a returning signal gives away Earth, a research lead takes the prototype up to buy time for evacuation. The selected fighter's special carries the final shot into gameplay. Pause or skip it, or choose **Replay Prologue** in the Flight Manual.
 
 **v32 Battlefield lighting.** Key light and ambient bounce change as you fly through the five sectors. Charged weapons, shields and explosions cast brief pools of light on nearby ships and aliens. Try the mirror boss in single-boss practice to see its cyan and violet beams, from the charge to the fading aftershock.
 

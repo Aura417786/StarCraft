@@ -13,7 +13,7 @@
   background:
     linear-gradient(90deg, #0b0b0ce8 0%, #101113c4 31%, #141a2050 59%, #242b3021 100%),
     linear-gradient(0deg, #0d1013f0, #10151a00 44%, #100f0f57 100%),
-    url("assets/intro/hangar.webp") 66% 52% / cover no-repeat;
+    url("assets/scenery/hangar.webp") 66% 52% / cover no-repeat;
 }
 #start-screen .start-copy { max-width: 470px; }
 #start-screen .hangar-title {

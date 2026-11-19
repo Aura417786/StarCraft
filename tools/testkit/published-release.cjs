@@ -9,12 +9,11 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 
 const required = [
-  "boss-living-materials.js", "boss-final-form-art.js", "opening-flight-stage.js",
-  "opening.js", "opening-art.js", "elemental-confluence-vfx.js", "campaign-victory.js",
+  "boss-living-materials.js", "boss-final-form-art.js",
+  "assets/scenery/hangar.webp", "elemental-confluence-vfx.js", "campaign-victory.js",
   "assets/vfx/nextgen/living-organs.webp", "assets/vfx/nextgen/spell-matter.webp",
-  ...["briefing","resolve","witnesses","helmet-lift","seal-check"].map(id => "assets/intro/performances/" + id + ".mp4"),
   "index.html", "boss-mimicry.js", "evolution-preview.js", "ship-renderer.js", "fighter-atlas-data.js",
-  "fighter-variants.js", "opening-story.js", "battlefield.js", "journey.js", "journey-art.js", "boss-attack-art.js", "boss-confluence-vfx.js", "boss-pressure-art.js", "boss-ultimate-art.js",
+  "fighter-variants.js", "battlefield.js", "journey.js", "journey-art.js", "boss-attack-art.js", "boss-confluence-vfx.js", "boss-pressure-art.js", "boss-ultimate-art.js",
   "elemental-armored-vfx.js", "elemental-cosmic-vfx.js", "nextgen-elemental-vfx.js",
   "assets/vfx/nextgen/tidal-breaker.webp", "assets/vfx/nextgen/void-inclined-horizon.webp",
   "assets/vfx/nextgen/void-collapse-front.webp", "assets/vfx/nextgen/void-shear.webp", "boss-vfx-materials.js",
@@ -45,6 +44,8 @@ function gameUrl(input) {
 async function verifyAssets(page, base, manifest, report) {
   const selected = new Map();
   const rows = new Map(manifest.files.map(row => [row.path, row]));
+  assert.ok(!manifest.files.some(row=>/^(?:opening(?:[.-])|assets\/intro\/|vendor\/cinematic\/)/.test(row.path)),
+    "The release still includes a prologue asset");
   for (const name of required) {
     assert.ok(rows.has(name), "Release manifest omits " + name);
     selected.set(name, rows.get(name));
@@ -63,7 +64,7 @@ async function verifyAssets(page, base, manifest, report) {
       }) ?? canonical.href;
       const row = { path: file.path, requested: target, expectedBytes: file.bytes, expectedSha256: file.sha256 };
       try {
-        const response = await page.request.get(target, { maxRedirects: 0, timeout: 30000 });
+          const response = await page.request.get(target, { maxRedirects: 0, timeout: file.bytes > 2000000 ? 120000 : 30000 });
         try {
           const data = await response.body();
           row.status = response.status();
@@ -115,15 +116,14 @@ async function visitor(page, base, out, report) {
   assert.match(report.entry.heading, /星际突围|Star\s*Breaker/i);
   assert.ok(report.entry.canvas);
   const referenced = new Set(report.entry.resources);
+  assert.equal(await page.locator("#replay-intro-button, #campaign-opening").count(),0);
   for (const entry of ["boss-mimicry.js","boss-resonance.js","audio.js","audio-catalog.js","tactical-hud.css","tactical-hangar.css"].map(file => file + "?v=" + report.entry.version)) {
     assert.ok(referenced.has(new URL(entry,base).href), "Homepage omits release resource "+entry);
   }
   await page.screenshot({path:path.join(out,"visitor-hangar.png")});
   await page.locator("#start-button").click();
-  await page.waitForFunction(() => document.querySelector("#campaign-opening")?.open || document.querySelector("#start-screen").hidden);
-  const skip = page.locator("#campaign-opening .opening-finish");
-  if (await skip.isVisible()) await skip.click();
   await page.locator("#start-screen").waitFor({state:"hidden"});
+  assert.equal(await page.locator("#campaign-opening").count(),0);
   const training = page.locator("#flight-training-skip");
   if (await training.isVisible()) await training.click();
   await page.locator("#game-canvas").click({position:{x:165,y:200}});
