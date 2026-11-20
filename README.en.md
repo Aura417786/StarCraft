@@ -1,5 +1,7 @@
 # Star Breaker · 星际突围
 
+**v37.2 · Fullscreen fix.** The settings panel remains usable when entering fullscreen from the hangar. Close settings to return to the hangar menu.
+
 **v37.1 · New boss routes and arenas.** Choose campaign difficulty on the main hangar screen and pick your fighter in Sortie Setup. All eleven bosses have their own arenas and movement challenges. Read the ghost trail, refractions, spores, and gravitational currents before committing to a counterattack.
 
 Hold Shift to boost with a flame matched to your fighter. Auric can build up to eight lanes. The next lane upgrade fuses them into one shot with 25% more total volley damage and a new color. Additional lanes share that firepower until the next fusion.

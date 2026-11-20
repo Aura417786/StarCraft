@@ -448,7 +448,18 @@ fullscreenButton.addEventListener("click", async () => {
   clearMovement();
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
-    else await app.requestFullscreen();
+    else {
+      const settings = app.querySelector("#sortie-console[open]");
+      const focusedControl = document.activeElement;
+      await app.requestFullscreen();
+      if (settings?.open) {
+        // Fullscreen raises the game above any already open modal.
+        // Reopen the same settings panel so it paints and receives input on top.
+        settings.close();
+        settings.showModal();
+        if (settings.contains(focusedControl)) focusedControl.focus({ preventScroll: true });
+      }
+    }
   } catch {
     statusMessage.textContent = tr("浏览器未允许全屏。战场仍铺满当前窗口，也可以使用 F11。", "Fullscreen is unavailable. The game still fills this window, or you can press F11.");
   }

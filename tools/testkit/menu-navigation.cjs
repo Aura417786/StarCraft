@@ -138,10 +138,34 @@ async function checkSettings(page) {
   const fullscreenAvailable = await fullscreen.isVisible() && await fullscreen.isEnabled();
   if (fullscreenAvailable) {
     await page.bringToFront();
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("DOM.enable");
+    const { root } = await cdp.send("DOM.getDocument");
+    const { nodeId: appNode } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "#game-app" });
+    const { nodeId: dialogNode } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "#sortie-console" });
     await fullscreen.click();
     await page.waitForFunction(() => document.fullscreenElement?.id === "game-app");
+    await page.locator("#sortie-console:modal #sortie-fullscreen[aria-pressed=true]").waitFor();
+    const { nodeIds } = await cdp.send("DOM.getTopLayerElements");
+    await cdp.detach();
+    const appLayer = nodeIds.indexOf(appNode);
+    assert.ok(appLayer >= 0 && nodeIds.indexOf(dialogNode) > appLayer,
+      "The settings dialog must paint above the fullscreen game");
+    await focusIs(page, "#sortie-fullscreen");
+    await page.locator("#system-tab-audio").click();
+    await page.locator("#sortie-sound").check();
+    await page.locator("#sortie-sound").uncheck();
+    await page.locator("#system-tab-display").click();
+    await page.locator("#sortie-console-close").click();
+    await page.locator("#sortie-console").waitFor({ state: "hidden" });
+    await focusIs(page, '[data-sortie-console="settings"]');
+    await page.locator("#hangar-loadout").click();
+    await pageIs(page, "loadout");
+    await page.locator("#hangar-back-loadout").click();
+    await entry.click();
     await fullscreen.click();
     await page.waitForFunction(() => !document.fullscreenElement);
+    await page.locator("#system-tab-display").click();
   }
   await page.screenshot({ path: path.join(output, "settings.png") });
   await page.keyboard.press("Escape");

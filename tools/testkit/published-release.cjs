@@ -125,7 +125,8 @@ async function visitor(page, base, out, report) {
   }
   await page.screenshot({path:path.join(out,"visitor-hangar.png")});
   const homeDifficulty = page.locator('#hangar-home #hangar-difficulty label:has(input[value="nightmare"])');
-  if (report.version === "v37.1") {
+  const hasHomeDifficulty = Number.parseFloat(report.entry.version) >= 37.1;
+  if (hasHomeDifficulty) {
     assert.ok(await homeDifficulty.isVisible(), "Campaign difficulty is missing from the main menu");
     await homeDifficulty.click();
   }
@@ -141,7 +142,7 @@ async function visitor(page, base, out, report) {
   report.battle = await page.evaluate(() => ({state, seconds:battleTime, fighter:sortieFighter,
     difficulty:sortieStats.difficulty, lives:player.lives}));
   assert.equal(report.battle.state,"battle");
-  if (report.version === "v37.1") assert.equal(report.battle.difficulty, "nightmare");
+  if (hasHomeDifficulty) assert.equal(report.battle.difficulty, "nightmare");
   await page.screenshot({path:path.join(out,"visitor-battle.png")});
   await page.locator("#pause-button").click();
   await page.locator("#pause-resume").waitFor({state:"visible"});
